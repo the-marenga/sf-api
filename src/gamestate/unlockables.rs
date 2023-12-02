@@ -504,9 +504,9 @@ fn parse_scrapbook_item(index: i64) -> Option<EquipmentIdent> {
         (4185..=4202, Belt, Some(Scout), &[4194, 4195]),
     ];
 
-    let mut epic = true;
+    let mut is_epic = true;
     for (range, typ, class, ignore) in slots {
-        epic = !epic;
+        is_epic = !is_epic;
         if !range.contains(&index) {
             continue;
         }
@@ -514,36 +514,27 @@ fn parse_scrapbook_item(index: i64) -> Option<EquipmentIdent> {
             return None;
         }
 
-        let len = range.end() - range.start() + 1;
-        let index_max = *range.end();
-        use EquipmentSlot::*;
+        let relative_pos = index - range.start() + 1;
 
-        let model_id = len - (index_max - index);
-        let color = match model_id % 10 {
+        let color = match relative_pos % 10 {
+            _ if typ == Talisman || is_epic => 1,
             0 => 5,
-            1..=5 => model_id % 10,
-            _ => model_id % 10 - 5,
-        };
+            1..=5 => relative_pos % 10,
+            _ => relative_pos % 10 - 5,
+        } as u8;
 
-        let model_id = if epic {
-            model_id + 49
-        } else if typ == Talisman {
-            model_id
-        } else if model_id % 5 != 0 {
-            model_id / 5 + 1
-        } else {
-            model_id / 5
-        };
+        let model_id = match () {
+            _ if is_epic => relative_pos + 49,
+            _ if typ == Talisman => relative_pos,
+            _ if relative_pos % 5 != 0 => relative_pos / 5 + 1,
+            _ => relative_pos / 5,
+        } as u16;
 
         return Some(EquipmentIdent {
             class,
             typ,
-            model_id: model_id as u16,
-            color: if typ == Talisman || epic {
-                1
-            } else {
-                color as u8
-            },
+            model_id,
+            color,
         });
     }
     None

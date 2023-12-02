@@ -247,8 +247,7 @@ impl Item {
         let model_id = ((data[1] & 0xFFFF) % 1000) as u16;
 
         let color = match model_id {
-            // This works.. but it feels wrong..
-            ..=50 if typ != ItemType::Talisman => {
+            ..=49 if typ != ItemType::Talisman => {
                 ((data[2..=9].iter().sum::<i64>() % 5) + 1) as u8
             }
             _ => 1,
