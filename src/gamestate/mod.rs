@@ -11,7 +11,7 @@ pub mod tavern;
 pub mod underworld;
 pub mod unlockables;
 
-use std::{array::from_fn, collections::HashMap, i64, mem::MaybeUninit};
+use std::{array::from_fn, collections::HashSet, i64, mem::MaybeUninit};
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use log::warn;
@@ -935,10 +935,8 @@ impl GameState {
                         server_time.convert_to_local(data[1], "event t end");
                 }
                 "scrapbook" => {
-                    let val = val.as_str();
-                    parse_scrapbook(val);
-
-                    // I hate this
+                    self.unlocks.scrapbok =
+                        Some(ScrapBook::parse(val.as_str()));
                 }
                 "dungeonfaces" | "shadowfaces" => {
                     // Gets returned after winning a dungeon fight. This looks a
@@ -1423,183 +1421,6 @@ impl GameState {
             fights.resize(id, Default::default())
         }
         fights.get_mut(id - 1).unwrap()
-    }
-}
-
-/// 1 to 1 copy of Hubert Lipińskis Code
-/// https://github.com/HubertLipinski/sfgame-scrapbook-helper
-fn parse_scrapbook(val: &str) {
-    let text =
-        base64::Engine::decode(&base64::engine::general_purpose::URL_SAFE, val)
-            .unwrap();
-
-    let mut item_index = 1;
-
-    let mut items = HashMap::new();
-
-    for (_i, b) in text.into_iter().enumerate() {
-        for j in (0..=7).rev() {
-            let is_owned = ((b >> j) & 1) == 1;
-            let item_name = parse_scrapbook_item(item_index);
-            if let Some(name) = item_name {
-                if items.insert(name, is_owned).is_some() {
-                    panic!("{name:?}")
-                }
-            }
-            item_index += 1;
-        }
-    }
-    println!("{:#?}", items.len());
-
-
-    let mut pc = HashMap::new();
-    for k in items.keys(){
-        pc.entry(k.class).and_modify(|a|*a += 1).or_insert(1);
-    }
-    println!("{pc:#?}")
-
-    
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct EquipmentIdent {
-    pub class: Option<Class>,
-    pub typ: EquipmentSlot,
-    pub model_id: u32,
-    pub color: u8,
-}
-
-impl ToString for EquipmentIdent {
-    fn to_string(&self) -> String {
-        let item_typ = self.typ.raw_id();
-        let model_id = self.model_id;
-        let color = self.color;
-
-        if let Some(class) = self.class {
-            let ci = class as u8 + 1;
-            format!("itm{item_typ}_{model_id}_{color}_{ci}")
-        } else {
-            format!("itm{item_typ}_{model_id}_{color}")
-        }
-    }
-}
-
-fn parse_scrapbook_item(index: i64) -> Option<EquipmentIdent> {
-    use Class::*;
-    use EquipmentSlot::*;
-    let slots: [(_, _, _, &[_]); 44] = [
-        (801..=905, Amulet, None, &[]),
-        (1011..=1028, Amulet, None, &[]),
-        (1051..=1130, Ring, None, &[]),
-        (1211..=1228, Ring, None, &[]),
-        (1251..=1287, Talisman, None, &[]),
-        (1325..=1342, Talisman, None, &[]),
-        (1365..=1514, Weapon, Some(Warrior), &[]),
-        (1665..=1682, Weapon, Some(Warrior), &[]),
-        (1705..=1754, Shield, Some(Warrior), &[]),
-        (1805..=1822, Shield, Some(Warrior), &[]),
-        (1845..=1894, BreastPlate, Some(Warrior), &[]),
-        (1945..=1962, BreastPlate, Some(Warrior), &[1954, 1955]),
-        (1985..=2034, FootWear, Some(Warrior), &[]),
-        (2085..=2102, FootWear, Some(Warrior), &[2094, 2095]),
-        (2125..=2174, Gloves, Some(Warrior), &[]),
-        (2225..=2242, Gloves, Some(Warrior), &[2234, 2235]),
-        (2265..=2314, Hat, Some(Warrior), &[]),
-        (2365..=2382, Hat, Some(Warrior), &[2374, 2375]),
-        (2405..=2454, Belt, Some(Warrior), &[]),
-        (2505..=2522, Belt, Some(Warrior), &[2514, 2515]),
-        (2545..=2594, Weapon, Some(Mage), &[]),
-        (2645..=2662, Weapon, Some(Mage), &[]),
-        (2685..=2734, BreastPlate, Some(Mage), &[]),
-        (2785..=2802, BreastPlate, Some(Mage), &[2794, 2795]),
-        (2825..=2874, FootWear, Some(Mage), &[]),
-        (2925..=2942, FootWear, Some(Mage), &[2934, 2935]),
-        (2965..=3014, Gloves, Some(Mage), &[]),
-        (3065..=3082, Gloves, Some(Mage), &[3073, 3075]),
-        (3105..=3154, Hat, Some(Mage), &[]),
-        (3205..=3222, Hat, Some(Mage), &[3214, 3215]),
-        (3245..=3294, Belt, Some(Mage), &[]),
-        (3345..=3362, Belt, Some(Mage), &[3354, 3355]),
-        (3385..=3434, Weapon, Some(Scout), &[]),
-        (3485..=3502, Weapon, Some(Scout), &[]),
-        (3525..=3574, BreastPlate, Some(Scout), &[]),
-        (3625..=3642, BreastPlate, Some(Scout), &[3634, 3635]),
-        (3665..=3714, FootWear, Some(Scout), &[]),
-        (3765..=3782, FootWear, Some(Scout), &[3774, 3775]),
-        (3805..=3854, Gloves, Some(Scout), &[]),
-        (3905..=3922, Gloves, Some(Scout), &[3914, 3915]),
-        (3945..=3994, Hat, Some(Scout), &[]),
-        (4045..=4062, Hat, Some(Scout), &[4054, 4055]),
-        (4085..=4134, Belt, Some(Scout), &[]),
-        (4185..=4202, Belt, Some(Scout), &[4194, 4195]),
-    ];
-
-    let mut epic = true;
-    for (range, typ, class, ignore) in slots {
-        epic = !epic;
-        if !range.contains(&index) {
-            continue;
-        }
-        if ignore.contains(&index) {
-            return None;
-        }
-
-        let len = range.end() - range.start() + 1;
-        return Some(match epic {
-            true => parse_epic(len, index, *range.end(), typ, class),
-            false => parse_equipment(len, index, *range.end(), typ, class),
-        });
-    }
-    None
-}
-
-fn parse_equipment(
-    range: i64,
-    index: i64,
-    index_max: i64,
-    typ: EquipmentSlot,
-    class: Option<Class>,
-) -> EquipmentIdent {
-    use EquipmentSlot::*;
-
-    let model_id = range - (index_max - index);
-
-    let color = match model_id % 10 {
-        0 => 5,
-        1..=5 => model_id % 10,
-        _ => model_id % 10 - 5,
-    };
-
-    let model_id = if typ == Talisman {
-        model_id
-    } else if model_id % 5 != 0 {
-        model_id / 5 + 1
-    } else {
-        model_id / 5
-    };
-
-    EquipmentIdent {
-        class,
-        typ,
-        model_id: model_id as u32,
-        color: if typ == Talisman { 0 } else { color as u8 },
-    }
-}
-
-fn parse_epic(
-    range: i64,
-    index: i64,
-    index_max: i64,
-    typ: EquipmentSlot,
-    class: Option<Class>,
-) -> EquipmentIdent {
-    let num = range - (index_max - index);
-    let model_id = num + 49;
-    EquipmentIdent {
-        class,
-        typ,
-        model_id: model_id as u32,
-        color: 0,
     }
 }
 

@@ -1,6 +1,7 @@
 use chrono::{DateTime, Local};
 use log::error;
 use num_traits::FromPrimitive;
+use serde::{Deserialize, Serialize};
 use strum::EnumCount;
 
 use super::*;
@@ -16,6 +17,7 @@ use crate::{
 pub struct Unlockables {
     /// Whether this character has the mirror completed
     pub mirror: Mirror,
+    pub scrapbok: Option<ScrapBook>,
     pub scrapbook_count: Option<u32>,
     pub dungeon_timer: Option<DateTime<Local>>,
     pub dungeons: Dungeons,
@@ -373,4 +375,175 @@ impl Achievements {
 pub struct Achievement {
     achieved: bool,
     progress: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScrapBook {
+    /// All the items, that this player has already collected. To check if an
+    /// item is in this, you should call equipment_ident() on an item and see
+    /// if this item contains that
+    pub items: HashSet<EquipmentIdent>,
+    /// All the monsters, that the player has seen already. I have only checked
+    /// this once, but this should match the tavern monster id.
+    // TODO: Dungeon monster ids?
+    pub monster: HashSet<u16>,
+}
+
+impl ScrapBook {
+    // 99% based on Hubert Lipińskis Code
+    // https://github.com/HubertLipinski/sfgame-scrapbook-helper
+    pub fn parse(val: &str) -> ScrapBook {
+        let text = base64::Engine::decode(
+            &base64::engine::general_purpose::URL_SAFE,
+            val,
+        )
+        .unwrap();
+
+        let mut item_index = 0;
+        let mut items = HashSet::new();
+        let mut monster = HashSet::new();
+
+        for byte in text.into_iter() {
+            for bit_pos in (0..=7).rev() {
+                item_index += 1;
+                let is_owned = ((byte >> bit_pos) & 1) == 1;
+                if is_owned {
+                    if item_index < 801 {
+                        // Monster
+                        monster.insert(item_index as u16);
+                        continue;
+                    } else {
+                        // Items
+                        if let Some(ident) = parse_scrapbook_item(item_index) {
+                            if !items.insert(ident) {
+                                error!(
+                                    "Two scrapbook positions parsed to the \
+                                     same ident"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        ScrapBook { items, monster }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct EquipmentIdent {
+    pub class: Option<Class>,
+    pub typ: EquipmentSlot,
+    pub model_id: u16,
+    pub color: u8,
+}
+
+impl ToString for EquipmentIdent {
+    fn to_string(&self) -> String {
+        let item_typ = self.typ.raw_id();
+        let model_id = self.model_id;
+        let color = self.color;
+
+        if let Some(class) = self.class {
+            let ci = class as u8 + 1;
+            format!("itm{item_typ}_{model_id}_{color}_{ci}")
+        } else {
+            format!("itm{item_typ}_{model_id}_{color}")
+        }
+    }
+}
+
+fn parse_scrapbook_item(index: i64) -> Option<EquipmentIdent> {
+    use Class::*;
+    use EquipmentSlot::*;
+    let slots: [(_, _, _, &[_]); 44] = [
+        (801..=905, Amulet, None, &[]),
+        (1011..=1028, Amulet, None, &[]),
+        (1051..=1130, Ring, None, &[]),
+        (1211..=1228, Ring, None, &[]),
+        (1251..=1287, Talisman, None, &[]),
+        (1325..=1342, Talisman, None, &[]),
+        (1365..=1514, Weapon, Some(Warrior), &[]),
+        (1665..=1682, Weapon, Some(Warrior), &[]),
+        (1705..=1754, Shield, Some(Warrior), &[]),
+        (1805..=1822, Shield, Some(Warrior), &[]),
+        (1845..=1894, BreastPlate, Some(Warrior), &[]),
+        (1945..=1962, BreastPlate, Some(Warrior), &[1954, 1955]),
+        (1985..=2034, FootWear, Some(Warrior), &[]),
+        (2085..=2102, FootWear, Some(Warrior), &[2094, 2095]),
+        (2125..=2174, Gloves, Some(Warrior), &[]),
+        (2225..=2242, Gloves, Some(Warrior), &[2234, 2235]),
+        (2265..=2314, Hat, Some(Warrior), &[]),
+        (2365..=2382, Hat, Some(Warrior), &[2374, 2375]),
+        (2405..=2454, Belt, Some(Warrior), &[]),
+        (2505..=2522, Belt, Some(Warrior), &[2514, 2515]),
+        (2545..=2594, Weapon, Some(Mage), &[]),
+        (2645..=2662, Weapon, Some(Mage), &[]),
+        (2685..=2734, BreastPlate, Some(Mage), &[]),
+        (2785..=2802, BreastPlate, Some(Mage), &[2794, 2795]),
+        (2825..=2874, FootWear, Some(Mage), &[]),
+        (2925..=2942, FootWear, Some(Mage), &[2934, 2935]),
+        (2965..=3014, Gloves, Some(Mage), &[]),
+        (3065..=3082, Gloves, Some(Mage), &[3074, 3075]),
+        (3105..=3154, Hat, Some(Mage), &[]),
+        (3205..=3222, Hat, Some(Mage), &[3214, 3215]),
+        (3245..=3294, Belt, Some(Mage), &[]),
+        (3345..=3362, Belt, Some(Mage), &[3354, 3355]),
+        (3385..=3434, Weapon, Some(Scout), &[]),
+        (3485..=3502, Weapon, Some(Scout), &[]),
+        (3525..=3574, BreastPlate, Some(Scout), &[]),
+        (3625..=3642, BreastPlate, Some(Scout), &[3634, 3635]),
+        (3665..=3714, FootWear, Some(Scout), &[]),
+        (3765..=3782, FootWear, Some(Scout), &[3774, 3775]),
+        (3805..=3854, Gloves, Some(Scout), &[]),
+        (3905..=3922, Gloves, Some(Scout), &[3914, 3915]),
+        (3945..=3994, Hat, Some(Scout), &[]),
+        (4045..=4062, Hat, Some(Scout), &[4054, 4055]),
+        (4085..=4134, Belt, Some(Scout), &[]),
+        (4185..=4202, Belt, Some(Scout), &[4194, 4195]),
+    ];
+
+    let mut epic = true;
+    for (range, typ, class, ignore) in slots {
+        epic = !epic;
+        if !range.contains(&index) {
+            continue;
+        }
+        if ignore.contains(&index) {
+            return None;
+        }
+
+        let len = range.end() - range.start() + 1;
+        let index_max = *range.end();
+        use EquipmentSlot::*;
+
+        let model_id = len - (index_max - index);
+        let color = match model_id % 10 {
+            0 => 5,
+            1..=5 => model_id % 10,
+            _ => model_id % 10 - 5,
+        };
+
+        let model_id = if epic {
+            model_id + 49
+        } else if typ == Talisman {
+            model_id
+        } else if model_id % 5 != 0 {
+            model_id / 5 + 1
+        } else {
+            model_id / 5
+        };
+
+        return Some(EquipmentIdent {
+            class,
+            typ,
+            model_id: model_id as u16,
+            color: if typ == Talisman || epic {
+                1
+            } else {
+                color as u8
+            },
+        });
+    }
+    None
 }

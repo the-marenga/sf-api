@@ -3,7 +3,10 @@ use log::{error, warn};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use super::{unlockables::PetClass, Attributes, Class, ServerTime};
+use super::{
+    unlockables::{EquipmentIdent, PetClass},
+    Attributes, Class, ServerTime,
+};
 use crate::{
     command::AttributeType,
     misc::{soft_into, warning_parse, warning_try_into},
@@ -72,7 +75,7 @@ pub enum ItemPosition {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Equipment([Option<Item>; 10]);
+pub struct Equipment(pub [Option<Item>; 10]);
 
 impl Equipment {
     pub fn get_mut(&mut self, slot: EquipmentSlot) -> &mut Option<Item> {
@@ -124,6 +127,15 @@ pub struct Item {
 }
 
 impl Item {
+    pub fn equipment_ident(&self) -> Option<EquipmentIdent> {
+        Some(EquipmentIdent {
+            class: self.class,
+            typ: self.typ.equipment_slot()?,
+            model_id: self.model_id,
+            color: self.color,
+        })
+    }
+
     /// Checks, if this item is unique. Technically they are not always unique,
     /// as the scrapbook/keys can be sold, but it should be clear what this is
     pub fn is_unique(&self) -> bool {
@@ -236,7 +248,9 @@ impl Item {
 
         let color = match model_id {
             // This works.. but it feels wrong..
-            ..=50 => ((data[4..=11].iter().sum::<i64>() % 5) + 1) as u8,
+            ..=50 if typ != ItemType::Talisman => {
+                ((data[2..=9].iter().sum::<i64>() % 5) + 1) as u8
+            }
             _ => 1,
         };
 
@@ -625,7 +639,7 @@ impl GemType {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EquipmentSlot {
     Hat = 1,
@@ -641,6 +655,22 @@ pub enum EquipmentSlot {
 }
 
 impl EquipmentSlot {
+    pub fn raw_id(&self) -> u8 {
+        use EquipmentSlot::*;
+        match self {
+            Weapon => 1,
+            Shield => 2,
+            BreastPlate => 3,
+            FootWear => 4,
+            Gloves => 5,
+            Hat => 6,
+            Belt => 7,
+            Amulet => 8,
+            Ring => 9,
+            Talisman => 10,
+        }
+    }
+
     // This is just itemtyp * 10, but whatever
     pub(crate) fn witch_id(&self) -> u32 {
         match self {
