@@ -180,6 +180,7 @@ impl CharacterSession {
         // Make sure we dont have any weird stuff in our url
         url::Url::parse(&url).map_err(|_| SFError::InvalidRequest)?;
 
+        #[allow(unused_mut)]
         let mut req = self
             .client
             .get(&url)
