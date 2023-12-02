@@ -935,8 +935,7 @@ impl GameState {
                         server_time.convert_to_local(data[1], "event t end");
                 }
                 "scrapbook" => {
-                    self.unlocks.scrapbok =
-                        Some(ScrapBook::parse(val.as_str()));
+                    self.unlocks.scrapbok = ScrapBook::parse(val.as_str());
                 }
                 "dungeonfaces" | "shadowfaces" => {
                     // Gets returned after winning a dungeon fight. This looks a
