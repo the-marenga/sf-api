@@ -11,7 +11,7 @@ pub mod tavern;
 pub mod underworld;
 pub mod unlockables;
 
-use std::{array::from_fn, i64, mem::MaybeUninit};
+use std::{array::from_fn, collections::HashSet, i64, mem::MaybeUninit};
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use log::warn;
@@ -935,7 +935,8 @@ impl GameState {
                         server_time.convert_to_local(data[1], "event t end");
                 }
                 "scrapbook" => {
-                    // I hate this
+                    self.unlocks.scrapbok =
+                        Some(ScrapBook::parse(val.as_str()));
                 }
                 "dungeonfaces" | "shadowfaces" => {
                     // Gets returned after winning a dungeon fight. This looks a

@@ -212,10 +212,10 @@ pub enum EventTaskTyp {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EventTask {
-    typ: EventTaskTyp,
-    current: u64,
-    target: u64,
-    reward: u8,
+    pub typ: EventTaskTyp,
+    pub current: u64,
+    pub target: u64,
+    pub reward: u8,
 }
 
 impl EventTask {
@@ -232,15 +232,15 @@ impl EventTask {
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RewardChest {
-    opened: bool,
-    reward: [Option<Reward>; 2],
+    pub opened: bool,
+    pub reward: [Option<Reward>; 2],
 }
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Reward {
-    typ: RewardTyp,
-    amount: u64,
+    pub typ: RewardTyp,
+    pub amount: u64,
 }
 
 impl Reward {

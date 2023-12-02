@@ -106,8 +106,8 @@ This is a list of things still on my agenda:
 - [X] Shell player command
 - [X] Better pet parsing
 - [X] Hall of Fame pets commands
+- [X] Scrapbook parsing
 - [ ] Add more get() functions for stuff, that is in arrays
-- [ ] Scrapbook parsing
 - [ ] consider a `into_list_with()` to avoid allocations there
 - [ ] Remove the main and replace that with actual tests
 - [ ] Better attribute debug

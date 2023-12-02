@@ -107,7 +107,7 @@ pub enum Gender {
     Male,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, FromPrimitive)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Class {
     #[default]
