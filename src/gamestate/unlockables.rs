@@ -372,8 +372,8 @@ impl Achievements {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Achievement {
-    achieved: bool,
-    progress: i64,
+    pub achieved: bool,
+    pub progress: i64,
 }
 
 #[derive(Debug, Clone)]
