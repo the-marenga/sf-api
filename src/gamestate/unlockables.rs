@@ -1,7 +1,6 @@
 use chrono::{DateTime, Local};
 use log::error;
 use num_traits::FromPrimitive;
-use serde::{Deserialize, Serialize};
 use strum::EnumCount;
 
 use super::*;
@@ -377,7 +376,8 @@ pub struct Achievement {
     progress: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ScrapBook {
     /// All the items, that this player has already collected. To check if an
     /// item is in this, you should call equipment_ident() on an item and see
@@ -430,7 +430,8 @@ impl ScrapBook {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EquipmentIdent {
     pub class: Option<Class>,
     pub typ: EquipmentSlot,
