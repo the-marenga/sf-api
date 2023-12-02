@@ -11,7 +11,7 @@ pub mod tavern;
 pub mod underworld;
 pub mod unlockables;
 
-use std::{array::from_fn, i64, mem::MaybeUninit};
+use std::{array::from_fn, collections::HashMap, i64, mem::MaybeUninit};
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use log::warn;
@@ -935,6 +935,9 @@ impl GameState {
                         server_time.convert_to_local(data[1], "event t end");
                 }
                 "scrapbook" => {
+                    let val = val.as_str();
+                    parse_scrapbook(val);
+
                     // I hate this
                 }
                 "dungeonfaces" | "shadowfaces" => {
@@ -1420,6 +1423,352 @@ impl GameState {
             fights.resize(id, Default::default())
         }
         fights.get_mut(id - 1).unwrap()
+    }
+}
+
+
+/// 1 to 1 copy of Hubert Lipińskis Code 
+/// https://github.com/HubertLipinski/sfgame-scrapbook-helper
+fn parse_scrapbook(val: &str) {
+    let text =
+        base64::Engine::decode(&base64::engine::general_purpose::URL_SAFE, val)
+            .unwrap();
+
+    let mut item_index = 1;
+
+    let mut items: HashMap<String, bool> = HashMap::new();
+
+    for (_i, b) in text.into_iter().enumerate() {
+        for j in (0..=7).rev() {
+            let is_owned = ((b >> j) & 1) == 1;
+            let item_name = parse_scrapbook_item(item_index);
+            if let Some(name) = item_name {
+                items.insert(name, is_owned);
+            }
+            item_index += 1;
+        }
+    }
+    println!("{:#?}", items.len())
+}
+
+fn parse_scrapbook_item(index: i64) -> Option<String> {
+    return Some(match index {
+        801..=905 => {
+            let image_path = format!("items\\08-necklaces\\");
+            let arg = method_3(105, index, 905, 0, 8, None);
+            format!("{image_path}{arg}")
+        }
+        1011..=1028 => {
+            let image_path = format!("items\\08-necklaces\\epic\\");
+            let arg = method_5(18, index, 1028, 50, 64, 8, None);
+            format!("{image_path}{arg}")
+        }
+        1051..=1130 => {
+            let image_path = format!("items\\09-rings\\");
+            let arg = method_3(80, index, 1130, 0, 9, None);
+            format!("{image_path}{arg}")
+        }
+        1211..=1228 => {
+            let image_path = format!("items\\09-rings\\epic\\");
+            let arg = method_5(18, index, 1228, 50, 67, 9, None);
+            format!("{image_path}{arg}")
+        }
+        1251..=1287 => {
+            let image_path = format!("items\\10-talismans\\");
+            let arg = method_4(37, index, 1287, 0, 10);
+            format!("{image_path}{arg}")
+        }
+        1325..=1342 => {
+            let image_path = format!("items\\10-talismans\\");
+            let arg = method_5(18, index, 1342, 50, 50, 10, None);
+            format!("{image_path}{arg}")
+        }
+        1365..=1514 => {
+            let image_path = format!("items\\01-weapons\\warrior\\");
+            let arg = method_3(150, index, 1514, 0, 1, Some(Class::Warrior));
+            format!("{image_path}{arg}")
+        }
+        1665..=1682 => {
+            let image_path = format!("items\\01-weapons\\warrior\\epic\\");
+            let arg =
+                method_5(14, index, 1678, 50, -1, 1, Some(Class::Warrior));
+            format!("{image_path}{arg}")
+        }
+        1705..=1754 => {
+            let image_path = format!("items\\02-shields\\warrior\\");
+            let arg = method_3(50, index, 1754, 0, 2, Some(Class::Warrior));
+            format!("{image_path}{arg}")
+        }
+        1805..=1822 => {
+            let image_path = format!("items\\02-shields\\warrior\\");
+            let arg =
+                method_5(18, index, 1822, 50, -1, 2, Some(Class::Warrior));
+            format!("{image_path}{arg}")
+        }
+        1845..=1894 => {
+            let image_path = format!("items\\03-armor\\warrior\\");
+            let arg = method_3(50, index, 1894, 0, 3, Some(Class::Warrior));
+            format!("{image_path}{arg}")
+        }
+        1945..=1953 | 1956..=1962 => {
+            let image_path = format!("items\\03-armor\\warrior\\epic\\");
+            let arg =
+                method_5(18, index, 1962, 50, -1, 3, Some(Class::Warrior));
+            format!("{image_path}{arg}")
+        }
+        1985..=2034 => {
+            let image_path = format!("items\\04-shoes\\warrior\\");
+            let arg = method_3(50, index, 2034, 0, 4, Some(Class::Warrior));
+            format!("{image_path}{arg}")
+        }
+        2085..=2093 | 2096..=2102 => {
+            let image_path = format!("items\\04-shoes\\warrior\\");
+            let arg =
+                method_5(18, index, 2102, 50, -1, 4, Some(Class::Warrior));
+            format!("{image_path}{arg}")
+        }
+        2125..=2174 => {
+            let image_path = format!("items\\05-gloves\\warrior\\");
+            let arg = method_3(50, index, 2174, 0, 5, Some(Class::Warrior));
+            format!("{image_path}{arg}")
+        }
+        2225..=2233 | 2236..=2242 => {
+            let image_path = format!("items\\05-gloves\\warrior\\");
+            let arg =
+                method_5(18, index, 2242, 50, -1, 5, Some(Class::Warrior));
+            format!("{image_path}{arg}")
+        }
+        2265..=2314 => {
+            let image_path = format!("items\\06-helmets\\warrior\\");
+            let arg = method_3(50, index, 2314, 0, 6, Some(Class::Warrior));
+            format!("{image_path}{arg}")
+        }
+        2365..=2373 | 2376..=2382 => {
+            let image_path = format!("items\\06-helmets\\warrior\\");
+            let arg =
+                method_5(18, index, 2382, 50, -1, 6, Some(Class::Warrior));
+            format!("{image_path}{arg}")
+        }
+        2405..=2454 => {
+            let image_path = format!("items\\07-belts\\warrior\\");
+            let arg = method_3(50, index, 2454, 0, 7, Some(Class::Warrior));
+            format!("{image_path}{arg}")
+        }
+        2505..=2513 | 2516..=2522 => {
+            let image_path = format!("items\\07-belts\\warrior\\epic\\");
+            let arg =
+                method_5(18, index, 2522, 50, -1, 7, Some(Class::Warrior));
+            format!("{image_path}{arg}")
+        }
+        2545..=2594 => {
+            let image_path = format!("items\\01-weapons\\mage\\");
+            let arg = method_3(50, index, 2594, 0, 1, Some(Class::Mage));
+            format!("{image_path}{arg}")
+        }
+        2645..=2662 => {
+            let image_path = format!("items\\01-weapons\\mage\\");
+            let arg = method_5(18, index, 2662, 50, -1, 1, Some(Class::Mage));
+            format!("{image_path}{arg}")
+        }
+        2685..=2734 => {
+            let image_path = format!("items\\03-armor\\mage\\");
+            let arg = method_3(50, index, 2734, 0, 3, Some(Class::Mage));
+            format!("{image_path}{arg}")
+        }
+        2785..=2793 | 2796..=2802 => {
+            let image_path = format!("items\\03-armor\\mage\\epic\\");
+            let arg = method_5(18, index, 2802, 50, -1, 3, Some(Class::Mage));
+            format!("{image_path}{arg}")
+        }
+        2825..=2874 => {
+            let image_path = format!("items\\04-shoes\\mage\\");
+            let arg = method_3(50, index, 2874, 0, 4, Some(Class::Mage));
+            format!("{image_path}{arg}")
+        }
+        2925..=2933 | 2936..=2942 => {
+            let image_path = format!("items\\04-shoes\\mage\\");
+            let arg = method_5(18, index, 2942, 50, -1, 4, Some(Class::Mage));
+            format!("{image_path}{arg}")
+        }
+        2965..=3014 => {
+            let image_path = format!("items\\05-gloves\\mage\\");
+            let arg = method_3(50, index, 3014, 0, 5, Some(Class::Mage));
+            format!("{image_path}{arg}")
+        }
+        3065..=3073 | 3076..=3082 => {
+            let image_path = format!("items\\05-gloves\\mage\\");
+            let arg = method_5(18, index, 3082, 50, -1, 5, Some(Class::Mage));
+            format!("{image_path}{arg}")
+        }
+        3105..=3154 => {
+            let image_path = format!("items\\06-helmets\\mage\\");
+            let arg = method_3(50, index, 3154, 0, 6, Some(Class::Mage));
+            format!("{image_path}{arg}")
+        }
+        3205..=3213 | 3216..=3222 => {
+            let image_path = format!("items\\06-helmets\\mage\\");
+            let arg = method_5(18, index, 3222, 50, -1, 6, Some(Class::Mage));
+            format!("{image_path}{arg}")
+        }
+        3245..=3294 => {
+            let image_path = format!("items\\07-belts\\mage\\");
+            let arg = method_3(50, index, 3294, 0, 7, Some(Class::Mage));
+            format!("{image_path}{arg}")
+        }
+        3345..=3353 | 3356..=3362 => {
+            let image_path = format!("items\\07-belts\\mage\\epic\\");
+            let arg = method_5(18, index, 3362, 50, -1, 7, Some(Class::Mage));
+            format!("{image_path}{arg}")
+        }
+        3385..=3434 => {
+            let image_path = format!("items\\01-weapons\\scout\\");
+            let arg = method_3(50, index, 3434, 0, 1, Some(Class::Scout));
+            format!("{image_path}{arg}")
+        }
+        3485..=3502 => {
+            let image_path = format!("items\\01-weapons\\scout\\");
+            let arg = method_5(18, index, 3502, 50, -1, 1, Some(Class::Scout));
+            format!("{image_path}{arg}")
+        }
+        3525..=3574 => {
+            let image_path = format!("items\\03-armor\\scout\\");
+            let arg = method_3(50, index, 3574, 0, 3, Some(Class::Scout));
+            format!("{image_path}{arg}")
+        }
+        3625..=3633 | 3636..=3642 => {
+            let image_path = format!("items\\03-armor\\scout\\epic\\");
+            let arg = method_5(18, index, 3642, 50, -1, 3, Some(Class::Scout));
+            format!("{image_path}{arg}")
+        }
+        3665..=3714 => {
+            let image_path = format!("items\\04-shoes\\scout\\");
+            let arg = method_3(50, index, 3714, 0, 4, Some(Class::Scout));
+            format!("{image_path}{arg}")
+        }
+        3765..=3773 | 3776..=3782 => {
+            let image_path = format!("items\\04-shoes\\scout\\");
+            let arg = method_5(18, index, 3782, 50, -1, 4, Some(Class::Scout));
+            format!("{image_path}{arg}")
+        }
+        3805..=3854 => {
+            let image_path = format!("items\\05-gloves\\scout\\");
+            let arg = method_3(50, index, 3854, 0, 5, Some(Class::Scout));
+            format!("{image_path}{arg}")
+        }
+        3905..=3913 | 3916..=3922 => {
+            let image_path = format!("items\\05-gloves\\scout\\");
+            let arg = method_5(18, index, 3922, 50, -1, 5, Some(Class::Scout));
+            format!("{image_path}{arg}")
+        }
+        3945..=3994 => {
+            let image_path = format!("items\\06-helmets\\scout\\");
+            let arg = method_3(50, index, 3994, 0, 6, Some(Class::Scout));
+            format!("{image_path}{arg}")
+        }
+        4045..=4053 | 4056..=4062 => {
+            let image_path = format!("items\\06-helmets\\scout\\");
+            let arg = method_5(18, index, 4062, 50, -1, 6, Some(Class::Scout));
+            format!("{image_path}{arg}")
+        }
+        4085..=4134 => {
+            let image_path = format!("items\\07-belts\\scout\\");
+            let arg = method_3(50, index, 4134, 0, 7, Some(Class::Scout));
+            format!("{image_path}{arg}")
+        }
+        4185..=4193 | 4196..=4202 => {
+            let image_path = format!("items\\07-belts\\scout\\epic\\");
+            let arg = method_5(18, index, 4202, 50, -1, 7, Some(Class::Scout));
+            format!("{image_path}{arg}")
+        }
+
+        _ => return None,
+    });
+}
+
+fn method_3(
+    int_0: i64,
+    int_1: i64,
+    int_2: i64,
+    int_3: i64,
+    int_4: i64,
+    character_class_0: Option<Class>,
+) -> String {
+    let mut num = int_0 - (int_2 - int_1);
+    let num2;
+    if num < 10 {
+        num2 = num;
+    } else {
+        num2 = num % 10;
+    }
+    while num % 5 != 0 {
+        num += 1;
+    }
+    num /= 5;
+
+    let mut str = format!("itm{int_4}_{}_", num + int_3);
+    if num2 == 0 {
+        str.push('5');
+    }
+    if num2 >= 1 && num2 <= 5 {
+        str = format!("{str}{num2}");
+    }
+    if num2 >= 6 && num2 <= 9 {
+        str = format!("{str}{}", num2 - 5);
+    }
+    match character_class_0 {
+        Some(Class::Warrior) | None => {
+            str.push('1');
+        }
+        Some(Class::Mage) => {
+            str.push('2');
+        }
+        Some(Class::Scout) => {
+            str.push('3');
+        }
+        _ => {}
+    }
+
+    str
+}
+
+fn method_4(
+    int_0: i64,
+    int_1: i64,
+    int_2: i64,
+    int_3: i64,
+    int_4: i64,
+) -> String {
+    let num = int_0 - (int_2 - int_1);
+    format!("itm{int_4}_{}_1", num + int_3)
+}
+
+fn method_5(
+    int_0: i64,
+    int_1: i64,
+    int_2: i64,
+    int_3: i64,
+    int_4: i64,
+    int_5: i64,
+    character_class_0: Option<Class>,
+) -> String {
+    let num = int_0 - (int_2 - int_1);
+    if num + int_3 - 1 < int_4 || int_4 < 1 {
+        let mut str = format!("itm{int_5}_{}_1_", num + int_3 - 1);
+        match character_class_0 {
+            Some(Class::Warrior) | None => {
+                str.push('1');
+            }
+            Some(Class::Mage) => {
+                str.push('2');
+            }
+            Some(Class::Scout) => {
+                str.push('3');
+            }
+            _ => {}
+        }
+        return str;
+    } else {
+        format!("itm{int_5}_{}_1", num + int_3 - 1)
     }
 }
 
