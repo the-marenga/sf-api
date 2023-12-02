@@ -1426,8 +1426,7 @@ impl GameState {
     }
 }
 
-
-/// 1 to 1 copy of Hubert Lipińskis Code 
+/// 1 to 1 copy of Hubert Lipińskis Code
 /// https://github.com/HubertLipinski/sfgame-scrapbook-helper
 fn parse_scrapbook(val: &str) {
     let text =
@@ -1448,7 +1447,13 @@ fn parse_scrapbook(val: &str) {
             item_index += 1;
         }
     }
-    println!("{:#?}", items.len())
+    // println!("{:#?}", items)
+}
+
+pub struct EquipmentIdent {
+    pub class: Option<Class>,
+    pub typ: EquipmentSlot,
+    pub is_epic: bool,
 }
 
 fn parse_scrapbook_item(index: i64) -> Option<String> {
@@ -1479,6 +1484,7 @@ fn parse_scrapbook_item(index: i64) -> Option<String> {
             format!("{image_path}{arg}")
         }
         1325..=1342 => {
+            
             let image_path = format!("items\\10-talismans\\");
             let arg = method_5(18, index, 1342, 50, 50, 10, None);
             format!("{image_path}{arg}")
@@ -1686,89 +1692,57 @@ fn parse_scrapbook_item(index: i64) -> Option<String> {
 }
 
 fn method_3(
-    int_0: i64,
-    int_1: i64,
-    int_2: i64,
-    int_3: i64,
-    int_4: i64,
-    character_class_0: Option<Class>,
+    range: i64,
+    index: i64,
+    index_max: i64,
+    epic_offset: i64,
+    item_typ: i64,
+    class: Option<Class>,
 ) -> String {
-    let mut num = int_0 - (int_2 - int_1);
-    let num2;
-    if num < 10 {
-        num2 = num;
-    } else {
-        num2 = num % 10;
-    }
-    while num % 5 != 0 {
-        num += 1;
-    }
-    num /= 5;
+    let mut num = range - (index_max - index);
+    let k = match num % 10 {
+        0 => 5,
+        1..=5 => num % 10,
+        _ => num % 10 - 5,
+    };
+    num = if num % 5 != 0 { num / 5 + 1 } else { num / 5 };
+    let ci = class.map(|c| c as u8 + 1).unwrap_or(1);
 
-    let mut str = format!("itm{int_4}_{}_", num + int_3);
-    if num2 == 0 {
-        str.push('5');
-    }
-    if num2 >= 1 && num2 <= 5 {
-        str = format!("{str}{num2}");
-    }
-    if num2 >= 6 && num2 <= 9 {
-        str = format!("{str}{}", num2 - 5);
-    }
-    match character_class_0 {
-        Some(Class::Warrior) | None => {
-            str.push('1');
-        }
-        Some(Class::Mage) => {
-            str.push('2');
-        }
-        Some(Class::Scout) => {
-            str.push('3');
-        }
-        _ => {}
-    }
-
-    str
+    let model_id = num + epic_offset;
+    format!("itm{item_typ}_{model_id}_{k}_{ci}")
 }
 
 fn method_4(
-    int_0: i64,
-    int_1: i64,
-    int_2: i64,
-    int_3: i64,
-    int_4: i64,
+    range: i64,
+    index: i64,
+    index_max: i64,
+    epic_offset: i64,
+    item_typ: i64,
 ) -> String {
-    let num = int_0 - (int_2 - int_1);
-    format!("itm{int_4}_{}_1", num + int_3)
+    let model_id = range - (index_max - index);
+    format!("itm{item_typ}_{}_1", model_id + epic_offset)
 }
 
 fn method_5(
-    int_0: i64,
-    int_1: i64,
-    int_2: i64,
-    int_3: i64,
-    int_4: i64,
-    int_5: i64,
-    character_class_0: Option<Class>,
+    range: i64,
+    index: i64,
+    index_max: i64,
+    epic_offset: i64,
+    class_epic_limit: i64,
+    item_typ: i64,
+    class: Option<Class>,
 ) -> String {
-    let num = int_0 - (int_2 - int_1);
-    if num + int_3 - 1 < int_4 || int_4 < 1 {
-        let mut str = format!("itm{int_5}_{}_1_", num + int_3 - 1);
-        match character_class_0 {
-            Some(Class::Warrior) | None => {
-                str.push('1');
-            }
-            Some(Class::Mage) => {
-                str.push('2');
-            }
-            Some(Class::Scout) => {
-                str.push('3');
-            }
-            _ => {}
-        }
-        return str;
+    let num = range - (index_max - index);
+    let model_id = num + epic_offset - 1;
+    
+    if model_id < class_epic_limit || class_epic_limit < 1 {
+        let ci = class.map(|c| c as u8 + 1).unwrap_or(1);
+        format!("itm{item_typ}_{}_1_{ci}", model_id)
     } else {
-        format!("itm{int_5}_{}_1", num + int_3 - 1)
+        if item_typ != 10 {
+            println!("{item_typ}");
+        }
+        format!("itm{item_typ}_{}_1", model_id)
     }
 }
 
