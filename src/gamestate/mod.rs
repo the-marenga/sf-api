@@ -935,8 +935,7 @@ impl GameState {
                         server_time.convert_to_local(data[1], "event t end");
                 }
                 "scrapbook" => {
-                    self.unlocks.scrapbok =
-                        Some(ScrapBook::parse(val.as_str()));
+                    self.unlocks.scrapbok = ScrapBook::parse(val.as_str());
                 }
                 "dungeonfaces" | "shadowfaces" => {
                     // Gets returned after winning a dungeon fight. This looks a
@@ -1223,7 +1222,7 @@ impl GameState {
         self.character.min_damage = soft_into(data[448], "min damage", 0);
         self.character.max_damage = soft_into(data[449], "max damage", 0);
 
-        self.character.level = soft_into(data[7] & 0xFF, "level", 0);
+        self.character.level = soft_into(data[7] & 0xFFFF, "level", 0);
         self.character.experience = soft_into(data[8], "experience", 0);
         self.character.next_level_xp = soft_into(data[9], "xp to next lvl", 0);
         self.character.honor = soft_into(data[10], "honor", 0);

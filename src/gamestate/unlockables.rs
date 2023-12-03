@@ -392,41 +392,41 @@ pub struct ScrapBook {
 impl ScrapBook {
     // 99% based on Hubert Lipińskis Code
     // https://github.com/HubertLipinski/sfgame-scrapbook-helper
-    pub fn parse(val: &str) -> ScrapBook {
+    pub fn parse(val: &str) -> Option<ScrapBook> {
         let text = base64::Engine::decode(
             &base64::engine::general_purpose::URL_SAFE,
             val,
         )
         .unwrap();
+        if text.iter().all(|a| *a == 0) {
+            return None;
+        }
 
-        let mut item_index = 0;
+        let mut index = 0;
         let mut items = HashSet::new();
         let mut monster = HashSet::new();
 
         for byte in text.into_iter() {
             for bit_pos in (0..=7).rev() {
-                item_index += 1;
+                index += 1;
                 let is_owned = ((byte >> bit_pos) & 1) == 1;
-                if is_owned {
-                    if item_index < 801 {
-                        // Monster
-                        monster.insert(item_index as u16);
-                        continue;
-                    } else {
-                        // Items
-                        if let Some(ident) = parse_scrapbook_item(item_index) {
-                            if !items.insert(ident) {
-                                error!(
-                                    "Two scrapbook positions parsed to the \
-                                     same ident"
-                                );
-                            }
-                        }
+                if !is_owned {
+                    continue;
+                }
+                if index < 801 {
+                    // Monster
+                    monster.insert(index as u16);
+                } else if let Some(ident) = parse_scrapbook_item(index) {
+                    // Items
+                    if !items.insert(ident) {
+                        error!(
+                            "Two scrapbook positions parsed to the same ident"
+                        );
                     }
                 }
             }
         }
-        ScrapBook { items, monster }
+        Some(ScrapBook { items, monster })
     }
 }
 
