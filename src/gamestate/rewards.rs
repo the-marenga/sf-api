@@ -198,15 +198,25 @@ pub enum GambleResult {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EventTaskSetting {
     ShoppingSpree = 4,
+    PartTimeNudist = 7,
+    Scrimper = 8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EventTaskTyp {
+    WinFightsBareHands = 57,
     SpendGoldInShop = 65,
     SpendGoldOnUpgrades = 66,
     RequestNewGoods = 67,
     BuyHourGlasses = 68,
+    WinFightsNoChestplate = 75,
+    WinFightsNoGear = 76,
+    WinFightsNoEpicsLegendaries = 77,
+    EarnMoneyCityGuard = 78,
+    EarnMoneyFromHoFFights = 79,
+    EarnMoneySellingItems = 80,
+    ColectGoldFromPit = 81,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
