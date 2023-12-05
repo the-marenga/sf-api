@@ -72,6 +72,10 @@ impl CharacterSession {
         self.session_id = "00000000000000000000000000000000".to_string();
     }
 
+    pub fn server_url(&self) -> &url::Url {
+        &self.server_url
+    }
+
     /// Checks if this session has ever been able to successfully login to the
     /// server to establish a session id. You should not need to check this, as
     /// `login()` should return error on unsuccessfull logins, but if you want
