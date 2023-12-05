@@ -157,6 +157,10 @@ impl Item {
         self.model_id >= 50
     }
 
+    pub fn is_legendary(&self) -> bool {
+        self.model_id >= 90
+    }
+
     /// The armor rating of this item. This is just the `effect_val`, if any
     pub fn armor(&self) -> u32 {
         use ItemType::*;
