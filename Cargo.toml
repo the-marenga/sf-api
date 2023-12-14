@@ -26,6 +26,6 @@ tokio = "1.35"
 url = "2.5"
 
 [features]
-default = ["sso", "serde", "simulate"]
+default = ["sso", "serde"]
 sso = ["dep:serde", "dep:serde_json"]
 serde = ["dep:serde", "num-bigint/serde", "chrono/serde"]
