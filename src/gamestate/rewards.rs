@@ -200,6 +200,7 @@ pub enum EventTaskSetting {
     ShoppingSpree = 4,
     PartTimeNudist = 7,
     Scrimper = 8,
+    Scholar = 9,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive)]
@@ -217,6 +218,10 @@ pub enum EventTaskTyp {
     EarnMoneyFromHoFFights = 79,
     EarnMoneySellingItems = 80,
     ColectGoldFromPit = 81,
+    GainXpFromQuests = 82,
+    GainXpFromAcademy = 83,
+    GainXpFromArenaFights = 84,
+    GainXpFromAdventuromatic = 85,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -425,6 +430,7 @@ impl DailyQuestType {
             57 => WinFightsWithBareHands,
             58 => DefeatOtherPet,
             77 => WinFightsWithoutEpics,
+            92 => WinFights(Some(Class::Necromancer)),
             x => {
                 warn!("Unknown daily quest: {x}");
                 return None;

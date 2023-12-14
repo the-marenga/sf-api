@@ -731,7 +731,7 @@ impl Default for ConnectionOptions {
                  (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
                     .to_string(),
             ),
-            expected_server_version: 1999,
+            expected_server_version: 2000,
             error_on_unsupported_version: false,
         }
     }
