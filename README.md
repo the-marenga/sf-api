@@ -71,7 +71,7 @@ cargo add --git https://github.com/the-marenga/sf-api
 ``` 
 ### Windows Builds
 
-Windows does not come with the requires openssl libraries installed, that are required to encrypt/decrypt server requests. There are a few ways to fix this, but easiest way should be:
+Windows does not come with the requires openssl libraries installed, that are required to encrypt/decrypt server requests. There are a few ways to fix this, but the easiest way should be:
 - Install, bootstrap and integrate [vcpkg](https://vcpkg.io/en/getting-started)
 - Run `./vcpkg.exe install openssl:x64-windows-static-md` to install the required openssl version.
 - You may need to restart your IDE/Terminal, but after that builds should just work
@@ -123,6 +123,7 @@ This is a list of things still on my agenda:
 - [X] Better pet parsing
 - [X] Hall of Fame pets commands
 - [X] Scrapbook parsing
+- [ ] Switch away from openssl
 - [ ] Add more get() functions for stuff, that is in arrays
 - [ ] consider a `into_list_with()` to avoid allocations there
 - [ ] Remove the main and replace that with actual tests
