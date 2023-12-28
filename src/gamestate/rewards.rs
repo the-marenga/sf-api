@@ -194,6 +194,7 @@ pub enum GambleResult {
     MushroomChange(i32),
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EventTaskSetting {
@@ -201,11 +202,14 @@ pub enum EventTaskSetting {
     PartTimeNudist = 7,
     Scrimper = 8,
     Scholar = 9,
+    UnderworldFigure = 11,
 }
 
+#[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EventTaskTyp {
+    LureHeroesIntoUnderworld = 12,
     WinFightsBareHands = 57,
     SpendGoldInShop = 65,
     SpendGoldOnUpgrades = 66,
@@ -222,6 +226,8 @@ pub enum EventTaskTyp {
     GainXpFromAcademy = 83,
     GainXpFromArenaFights = 84,
     GainXpFromAdventuromatic = 85,
+    ClaimSoulsFromExtractor = 90,
+    FillMushroomsInAdventuromatic = 91,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -295,6 +301,7 @@ pub enum RewardTyp {
     Mushroom = 3,
     Silver = 4,
     LuckyCoins = 5,
+    Souls = 10,
     Experience = 24,
     Hourglass = 26,
     Beer = 28,
