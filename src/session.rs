@@ -3,7 +3,6 @@ use std::{collections::HashMap, str::FromStr};
 use base64::Engine;
 use chrono::NaiveDateTime;
 use log::{error, trace, warn};
-use openssl::symm::{Cipher, Crypter};
 use reqwest::{header::*, Client};
 
 use crate::{
@@ -616,30 +615,21 @@ impl ServerConnection {
 }
 
 fn encrypt_server_request(to_encrypt: String, key: &str) -> String {
-    let mut to_encrypt = to_encrypt.into_bytes();
+    let mut my_key = [0; 16];
+    my_key.copy_from_slice(&key.as_bytes()[..16]);
 
-    let cipher = Cipher::aes_128_cbc();
-    let mut crypter = Crypter::new(
-        cipher,
-        openssl::symm::Mode::Encrypt,
-        key.as_bytes(),
-        Some(CRYPTO_IV.as_bytes()),
-    )
-    .unwrap();
+    let mut cipher = libaes::Cipher::new_128(&my_key);
+    cipher.set_auto_padding(false);
 
     // This feels wrong, but the normal padding does not work. No idea what the
     // default padding strategy is
-    crypter.pad(false);
-    while to_encrypt.len() % cipher.block_size() != 0 {
+    let mut to_encrypt = to_encrypt.into_bytes();
+    while to_encrypt.len() % 16 != 0 {
         to_encrypt.push(0);
     }
+    let encrypted = cipher.cbc_encrypt(CRYPTO_IV.as_bytes(), &to_encrypt);
 
-    let mut encrypted = vec![0; to_encrypt.len() + cipher.block_size()];
-    let count = crypter.update(&to_encrypt, &mut encrypted).unwrap();
-    let rest = crypter.finalize(&mut encrypted[count..]).unwrap();
-    encrypted.truncate(count + rest);
-
-    base64::engine::general_purpose::URL_SAFE.encode(&encrypted)
+    base64::engine::general_purpose::URL_SAFE.encode(encrypted)
 }
 
 pub(crate) fn reqwest_client(
@@ -694,26 +684,18 @@ pub fn decrypt_url(encrypted_url: &str, login_resp: &str) -> String {
 const CRYPTO_IV: &str = "jXT#/vz]3]5X7Jl\\";
 
 fn decrypt_server_request(to_decrypt: &str, key: &str) -> String {
-    let mut decrypt = Crypter::new(
-        Cipher::aes_128_cbc(),
-        openssl::symm::Mode::Decrypt,
-        key.as_bytes(),
-        Some(CRYPTO_IV.as_bytes()),
-    )
-    .unwrap();
-    decrypt.pad(false);
-
     let text = base64::engine::general_purpose::URL_SAFE
         .decode(to_decrypt)
         .unwrap();
 
-    let mut output = vec![0; 4000.max(text.len())];
-    let mut len = 0;
-    len += decrypt.update(&text, output.as_mut_slice()).unwrap();
-    len += decrypt.finalize(output.as_mut_slice()).unwrap();
-    output.truncate(len);
+    let mut my_key = [0; 16];
+    my_key.copy_from_slice(&key.as_bytes()[..16]);
 
-    String::from_utf8(output).unwrap()
+    let mut cipher = libaes::Cipher::new_128(&my_key);
+    cipher.set_auto_padding(false);
+    let decrypted = cipher.cbc_decrypt(CRYPTO_IV.as_bytes(), &text);
+
+    String::from_utf8(decrypted).unwrap()
 }
 
 #[derive(Debug, Clone)]
