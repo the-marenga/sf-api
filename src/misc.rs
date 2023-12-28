@@ -9,9 +9,10 @@ use crate::error::SFError;
 pub(crate) const HASH_CONST: &str = "ahHoj2woo1eeChiech6ohphoB7Aithoh";
 
 pub(crate) fn sha1_hash(val: &str) -> String {
-    let mut sha1 = openssl::sha::Sha1::new();
-    sha1.update(val.as_bytes());
-    let hash = sha1.finish();
+    use sha1::{Digest, Sha1};
+    let mut hasher = Sha1::new();
+    hasher.update(val.as_bytes());
+    let hash = hasher.finalize();
     let mut result = String::with_capacity(hash.len() * 2);
     for byte in hash.iter() {
         result.push_str(&format!("{byte:02x}"));
