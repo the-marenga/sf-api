@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
+use chrono::{Local, NaiveDateTime};
 use reqwest::{header::*, Client};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -240,6 +241,8 @@ impl SFAccount {
             country_code: String,
             #[serde(rename = "md")]
             merged_into: Option<String>,
+            #[serde(rename = "m")]
+            merge_date_time: Option<String>,
         }
 
         let resp: ServerResp = serde_json::from_str(&res).map_err(|_| {
@@ -250,15 +253,23 @@ impl SFAccount {
             .servers
             .into_iter()
             .filter_map(|s| {
-                Some((
-                    s.id,
-                    format!("https://{}", s.merged_into.unwrap_or(s.url))
-                        .parse()
-                        .ok()?,
-                ))
+                let mut server_url = s.url;
+                if let Some(merged_url) = s.merged_into {
+                    if let Some(mdt) = s.merge_date_time.and_then(|a| {
+                        NaiveDateTime::parse_from_str(&a, "%Y-%m-%d %H:%M:%S")
+                            .ok()
+                    }) {
+                        if Local::now().naive_utc() > mdt {
+                            server_url = merged_url
+                        }
+                    } else {
+                        server_url = merged_url
+                    }
+                }
+
+                Some((s.id, format!("https://{}", server_url).parse().ok()?))
             })
             .collect();
-
         if servers.is_empty() {
             return Err(SFError::ParsingError("empty server list", res));
         }
