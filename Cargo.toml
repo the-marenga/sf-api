@@ -2,6 +2,10 @@
 name = "sf-api"
 version = "0.0.1"
 edition = "2021"
+license = "MIT"
+description = "A simple API to send commands to the S&F servers and parse their responses into characters"
+repository = "https://github.com/the-marenga/sf-api"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
