@@ -1,4 +1,5 @@
 # S&F API 🧙🏽‍♂️
+![crates.io](https://img.shields.io/crates/v/sf-api.svg) ![Build Status](https://img.shields.io/github/actions/workflow/status/the-marenga/sf-api/rust.yml?branch=main) ![Licence](https://img.shields.io/crates/l/sf-api)
 
 ## Overview
 
