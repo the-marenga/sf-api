@@ -67,7 +67,7 @@ If you use a single sign-on S&F Account, you can use it like this:
 You just need to run the following command in your [Rust](https://rustup.rs/) project:
 
 ```
-cargo add --git https://github.com/the-marenga/sf-api
+cargo add sf-api
 ``` 
 
 ## Guidelines
