@@ -459,6 +459,13 @@ impl GameState {
                 "calenderreward" => {
                     // Probably removed and shoould be irrelevant
                 }
+                "oktoberfest" => {
+                    // Not sure if this is still used, but it seems to just be
+                    // empty.
+                    if !val.as_str().is_empty() {
+                        warn!("oktoberfest response is not empty: {val}")
+                    }
+                }
                 "calenderinfo" => {
                     // This is twice in the original response.
                     // This API sucks LMAO

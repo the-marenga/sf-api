@@ -390,7 +390,11 @@ impl<'de> serde::Deserialize<'de> for Response {
             }
         }
 
-        deserializer.deserialize_struct("A", &["q", "j"], AVisitor)
+        deserializer.deserialize_struct(
+            "Response",
+            &["body", "received_at"],
+            AVisitor,
+        )
     }
 }
 
@@ -713,7 +717,7 @@ impl Default for ConnectionOptions {
                  (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
                     .to_string(),
             ),
-            expected_server_version: 2000,
+            expected_server_version: 2001,
             error_on_unsupported_version: false,
         }
     }
