@@ -199,6 +199,7 @@ pub enum GambleResult {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EventTaskSetting {
     ShoppingSpree = 4,
+    TimeSkipper = 5,
     PartTimeNudist = 7,
     Scrimper = 8,
     Scholar = 9,
@@ -215,6 +216,8 @@ pub enum EventTaskTyp {
     SpendGoldOnUpgrades = 66,
     RequestNewGoods = 67,
     BuyHourGlasses = 68,
+    SkipQuest = 69,
+    SkipGameOfDiceWait = 70,
     WinFightsNoChestplate = 75,
     WinFightsNoGear = 76,
     WinFightsNoEpicsLegendaries = 77,
