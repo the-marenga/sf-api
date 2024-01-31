@@ -307,7 +307,7 @@ impl OtherPlayer {
         op.active_potions =
             ItemType::parse_active_potions(&data[194..], server_time);
         op.portal_hp_bonus =
-            soft_into((data[252] >> 16) / 256, "other portal hp bonus", 0);
+            soft_into(data[252] >> 24, "other portal hp bonus", 0);
 
         op.armor = soft_into(data[168], "other armor", 0);
         op.min_damage_base = soft_into(data[169], "other min damage", 0);

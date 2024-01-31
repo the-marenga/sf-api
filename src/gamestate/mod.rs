@@ -1317,10 +1317,10 @@ impl GameState {
         self.unlocks
             .portal
             .get_or_insert_with(Default::default)
-            .player_hp_bonus =
-            soft_into((data[445] >> 16) / 256, "portal hp bonus", 0);
+            .player_hp_bonus = soft_into(data[445] >> 24, "portal hp bonus", 0);
 
         let guild = self.unlocks.guild.get_or_insert_with(Default::default);
+        // TODO: This might be better as & 0xFF?
         guild.guild_portal.damage_bonus = ((data[445] >> 16) % 256) as u8;
         guild.own_treasure_skill =
             soft_into(data[623], "own treasure skill", 0);
