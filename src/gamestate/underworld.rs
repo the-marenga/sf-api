@@ -174,7 +174,7 @@ pub struct UnderworldUnits {
 #[derive(Debug, Default, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UnderworldUnitUpradeInfo {
-    pub next_level: u8,
+    pub next_level: u16,
     pub silver: u32,
     pub souls: u32,
 }
