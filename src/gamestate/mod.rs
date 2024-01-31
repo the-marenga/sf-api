@@ -1230,6 +1230,9 @@ impl GameState {
         self.character.max_damage = soft_into(data[449], "max damage", 0);
 
         self.character.level = soft_into(data[7] & 0xFFFF, "level", 0);
+        self.arena.fights_for_xp =
+            soft_into(data[7] >> 16, "arena xp fights", 0);
+
         self.character.experience = soft_into(data[8], "experience", 0);
         self.character.next_level_xp = soft_into(data[9], "xp to next lvl", 0);
         self.character.honor = soft_into(data[10], "honor", 0);
