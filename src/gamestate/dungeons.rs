@@ -217,7 +217,7 @@ impl Dungeons {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Companions([Companion; CompanionClass::COUNT]);
+pub struct Companions(pub [Companion; CompanionClass::COUNT]);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumCount)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

@@ -61,7 +61,7 @@ pub struct GameState {
 const SHOP_N: usize = 6;
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Shop([Item; SHOP_N]);
+pub struct Shop(pub [Item; SHOP_N]);
 
 impl Shop {
     pub(crate) fn parse(data: &[i64], server_time: ServerTime) -> Option<Shop> {
