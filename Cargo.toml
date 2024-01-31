@@ -1,9 +1,9 @@
 [package]
 name = "sf-api"
-version = "0.0.1"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
-description = "A simple API to send commands to the S&F servers and parse their responses into characters"
+description = "A simple API to send commands to the Shakes & Fidget servers and parse their responses into characters"
 repository = "https://github.com/the-marenga/sf-api"
 readme = "README.md"
 
@@ -26,7 +26,7 @@ reqwest = { version = "0.11", features = ["gzip", "deflate", "brotli"] }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
 sha1 = "0.10"
-strum = { version = "0.25", features = ["strum_macros", "derive"] }
+strum = { version = "0.26", features = ["strum_macros", "derive"] }
 tokio = "1.35"
 url = "2.5"
 
