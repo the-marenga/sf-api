@@ -140,7 +140,7 @@ pub enum BardInstrument {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Attributes(pub(crate) [u32; AttributeType::COUNT]);
+pub struct Attributes(pub [u32; AttributeType::COUNT]);
 
 impl Attributes {
     pub fn get(&self, attribute: AttributeType) -> u32 {

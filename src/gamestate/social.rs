@@ -211,6 +211,10 @@ pub struct OtherPlayer {
     pub honor: u32,
     pub rank: u32,
     pub fortress_rank: Option<u32>,
+    /// The hp bonus in percent this player has from the personal demon portal
+    pub portal_hp_bonus: u32,
+    /// The damage bonus in percent this player has from the guild demon portal
+    pub portal_dmg_bonus: u32,
 
     pub base_attributes: Attributes,
     pub bonus_attributes: Attributes,
@@ -304,7 +308,10 @@ impl OtherPlayer {
 
         op.active_potions =
             ItemType::parse_active_potions(&data[194..], server_time);
-        // op.portal_hp_bonus = (data[253] >> 16) / 256;
+        op.portal_hp_bonus =
+            soft_into(data[252] >> 24, "other portal hp bonus", 0);
+        op.portal_dmg_bonus =
+            soft_into((data[252] >> 16) & 0xFF, "other portal dmg bonus", 0);
 
         op.armor = soft_into(data[168], "other armor", 0);
         op.min_damage_base = soft_into(data[169], "other min damage", 0);

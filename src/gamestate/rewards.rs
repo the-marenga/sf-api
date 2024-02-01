@@ -200,6 +200,7 @@ pub enum GambleResult {
 pub enum EventTaskSetting {
     ShoppingSpree = 4,
     TimeSkipper = 5,
+    RuffianReset = 6,
     PartTimeNudist = 7,
     Scrimper = 8,
     Scholar = 9,
@@ -207,30 +208,75 @@ pub enum EventTaskSetting {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EventTaskTyp {
-    LureHeroesIntoUnderworld = 12,
-    WinFightsBareHands = 57,
-    SpendGoldInShop = 65,
-    SpendGoldOnUpgrades = 66,
-    RequestNewGoods = 67,
-    BuyHourGlasses = 68,
-    SkipQuest = 69,
-    SkipGameOfDiceWait = 70,
-    WinFightsNoChestplate = 75,
-    WinFightsNoGear = 76,
-    WinFightsNoEpicsLegendaries = 77,
-    EarnMoneyCityGuard = 78,
-    EarnMoneyFromHoFFights = 79,
-    EarnMoneySellingItems = 80,
-    ColectGoldFromPit = 81,
-    GainXpFromQuests = 82,
-    GainXpFromAcademy = 83,
-    GainXpFromArenaFights = 84,
-    GainXpFromAdventuromatic = 85,
-    ClaimSoulsFromExtractor = 90,
-    FillMushroomsInAdventuromatic = 91,
+    LureHeroesIntoUnderworld,
+    WinFightsAgainst(Class),
+    WinFightsBareHands,
+    SpendGoldInShop,
+    SpendGoldOnUpgrades,
+    RequestNewGoods,
+    BuyHourGlasses,
+    SkipQuest,
+    SkipGameOfDiceWait,
+    WinFights,
+    WinFightsBackToBack,
+    WinFightsNoChestplate,
+    WinFightsNoGear,
+    WinFightsNoEpicsLegendaries,
+    EarnMoneyCityGuard,
+    EarnMoneyFromHoFFights,
+    EarnMoneySellingItems,
+    ColectGoldFromPit,
+    GainXpFromQuests,
+    GainXpFromAcademy,
+    GainXpFromArenaFights,
+    GainXpFromAdventuromatic,
+    ClaimSoulsFromExtractor,
+    FillMushroomsInAdventuromatic,
+}
+
+impl EventTaskTyp {
+    pub fn parse(num: i64) -> Option<EventTaskTyp> {
+        use EventTaskTyp::*;
+        Some(match num {
+            12 => LureHeroesIntoUnderworld,
+            48 => WinFightsAgainst(Class::Warrior),
+            49 => WinFightsAgainst(Class::Mage),
+            50 => WinFightsAgainst(Class::Scout),
+            51 => WinFightsAgainst(Class::Assassin),
+            52 => WinFightsAgainst(Class::Druid),
+            53 => WinFightsAgainst(Class::Bard),
+            54 => WinFightsAgainst(Class::BattleMage),
+            55 => WinFightsAgainst(Class::Berserker),
+            56 => WinFightsAgainst(Class::DemonHunter),
+            57 => WinFightsBareHands,
+            65 => SpendGoldInShop,
+            66 => SpendGoldOnUpgrades,
+            67 => RequestNewGoods,
+            68 => BuyHourGlasses,
+            69 => SkipQuest,
+            70 => SkipGameOfDiceWait,
+            71 => WinFights,
+            72 => WinFightsBackToBack,
+            75 => WinFightsNoChestplate,
+            76 => WinFightsNoGear,
+            77 => WinFightsNoEpicsLegendaries,
+            78 => EarnMoneyCityGuard,
+            79 => EarnMoneyFromHoFFights,
+            80 => EarnMoneySellingItems,
+            81 => ColectGoldFromPit,
+            82 => GainXpFromQuests,
+            83 => GainXpFromAcademy,
+            84 => GainXpFromArenaFights,
+            85 => GainXpFromAdventuromatic,
+            90 => ClaimSoulsFromExtractor,
+            91 => FillMushroomsInAdventuromatic,
+            92 => WinFightsAgainst(Class::Necromancer),
+            _ => return None,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -245,7 +291,7 @@ pub struct EventTask {
 impl EventTask {
     pub(crate) fn parse(data: &[i64]) -> Option<EventTask> {
         Some(EventTask {
-            typ: FromPrimitive::from_i64(data[0])?,
+            typ: warning_parse(data[0], "event task typ", EventTaskTyp::parse)?,
             current: soft_into(data[1], "current eti", 0),
             target: soft_into(data[2], "target eti", u64::MAX),
             reward: soft_into(data[3], "reward eti", 0),
@@ -301,9 +347,11 @@ impl RewardChest {
 #[derive(Debug, Clone, FromPrimitive, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RewardTyp {
+    ExtraBeer = 2,
     Mushroom = 3,
     Silver = 4,
     LuckyCoins = 5,
+    Stone = 9,
     Souls = 10,
     Experience = 24,
     Hourglass = 26,

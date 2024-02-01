@@ -12,6 +12,9 @@ pub struct Arena {
     pub enemy_ids: [PlayerId; 3],
     /// The time at which the player will be able to fight for free again
     pub next_free_fight: Option<DateTime<Local>>,
+    /// The amount of fights this character has already fought today, that
+    /// gave xp. 0-10
+    pub fights_for_xp: u8,
 }
 
 #[derive(Debug, Default, Clone)]

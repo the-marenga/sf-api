@@ -61,7 +61,7 @@ pub struct GameState {
 const SHOP_N: usize = 6;
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Shop([Item; SHOP_N]);
+pub struct Shop(pub [Item; SHOP_N]);
 
 impl Shop {
     pub(crate) fn parse(data: &[i64], server_time: ServerTime) -> Option<Shop> {
@@ -1230,6 +1230,9 @@ impl GameState {
         self.character.max_damage = soft_into(data[449], "max damage", 0);
 
         self.character.level = soft_into(data[7] & 0xFFFF, "level", 0);
+        self.arena.fights_for_xp =
+            soft_into(data[7] >> 16, "arena xp fights", 0);
+
         self.character.experience = soft_into(data[8], "experience", 0);
         self.character.next_level_xp = soft_into(data[9], "xp to next lvl", 0);
         self.character.honor = soft_into(data[10], "honor", 0);
@@ -1314,10 +1317,10 @@ impl GameState {
         self.unlocks
             .portal
             .get_or_insert_with(Default::default)
-            .player_hp_bonus =
-            soft_into((data[445] >> 16) / 256, "portal hp bonus", 0);
+            .player_hp_bonus = soft_into(data[445] >> 24, "portal hp bonus", 0);
 
         let guild = self.unlocks.guild.get_or_insert_with(Default::default);
+        // TODO: This might be better as & 0xFF?
         guild.guild_portal.damage_bonus = ((data[445] >> 16) % 256) as u8;
         guild.own_treasure_skill =
             soft_into(data[623], "own treasure skill", 0);
