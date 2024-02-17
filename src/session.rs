@@ -470,7 +470,8 @@ impl Response {
                         .position(|a| a == ':')
                         .unwrap_or(part.len());
 
-                    let val = &part[seperator_pos + 1..];
+                    let val_start = (seperator_pos + 1).min(part.len());
+                    let val = &part[val_start..];
 
                     let sub_key = &part
                         [(base_key_len).min(seperator_pos)..seperator_pos]
