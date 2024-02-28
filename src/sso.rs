@@ -338,7 +338,7 @@ pub struct GoogleAuth {
 }
 
 #[derive(Debug)]
-pub enum GoogleSSOLoginResponse {
+pub enum GoogleAuthResponse {
     Success(SFAccount),
     NoAuth(GoogleAuth),
 }
@@ -348,7 +348,7 @@ impl GoogleAuth {
         &self.auth_url
     }
 
-    pub async fn try_login(self) -> Result<GoogleSSOLoginResponse, SFError> {
+    pub async fn try_login(self) -> Result<GoogleAuthResponse, SFError> {
         let resp = send_api_request(
             &self.client,
             "",
@@ -360,7 +360,7 @@ impl GoogleAuth {
         if let Some(message) = val_to_string(&resp) {
             return match message.as_str() {
                 "SSO_POPUP_STATE_PROCESSING" => {
-                    Ok(GoogleSSOLoginResponse::NoAuth(self))
+                    Ok(GoogleAuthResponse::NoAuth(self))
                 }
                 _ => Err(SFError::ConnectionError),
             };
@@ -402,7 +402,7 @@ impl GoogleAuth {
         let username = val_to_string(&res["account"]["username"])
             .ok_or(SFError::ConnectionError)?;
 
-        Ok(GoogleSSOLoginResponse::Success(SFAccount {
+        Ok(GoogleAuthResponse::Success(SFAccount {
             username,
             client: self.client,
             session: AccountSession {
