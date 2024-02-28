@@ -15,16 +15,16 @@ use crate::{
 
 #[derive(Debug)]
 #[allow(dead_code)]
-enum SSOAuth {
+enum SSOAuthDate {
     SF { pw_hash: String },
-    Google { api_token: String },
+    Google,
     Steam,
 }
 
 #[derive(Debug)]
 pub struct SFAccount {
     pub(super) username: String,
-    auth: SSOAuth,
+    auth: SSOAuthDate,
     pub(super) session: AccountSession,
     pub(super) client: Client,
     pub(super) options: ConnectionOptions,
@@ -73,7 +73,7 @@ impl SFAccount {
 
         let mut tmp_self = Self {
             username,
-            auth: SSOAuth::SF { pw_hash },
+            auth: SSOAuthDate::SF { pw_hash },
             session: AccountSession {
                 uuid: Default::default(),
                 bearer_token: Default::default(),
@@ -92,7 +92,7 @@ impl SFAccount {
     /// us
     pub async fn refresh_login(&mut self) -> Result<(), SFError> {
         let pw_hash = match &self.auth {
-            SSOAuth::SF { pw_hash } => pw_hash,
+            SSOAuthDate::SF { pw_hash } => pw_hash,
             _ => {
                 // I do not think there is a way to reauth without going through
                 // the SSO process again for these
@@ -331,130 +331,9 @@ impl ServerLookup {
 }
 
 #[derive(Debug)]
-pub struct GoogleAuth {
-    client: Client,
-    options: ConnectionOptions,
-    auth_url: Url,
-    auth_id: String,
-}
-
-#[derive(Debug)]
-pub enum GoogleAuthResponse {
+pub enum AuthResponse {
     Success(SFAccount),
-    NoAuth(GoogleAuth),
-}
-
-impl GoogleAuth {
-    /// Returns the SSO auth url from google, that the user has to login through
-    pub fn auth_url(&self) -> &Url {
-        &self.auth_url
-    }
-
-    /// Tries to login. If the user has successfully authenticated via the
-    /// auth_url, this will return the normal SFAccount. Otherwise, this will
-    /// return the existing GoogleAuth for you to reattempt the login after a
-    /// few seconds
-    pub async fn try_login(self) -> Result<GoogleAuthResponse, SFError> {
-        let resp = send_api_request(
-            &self.client,
-            "",
-            &format!("/json/sso/googleauth/check/{}", self.auth_id),
-            APIRequest::Get,
-        )
-        .await?;
-
-        if let Some(message) = val_to_string(&resp) {
-            return match message.as_str() {
-                "SSO_POPUP_STATE_PROCESSING" => {
-                    Ok(GoogleAuthResponse::NoAuth(self))
-                }
-                _ => Err(SFError::ConnectionError),
-            };
-        }
-
-        let google_access_token = val_to_string(&resp["access_token"])
-            .ok_or(SFError::ConnectionError)?;
-        let token_type = val_to_string(&resp["token_type"])
-            .ok_or(SFError::ConnectionError)?;
-        let id_token =
-            val_to_string(&resp["id_token"]).ok_or(SFError::ConnectionError)?;
-
-        if token_type != "Bearer" {
-            return Err(SFError::ConnectionError);
-        }
-
-        let mut form_data = HashMap::new();
-        form_data.insert("token".to_string(), id_token.clone());
-        form_data.insert("language".to_string(), "en".to_string());
-
-        let res = send_api_request(
-            &self.client,
-            "",
-            "json/login/sso/googleauth",
-            APIRequest::Post {
-                parameters: vec![
-                    "client_id=i43nwwnmfc5tced4jtuk4auuygqghud2yopx",
-                    "auth_type=access_token",
-                ],
-                form_data,
-            },
-        )
-        .await?;
-
-        let access_token = val_to_string(&res["token"]["access_token"])
-            .ok_or(SFError::ConnectionError)?;
-        let uuid = val_to_string(&res["account"]["uuid"])
-            .ok_or(SFError::ConnectionError)?;
-        let username = val_to_string(&res["account"]["username"])
-            .ok_or(SFError::ConnectionError)?;
-
-        Ok(GoogleAuthResponse::Success(SFAccount {
-            username,
-            client: self.client,
-            session: AccountSession {
-                uuid,
-                bearer_token: access_token,
-            },
-            options: self.options,
-            auth: SSOAuth::Google {
-                api_token: google_access_token,
-            },
-        }))
-    }
-
-    /// Instantiates a new attempt to login through google. A user then has to
-    /// interact with the auth_url this returns to validate the login.
-    /// Afterwardds you can login and transform this into a normal SFAccount
-    pub async fn new() -> Result<GoogleAuth, SFError> {
-        GoogleAuth::new_with_options(Default::default()).await
-    }
-
-    /// The same as new(), but with optional connection options
-    pub async fn new_with_options(
-        options: ConnectionOptions,
-    ) -> Result<GoogleAuth, SFError> {
-        let client =
-            reqwest_client(&options).ok_or(SFError::ConnectionError)?;
-        let resp = send_api_request(
-            &client,
-            "",
-            "json/sso/googleauth",
-            APIRequest::Get,
-        )
-        .await?;
-
-        let auth_url = val_to_string(&resp["redirect"])
-            .and_then(|a| Url::parse(&a).ok())
-            .ok_or(SFError::ConnectionError)?;
-        let auth_id =
-            val_to_string(&resp["id"]).ok_or(SFError::ConnectionError)?;
-        Ok(GoogleAuth {
-            client,
-            options,
-            auth_url,
-            auth_id,
-        })
-    }
+    NoAuth(SSOAuth),
 }
 
 fn val_to_string(val: &Value) -> Option<String> {
@@ -462,20 +341,38 @@ fn val_to_string(val: &Value) -> Option<String> {
 }
 
 #[derive(Debug)]
-pub struct SteamAuth {
+pub struct SSOAuth {
     client: Client,
     options: ConnectionOptions,
     auth_url: Url,
     auth_id: String,
+    provider: SSOProvider,
 }
 
 #[derive(Debug)]
-pub enum SteamAuthResponse {
-    Success(SFAccount),
-    NoAuth(SteamAuth),
+pub enum SSOProvider {
+    Google,
+    Steam,
 }
 
-impl SteamAuth {
+impl SSOProvider {
+    fn endpoint_ident(&self) -> &'static str {
+        match self {
+            SSOProvider::Google => "googleauth",
+            SSOProvider::Steam => "steamauth",
+        }
+    }
+}
+
+impl SSOAuth {
+    async fn send_api_request(
+        &self,
+        endpoint: &str,
+        method: APIRequest,
+    ) -> Result<Value, SFError> {
+        send_api_request(&self.client, "", endpoint, method).await
+    }
+
     /// Returns the SSO auth url from google, that the user has to login through
     pub fn auth_url(&self) -> &Url {
         &self.auth_url
@@ -485,20 +382,17 @@ impl SteamAuth {
     /// auth_url, this will return the normal SFAccount. Otherwise, this will
     /// return the existing GoogleAuth for you to reattempt the login after a
     /// few seconds
-    pub async fn try_login(self) -> Result<SteamAuthResponse, SFError> {
-        let resp = send_api_request(
-            &self.client,
-            "",
-            &format!("/json/sso/steamauth/check/{}", self.auth_id),
-            APIRequest::Get,
-        )
-        .await?;
+    pub async fn try_login(self) -> Result<AuthResponse, SFError> {
+        let endpoint = format!(
+            "/json/sso/{}/check/{}",
+            self.provider.endpoint_ident(),
+            self.auth_id
+        );
+        let resp = self.send_api_request(&endpoint, APIRequest::Get).await?;
 
         if let Some(message) = val_to_string(&resp) {
             return match message.as_str() {
-                "SSO_POPUP_STATE_PROCESSING" => {
-                    Ok(SteamAuthResponse::NoAuth(self))
-                }
+                "SSO_POPUP_STATE_PROCESSING" => Ok(AuthResponse::NoAuth(self)),
                 _ => Err(SFError::ConnectionError),
             };
         }
@@ -510,19 +404,18 @@ impl SteamAuth {
         form_data.insert("token".to_string(), id_token.clone());
         form_data.insert("language".to_string(), "en".to_string());
 
-        let res = send_api_request(
-            &self.client,
-            "",
-            "json/login/sso/steamauth",
-            APIRequest::Post {
-                parameters: vec![
-                    "client_id=i43nwwnmfc5tced4jtuk4auuygqghud2yopx",
-                    "auth_type=access_token",
-                ],
-                form_data,
-            },
-        )
-        .await?;
+        let res = self
+            .send_api_request(
+                &format!("json/login/sso/{}", self.provider.endpoint_ident()),
+                APIRequest::Post {
+                    parameters: vec![
+                        "client_id=i43nwwnmfc5tced4jtuk4auuygqghud2yopx",
+                        "auth_type=access_token",
+                    ],
+                    form_data,
+                },
+            )
+            .await?;
 
         let access_token = val_to_string(&res["token"]["access_token"])
             .ok_or(SFError::ConnectionError)?;
@@ -531,7 +424,7 @@ impl SteamAuth {
         let username = val_to_string(&res["account"]["username"])
             .ok_or(SFError::ConnectionError)?;
 
-        Ok(SteamAuthResponse::Success(SFAccount {
+        Ok(AuthResponse::Success(SFAccount {
             username,
             client: self.client,
             session: AccountSession {
@@ -539,27 +432,32 @@ impl SteamAuth {
                 bearer_token: access_token,
             },
             options: self.options,
-            auth: SSOAuth::Steam,
+            auth: match self.provider {
+                SSOProvider::Google => SSOAuthDate::Google,
+                SSOProvider::Steam => SSOAuthDate::Steam,
+            },
         }))
     }
 
     /// Instantiates a new attempt to login through google. A user then has to
     /// interact with the auth_url this returns to validate the login.
     /// Afterwardds you can login and transform this into a normal SFAccount
-    pub async fn new() -> Result<SteamAuth, SFError> {
-        SteamAuth::new_with_options(Default::default()).await
+    pub async fn new(provider: SSOProvider) -> Result<Self, SFError> {
+        Self::new_with_options(provider, Default::default()).await
     }
 
     /// The same as new(), but with optional connection options
     pub async fn new_with_options(
+        provider: SSOProvider,
         options: ConnectionOptions,
-    ) -> Result<SteamAuth, SFError> {
+    ) -> Result<Self, SFError> {
         let client =
             reqwest_client(&options).ok_or(SFError::ConnectionError)?;
+
         let resp = send_api_request(
             &client,
             "",
-            "json/sso/steamauth",
+            &format!("json/sso/{}", provider.endpoint_ident()),
             APIRequest::Get,
         )
         .await?;
@@ -569,11 +467,12 @@ impl SteamAuth {
             .ok_or(SFError::ConnectionError)?;
         let auth_id =
             val_to_string(&resp["id"]).ok_or(SFError::ConnectionError)?;
-        Ok(SteamAuth {
+        Ok(Self {
             client,
             options,
             auth_url,
             auth_id,
+            provider,
         })
     }
 }
