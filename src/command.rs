@@ -958,7 +958,6 @@ impl Command {
                      {pass}/106"
                 )
             }
-
             SetLanguage { language } => {
                 format!("AccountSetLanguage:{language}")
             }
