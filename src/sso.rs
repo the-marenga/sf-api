@@ -54,6 +54,8 @@ pub struct SSOCharacter {
     pub(super) server_id: i32,
 }
 impl SFAccount {
+    /// Initializes a SFAccount by logging the user in using the supplied clear
+    /// text credentials
     pub async fn login(
         username: String,
         password: String,
@@ -61,7 +63,6 @@ impl SFAccount {
         Self::login_with_options(username, password, Default::default()).await
     }
 
-    /// Creates a new SSO account by logging the user in.
     pub async fn login_with_options(
         username: String,
         password: String,
@@ -71,7 +72,7 @@ impl SFAccount {
         Self::login_hashed_with_options(username, pw_hash, options).await
     }
 
-    /// Creates a new SSO account by logging the user in.
+    /// Initializes a SFAccount by logging the user in using the hashed password
     pub async fn login_hashed(
         username: String,
         pw_hash: PWHash,
