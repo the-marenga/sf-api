@@ -80,6 +80,9 @@ pub struct Portrait {
     pub beards: u8,
     pub nose: u8,
     pub ears: u8,
+    pub extra: u8,
+    pub horns: u8,
+    /// Influencers get a special portrait. Otherwise this should be 0
     pub special_portrait: u32,
 }
 
@@ -93,8 +96,9 @@ impl Portrait {
         self.beards = soft_into(data[4] % 100, "beards", 1);
         self.nose = soft_into(data[5], "nose", 1);
         self.ears = soft_into(data[6], "ears", 1);
-        // Check what 24..=25 are
-        self.special_portrait = soft_into(data[9], "special", 1);
+        self.extra = soft_into(data[7], "extra", 1);
+        self.horns = soft_into(data[8], "horns", 1);
+        self.special_portrait = soft_into(-data[9], "special", 1);
         self.gender = FromPrimitive::from_i64(data[11] % 2).unwrap_or_default();
     }
 }
