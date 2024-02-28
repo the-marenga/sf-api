@@ -15,7 +15,7 @@ use crate::{
 
 #[derive(Debug)]
 #[allow(dead_code)]
-enum SSOAuthDate {
+enum SSOAuthData {
     SF { pw_hash: String },
     Google,
     Steam,
@@ -24,7 +24,7 @@ enum SSOAuthDate {
 #[derive(Debug)]
 pub struct SFAccount {
     pub(super) username: String,
-    auth: SSOAuthDate,
+    auth: SSOAuthData,
     pub(super) session: AccountSession,
     pub(super) client: Client,
     pub(super) options: ConnectionOptions,
@@ -73,7 +73,7 @@ impl SFAccount {
 
         let mut tmp_self = Self {
             username,
-            auth: SSOAuthDate::SF { pw_hash },
+            auth: SSOAuthData::SF { pw_hash },
             session: AccountSession {
                 uuid: Default::default(),
                 bearer_token: Default::default(),
@@ -92,7 +92,7 @@ impl SFAccount {
     /// us
     pub async fn refresh_login(&mut self) -> Result<(), SFError> {
         let pw_hash = match &self.auth {
-            SSOAuthDate::SF { pw_hash } => pw_hash,
+            SSOAuthData::SF { pw_hash } => pw_hash,
             _ => {
                 // I do not think there is a way to reauth without going through
                 // the SSO process again for these
@@ -433,8 +433,8 @@ impl SSOAuth {
             },
             options: self.options,
             auth: match self.provider {
-                SSOProvider::Google => SSOAuthDate::Google,
-                SSOProvider::Steam => SSOAuthDate::Steam,
+                SSOProvider::Google => SSOAuthData::Google,
+                SSOProvider::Steam => SSOAuthData::Steam,
             },
         }))
     }
