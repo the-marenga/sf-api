@@ -503,7 +503,7 @@ fn parse_scrapbook_item(index: i64) -> Option<EquipmentIdent> {
         (3945..=4045 - 1, Hat, Some(Scout), &[]),
         (4045..=4085 - 1, Hat, Some(Scout), &[4054, 4055]),
         (4085..=4185 - 1, Belt, Some(Scout), &[]),
-        (4185..=4202, Belt, Some(Scout), &[4194, 4195]),
+        (4185..=4225 - 1, Belt, Some(Scout), &[4194, 4195]),
     ];
 
     let mut is_epic = true;
