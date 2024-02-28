@@ -14,9 +14,16 @@ use crate::{
 };
 
 #[derive(Debug)]
+#[allow(dead_code)]
+enum SSOAuth {
+    SF { pw_hash: String },
+    Google { api_token: String },
+}
+
+#[derive(Debug)]
 pub struct SFAccount {
     pub(super) username: String,
-    pub(super) pw_hash: String,
+    auth: SSOAuth,
     pub(super) session: AccountSession,
     pub(super) client: Client,
     pub(super) options: ConnectionOptions,
@@ -65,7 +72,7 @@ impl SFAccount {
 
         let mut tmp_self = Self {
             username,
-            pw_hash,
+            auth: SSOAuth::SF { pw_hash },
             session: AccountSession {
                 uuid: Default::default(),
                 bearer_token: Default::default(),
@@ -83,9 +90,18 @@ impl SFAccount {
     /// connected too long, or the server was restarted/cache cleared and forgot
     /// us
     pub async fn refresh_login(&mut self) -> Result<(), SFError> {
+        let pw_hash = match &self.auth {
+            SSOAuth::SF { pw_hash } => pw_hash,
+            SSOAuth::Google { .. } => {
+                // TODO: Try to actually reauth with google (if that is even
+                // posible)
+                return Err(SFError::ConnectionError);
+            }
+        };
+
         let mut form_data = HashMap::new();
         form_data.insert("username".to_string(), self.username.clone());
-        form_data.insert("password".to_string(), self.pw_hash.clone());
+        form_data.insert("password".to_string(), pw_hash.clone());
 
         let res = self
             .send_api_request(
@@ -126,7 +142,7 @@ impl SFAccount {
         // This could be passed in as an argument in case of multiple SSO
         // accounts to safe on requests, but I dont think people have multiple
         // and this is way easier
-        let server_lookup = fetch_server_lookup(&self.client).await?;
+        let server_lookup = ServerLookup::fetch(&self.client).await?;
         let mut res = self
             .send_api_request("json/client/characters", APIRequest::Get)
             .await?;
@@ -238,71 +254,72 @@ async fn send_api_request(
     Ok(data)
 }
 
-/// Fetches the current mapping of server ids to server urls.
-async fn fetch_server_lookup(client: &Client) -> Result<ServerLookup, SFError> {
-    let res = client
-        .get("https://sfgame.net/config.json")
-        .send()
-        .await
-        .map_err(|_| SFError::ConnectionError)?
-        .text()
-        .await
-        .map_err(|_| SFError::ConnectionError)?;
-
-    #[derive(Debug, Deserialize, Serialize)]
-    struct ServerResp {
-        servers: Vec<ServerInfo>,
-    }
-
-    #[derive(Debug, Deserialize, Serialize)]
-    struct ServerInfo {
-        #[serde(rename = "i")]
-        id: i32,
-        #[serde(rename = "d")]
-        url: String,
-        #[serde(rename = "c")]
-        country_code: String,
-        #[serde(rename = "md")]
-        merged_into: Option<String>,
-        #[serde(rename = "m")]
-        merge_date_time: Option<String>,
-    }
-
-    let resp: ServerResp = serde_json::from_str(&res).map_err(|_| {
-        SFError::ParsingError("server response", res.to_string())
-    })?;
-
-    let servers: HashMap<i32, Url> = resp
-        .servers
-        .into_iter()
-        .filter_map(|s| {
-            let mut server_url = s.url;
-            if let Some(merged_url) = s.merged_into {
-                if let Some(mdt) = s.merge_date_time.and_then(|a| {
-                    NaiveDateTime::parse_from_str(&a, "%Y-%m-%d %H:%M:%S").ok()
-                }) {
-                    if Local::now().naive_utc() > mdt {
-                        server_url = merged_url
-                    }
-                } else {
-                    server_url = merged_url
-                }
-            }
-
-            Some((s.id, format!("https://{}", server_url).parse().ok()?))
-        })
-        .collect();
-    if servers.is_empty() {
-        return Err(SFError::ParsingError("empty server list", res));
-    }
-
-    Ok(ServerLookup(servers))
-}
-
 #[derive(Debug, Clone)]
 pub struct ServerLookup(HashMap<i32, Url>);
 
 impl ServerLookup {
+    /// Fetches the current mapping of server ids to server urls.
+    async fn fetch(client: &Client) -> Result<ServerLookup, SFError> {
+        let res = client
+            .get("https://sfgame.net/config.json")
+            .send()
+            .await
+            .map_err(|_| SFError::ConnectionError)?
+            .text()
+            .await
+            .map_err(|_| SFError::ConnectionError)?;
+
+        #[derive(Debug, Deserialize, Serialize)]
+        struct ServerResp {
+            servers: Vec<ServerInfo>,
+        }
+
+        #[derive(Debug, Deserialize, Serialize)]
+        struct ServerInfo {
+            #[serde(rename = "i")]
+            id: i32,
+            #[serde(rename = "d")]
+            url: String,
+            #[serde(rename = "c")]
+            country_code: String,
+            #[serde(rename = "md")]
+            merged_into: Option<String>,
+            #[serde(rename = "m")]
+            merge_date_time: Option<String>,
+        }
+
+        let resp: ServerResp = serde_json::from_str(&res).map_err(|_| {
+            SFError::ParsingError("server response", res.to_string())
+        })?;
+
+        let servers: HashMap<i32, Url> = resp
+            .servers
+            .into_iter()
+            .filter_map(|s| {
+                let mut server_url = s.url;
+                if let Some(merged_url) = s.merged_into {
+                    if let Some(mdt) = s.merge_date_time.and_then(|a| {
+                        NaiveDateTime::parse_from_str(&a, "%Y-%m-%d %H:%M:%S")
+                            .ok()
+                    }) {
+                        if Local::now().naive_utc() > mdt {
+                            server_url = merged_url
+                        }
+                    } else {
+                        server_url = merged_url
+                    }
+                }
+
+                Some((s.id, format!("https://{}", server_url).parse().ok()?))
+            })
+            .collect();
+        if servers.is_empty() {
+            return Err(SFError::ParsingError("empty server list", res));
+        }
+
+        Ok(ServerLookup(servers))
+    }
+
     /// Gets the mapping of a server id to a url
     pub fn get(&self, server_id: i32) -> Result<Url, SFError> {
         self.0
@@ -311,26 +328,18 @@ impl ServerLookup {
             .ok_or(SFError::InvalidRequest)
     }
 }
+
 #[derive(Debug)]
 pub struct GoogleAuth {
     client: Client,
     options: ConnectionOptions,
-    id_token: String,
     auth_url: Url,
     auth_id: String,
 }
 
 #[derive(Debug)]
-pub struct GoogleAccount {
-    username: String,
-    client: Client,
-    data: AccountSession,
-    options: ConnectionOptions,
-    api_access_token: String,
-}
-
 pub enum GoogleSSOLoginResponse {
-    Success(GoogleAccount),
+    Success(SFAccount),
     NoAuth(GoogleAuth),
 }
 
@@ -393,15 +402,17 @@ impl GoogleAuth {
         let username = val_to_string(&res["account"]["username"])
             .ok_or(SFError::ConnectionError)?;
 
-        Ok(GoogleSSOLoginResponse::Success(GoogleAccount {
+        Ok(GoogleSSOLoginResponse::Success(SFAccount {
             username,
             client: self.client,
-            data: AccountSession {
+            session: AccountSession {
                 uuid,
                 bearer_token: access_token,
             },
             options: self.options,
-            api_access_token: google_access_token,
+            auth: SSOAuth::Google {
+                api_token: google_access_token,
+            },
         }))
     }
 
