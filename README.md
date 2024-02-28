@@ -13,7 +13,7 @@ The most basic example on how to use this would be:
     let mut session = CharacterSession::new(
         "username",
         "password",
-        ServerConnection::new("s1.sfgame.de").unwrap(),
+        ServerConnection::new("f1.sfgame.net").unwrap(),
     );
 
     // The login response will contain information about our character and the 
