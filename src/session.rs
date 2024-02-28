@@ -59,10 +59,10 @@ impl CharacterSession {
         password: &str,
         server: ServerConnection,
     ) -> Self {
-        Self::new_with_hash(username, PWHash::new(password), server)
+        Self::new_hashed(username, PWHash::new(password), server)
     }
 
-    pub fn new_with_hash(
+    pub fn new_hashed(
         username: &str,
         pw_hash: PWHash,
         server: ServerConnection,
