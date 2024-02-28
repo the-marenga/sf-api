@@ -344,10 +344,15 @@ pub enum GoogleAuthResponse {
 }
 
 impl GoogleAuth {
+    /// Returns the SSO auth url from google, that the user has to login through
     pub fn auth_url(&self) -> &Url {
         &self.auth_url
     }
 
+    /// Tries to login. If the user has successfully authenticated via the
+    /// auth_url, this will return the normal SFAccount. Otherwise, this will
+    /// return the existing GoogleAuth for you to reattempt the login after a
+    /// few seconds
     pub async fn try_login(self) -> Result<GoogleAuthResponse, SFError> {
         let resp = send_api_request(
             &self.client,
@@ -416,10 +421,14 @@ impl GoogleAuth {
         }))
     }
 
+    /// Instantiates a new attempt to login through google. A user then has to
+    /// interact with the auth_url this returns to validate the login.
+    /// Afterwardds you can login and transform this into a normal SFAccount
     pub async fn new() -> Result<GoogleAuth, SFError> {
         GoogleAuth::new_with_options(Default::default()).await
     }
 
+    /// The same as new(), but with optional connection options
     pub async fn new_with_options(
         options: ConnectionOptions,
     ) -> Result<GoogleAuth, SFError> {
