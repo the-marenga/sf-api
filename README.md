@@ -1,5 +1,5 @@
 # S&F API 🧙🏽‍♂️
-[![crates.io](https://img.shields.io/crates/v/sf-api.svg)](https://crates.io/crates/sf-api) ![Build Status](https://img.shields.io/github/actions/workflow/status/the-marenga/sf-api/rust.yml?branch=main) ![Licence](https://img.shields.io/crates/l/sf-api)
+[![crates.io](https://img.shields.io/crates/v/sf-api.svg)](https://crates.io/crates/sf-api) ![Build Status](https://img.shields.io/github/actions/workflow/status/the-marenga/sf-api/rust.yml?branch=main) ![Licence](https://img.shields.io/crates/l/sf-api) [<img src='https://storage.ko-fi.com/cdn/kofi3.png?v=3' height='20'>](https://ko-fi.com/J3J0ULD4J)
 
 ## Overview
 
