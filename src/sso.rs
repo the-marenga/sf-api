@@ -9,14 +9,14 @@ use url::Url;
 
 use crate::{
     error::SFError,
-    misc::{sha1_hash, HASH_CONST},
-    session::{reqwest_client, CharacterSession, ConnectionOptions},
+    misc::sha1_hash,
+    session::{reqwest_client, CharacterSession, ConnectionOptions, PWHash},
 };
 
 #[derive(Debug)]
 #[allow(dead_code)]
 enum SSOAuthData {
-    SF { pw_hash: String },
+    SF { pw_hash: PWHash },
     Google,
     Steam,
 }
@@ -58,8 +58,7 @@ impl SFAccount {
         username: String,
         password: String,
     ) -> Result<SFAccount, SFError> {
-        SFAccount::login_with_options(username, password, Default::default())
-            .await
+        Self::login_with_options(username, password, Default::default()).await
     }
 
     /// Creates a new SSO account by logging the user in.
@@ -68,9 +67,24 @@ impl SFAccount {
         password: String,
         options: ConnectionOptions,
     ) -> Result<SFAccount, SFError> {
-        let pw_hash = sha1_hash(&(password.clone() + HASH_CONST));
-        let pw_hash = sha1_hash(&(pw_hash + "0"));
+        let pw_hash = PWHash::new(&password);
+        Self::login_hashed_with_options(username, pw_hash, options).await
+    }
 
+    /// Creates a new SSO account by logging the user in.
+    pub async fn login_hashed(
+        username: String,
+        pw_hash: PWHash,
+    ) -> Result<SFAccount, SFError> {
+        Self::login_hashed_with_options(username, pw_hash, Default::default())
+            .await
+    }
+
+    pub async fn login_hashed_with_options(
+        username: String,
+        pw_hash: PWHash,
+        options: ConnectionOptions,
+    ) -> Result<SFAccount, SFError> {
         let mut tmp_self = Self {
             username,
             auth: SSOAuthData::SF { pw_hash },
@@ -102,7 +116,10 @@ impl SFAccount {
 
         let mut form_data = HashMap::new();
         form_data.insert("username".to_string(), self.username.clone());
-        form_data.insert("password".to_string(), pw_hash.clone());
+        form_data.insert(
+            "password".to_string(),
+            sha1_hash(&(pw_hash.get().to_string() + "0")),
+        );
 
         let res = self
             .send_api_request(
