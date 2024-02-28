@@ -432,13 +432,17 @@ impl Response {
         let body = og_body
             .trim_end_matches('|')
             .trim_start_matches(|a: char| !a.is_alphabetic());
-        if !body.contains(':') && body != "success" {
+        if !body.contains(':')
+            && !body.starts_with("success")
+            && !body.starts_with("Success")
+        {
             return Err(SFError::ParsingError(
                 "unexpected server response",
                 body.to_string(),
             ));
         }
-        if body.starts_with("error") {
+
+        if body.starts_with("error") || body.starts_with("Error") {
             return Err(SFError::ServerError(
                 body.split_once(':').unwrap_or_default().1.to_string(),
             ));
