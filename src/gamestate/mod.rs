@@ -1281,8 +1281,6 @@ impl GameState {
         }
         self.arena.next_free_fight =
             server_time.convert_to_local(data[460], "next battle time");
-        self.arena.next_free_fight =
-            server_time.convert_to_local(data[460], "next battle time");
 
         // Toilet remains none as long as its level is 0
         if data[491] > 0 {
@@ -1325,7 +1323,7 @@ impl GameState {
         guild.own_treasure_skill =
             soft_into(data[623], "own treasure skill", 0);
         guild.own_instruction_skill =
-            soft_into(data[624], "own treasure skill", 0);
+            soft_into(data[624], "own instruction skill", 0);
         guild.hydra_next_battle =
             server_time.convert_to_local(data[627], "pet battle");
         self.unlocks
