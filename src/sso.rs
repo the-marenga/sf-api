@@ -100,10 +100,9 @@ impl SFAccount {
             )
             .await?;
 
-        let to_str = |d: &Value| d.as_str().map(|a| a.to_string());
         let (Some(bearer_token), Some(uuid)) = (
-            to_str(&res["token"]["access_token"]),
-            to_str(&res["account"]["uuid"]),
+            val_to_string(&res["token"]["access_token"]),
+            val_to_string(&res["account"]["uuid"]),
         ) else {
             return Err(SFError::ParsingError(
                 "missing auth value in api response",
@@ -127,7 +126,7 @@ impl SFAccount {
         // This could be passed in as an argument in case of multiple SSO
         // accounts to safe on requests, but I dont think people have multiple
         // and this is way easier
-        let server_lookup = self.fetch_server_lookup().await?;
+        let server_lookup = fetch_server_lookup(&self.client).await?;
         let mut res = self
             .send_api_request("json/client/characters", APIRequest::Get)
             .await?;
@@ -154,128 +153,150 @@ impl SFAccount {
         Ok(chars)
     }
 
-    /// Send a request to the SSO server. The endoint will be "json/*". We try
-    /// to check if the response is bad in any way, but S&F responses never obey
-    /// to HTML status codes, or their own system, so good luck
     async fn send_api_request(
         &self,
         endpoint: &str,
         method: APIRequest,
     ) -> Result<Value, SFError> {
-        let mut url = url::Url::parse("https://sso.playa-games.com")
-            .map_err(|_| SFError::ConnectionError)?;
-        url.set_path(endpoint);
+        send_api_request(
+            &self.client,
+            &self.session.bearer_token,
+            endpoint,
+            method,
+        )
+        .await
+    }
+}
 
-        let mut request = match method {
-            APIRequest::Get => self.client.get(url.as_str()),
-            APIRequest::Post {
-                parameters,
-                form_data,
-            } => {
-                url.set_query(Some(&parameters.join("&")));
-                self.client.post(url.as_str()).form(&form_data)
-            }
-        };
+/// Send a request to the SSO server. The endoint will be "json/*". We try
+/// to check if the response is bad in any way, but S&F responses never obey
+/// to HTML status codes, or their own system, so good luck
+async fn send_api_request(
+    client: &Client,
+    bearer_token: &str,
+    endpoint: &str,
+    method: APIRequest,
+) -> Result<Value, SFError> {
+    let mut url = url::Url::parse("https://sso.playa-games.com")
+        .map_err(|_| SFError::ConnectionError)?;
+    url.set_path(endpoint);
 
-        // Set all necessary header values to make our request succeed
-        if !self.session.bearer_token.is_empty() {
-            request = request.bearer_auth(&self.session.bearer_token);
+    let mut request = match method {
+        APIRequest::Get => client.get(url.as_str()),
+        APIRequest::Post {
+            parameters,
+            form_data,
+        } => {
+            url.set_query(Some(&parameters.join("&")));
+            client.post(url.as_str()).form(&form_data)
         }
-        let mut headers = HeaderMap::new();
-        headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
-        headers.insert(
-            REFERER,
-            HeaderValue::from_str(url.authority())
-                .map_err(|_| SFError::ConnectionError)?,
-        );
+    };
 
-        let res = request
-            .headers(headers)
-            .send()
-            .await
-            .map_err(|_| SFError::ConnectionError)?;
-        if !res.status().is_success() {
-            return Err(SFError::ConnectionError);
-        }
-        let text = res.text().await.map_err(|_| SFError::ConnectionError)?;
+    // Set all necessary header values to make our request succeed
+    if !bearer_token.is_empty() {
+        request = request.bearer_auth(bearer_token);
+    }
+    let mut headers = HeaderMap::new();
+    headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+    headers.insert(
+        REFERER,
+        HeaderValue::from_str(url.authority())
+            .map_err(|_| SFError::ConnectionError)?,
+    );
 
-        #[derive(Debug, Serialize, Deserialize)]
-        struct APIResponse {
-            success: bool,
-            status: u8,
-            data: Value,
-        }
-        let resp: APIResponse = serde_json::from_str(&text)
-            .map_err(|_| SFError::ParsingError("API response", text))?;
+    let res = request
+        .headers(headers)
+        .send()
+        .await
+        .map_err(|_| SFError::ConnectionError)?;
+    if !res.status().is_success() {
+        return Err(SFError::ConnectionError);
+    }
+    let text = res.text().await.map_err(|_| SFError::ConnectionError)?;
 
-        if !resp.success {
-            return Err(SFError::ConnectionError);
-        }
-        Ok(resp.data)
+    #[derive(Debug, Serialize, Deserialize)]
+    struct APIResponse {
+        success: bool,
+        status: u8,
+        data: Option<Value>,
+        message: Option<Value>,
+    }
+    let resp: APIResponse = serde_json::from_str(&text)
+        .map_err(|_| SFError::ParsingError("API response", text))?;
+
+    if !resp.success {
+        return Err(SFError::ConnectionError);
+    }
+    let data = match resp.data {
+        Some(data) => data,
+        None => match resp.message {
+            Some(message) => message,
+            None => return Err(SFError::ConnectionError),
+        },
+    };
+
+    Ok(data)
+}
+
+/// Fetches the current mapping of server ids to server urls.
+async fn fetch_server_lookup(client: &Client) -> Result<ServerLookup, SFError> {
+    let res = client
+        .get("https://sfgame.net/config.json")
+        .send()
+        .await
+        .map_err(|_| SFError::ConnectionError)?
+        .text()
+        .await
+        .map_err(|_| SFError::ConnectionError)?;
+
+    #[derive(Debug, Deserialize, Serialize)]
+    struct ServerResp {
+        servers: Vec<ServerInfo>,
     }
 
-    /// Fetches the current mapping of server ids to server urls.
-    async fn fetch_server_lookup(&self) -> Result<ServerLookup, SFError> {
-        let res = self
-            .client
-            .get("https://sfgame.net/config.json")
-            .send()
-            .await
-            .map_err(|_| SFError::ConnectionError)?
-            .text()
-            .await
-            .map_err(|_| SFError::ConnectionError)?;
+    #[derive(Debug, Deserialize, Serialize)]
+    struct ServerInfo {
+        #[serde(rename = "i")]
+        id: i32,
+        #[serde(rename = "d")]
+        url: String,
+        #[serde(rename = "c")]
+        country_code: String,
+        #[serde(rename = "md")]
+        merged_into: Option<String>,
+        #[serde(rename = "m")]
+        merge_date_time: Option<String>,
+    }
 
-        #[derive(Debug, Deserialize, Serialize)]
-        struct ServerResp {
-            servers: Vec<ServerInfo>,
-        }
+    let resp: ServerResp = serde_json::from_str(&res).map_err(|_| {
+        SFError::ParsingError("server response", res.to_string())
+    })?;
 
-        #[derive(Debug, Deserialize, Serialize)]
-        struct ServerInfo {
-            #[serde(rename = "i")]
-            id: i32,
-            #[serde(rename = "d")]
-            url: String,
-            #[serde(rename = "c")]
-            country_code: String,
-            #[serde(rename = "md")]
-            merged_into: Option<String>,
-            #[serde(rename = "m")]
-            merge_date_time: Option<String>,
-        }
-
-        let resp: ServerResp = serde_json::from_str(&res).map_err(|_| {
-            SFError::ParsingError("server response", res.to_string())
-        })?;
-
-        let servers: HashMap<i32, Url> = resp
-            .servers
-            .into_iter()
-            .filter_map(|s| {
-                let mut server_url = s.url;
-                if let Some(merged_url) = s.merged_into {
-                    if let Some(mdt) = s.merge_date_time.and_then(|a| {
-                        NaiveDateTime::parse_from_str(&a, "%Y-%m-%d %H:%M:%S")
-                            .ok()
-                    }) {
-                        if Local::now().naive_utc() > mdt {
-                            server_url = merged_url
-                        }
-                    } else {
+    let servers: HashMap<i32, Url> = resp
+        .servers
+        .into_iter()
+        .filter_map(|s| {
+            let mut server_url = s.url;
+            if let Some(merged_url) = s.merged_into {
+                if let Some(mdt) = s.merge_date_time.and_then(|a| {
+                    NaiveDateTime::parse_from_str(&a, "%Y-%m-%d %H:%M:%S").ok()
+                }) {
+                    if Local::now().naive_utc() > mdt {
                         server_url = merged_url
                     }
+                } else {
+                    server_url = merged_url
                 }
+            }
 
-                Some((s.id, format!("https://{}", server_url).parse().ok()?))
-            })
-            .collect();
-        if servers.is_empty() {
-            return Err(SFError::ParsingError("empty server list", res));
-        }
-
-        Ok(ServerLookup(servers))
+            Some((s.id, format!("https://{}", server_url).parse().ok()?))
+        })
+        .collect();
+    if servers.is_empty() {
+        return Err(SFError::ParsingError("empty server list", res));
     }
+
+    Ok(ServerLookup(servers))
 }
 
 #[derive(Debug, Clone)]
@@ -289,4 +310,132 @@ impl ServerLookup {
             .cloned()
             .ok_or(SFError::InvalidRequest)
     }
+}
+#[derive(Debug)]
+pub struct GoogleAuth {
+    client: Client,
+    options: ConnectionOptions,
+    id_token: String,
+    auth_url: Url,
+    auth_id: String,
+}
+
+#[derive(Debug)]
+pub struct GoogleAccount {
+    username: String,
+    client: Client,
+    data: AccountSession,
+    options: ConnectionOptions,
+    api_access_token: String,
+}
+
+pub enum GoogleSSOLoginResponse {
+    Success(GoogleAccount),
+    NoAuth(GoogleAuth),
+}
+
+impl GoogleAuth {
+    pub fn auth_url(&self) -> &Url {
+        &self.auth_url
+    }
+
+    pub async fn try_login(self) -> Result<GoogleSSOLoginResponse, SFError> {
+        let resp = send_api_request(
+            &self.client,
+            "",
+            &format!("/json/sso/googleauth/check/{}", self.auth_id),
+            APIRequest::Get,
+        )
+        .await?;
+
+        if let Some(message) = val_to_string(&resp) {
+            return match message.as_str() {
+                "SSO_POPUP_STATE_PROCESSING" => {
+                    Ok(GoogleSSOLoginResponse::NoAuth(self))
+                }
+                _ => Err(SFError::ConnectionError),
+            };
+        }
+
+        let google_access_token = val_to_string(&resp["access_token"])
+            .ok_or(SFError::ConnectionError)?;
+        let token_type = val_to_string(&resp["token_type"])
+            .ok_or(SFError::ConnectionError)?;
+        let id_token =
+            val_to_string(&resp["id_token"]).ok_or(SFError::ConnectionError)?;
+
+        if token_type != "Bearer" {
+            return Err(SFError::ConnectionError);
+        }
+
+        let mut form_data = HashMap::new();
+        form_data.insert("token".to_string(), id_token.clone());
+        form_data.insert("language".to_string(), "en".to_string());
+
+        let res = send_api_request(
+            &self.client,
+            "",
+            "json/login/sso/googleauth",
+            APIRequest::Post {
+                parameters: vec![
+                    "client_id=i43nwwnmfc5tced4jtuk4auuygqghud2yopx",
+                    "auth_type=access_token",
+                ],
+                form_data,
+            },
+        )
+        .await?;
+
+        let access_token = val_to_string(&res["token"]["access_token"])
+            .ok_or(SFError::ConnectionError)?;
+        let uuid = val_to_string(&res["account"]["uuid"])
+            .ok_or(SFError::ConnectionError)?;
+        let username = val_to_string(&res["account"]["username"])
+            .ok_or(SFError::ConnectionError)?;
+
+        Ok(GoogleSSOLoginResponse::Success(GoogleAccount {
+            username,
+            client: self.client,
+            data: AccountSession {
+                uuid,
+                bearer_token: access_token,
+            },
+            options: self.options,
+            api_access_token: google_access_token,
+        }))
+    }
+
+    pub async fn new() -> Result<GoogleAuth, SFError> {
+        GoogleAuth::new_with_options(Default::default()).await
+    }
+
+    pub async fn new_with_options(
+        options: ConnectionOptions,
+    ) -> Result<GoogleAuth, SFError> {
+        let client =
+            reqwest_client(&options).ok_or(SFError::ConnectionError)?;
+        let resp = send_api_request(
+            &client,
+            "",
+            "json/sso/googleauth",
+            APIRequest::Get,
+        )
+        .await?;
+
+        let auth_url = val_to_string(&resp["redirect"])
+            .and_then(|a| Url::parse(&a).ok())
+            .ok_or(SFError::ConnectionError)?;
+        let auth_id =
+            val_to_string(&resp["id"]).ok_or(SFError::ConnectionError)?;
+        Ok(GoogleAuth {
+            client,
+            options,
+            auth_url,
+            auth_id,
+        })
+    }
+}
+
+fn val_to_string(val: &Value) -> Option<String> {
+    val.as_str().map(|a| a.to_string())
 }
