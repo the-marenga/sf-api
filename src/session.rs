@@ -33,14 +33,40 @@ pub struct CharacterSession {
     options: ConnectionOptions,
 }
 
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PWHash(String);
+
+impl PWHash {
+    /// Hashes the password the way the server expects it. You can use this to 
+    /// store user passwords safely (not in cleartext)
+    pub fn new(password: &str) -> Self {
+        Self(sha1_hash(&(password.to_string() + HASH_CONST)))
+    }
+
+    pub fn from_hash(hash: String) -> Self {
+        Self(hash)
+    } 
+
+    pub fn get(&self) -> &str {
+        &self.0
+    }
+}
+
 impl CharacterSession {
     pub fn new(
         username: &str,
         password: &str,
         server: ServerConnection,
     ) -> Self {
-        let pw_hash = sha1_hash(&(password.to_string() + HASH_CONST));
+        Self::new_hashed(username, PWHash::new(password), server)
+    }
 
+    pub fn new_hashed(
+        username: &str,
+        pw_hash: PWHash,
+        server: ServerConnection,
+    ) -> Self {
         let mut res = Self {
             login_data: LoginData::Basic {
                 username: username.to_string(),
@@ -91,7 +117,7 @@ impl CharacterSession {
         let login_cmd = match self.login_data.clone() {
             LoginData::Basic { username, pw_hash } => Command::Login {
                 username,
-                pw_hash,
+                pw_hash: pw_hash.get().to_string(),
                 login_count: self.login_count,
             },
             #[cfg(feature = "sso")]
@@ -569,7 +595,7 @@ impl<'a> std::fmt::Display for ResponseVal<'a> {
 enum LoginData {
     Basic {
         username: String,
-        pw_hash: String,
+        pw_hash: PWHash,
     },
     #[cfg(feature = "sso")]
     SSO {
