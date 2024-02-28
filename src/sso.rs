@@ -373,14 +373,14 @@ impl SSOAuth {
         send_api_request(&self.client, "", endpoint, method).await
     }
 
-    /// Returns the SSO auth url from google, that the user has to login through
+    /// Returns the SSO auth url, that the user has to login through
     pub fn auth_url(&self) -> &Url {
         &self.auth_url
     }
 
     /// Tries to login. If the user has successfully authenticated via the
     /// auth_url, this will return the normal SFAccount. Otherwise, this will
-    /// return the existing GoogleAuth for you to reattempt the login after a
+    /// return the existing Auth for you to reattempt the login after a
     /// few seconds
     pub async fn try_login(self) -> Result<AuthResponse, SFError> {
         let endpoint = format!(
@@ -439,9 +439,10 @@ impl SSOAuth {
         }))
     }
 
-    /// Instantiates a new attempt to login through google. A user then has to
-    /// interact with the auth_url this returns to validate the login.
-    /// Afterwardds you can login and transform this into a normal SFAccount
+    /// Instantiates a new attempt to login through a SSO provider. A user then
+    /// has to interact with the auth_url this returns to validate the
+    /// login. Afterwards you can login and transform this into a normal
+    /// SFAccount
     pub async fn new(provider: SSOProvider) -> Result<Self, SFError> {
         Self::new_with_options(provider, Default::default()).await
     }
