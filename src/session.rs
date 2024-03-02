@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{collections::HashMap, fmt::Debug, str::FromStr};
 
 use base64::Engine;
 use chrono::NaiveDateTime;
@@ -38,7 +38,7 @@ pub struct CharacterSession {
 pub struct PWHash(String);
 
 impl PWHash {
-    /// Hashes the password the way the server expects it. You can use this to 
+    /// Hashes the password the way the server expects it. You can use this to
     /// store user passwords safely (not in cleartext)
     pub fn new(password: &str) -> Self {
         Self(sha1_hash(&(password.to_string() + HASH_CONST)))
@@ -46,7 +46,7 @@ impl PWHash {
 
     pub fn from_hash(hash: String) -> Self {
         Self(hash)
-    } 
+    }
 
     pub fn get(&self) -> &str {
         &self.0
@@ -347,6 +347,22 @@ pub struct Response {
     /// this response is held any amount of time before being used to update
     /// character state
     received_at: NaiveDateTime,
+}
+
+impl Clone for Response {
+    // This is not a good clone..
+    fn clone(&self) -> Self {
+        Self::parse(self.raw_response().to_string(), self.received_at())
+            .unwrap()
+    }
+}
+
+impl Debug for Response {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_map()
+            .entries(self.values().iter().map(|a| (a.0, a.1.as_str())))
+            .finish()
+    }
 }
 
 #[cfg(feature = "serde")]
