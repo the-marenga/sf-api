@@ -367,7 +367,7 @@ pub struct SSOAuth {
     provider: SSOProvider,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum SSOProvider {
     Google,
     Steam,
