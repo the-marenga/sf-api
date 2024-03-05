@@ -54,6 +54,10 @@ pub struct SSOCharacter {
     pub(super) server_id: i32,
 }
 impl SFAccount {
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+
     /// Initializes a SFAccount by logging the user in using the supplied clear
     /// text credentials
     pub async fn login(
