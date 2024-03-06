@@ -54,9 +54,9 @@ pub enum Command {
     /// Updates the current state of the user. Also notifies the guild, that
     /// the player is logged in. Should therefore be send regularely
     UpdatePlayer,
-    /// Queries 30 Hall of Fame entries starting from the top. Starts at 0
+    /// Queries 51 Hall of Fame entries starting from the top. Starts at 0
     ///
-    /// **NOTE:** The server might return less then 30, if there is a "broken"
+    /// **NOTE:** The server might return less then 51, if there is a "broken"
     /// player encountered. This is NOT a library bug, this is a S&F bug and
     /// will glitch out the UI, when trying to view the page in a browser.
     // I assume this is because the player name contains some invalid
@@ -68,7 +68,7 @@ pub enum Command {
     HallOfFamePage {
         page: usize,
     },
-    /// Queries 30 Hall of Fame entries for the fortress starting from the top.
+    /// Queries 51 Hall of Fame entries for the fortress starting from the top.
     /// Starts at 0
     HallOfFameFortressPage {
         page: usize,
@@ -617,29 +617,29 @@ impl Command {
             }
             UpdatePlayer => "Poll:".to_string(),
             HallOfFamePage { page } => {
-                let per_page = 30;
-                let pos = 16 + (per_page * page);
-                format!("PlayerGetHallOfFame:{pos}//15/15")
+                let per_page = 51;
+                let pos = 26 + (per_page * page);
+                format!("PlayerGetHallOfFame:{pos}//25/25")
             }
             HallOfFameFortressPage { page } => {
-                let per_page = 30;
-                let pos = 16 + (per_page * page);
-                format!("FortressGetHallOfFame:{pos}//15/15")
+                let per_page = 51;
+                let pos = 26 + (per_page * page);
+                format!("FortressGetHallOfFame:{pos}//25/25")
             }
             HallOfFameGroupPage { page } => {
-                let per_page = 30;
-                let pos = 16 + (per_page * page);
-                format!("GroupGetHallOfFame:{pos}//15/15")
+                let per_page = 51;
+                let pos = 26 + (per_page * page);
+                format!("GroupGetHallOfFame:{pos}//25/25")
             }
             HallOfFameUnderworldPage { page } => {
-                let per_page = 30;
-                let pos = 16 + (per_page * page);
-                format!("UnderworldGetHallOfFame:{pos}//15/15")
+                let per_page = 51;
+                let pos = 26 + (per_page * page);
+                format!("UnderworldGetHallOfFame:{pos}//25/25")
             }
             HallOfFamePetsPage { page } => {
-                let per_page = 30;
-                let pos = 16 + (per_page * page);
-                format!("PetsGetHallOfFame:{pos}//15/15")
+                let per_page = 51;
+                let pos = 26 + (per_page * page);
+                format!("PetsGetHallOfFame:{pos}//25/25")
             }
             ViewPlayer { ident } => format!("PlayerLookAt:{ident}"),
             BuyBeer => format!("PlayerBeerBuy:"),

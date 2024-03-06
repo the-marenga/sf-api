@@ -1,4 +1,9 @@
-use std::{collections::HashMap, str::FromStr};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    str::FromStr,
+    sync::{atomic::AtomicU32, Arc},
+};
 
 use base64::Engine;
 use chrono::NaiveDateTime;
@@ -22,7 +27,7 @@ pub struct CharacterSession {
     /// is valid and nobody else logs in
     session_id: String,
     /// The amount of commands we have send
-    command_count: u32,
+    command_count: Arc<AtomicU32>,
     login_count: u32,
     crypto_id: String,
     crypto_key: String,
@@ -38,7 +43,7 @@ pub struct CharacterSession {
 pub struct PWHash(String);
 
 impl PWHash {
-    /// Hashes the password the way the server expects it. You can use this to 
+    /// Hashes the password the way the server expects it. You can use this to
     /// store user passwords safely (not in cleartext)
     pub fn new(password: &str) -> Self {
         Self(sha1_hash(&(password.to_string() + HASH_CONST)))
@@ -46,7 +51,7 @@ impl PWHash {
 
     pub fn from_hash(hash: String) -> Self {
         Self(hash)
-    } 
+    }
 
     pub fn get(&self) -> &str {
         &self.0
@@ -93,7 +98,7 @@ impl CharacterSession {
         self.crypto_key = "[_/$VV&*Qg&)r?~g".to_string();
         self.crypto_id = "0-00000000000000".to_string();
         self.login_count = 1;
-        self.command_count = 0;
+        self.command_count = Default::default();
         self.session_id = "00000000000000000000000000000000".to_string();
     }
 
@@ -178,12 +183,16 @@ impl CharacterSession {
         let resp = s.login().await?;
         Ok((s, resp))
     }
-    /// Encode and send a command to the server, decrypts and parses its
-    /// response and returns the response. When this returns an error, the
-    /// Session might be in an invalid state, so you should login again just to
-    /// be safe
-    pub async fn send_command(
-        &mut self,
+
+    /// The internal version `send_command`. It allows you to send requests
+    /// with only a normal ref, because this version does not update the
+    /// cryptography settings of this session, if the server responds with them.
+    /// If you do not expect the server to send you new crypto settings, because
+    /// you only do predictable simple requests (no login, etc), or you
+    /// want to update them yourself, because that is easier to handle for you,
+    /// you can use this function to increase your commands/account/sec speed
+    pub async fn send_command_raw(
+        &self,
         command: &Command,
     ) -> Result<Response, SFError> {
         trace!("Sending a {command:?} command");
@@ -203,6 +212,7 @@ impl CharacterSession {
             encrypt_server_request(command_str, &self.crypto_key),
             fastrand::f64(), // Pretty sure this is just cache busting
             self.command_count
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
         );
         trace!("Full request url: {url}");
 
@@ -232,26 +242,9 @@ impl CharacterSession {
         match response_body {
             body if body.is_empty() => Err(SFError::EmptyResponse),
             body => {
-                self.command_count += 1;
-                let res =
+                let resp =
                     Response::parse(body, chrono::Local::now().naive_local())?;
-                let data = res.values();
-                if let Some(lc) = data.get("login count") {
-                    self.login_count = (*lc).into("login count")?;
-                }
-                if let Some(lc) = data.get("sessionid") {
-                    self.session_id.clear();
-                    self.session_id.push_str(lc.as_str());
-                }
-                if let Some(lc) = data.get("cryptokey") {
-                    self.crypto_key.clear();
-                    self.crypto_key.push_str(lc.as_str());
-                }
-                if let Some(lc) = data.get("cryptoid") {
-                    self.crypto_id.clear();
-                    self.crypto_id.push_str(lc.as_str());
-                }
-                if let Some(lc) = data.get("serverversion").copied() {
+                if let Some(lc) = resp.values().get("serverversion").copied() {
                     let version: u32 = lc.into("server version")?;
                     if version > self.options.expected_server_version {
                         warn!("Untested S&F Server version: {version}");
@@ -260,8 +253,40 @@ impl CharacterSession {
                         }
                     }
                 }
-                Ok(res)
+                Ok(resp)
             }
+        }
+    }
+
+    /// Encode and send a command to the server, decrypts and parses its
+    /// response and returns the response. When this returns an error, the
+    /// Session might be in an invalid state, so you should login again just to
+    /// be safe
+    pub async fn send_command(
+        &mut self,
+        command: &Command,
+    ) -> Result<Response, SFError> {
+        let res = self.send_command_raw(command).await?;
+        self.update(&res);
+        Ok(res)
+    }
+
+    pub fn update(&mut self, res: &Response) {
+        let data = res.values();
+        if let Some(lc) = data.get("login count") {
+            self.login_count = (*lc).into("login count").unwrap_or_default();
+        }
+        if let Some(lc) = data.get("sessionid") {
+            self.session_id.clear();
+            self.session_id.push_str(lc.as_str());
+        }
+        if let Some(lc) = data.get("cryptokey") {
+            self.crypto_key.clear();
+            self.crypto_key.push_str(lc.as_str());
+        }
+        if let Some(lc) = data.get("cryptoid") {
+            self.crypto_id.clear();
+            self.crypto_id.push_str(lc.as_str());
         }
     }
 
@@ -287,7 +312,7 @@ impl CharacterSession {
             session_id: "00000000000000000000000000000000".to_string(),
             crypto_id: "0-00000000000000".to_string(),
             crypto_key: "[_/$VV&*Qg&)r?~g".to_string(),
-            command_count: 1,
+            command_count: Arc::new(AtomicU32::new(1)),
             login_count: 0,
             client,
             options,
@@ -347,6 +372,22 @@ pub struct Response {
     /// this response is held any amount of time before being used to update
     /// character state
     received_at: NaiveDateTime,
+}
+
+impl Clone for Response {
+    // This is not a good clone..
+    fn clone(&self) -> Self {
+        Self::parse(self.raw_response().to_string(), self.received_at())
+            .unwrap()
+    }
+}
+
+impl Debug for Response {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_map()
+            .entries(self.values().iter().map(|a| (a.0, a.1.as_str())))
+            .finish()
+    }
 }
 
 #[cfg(feature = "serde")]
