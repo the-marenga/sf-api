@@ -97,7 +97,7 @@ impl Portrait {
         self.nose = soft_into(data[5], "nose", 1);
         self.ears = soft_into(data[6], "ears", 1);
         self.extra = soft_into(data[7], "extra", 1);
-        self.horns = soft_into(data[8], "horns", 1);
+        self.horns = soft_into(data[8] % 100, "horns", 1);
         self.special_portrait = soft_into(-data[9], "special", 1);
         self.gender = FromPrimitive::from_i64(data[11] % 2).unwrap_or_default();
     }
