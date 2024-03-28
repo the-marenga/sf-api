@@ -107,22 +107,3 @@ There are roughly ~500 properties, that get parsed. This is such a huge amount o
 
 > I might consider using something like [derive_getters](https://docs.rs/derive-getters/latest/derive_getters/) in the future, but I dont really care about this issue and it would increase compile times, so for now you just access the fields
 
-## TODO
-
-This is a list of things still on my agenda:
-- [X] Make command positions correct/consistent
-- [X] All flags 
-- [X] Shell player command
-- [X] Better pet parsing
-- [X] Hall of Fame pets commands
-- [X] Scrapbook parsing
-- [X] Switch away from openssl
-- [ ] Add more get() functions for stuff, that is in arrays
-- [ ] consider a `into_list_with()` to avoid allocations there
-- [ ] Remove the main and replace that with actual tests
-- [ ] Better attribute debug
-- [ ] Achievement names (enum)
-- [ ] Understand portal enemy level
-- [ ] Hall of knights parsing
-- [ ] Explain some of the interactions/limits of commands
-- [ ] Check if register with mail is still possible
