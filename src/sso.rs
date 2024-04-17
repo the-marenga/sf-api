@@ -165,7 +165,8 @@ impl SFAccount {
         // This could be passed in as an argument in case of multiple SSO
         // accounts to safe on requests, but I dont think people have multiple
         // and this is way easier
-        let server_lookup = ServerLookup::fetch(&self.client).await?;
+        let server_lookup =
+            ServerLookup::fetch_with_client(&self.client).await?;
         let mut res = self
             .send_api_request("json/client/characters", APIRequest::Get)
             .await?;
@@ -281,8 +282,14 @@ async fn send_api_request(
 pub struct ServerLookup(HashMap<i32, Url>);
 
 impl ServerLookup {
+    pub async fn fetch() -> Result<ServerLookup, SFError> {
+        Self::fetch_with_client(&reqwest::Client::new()).await
+    }
+
     /// Fetches the current mapping of server ids to server urls.
-    pub async fn fetch(client: &Client) -> Result<ServerLookup, SFError> {
+    async fn fetch_with_client(
+        client: &Client,
+    ) -> Result<ServerLookup, SFError> {
         let res = client
             .get("https://sfgame.net/config.json")
             .send()
