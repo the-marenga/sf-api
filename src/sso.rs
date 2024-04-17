@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::{HashMap, HashSet}, sync::Arc};
 
 use chrono::{Local, NaiveDateTime};
 use reqwest::{header::*, Client};
@@ -358,7 +358,7 @@ impl ServerLookup {
             .ok_or(SFError::InvalidRequest)
     }
 
-    pub fn all(&self) -> Vec<Url> {
+    pub fn all(&self) -> HashSet<Url> {
         self.0.iter().map(|a| a.1.clone()).collect()
     }
 }
