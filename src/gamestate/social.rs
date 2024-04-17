@@ -48,10 +48,10 @@ pub struct OtherPlayers {
     /// A list of hall of fame pet players fetched during the last command
     pub underworld_hall_of_fame: Vec<HallOfFameUnderworldEntry>,
 
-    player_id_lookup: HashMap<PlayerId, usize>,
-    name_lookup: HashMap<String, usize>,
-    /// Other players, that has been fetched
-    other_players: Vec<OtherPlayer>,
+    /// This can be accessed by using the lookup_pid/lookup_name methods
+    /// on OtherPlayers
+    other_players: HashMap<PlayerId, OtherPlayer>,
+    name_lookup: HashMap<String, PlayerId>,
 
     pub guilds: HashMap<String, OtherGuild>,
 
@@ -66,30 +66,34 @@ pub struct OtherPlayers {
 
 impl OtherPlayers {
     pub(crate) fn insert_lookup(&mut self, other: OtherPlayer) {
-        let new_place = self.other_players.len();
-
-        self.player_id_lookup.insert(other.player_id, new_place);
-        self.name_lookup.insert(other.name.clone(), new_place);
-        self.other_players.push(other);
+        self.name_lookup.insert(other.name.clone(), other.player_id);
+        self.other_players.insert(other.player_id, other);
     }
 
     /// Checks to see if we have queried a player with that player id
     pub fn lookup_pid(&self, pid: PlayerId) -> Option<&OtherPlayer> {
-        let other_pos = self.player_id_lookup.get(&pid)?;
-        self.other_players.get(*other_pos)
+        self.other_players.get(&pid)
     }
 
     /// Checks to see if we have queried a player with the given name
     pub fn lookup_name(&self, name: &str) -> Option<&OtherPlayer> {
         let other_pos = self.name_lookup.get(name)?;
-        self.other_players.get(*other_pos)
+        self.other_players.get(other_pos)
+    }
+
+    /// Removes the information about another player based on their id
+    pub fn remove_pid(&mut self, pid: PlayerId) -> Option<OtherPlayer> {
+        self.other_players.remove(&pid)
+    }
+
+    /// Removes the information about another player based on their name
+    pub fn remove_name(&mut self, name: &str) -> Option<OtherPlayer> {
+        let other_pos = self.name_lookup.remove(name)?;
+        self.other_players.remove(&other_pos)
     }
 
     pub fn reset_lookups(&mut self) {
-        // We dont clear here, because that would not free the vec, which could
-        // be bad in case we fetch like the entire server on 1000 accounts
         self.other_players = Default::default();
-        self.player_id_lookup = Default::default();
         self.name_lookup = Default::default();
     }
 
