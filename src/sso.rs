@@ -282,7 +282,7 @@ pub struct ServerLookup(HashMap<i32, Url>);
 
 impl ServerLookup {
     /// Fetches the current mapping of server ids to server urls.
-    async fn fetch(client: &Client) -> Result<ServerLookup, SFError> {
+    pub async fn fetch(client: &Client) -> Result<ServerLookup, SFError> {
         let res = client
             .get("https://sfgame.net/config.json")
             .send()
@@ -349,6 +349,10 @@ impl ServerLookup {
             .get(&server_id)
             .cloned()
             .ok_or(SFError::InvalidRequest)
+    }
+
+    pub fn all(&self) -> Vec<Url> {
+        self.0.iter().map(|a| a.1.clone()).collect()
     }
 }
 
