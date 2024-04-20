@@ -510,9 +510,14 @@ impl Response {
         }
 
         if body.starts_with("error") || body.starts_with("Error") {
-            return Err(SFError::ServerError(
-                body.split_once(':').unwrap_or_default().1.to_string(),
-            ));
+            let raw_error = body.split_once(':').unwrap_or_default().1;
+
+            let error_msg = match raw_error {
+                "adventure index must be 1-3" => "quest index must be 0-2",
+                x => x,
+            };
+
+            return Err(SFError::ServerError(error_msg.to_string()));
         }
 
         let resp = ResponseBuilder {
