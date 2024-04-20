@@ -3,8 +3,14 @@ use num_derive::FromPrimitive;
 
 use crate::{
     gamestate::{
-        character::*, dungeons::LightDungeon, fortress::*, guild::GuildSkill,
-        idle::IdleBuildingType, items::*, social::Relationship, underworld::*,
+        character::*,
+        dungeons::{LightDungeon, ShadowDungeons},
+        fortress::*,
+        guild::GuildSkill,
+        idle::IdleBuildingType,
+        items::*,
+        social::Relationship,
+        underworld::*,
         unlockables::Unlockable,
     },
     misc::{sha1_hash, to_sf_string, HASH_CONST},
@@ -73,7 +79,9 @@ pub enum Command {
     HallOfFameFortressPage {
         page: usize,
     },
-    /// Looks at a specific player. Ident is either their name, or player_id
+    /// Looks at a specific player. Ident is either their name, or player_id.
+    /// The information about the player can then be found by using the
+    /// lookup_* methods on Otherplayers
     ViewPlayer {
         ident: String,
     },
@@ -175,7 +183,6 @@ pub enum Command {
     /// Flushes the toilet
     ToiletFlush,
     /// Opens the toilet door for the first time.
-    // NOTE: This might have moved to the unlocks, I am not sure
     ToiletOpen,
     /// Drops an item from one of the inventories into the toilet
     ToiletDrop {
@@ -234,6 +241,11 @@ pub enum Command {
     /// Enters a specific dungeon
     FightLightDungeon {
         name: LightDungeon,
+        use_mushroom: bool,
+    },
+    /// Enters a specific shadow dungeon
+    FightShadowDungeon {
+        name: ShadowDungeons,
         use_mushroom: bool,
     },
     /// Attacks the requested level of the tower
@@ -1008,6 +1020,11 @@ impl Command {
                 format!("ExpeditionProceed:{}", pos + 1)
             }
             ExpeditionStart { pos } => format!("ExpeditionStart:{}", pos + 1),
+            FightShadowDungeon { name, use_mushroom } => format!(
+                "PlayerShadowBattle:{}/{}",
+                *name as u32 + 1,
+                *use_mushroom as u8
+            ),
         }
     }
 }
