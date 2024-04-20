@@ -32,8 +32,8 @@ impl Portal {
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Dungeons {
-    light_dungeons: Vec<DungeonProgress>,
-    shadow_dungeons: Vec<DungeonProgress>,
+    light_dungeons: [DungeonProgress; 30],
+    shadow_dungeons: [DungeonProgress; 30],
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -136,7 +136,6 @@ impl Dungeons {
             DungeonType::Light => &mut self.light_dungeons,
             DungeonType::Shadow => &mut self.shadow_dungeons,
         };
-        dungeons.resize(data.len(), DungeonProgress::Locked);
 
         for ((dungeon_id, progress), dungeon) in
             data.iter().copied().enumerate().zip(dungeons)
