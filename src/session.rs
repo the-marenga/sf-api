@@ -513,9 +513,7 @@ impl Response {
             let raw_error = body.split_once(':').unwrap_or_default().1;
 
             let error_msg = match raw_error {
-                "adventure index must be 1-3" => {
-                    "quest index must be between 0-2"
-                }
+                "adventure index must be 1-3" => "quest index must be 0-2",
                 x => x,
             };
 
