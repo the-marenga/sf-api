@@ -3,8 +3,14 @@ use num_derive::FromPrimitive;
 
 use crate::{
     gamestate::{
-        character::*, dungeons::LightDungeon, fortress::*, guild::GuildSkill,
-        idle::IdleBuildingType, items::*, social::Relationship, underworld::*,
+        character::*,
+        dungeons::{LightDungeon, ShadowDungeons},
+        fortress::*,
+        guild::GuildSkill,
+        idle::IdleBuildingType,
+        items::*,
+        social::Relationship,
+        underworld::*,
         unlockables::Unlockable,
     },
     misc::{sha1_hash, to_sf_string, HASH_CONST},
@@ -234,6 +240,10 @@ pub enum Command {
     /// Enters a specific dungeon
     FightLightDungeon {
         name: LightDungeon,
+        use_mushroom: bool,
+    },
+    FightShadowDungeon {
+        name: ShadowDungeons,
         use_mushroom: bool,
     },
     /// Attacks the requested level of the tower
@@ -1008,6 +1018,11 @@ impl Command {
                 format!("ExpeditionProceed:{}", pos + 1)
             }
             ExpeditionStart { pos } => format!("ExpeditionStart:{}", pos + 1),
+            FightShadowDungeon { name, use_mushroom } => format!(
+                "PlayerShadowBattle:{}/{}",
+                *name as u32 + 1,
+                *use_mushroom as u8
+            ),
         }
     }
 }

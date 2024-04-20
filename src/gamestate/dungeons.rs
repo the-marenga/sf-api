@@ -93,7 +93,9 @@ pub enum LightDungeon {
     PlayaGamesHQ = 29,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, EnumCount)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter,
+)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ShadowDungeons {
     DesecratedCatacombs = 0,
@@ -182,7 +184,6 @@ impl Dungeons {
             DungeonType::Light => &mut self.light_dungeons,
             DungeonType::Shadow => &mut self.shadow_dungeons,
         };
-        dungeons.resize(data.len(), DungeonProgress::Locked);
 
         for (dungeon, level) in dungeons.iter_mut().zip(data) {
             let level = *level;
