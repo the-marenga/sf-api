@@ -519,9 +519,7 @@ impl Response {
                 x => x,
             };
 
-            return Err(SFError::ServerError(
-                error_msg.to_string(),
-            ));
+            return Err(SFError::ServerError(error_msg.to_string()));
         }
 
         let resp = ResponseBuilder {
