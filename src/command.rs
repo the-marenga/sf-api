@@ -79,7 +79,9 @@ pub enum Command {
     HallOfFameFortressPage {
         page: usize,
     },
-    /// Looks at a specific player. Ident is either their name, or player_id
+    /// Looks at a specific player. Ident is either their name, or player_id.
+    /// The information about the player can then be found by using the
+    /// lookup_* methods on Otherplayers
     ViewPlayer {
         ident: String,
     },
@@ -181,7 +183,6 @@ pub enum Command {
     /// Flushes the toilet
     ToiletFlush,
     /// Opens the toilet door for the first time.
-    // NOTE: This might have moved to the unlocks, I am not sure
     ToiletOpen,
     /// Drops an item from one of the inventories into the toilet
     ToiletDrop {
@@ -242,6 +243,7 @@ pub enum Command {
         name: LightDungeon,
         use_mushroom: bool,
     },
+    /// Enters a specific shadow dungeon
     FightShadowDungeon {
         name: ShadowDungeons,
         use_mushroom: bool,
