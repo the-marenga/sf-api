@@ -1,11 +1,12 @@
 use chrono::{DateTime, Local};
+use enum_map::EnumMap;
 use log::{error, warn};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
 use super::{
     unlockables::{EquipmentIdent, PetClass},
-    Attributes, Class, ServerTime,
+    Class, ServerTime,
 };
 use crate::{
     command::AttributeType,
@@ -115,7 +116,7 @@ pub struct Item {
     /// abstraction. This is only public in case I am missing a case here
     pub type_specific_val: u32,
     /// The stats this item gives, when equiped
-    pub attributes: Attributes,
+    pub attributes: EnumMap<AttributeType, u32>,
     /// The gemslot of this item, if any. A gemslot can be filled or empty
     pub gem_slot: Option<GemSlot>,
     /// The rune on this item
@@ -191,7 +192,7 @@ impl Item {
             _ => FromPrimitive::from_i64((data[1] & 0xFFFF) / 1000),
         };
         let mut rune = None;
-        let mut attributes = Attributes::default();
+        let mut attributes: EnumMap<AttributeType, u32> = EnumMap::default();
         if typ.equipment_slot().is_some() {
             for i in 0..3 {
                 use AttributeType::*;
@@ -201,7 +202,7 @@ impl Item {
                     continue;
                 };
                 let atr_val = data[i + 7];
-                let Ok(atr_val) = atr_val.try_into() else {
+                let Ok(atr_val): Result<u32, _> = atr_val.try_into() else {
                     warn!("Invalid attribute value: {atr_val}, {typ:?}");
                     continue;
                 };
@@ -209,24 +210,28 @@ impl Item {
                 match atr_typ {
                     0 => {}
                     1..=5 => {
-                        attributes.0[atr_typ - 1] = atr_val;
+                        let Some(atr_typ) = AttributeType::from_usize(atr_typ)
+                        else {
+                            continue;
+                        };
+                        attributes[atr_typ] = atr_val;
                     }
                     6 => {
-                        attributes.0.fill(atr_val);
+                        attributes.as_mut_array().fill(atr_val);
                     }
                     21 => {
                         for atr in [Strength, Constitution, Luck] {
-                            attributes.set(atr, atr_val)
+                            attributes[atr] = atr_val
                         }
                     }
                     22 => {
                         for atr in [Dexterity, Constitution, Luck] {
-                            attributes.set(atr, atr_val)
+                            attributes[atr] = atr_val
                         }
                     }
                     23 => {
                         for atr in [Intelligence, Constitution, Luck] {
-                            attributes.set(atr, atr_val)
+                            attributes[atr] = atr_val
                         }
                     }
                     rune_typ => {

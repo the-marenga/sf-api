@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Local};
+use enum_map::EnumMap;
 use log::warn;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
@@ -12,7 +13,7 @@ use super::{
     guild::GuildRank,
     items::{Equipment, ItemType},
     unlockables::Mirror,
-    Attributes, Class, Race, ServerTime,
+    AttributeType, Class, Race, ServerTime,
 };
 use crate::{misc::*, PlayerId};
 
@@ -220,10 +221,10 @@ pub struct OtherPlayer {
     /// The damage bonus in percent this player has from the guild demon portal
     pub portal_dmg_bonus: u32,
 
-    pub base_attributes: Attributes,
-    pub bonus_attributes: Attributes,
+    pub base_attributes: EnumMap<AttributeType, u32>,
+    pub bonus_attributes: EnumMap<AttributeType, u32>,
     /// This should be the percentage bonus to skills from pets
-    pub pet_attribute_bonus_perc: Attributes,
+    pub pet_attribute_bonus_perc: EnumMap<AttributeType, u32>,
 
     pub class: Class,
     pub race: Race,
@@ -276,11 +277,11 @@ impl OtherPlayer {
         use crate::command::AttributeType::*;
         // The order of these makes no sense. It is neither pet,
         // nor attribute order
-        atr.set(Strength, data[5]);
-        atr.set(Dexterity, data[2]);
-        atr.set(Intelligence, data[3]);
-        atr.set(Constitution, data[1]);
-        atr.set(Luck, data[4]);
+        atr[Constitution] = data[1];
+        atr[Dexterity] = data[2];
+        atr[Intelligence] = data[3];
+        atr[Luck] = data[4];
+        atr[Strength] = data[5];
     }
 
     pub(crate) fn parse(
@@ -297,11 +298,11 @@ impl OtherPlayer {
         op.race = warning_parse(data[18], "other race", |a| {
             FromPrimitive::from_i64(a)
         })?;
-        op.portrait.update(&data[8..]);
+        op.portrait = Portrait::parse(&data[8..]).ok()?;
         op.mirror = Mirror::parse(data[19]);
         op.class = FromPrimitive::from_i64(data[20] - 1)?;
-        op.base_attributes.update(&data[21..]);
-        op.bonus_attributes.update(&data[26..]);
+        update_enum_map(&mut op.base_attributes, &data[21..]);
+        update_enum_map(&mut op.bonus_attributes, &data[26..]);
         op.equipment = Equipment::parse(&data[39..], server_time);
         op.mount = FromPrimitive::from_i64(data[159]);
 

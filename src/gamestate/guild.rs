@@ -1,11 +1,12 @@
 use chrono::{DateTime, Local, NaiveTime};
+use enum_map::EnumMap;
 use log::warn;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
 use super::{
     items::{ItemType, PotionSize, PotionType},
-    Attributes, ServerTime,
+    update_enum_map, AttributeType, ServerTime,
 };
 use crate::misc::{from_sf_string, soft_into, warning_parse};
 
@@ -47,7 +48,7 @@ pub struct Guild {
     pub hydra_next_battle: Option<DateTime<Local>>,
     pub hydra_current_life: u64,
     pub hydra_max_life: u64,
-    pub hydra_attributes: Attributes,
+    pub hydra_attributes: EnumMap<AttributeType, u32>,
 
     pub guild_portal: GuildPortal,
 
@@ -165,7 +166,7 @@ impl Guild {
         self.hydra_max_life =
             soft_into(data[384], "ghydra max clife", u64::MAX);
 
-        self.hydra_attributes.update(&data[385..]);
+        update_enum_map(&mut self.hydra_attributes, &data[385..]);
 
         self.guild_portal.life_percentage =
             soft_into(data[6] >> 16, "guild portal life p", 100);

@@ -232,3 +232,15 @@ impl<T: Copy + std::fmt::Debug + Display> CGet<T> for [T] {
             })
     }
 }
+
+pub(crate) fn update_enum_map<
+    B: Default + TryFrom<i64>,
+    A: enum_map::Enum + enum_map::EnumArray<B>,
+>(
+    map: &mut enum_map::EnumMap<A, B>,
+    vals: &[i64],
+) {
+    for (map_val, val) in map.as_mut_slice().iter_mut().zip(vals) {
+        *map_val = soft_into(*val, "attribute val", B::default());
+    }
+}

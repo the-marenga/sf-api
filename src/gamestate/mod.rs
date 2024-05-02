@@ -14,6 +14,7 @@ pub mod unlockables;
 use std::{array::from_fn, collections::HashSet, i64, mem::MaybeUninit};
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime};
+use enum_map::EnumMap;
 use log::warn;
 use num_traits::FromPrimitive;
 use strum::IntoEnumIterator;
@@ -108,10 +109,11 @@ impl GameState {
         // timestamp, this has to be set first
         if let Some(ts) = new_vals.get("timestamp").copied() {
             let ts = ts.into("server time stamp")?;
-            let server_time = NaiveDateTime::from_timestamp_opt(ts, 0)
+            let server_time = DateTime::from_timestamp(ts, 0)
                 .ok_or(ParsingError("server time stamp", ts.to_string()))?;
-            self.server_time_diff =
-                (server_time - response.received_at()).num_seconds();
+            self.server_time_diff = (server_time.naive_utc()
+                - response.received_at())
+            .num_seconds();
             self.last_request_timestamp = ts;
         }
         let server_time = self.server_time();
@@ -187,11 +189,22 @@ impl GameState {
                 }
                 "owntower" => {
                     let data = val.into_list("tower")?;
-                    self.unlocks
+                    let companions = self
+                        .unlocks
                         .companions
-                        .get_or_insert_with(Default::default)
-                        .update(&data, server_time);
-
+                        .get_or_insert_with(Default::default);
+                    for (i, class) in CompanionClass::iter().enumerate() {
+                        let comp_start = 3 + i * 148;
+                        companions[class].level = data[comp_start];
+                        companions[class].equipment = Equipment::parse(
+                            &data[(comp_start + 22)..],
+                            server_time,
+                        );
+                        update_enum_map(
+                            &mut companions[class].attributes,
+                            &data[(comp_start + 4)..],
+                        )
+                    }
                     // Why would they include this in the tower response???
                     self.unlocks
                         .underworld
@@ -1213,6 +1226,7 @@ impl GameState {
         Ok(())
     }
 
+    #[allow(clippy::indexing_slicing)]
     pub(crate) fn update_player_save(&mut self, data: &[i64]) {
         let server_time = self.server_time();
         if data.len() < 700 {
@@ -1221,8 +1235,8 @@ impl GameState {
         }
 
         self.character.player_id = soft_into(data[1], "player id", 0);
-        self.character.portrait.update(&data[17..]);
-
+        self.character.portrait =
+            Portrait::parse(&data[17..]).unwrap_or_default();
         self.character.equipment = Equipment::parse(&data[48..], server_time);
 
         self.character.armor = soft_into(data[447], "total armor", 0);
@@ -1244,9 +1258,12 @@ impl GameState {
 
         self.tavern.update(data, server_time);
 
-        self.character.attribute_basis.update(&data[30..]);
-        self.character.attribute_additions.update(&data[35..]);
-        self.character.attribute_times_bought.update(&data[40..]);
+        update_enum_map(&mut self.character.attribute_basis, &data[30..]);
+        update_enum_map(&mut self.character.attribute_additions, &data[35..]);
+        update_enum_map(
+            &mut self.character.attribute_times_bought,
+            &data[40..],
+        );
 
         self.character.mount = FromPrimitive::from_i64(data[286] & 0xFF);
         self.character.mount_end =
@@ -1366,9 +1383,9 @@ impl GameState {
         bs.arcane = soft_into(res[10], "bs arcane", 0);
         let fortress =
             self.unlocks.fortress.get_or_insert_with(Default::default);
-        fortress.resources[FortressResourceType::Wood as usize].limit =
+        fortress.resources[FortressResourceType::Wood].limit =
             soft_into(res[5], "saved wood ", 0);
-        fortress.resources[FortressResourceType::Stone as usize].limit =
+        fortress.resources[FortressResourceType::Stone].limit =
             soft_into(res[7], "saved stone", 0);
 
         let pets = self
@@ -1454,10 +1471,10 @@ impl ServerTime {
             warn!("Weird time stamp: {timestamp} for {name}");
             return None;
         }
-
-        NaiveDateTime::from_timestamp_opt(timestamp - self.0, 0)?
-            .and_local_timezone(Local)
-            .latest()
+        Some(
+            DateTime::from_timestamp(timestamp - self.0, 0)?
+                .with_timezone(&Local),
+        )
     }
 
     /// The current time of the server in their time zone (whatever that might

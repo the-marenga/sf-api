@@ -1,7 +1,8 @@
+use enum_map::{Enum, EnumMap};
 use log::warn;
 use strum::{EnumCount, EnumIter};
 
-use super::{items::Equipment, Attributes, ServerTime};
+use super::{items::Equipment, AttributeType};
 use crate::misc::soft_into;
 
 #[derive(Debug, Default, Clone)]
@@ -215,11 +216,18 @@ impl Dungeons {
     }
 }
 
-#[derive(Debug, Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Companions(pub [Companion; CompanionClass::COUNT]);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumCount)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    strum::EnumCount,
+    PartialOrd,
+    Ord,
+    Enum,
+    EnumIter,
+)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum CompanionClass {
     Warrior = 0,
@@ -232,21 +240,5 @@ pub enum CompanionClass {
 pub struct Companion {
     pub level: i64,
     pub equipment: Equipment,
-    pub attributes: Attributes,
-}
-
-impl Companions {
-    pub fn get(&self, class: CompanionClass) -> &Companion {
-        self.0.get(class as usize).unwrap()
-    }
-
-    pub(crate) fn update(&mut self, data: &[i64], server_time: ServerTime) {
-        for i in 0..CompanionClass::COUNT {
-            let comp_start = 3 + i * 148;
-            self.0[i].level = data[comp_start];
-            self.0[i].equipment =
-                Equipment::parse(&data[(comp_start + 22)..], server_time);
-            self.0[i].attributes.update(&data[(comp_start + 4)..]);
-        }
-    }
+    pub attributes: EnumMap<AttributeType, u32>,
 }

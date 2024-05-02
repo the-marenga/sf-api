@@ -23,7 +23,7 @@ pub struct Unlockables {
     pub portal: Option<Portal>,
     /// The companions unlocked from unlocking the tower. Note that the tower
     /// info itself is just handled as a normal light dungeon
-    pub companions: Option<Companions>,
+    pub companions: Option<EnumMap<CompanionClass, Companion>>,
     pub underworld: Option<Underworld>,
     pub fortress: Option<Fortress>,
     pub pet_collection: Option<PetCollection>,
@@ -146,7 +146,7 @@ pub struct PetCollection {
     pub habitat_fights_finished: [bool; PetClass::COUNT],
     pub next_explore_pet_lvl: [u16; PetClass::COUNT],
 
-    pub atr_bonus: Attributes,
+    pub atr_bonus: EnumMap<AttributeType, u32>,
     pub dungeon_timer: Option<DateTime<Local>>,
 }
 
@@ -193,7 +193,7 @@ impl PetCollection {
                 soft_into(*lvl, "next exp pet lvl", 100)
         }
 
-        self.atr_bonus.update(&data[250..]);
+        update_enum_map(&mut self.atr_bonus, &data[250..]);
     }
 
     pub(crate) fn update_pet_stat(&mut self, data: &[i64]) {
@@ -227,8 +227,8 @@ pub struct PetStats {
     pub level: u16,
     pub armor: u16,
     pub class: Class,
-    pub attributes: Attributes,
-    pub bonus_attributes: Attributes,
+    pub attributes: EnumMap<AttributeType, u32>,
+    pub bonus_attributes: EnumMap<AttributeType, u32>,
     pub min_damage: u16,
     pub max_damage: u16,
     pub element: PetClass,
@@ -291,8 +291,8 @@ impl PetStats {
             },
             ..Default::default()
         };
-        s.attributes.update(&data[4..]);
-        s.bonus_attributes.update(&data[9..]);
+        update_enum_map(&mut s.attributes, &data[4..]);
+        update_enum_map(&mut s.bonus_attributes, &data[9..]);
         Some(s)
     }
 }

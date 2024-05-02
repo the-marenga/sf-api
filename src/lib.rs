@@ -1,5 +1,11 @@
+#![warn(
+    missing_debug_implementations,
+    clippy::indexing_slicing,
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::missing_panics_doc
+)]
 #![allow(clippy::field_reassign_with_default)]
-#![warn(missing_debug_implementations)]
 
 pub mod command;
 pub mod error;

@@ -1,9 +1,10 @@
 use std::time::Duration;
 
 use chrono::{DateTime, Local};
+use enum_map::{Enum, EnumMap};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use strum::EnumCount;
+use strum::{EnumCount, EnumIter, IntoEnumIterator};
 
 use super::{items::GemType, ServerTime};
 use crate::{
@@ -14,9 +15,9 @@ use crate::{
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Fortress {
-    pub buildings: [FortressBuilding; FortressBuildingType::COUNT],
-    pub units: [FortressUnit; FortressUnitType::COUNT],
-    pub resources: [FortessRessource; FortressResourceType::COUNT],
+    pub buildings: EnumMap<FortressBuildingType, FortressBuilding>,
+    pub units: EnumMap<FortressUnitType, FortressUnit>,
+    pub resources: EnumMap<FortressResourceType, FortessRessource>,
 
     /// The highest level buildings can be upgraded to
     pub building_max_lvl: u8,
@@ -96,7 +97,18 @@ pub struct FortessRessource {
     pub max_limit_next: u64,
 }
 
-#[derive(Debug, Clone, Copy, EnumCount)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    EnumCount,
+    EnumIter,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Enum,
+)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FortressResourceType {
     Wood = 0,
@@ -104,7 +116,19 @@ pub enum FortressResourceType {
     Experience = 2,
 }
 
-#[derive(Debug, Clone, Copy, EnumCount, FromPrimitive)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    EnumCount,
+    FromPrimitive,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Enum,
+    EnumIter,
+)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FortressBuildingType {
     Fortress = 0,
@@ -136,7 +160,18 @@ pub struct FortressUnit {
     pub upgrade_wood_cost: u64,
 }
 
-#[derive(Debug, Clone, Copy, EnumCount)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    EnumCount,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Enum,
+    EnumIter,
+)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FortressUnitType {
     Soldier = 0,
@@ -153,87 +188,87 @@ pub struct FortressBuilding {
 
 impl Fortress {
     pub fn get_building(&self, typ: FortressBuildingType) -> &FortressBuilding {
-        self.buildings.get(typ as usize).unwrap()
+        &self.buildings[typ]
     }
 
     pub fn get_unit(&self, typ: FortressUnitType) -> &FortressUnit {
-        self.units.get(typ as usize).unwrap()
+        &self.units[typ]
     }
 
     pub fn get_ressource(
         &self,
         typ: FortressResourceType,
     ) -> &FortessRessource {
-        self.resources.get(typ as usize).unwrap()
+        &self.resources[typ]
     }
 
     pub(crate) fn update(&mut self, data: &[i64], server_time: ServerTime) {
         // Buildings
-        for idx in 0..FortressBuildingType::COUNT {
-            self.buildings[idx].level =
+        for (idx, typ) in FortressBuildingType::iter().enumerate() {
+            self.buildings[typ].level =
                 soft_into(data[524 + idx], "building lvl", 0);
         }
         self._some_level = soft_into(data[598], "group bonus level", 0);
 
         // Units
-        for idx in 0..FortressUnitType::COUNT {
-            self.units[idx].upgrade_began = server_time.convert_to_local(
+        for (idx, typ) in FortressUnitType::iter().enumerate() {
+            self.units[typ].upgrade_began = server_time.convert_to_local(
                 data[550 + idx],
                 "fortress unit upgrade start",
             );
-            self.units[idx].upgrade_finish = server_time.convert_to_local(
+            self.units[typ].upgrade_finish = server_time.convert_to_local(
                 data[553 + idx],
                 "fortress unit upgrade finish",
             );
         }
         use FortressBuildingType::*;
         use FortressUnitType::*;
-        self.units[Soldier as usize].max_count = soft_into(
-            self.buildings[Barracks as usize].level * 3,
+        self.units[Soldier].max_count = soft_into(
+            self.buildings[Barracks].level * 3,
             "soldier max count",
             0,
         );
-        self.units[Magician as usize].max_count = soft_into(
-            self.buildings[MagesTower as usize].level,
+        self.units[Magician].max_count = soft_into(
+            self.buildings[MagesTower].level,
             "magician max count",
             0,
         );
-        self.units[Archer as usize].max_count = soft_into(
-            self.buildings[ArcheryGuild as usize].level * 2,
+        self.units[Archer].max_count = soft_into(
+            self.buildings[ArcheryGuild].level * 2,
             "archer max count",
             0,
         );
 
-        self.units[Soldier as usize].count =
+        self.units[Soldier].count =
             soft_into(data[547] & 0xFFFF, "soldier count", 0);
-        self.units[Soldier as usize].in_que =
+        self.units[Soldier].in_que =
             soft_into(data[548] >> 16, "soldier in que", 0);
 
-        self.units[Magician as usize].count =
+        self.units[Magician].count =
             soft_into(data[547] >> 16, "magician count", 0);
-        self.units[Magician as usize].in_que =
+        self.units[Magician].in_que =
             soft_into(data[549] & 0xFFFF, "magicians in que", 0);
 
-        self.units[Archer as usize].count =
+        self.units[Archer].count =
             soft_into(data[548] & 0xFFFF, "archer count", 0);
-        self.units[Archer as usize].in_que =
+        self.units[Archer].in_que =
             soft_into(data[549] >> 16, "archer in que", 0);
 
         // Items
-        for idx in 0..FortressResourceType::COUNT {
+        for (idx, typ) in FortressResourceType::iter().enumerate() {
             if idx != 2 {
                 // self.resources[idx].saved =
                 //     soft_into(data[544 + idx], "saved resource", 0);
-                self.resources[idx].max_limit_next =
+                self.resources[typ].max_limit_next =
                     soft_into(data[584 + idx], "max saved next resource", 0);
             }
-            self.resources[idx].current =
+            self.resources[typ].current =
                 soft_into(data[562 + idx], "resource in store", 0);
-            self.resources[idx].max_in_building =
+            self.resources[typ].max_in_building =
                 soft_into(data[565 + idx], "resource max in store", 0);
-            self.resources[idx].max_save =
+            self.resources[typ].max_save =
                 soft_into(data[568 + idx], "resource max save", 0);
-            self.resources[idx].per_hour =
+            self.resources[typ].per_hour =
                 soft_into(data[574 + idx], "resource per hour", 0);
         }
         self.time_stamp =
@@ -258,34 +293,32 @@ impl Fortress {
     }
 
     pub(crate) fn update_unit_prices(&mut self, data: &[i64]) {
-        for i in 0..FortressUnitType::COUNT {
-            self.units[i].training_cost = FortressCost::parse(&data[i * 4..]);
+        for (i, typ) in FortressUnitType::iter().enumerate() {
+            self.units[typ].training_cost = FortressCost::parse(&data[i * 4..]);
         }
     }
 
     pub(crate) fn update_unit_upgrade_info(&mut self, data: &[i64]) {
-        for i in 0..FortressUnitType::COUNT {
-            self.units[i].next_lvl = soft_into(data[i * 3], "unit next lvl", 0);
-            self.units[i].upgrade_stone_cost =
+        for (i, typ) in FortressUnitType::iter().enumerate() {
+            self.units[typ].next_lvl =
+                soft_into(data[i * 3], "unit next lvl", 0);
+            self.units[typ].upgrade_stone_cost =
                 soft_into(data[1 + i * 3], "stone price next unit lvl", 0);
-            self.units[i].upgrade_wood_cost =
+            self.units[typ].upgrade_wood_cost =
                 soft_into(data[2 + i * 3], "wood price next unit lvl", 0);
         }
     }
 
     pub(crate) fn update_levels(&mut self, data: &[i64]) {
         use FortressUnitType::*;
-        self.units[Soldier as usize].level =
-            soft_into(data[1], "soldier level", 0);
-        self.units[Magician as usize].level =
-            soft_into(data[2], "magician level", 0);
-        self.units[Archer as usize].level =
-            soft_into(data[3], "archer level", 0);
+        self.units[Soldier].level = soft_into(data[1], "soldier level", 0);
+        self.units[Magician].level = soft_into(data[2], "magician level", 0);
+        self.units[Archer].level = soft_into(data[3], "archer level", 0);
     }
 
     pub(crate) fn update_prices(&mut self, data: &[i64]) {
-        for i in 0..FortressBuildingType::COUNT {
-            self.buildings[i].upgrade_cost =
+        for (i, typ) in FortressBuildingType::iter().enumerate() {
+            self.buildings[typ].upgrade_cost =
                 FortressCost::parse(&data[i * 4..]);
         }
         self.gem_search_cost = FortressCost::parse(&data[48..]);

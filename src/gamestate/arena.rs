@@ -166,7 +166,7 @@ pub struct Fighter {
     pub name: Option<String>,
     pub level: u32,
     pub life: u32,
-    pub attributes: Attributes,
+    pub attributes: EnumMap<AttributeType, u32>,
     pub class: Class,
 }
 
@@ -186,14 +186,13 @@ impl Fighter {
             }
         };
 
-        let mut attributes = Attributes::default();
-
+        let mut attributes = EnumMap::default();
         let raw_atrs =
             parse_vec(data.get(10..15)?, "fighter attributes", |a| {
                 a.parse().ok()
             })
             .ok()?;
-        attributes.update(&raw_atrs);
+        update_enum_map(&mut attributes, &raw_atrs);
 
         let class: i32 = data.cfsget(27, "fighter class").ok().flatten()?;
         let class: Class = FromPrimitive::from_i32(class - 1)?;

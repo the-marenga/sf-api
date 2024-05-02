@@ -1,10 +1,11 @@
 use std::fmt::Debug;
 
 use chrono::{DateTime, Local};
+use enum_map::EnumMap;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use strum::EnumCount;
 
+use super::SFError;
 use crate::{command::*, gamestate::items::*, misc::*, PlayerId};
 
 #[derive(Debug, Clone, Default)]
@@ -51,10 +52,10 @@ pub struct CharacterState {
     /// The max amount of damage the weapon claims it can do without any bonus
     pub max_damage: u32,
 
-    pub attribute_basis: Attributes,
-    pub attribute_additions: Attributes,
+    pub attribute_basis: EnumMap<AttributeType, u32>,
+    pub attribute_additions: EnumMap<AttributeType, u32>,
     /// The amount of times an atribute has been bought already
-    pub attribute_times_bought: Attributes,
+    pub attribute_times_bought: EnumMap<AttributeType, u32>,
 
     pub mount: Option<Mount>,
     pub mount_end: Option<DateTime<Local>>,
@@ -87,19 +88,22 @@ pub struct Portrait {
 }
 
 impl Portrait {
-    pub(crate) fn update(&mut self, data: &[i64]) {
-        self.mouth = soft_into(data[0], "mouth", 1);
-        self.hair_color = soft_into(data[1] / 100, "hair color", 1);
-        self.hair = soft_into(data[1] % 100, "hair", 1);
-        self.brows = soft_into(data[2] % 100, "brows", 1);
-        self.eyes = soft_into(data[3], "eyes", 1);
-        self.beards = soft_into(data[4] % 100, "beards", 1);
-        self.nose = soft_into(data[5], "nose", 1);
-        self.ears = soft_into(data[6], "ears", 1);
-        self.extra = soft_into(data[7], "extra", 1);
-        self.horns = soft_into(data[8] % 100, "horns", 1);
-        self.special_portrait = data[9];
-        self.gender = FromPrimitive::from_i64(data[11] % 2).unwrap_or_default();
+    pub(crate) fn parse(data: &[i64]) -> Result<Portrait, SFError> {
+        Ok(Self {
+            mouth: data.csiget(0, "mouth", 1)?,
+            hair_color: data.csiget(1, "hair color", 100)? / 100,
+            hair: data.csiget(1, "hair", 1)? % 100,
+            brows: data.csiget(2, "brows", 1)? % 100,
+            eyes: data.csiget(3, "eyes", 1)?,
+            beards: data.csiget(4, "beards", 1)? % 100,
+            nose: data.csiget(5, "nose", 1)?,
+            ears: data.csiget(6, "ears", 1)?,
+            extra: data.csiget(7, "extra", 1)?,
+            horns: data.csiget(8, "horns", 1)? % 100,
+            special_portrait: data.cget(9, "special portrait")?,
+            gender: Gender::from_i64(data.cget(11, "gender")? % 2)
+                .unwrap_or_default(),
+        })
     }
 }
 
@@ -140,27 +144,6 @@ pub enum BardInstrument {
     Harp = 1,
     Lute,
     Flute,
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Attributes(pub [u32; AttributeType::COUNT]);
-
-impl Attributes {
-    pub fn get(&self, attribute: AttributeType) -> u32 {
-        self.0[attribute as usize - 1]
-    }
-    pub fn get_mut(&mut self, attribute: AttributeType) -> &mut u32 {
-        self.0.get_mut(attribute as usize - 1).unwrap()
-    }
-    pub fn set(&mut self, attribute: AttributeType, val: u32) {
-        self.0[attribute as usize - 1] = val
-    }
-    pub(crate) fn update(&mut self, data: &[i64]) {
-        self.0.iter_mut().zip(data).for_each(|(old, new)| {
-            *old = soft_into(*new, "attribute value", 0)
-        });
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, Default, Clone, Copy, FromPrimitive)]

@@ -1,4 +1,5 @@
 #![allow(deprecated)]
+use enum_map::Enum;
 use num_derive::FromPrimitive;
 
 use crate::{
@@ -558,7 +559,9 @@ pub struct DiceReward {
     pub amount: u32,
 }
 
-#[derive(Debug, Copy, Clone, strum::EnumCount, PartialEq, Eq)]
+#[derive(
+    Debug, Copy, Clone, strum::EnumCount, PartialEq, Eq, Enum, FromPrimitive,
+)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum AttributeType {
     Strength = 1,
