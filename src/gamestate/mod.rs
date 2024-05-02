@@ -1230,7 +1230,6 @@ impl GameState {
         Ok(())
     }
 
-    #[allow(clippy::indexing_slicing)]
     pub(crate) fn update_player_save(&mut self, data: &[i64]) {
         let server_time = self.server_time();
         if data.len() < 700 {

@@ -3,7 +3,9 @@ use num::FromPrimitive;
 use num_derive::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
-use super::{items::Equipment, AttributeType, CCGet, CGet, SFError};
+use super::{
+    items::Equipment, AttributeType, CCGet, CGet, EnumMapGet, SFError,
+};
 use crate::misc::soft_into;
 
 #[derive(Debug, Default, Clone)]
@@ -144,8 +146,7 @@ macro_rules! update_progress {
             else {
                 continue;
             };
-            #[allow(clippy::indexing_slicing)]
-            let dungeon = &mut $dungeons[dungeon_typ];
+            let dungeon = $dungeons.get_mut(dungeon_typ);
             let level = match dungeon {
                 DungeonProgress::Open { level, .. } => *level,
                 _ => 0,
@@ -175,8 +176,7 @@ macro_rules! update_levels {
             else {
                 continue;
             };
-            #[allow(clippy::indexing_slicing)]
-            let dungeon = &mut $dungeons[dungeon_typ];
+            let dungeon = $dungeons.get_mut(dungeon_typ);
 
             if level < 1 {
                 // Either Finished or not unlocked

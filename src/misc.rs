@@ -1,6 +1,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use aho_corasick::AhoCorasick;
+use enum_map::{Enum, EnumArray, EnumMap};
 use log::error;
 use once_cell::sync::Lazy;
 
@@ -242,5 +243,23 @@ pub(crate) fn update_enum_map<
 ) {
     for (map_val, val) in map.as_mut_slice().iter_mut().zip(vals) {
         *map_val = soft_into(*val, "attribute val", B::default());
+    }
+}
+
+/// This is a workaround for clippy index warnings for safe index ops
+pub trait EnumMapGet<K, V> {
+    fn get(&self, key: K) -> &V;
+    fn get_mut(&mut self, key: K) -> &mut V;
+}
+
+impl<K: Enum + EnumArray<V>, V> EnumMapGet<K, V> for EnumMap<K, V> {
+    fn get(&self, key: K) -> &V {
+        #[allow(clippy::indexing_slicing)]
+        &self[key]
+    }
+
+    fn get_mut(&mut self, key: K) -> &mut V {
+        #[allow(clippy::indexing_slicing)]
+        &mut self[key]
     }
 }
