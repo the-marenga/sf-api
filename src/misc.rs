@@ -149,3 +149,78 @@ const fn sf_str_lookups(
         &["\n", ":", "%", "/", "|", "&", "\"", "#", ",", ";", "$"],
     )
 }
+
+pub(crate) trait CGet<T: Copy + std::fmt::Debug> {
+    fn cget(&self, pos: usize, name: &'static str) -> Result<T, SFError>;
+}
+
+pub(crate) trait CCGet<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> {
+    fn csiget(
+        &self,
+        pos: usize,
+        name: &'static str,
+        def: I,
+    ) -> Result<I, SFError>;
+    fn cwiget(
+        &self,
+        pos: usize,
+        name: &'static str,
+    ) -> Result<Option<I>, SFError>;
+}
+
+pub(crate) trait CSGet<T: FromStr> {
+    fn cfsget(&self, pos: usize, name: &'static str) -> Result<Option<T>, SFError>;
+}
+
+impl<T: FromStr> CSGet<T> for [&str] {
+    fn cfsget(&self, pos: usize, name: &'static str) -> Result<Option<T>, SFError> {
+        let raw = self.cget(pos, name)?;
+        Ok(warning_from_str(raw, name))
+    }
+}
+
+impl<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> CCGet<T, I> for [T] {
+    fn csiget(
+        &self,
+        pos: usize,
+        name: &'static str,
+        def: I,
+    ) -> Result<I, SFError> {
+        let raw = self.get(pos).copied().ok_or_else(|| {
+            SFError::TooShortResponse {
+                name,
+                pos,
+                array: format!("{:?}", self),
+            }
+        })?;
+
+        Ok(soft_into(raw, name, def))
+    }
+
+    fn cwiget(
+        &self,
+        pos: usize,
+        name: &'static str,
+    ) -> Result<Option<I>, SFError> {
+        let raw = self.get(pos).copied().ok_or_else(|| {
+            SFError::TooShortResponse {
+                name,
+                pos,
+                array: format!("{:?}", self),
+            }
+        })?;
+        Ok(warning_try_into(raw, name))
+    }
+}
+
+impl<T: Copy + std::fmt::Debug + Display> CGet<T> for [T] {
+    fn cget(&self, pos: usize, name: &'static str) -> Result<T, SFError> {
+        self.get(pos)
+            .copied()
+            .ok_or_else(|| SFError::TooShortResponse {
+                name,
+                pos,
+                array: format!("{:?}", self),
+            })
+    }
+}

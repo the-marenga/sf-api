@@ -1,6 +1,7 @@
 use std::{error::Error, fmt::Display};
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum SFError {
     /// Whatever you were trying to send was not possible to send. This is
     /// either our issue when you were doing something normal, or you were
@@ -21,8 +22,15 @@ pub enum SFError {
     /// with it. Most likely that you were not allowed to do your action (spend
     /// money you dont have, etc.)
     ServerError(String),
-    /// The server version is newer, than the
+    /// The server version is newer, than the limit set in the server
+    /// communication
     UnsupportedVersion(u32),
+    /// The server responded with a response, that was too short
+    TooShortResponse {
+        name: &'static str,
+        pos: usize,
+        array: String,
+    },
 }
 
 impl Error for SFError {
@@ -60,6 +68,12 @@ impl Display for SFError {
             }
             SFError::UnsupportedVersion(v) => {
                 f.write_str(&format!("The server version {v} is not supported"))
+            }
+            SFError::TooShortResponse { name, pos, array } => {
+                f.write_str(&format!(
+                    "Tried to access the response for {name} at [{pos}] , but \
+                     the response is too short. The response is: {array}"
+                ))
             }
         }
     }

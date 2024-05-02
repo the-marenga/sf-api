@@ -61,21 +61,26 @@ impl Fight {
         data: &[i64],
         server_time: ServerTime,
     ) -> Result<(), SFError> {
-        self.has_player_won = data[0] != 0;
-        self.silver_change = data[2];
+        self.has_player_won = data.cget(0, "has_player_won")? != 0;
+        self.silver_change = data.cget(2, "fight silver change")?;
 
         if data.len() < 20 {
             // Skip underworld
             return Ok(());
         }
-        self.xp_change = soft_into(data[3], "fight xp", 0);
-        self.mushroom_change = soft_into(data[4], "fight mushrooms", 0);
-        self.honor_change = data[5];
 
-        self.rank_pre_fight = soft_into(data[7], "fight rank pre", 0);
-        self.rank_post_fight = soft_into(data[8], "fight rank post", 0);
+        self.xp_change = data.csiget(3, "fight xp", 0)?;
+        self.mushroom_change = data.csiget(4, "fight mushrooms", 0)?;
+        self.honor_change = data.cget(5, "fight honor")?;
 
-        self.item_won = Item::parse(&data[9..], server_time);
+        self.rank_pre_fight = data.csiget(7, "fight rank pre", 0)?;
+        self.rank_post_fight = data.csiget(8, "fight rank post", 0)?;
+        let item = data.get(9..).ok_or_else(|| SFError::TooShortResponse {
+            name: "fight item",
+            pos: 9,
+            array: format!("{data:?}"),
+        })?;
+        self.item_won = Item::parse(item, server_time);
         Ok(())
     }
 
@@ -117,8 +122,10 @@ pub struct SingleFight {
 impl SingleFight {
     pub(crate) fn update_fighters(&mut self, data: &str) {
         let data = data.split('/').collect::<Vec<_>>();
-        self.fighter_a = Fighter::parse(&data[..47]);
-        self.fighter_b = Fighter::parse(&data[47..]);
+        // FIXME: IIRC this should probably be split(data.len() 2) instead
+        let (fighter_a, fighter_b) = data.split_at(47);
+        self.fighter_a = Fighter::parse(fighter_a);
+        self.fighter_b = Fighter::parse(fighter_b);
     }
 
     pub(crate) fn update_rounds(&mut self, data: &str) -> Result<(), SFError> {
@@ -165,12 +172,7 @@ pub struct Fighter {
 
 impl Fighter {
     pub(crate) fn parse(data: &[&str]) -> Option<Fighter> {
-        if data.len() < 28 {
-            warn!("Too short fighter response");
-            return None;
-        }
-
-        let fighter_typ: i64 = warning_from_str(data[5], "fighter typ")?;
+        let fighter_typ: i64 = data.cfsget(5, "fighter typ").ok()??;
         use FighterTyp::*;
 
         let mut fighter_type = match fighter_typ {
@@ -194,9 +196,9 @@ impl Fighter {
         let class: i32 = warning_from_str(data[27], "fighter class")?;
         let class: Class = FromPrimitive::from_i32(class - 1)?;
 
-        let id = warning_from_str(data[5], "fighter id").unwrap_or_default();
+        let id = data.cfsget(5, "fighter id").ok()?.unwrap_or_default();
 
-        let name = match data[6].parse::<i64>() {
+        let name = match data.cget(6, "fighter name").ok()?.parse::<i64>() {
             Ok(-770..=-740) => {
                 // This range might be too large
                 fighter_type = FighterTyp::FortressWall;
@@ -214,8 +216,8 @@ impl Fighter {
                 }
                 None
             }
-            Ok(_)
-                if data[5] == data[6] && fighter_type == FighterTyp::Player =>
+            Ok(pid)
+                if pid == id && fighter_type == FighterTyp::Player =>
             {
                 fighter_type = FighterTyp::Pet;
                 None
@@ -227,8 +229,8 @@ impl Fighter {
             typ: fighter_type,
             id,
             name,
-            level: warning_from_str(data[7], "fighter lvl")?,
-            life: warning_from_str(data[8], "fighter life")?,
+            level: data.cfsget(7, "fighter lvl").ok()??,
+            life: data.cfsget(8, "fighter life").ok()??,
             attributes,
             class,
         })
