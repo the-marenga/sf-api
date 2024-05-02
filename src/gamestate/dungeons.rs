@@ -1,8 +1,9 @@
 use enum_map::{Enum, EnumMap};
-use log::warn;
+use num::FromPrimitive;
+use num_derive::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
-use super::{items::Equipment, AttributeType};
+use super::{items::Equipment, AttributeType, CCGet, CGet, SFError};
 use crate::misc::soft_into;
 
 #[derive(Debug, Default, Clone)]
@@ -21,20 +22,25 @@ pub struct Portal {
 }
 
 impl Portal {
-    pub(crate) fn update(&mut self, data: &[i64]) {
-        self.current = match data[2] {
+    pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
+        self.current = match data.cget(2, "portal unlocked")? {
             0 => 0,
-            _ => soft_into(data[0] + 1, "portal progress", 0),
+            _ => soft_into(
+                data.cget(0, "portal progress")? + 1,
+                "portal progress",
+                0,
+            ),
         };
-        self.enemy_hp_percentage = soft_into(data[1], "portal hitpoint", 0);
+        self.enemy_hp_percentage = data.csiget(1, "portal hitpoint", 0)?;
+        Ok(())
     }
 }
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Dungeons {
-    light_dungeons: [DungeonProgress; 30],
-    shadow_dungeons: [DungeonProgress; 30],
+    pub light_dungeons: EnumMap<LightDungeon, DungeonProgress>,
+    pub shadow_dungeons: EnumMap<ShadowDungeon, DungeonProgress>,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -51,7 +57,7 @@ pub enum DungeonProgress {
     Finished,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DungeonType {
     Light,
@@ -59,7 +65,7 @@ pub enum DungeonType {
 }
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter,
+    Debug, Clone, Copy, PartialEq, Eq, EnumCount, EnumIter, Enum, FromPrimitive,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum LightDungeon {
@@ -95,10 +101,10 @@ pub enum LightDungeon {
 }
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, EnumCount, EnumIter,
+    Debug, Clone, Copy, PartialEq, Eq, EnumCount, EnumIter, Enum, FromPrimitive,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum ShadowDungeons {
+pub enum ShadowDungeon {
     DesecratedCatacombs = 0,
     MinesOfGloria = 1,
     RuinsOfGnark = 2,
@@ -131,22 +137,20 @@ pub enum ShadowDungeons {
     PlayaGamesHQ = 29,
 }
 
-impl Dungeons {
-    pub(crate) fn update(&mut self, data: &[i64], dungeon_type: DungeonType) {
-        let dungeons = match dungeon_type {
-            DungeonType::Light => &mut self.light_dungeons,
-            DungeonType::Shadow => &mut self.shadow_dungeons,
-        };
-
-        for ((dungeon_id, progress), dungeon) in
-            data.iter().copied().enumerate().zip(dungeons)
-        {
+macro_rules! update_progress {
+    ($data:expr, $dungeons:expr) => {
+        for (dungeon_id, progress) in $data.iter().copied().enumerate() {
+            let Some(dungeon_typ) = FromPrimitive::from_usize(dungeon_id)
+            else {
+                continue;
+            };
+            #[allow(clippy::indexing_slicing)]
+            let dungeon = &mut $dungeons[dungeon_typ];
             let level = match dungeon {
                 DungeonProgress::Open { level, .. } => *level,
                 _ => 0,
             };
-
-            let progress = match progress {
+            *dungeon = match progress {
                 -1 => DungeonProgress::Locked,
                 x => {
                     let stage = soft_into(x, "dungeon progress", 0);
@@ -160,33 +164,20 @@ impl Dungeons {
                     }
                 }
             };
-            match dungeon_type {
-                DungeonType::Shadow => {
-                    if dungeon_id > ShadowDungeons::COUNT {
-                        warn!("Unknown shadow dungeon id: {dungeon_id}");
-                    }
-                }
-                DungeonType::Light => {
-                    if dungeon_id == 17 {
-                        *dungeon = DungeonProgress::Locked;
-                        continue;
-                    } else if dungeon_id > LightDungeon::COUNT {
-                        warn!("Unknown light dungeon id: {dungeon_id}");
-                    }
-                }
-            };
-            *dungeon = progress;
         }
-    }
+    };
+}
 
-    pub(crate) fn update_levels(&mut self, data: &[u16], typ: DungeonType) {
-        let dungeons = match typ {
-            DungeonType::Light => &mut self.light_dungeons,
-            DungeonType::Shadow => &mut self.shadow_dungeons,
-        };
+macro_rules! update_levels {
+    ($dungeons:expr, $data:expr) => {
+        for (dungeon_id, level) in $data.iter().copied().enumerate() {
+            let Some(dungeon_typ) = FromPrimitive::from_usize(dungeon_id)
+            else {
+                continue;
+            };
+            #[allow(clippy::indexing_slicing)]
+            let dungeon = &mut $dungeons[dungeon_typ];
 
-        for (dungeon, level) in dungeons.iter_mut().zip(data) {
-            let level = *level;
             if level < 1 {
                 // Either Finished or not unlocked
                 continue;
@@ -205,28 +196,51 @@ impl Dungeons {
                 level,
             }
         }
+    };
+}
+
+impl Dungeons {
+    pub(crate) fn update_progress(
+        &mut self,
+        data: &[i64],
+        dungeon_type: DungeonType,
+    ) {
+        match dungeon_type {
+            DungeonType::Light => {
+                update_progress!(data, self.light_dungeons)
+            }
+            DungeonType::Shadow => {
+                update_progress!(data, self.shadow_dungeons)
+            }
+        };
     }
 
+    pub(crate) fn update_levels(&mut self, data: &[u16], typ: DungeonType) {
+        match typ {
+            DungeonType::Light => {
+                update_levels!(self.light_dungeons, data)
+            }
+            DungeonType::Shadow => {
+                update_levels!(self.shadow_dungeons, data)
+            }
+        };
+    }
+
+    #[deprecated(note = "You should access the dungeon member map directly")]
     pub fn get_light(&self, typ: LightDungeon) -> DungeonProgress {
-        self.light_dungeons[typ as usize]
+        #[allow(clippy::indexing_slicing)]
+        self.light_dungeons[typ]
     }
 
-    pub fn get_shadow(&self, typ: ShadowDungeons) -> DungeonProgress {
-        self.shadow_dungeons[typ as usize]
+    #[deprecated(note = "You should access the dungeon member map directly")]
+    pub fn get_shadow(&self, typ: ShadowDungeon) -> DungeonProgress {
+        #[allow(clippy::indexing_slicing)]
+        self.shadow_dungeons[typ]
     }
 }
 
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    PartialEq,
-    Eq,
-    strum::EnumCount,
-    PartialOrd,
-    Ord,
-    Enum,
-    EnumIter,
+    Debug, Clone, Copy, PartialEq, Eq, EnumCount, Enum, EnumIter, Hash,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum CompanionClass {

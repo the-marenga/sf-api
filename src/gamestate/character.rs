@@ -107,7 +107,7 @@ impl Portrait {
     }
 }
 
-#[derive(Debug, Clone, Default, Copy, PartialEq, Eq, FromPrimitive)]
+#[derive(Debug, Clone, Default, Copy, PartialEq, Eq, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Gender {
     #[default]
@@ -131,14 +131,14 @@ pub enum Class {
     Necromancer,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DruidMask {
     Cat = 4,
     Bear = 5,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BardInstrument {
     Harp = 1,
@@ -146,7 +146,7 @@ pub enum BardInstrument {
     Flute,
 }
 
-#[derive(Debug, PartialEq, Eq, Default, Clone, Copy, FromPrimitive)]
+#[derive(Debug, PartialEq, Eq, Default, Clone, Copy, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Race {
     #[default]
@@ -160,7 +160,7 @@ pub enum Race {
     Demon,
 }
 
-#[derive(Debug, Copy, Clone, FromPrimitive, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, FromPrimitive, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Mount {
     Cow = 1,

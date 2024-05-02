@@ -5,7 +5,7 @@ use num_derive::FromPrimitive;
 use crate::{
     gamestate::{
         character::*,
-        dungeons::{LightDungeon, ShadowDungeons},
+        dungeons::{LightDungeon, ShadowDungeon},
         fortress::*,
         guild::GuildSkill,
         idle::IdleBuildingType,
@@ -246,7 +246,7 @@ pub enum Command {
     },
     /// Enters a specific shadow dungeon
     FightShadowDungeon {
-        name: ShadowDungeons,
+        name: ShadowDungeon,
         use_mushroom: bool,
     },
     /// Attacks the requested level of the tower

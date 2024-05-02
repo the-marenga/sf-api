@@ -122,7 +122,13 @@ pub struct SingleFight {
 impl SingleFight {
     pub(crate) fn update_fighters(&mut self, data: &str) {
         let data = data.split('/').collect::<Vec<_>>();
-        // FIXME: IIRC this should probably be split(data.len() 2) instead
+        if data.len() < 60 {
+            self.fighter_a = None;
+            self.fighter_b = None;
+            warn!("Fighter response too short");
+            return;
+        }
+        // FIXME: IIRC this should probably be split(data.len() / 2) instead
         let (fighter_a, fighter_b) = data.split_at(47);
         self.fighter_a = Fighter::parse(fighter_a);
         self.fighter_b = Fighter::parse(fighter_b);
@@ -250,7 +256,8 @@ pub struct FightRound {
     pub action: BattleAction,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BattleAction {
     Attack,
@@ -265,6 +272,7 @@ pub enum BattleAction {
     SummonSpecial,
     Unknown,
 }
+
 impl BattleAction {
     pub(crate) fn parse(val: u32) -> BattleAction {
         match val {
@@ -282,7 +290,7 @@ impl BattleAction {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FighterTyp {
     #[default]
