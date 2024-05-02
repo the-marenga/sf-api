@@ -6,8 +6,9 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter, IntoEnumIterator};
 
-use super::{items::GemType, ServerTime};
+use super::{items::GemType, CCGet, SFError, ServerTime};
 use crate::{
+    gamestate::CGet,
     misc::{soft_into, warning_try_into},
     PlayerId,
 };
@@ -74,14 +75,14 @@ pub struct FortressCost {
 }
 
 impl FortressCost {
-    pub(crate) fn parse(data: &[i64]) -> FortressCost {
-        FortressCost {
-            time: Duration::from_secs(data[0] as u64),
+    pub(crate) fn parse(data: &[i64]) -> Result<FortressCost, SFError> {
+        Ok(FortressCost {
+            time: Duration::from_secs(data.csiget(0, "fortress time", 0)?),
             // Guessing here
-            silver: soft_into(data[1], "silver cost", u64::MAX),
-            wood: soft_into(data[2], "wood cost", u64::MAX),
-            stone: soft_into(data[3], "stone cost", u64::MAX),
-        }
+            silver: data.csiget(1, "silver cost", u64::MAX)?,
+            wood: data.csiget(2, "wood cost", u64::MAX)?,
+            stone: data.csiget(3, "stone cost", u64::MAX)?,
+        })
     }
 }
 
@@ -97,18 +98,7 @@ pub struct FortessRessource {
     pub max_limit_next: u64,
 }
 
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    EnumCount,
-    EnumIter,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Enum,
-)]
+#[derive(Debug, Clone, Copy, EnumCount, EnumIter, PartialEq, Eq, Enum)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FortressResourceType {
     Wood = 0,
@@ -117,17 +107,7 @@ pub enum FortressResourceType {
 }
 
 #[derive(
-    Debug,
-    Clone,
-    Copy,
-    EnumCount,
-    FromPrimitive,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Enum,
-    EnumIter,
+    Debug, Clone, Copy, EnumCount, FromPrimitive, PartialEq, Eq, Enum, EnumIter,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FortressBuildingType {
@@ -160,18 +140,7 @@ pub struct FortressUnit {
     pub upgrade_wood_cost: u64,
 }
 
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    EnumCount,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Enum,
-    EnumIter,
-)]
+#[derive(Debug, Clone, Copy, EnumCount, PartialEq, Eq, Enum, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FortressUnitType {
     Soldier = 0,
@@ -187,39 +156,26 @@ pub struct FortressBuilding {
 }
 
 impl Fortress {
-    pub fn get_building(&self, typ: FortressBuildingType) -> &FortressBuilding {
-        &self.buildings[typ]
-    }
-
-    pub fn get_unit(&self, typ: FortressUnitType) -> &FortressUnit {
-        &self.units[typ]
-    }
-
-    pub fn get_ressource(
-        &self,
-        typ: FortressResourceType,
-    ) -> &FortessRessource {
-        &self.resources[typ]
-    }
-
-    pub(crate) fn update(&mut self, data: &[i64], server_time: ServerTime) {
+    pub(crate) fn update(
+        &mut self,
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<(), SFError> {
         // Buildings
         for (idx, typ) in FortressBuildingType::iter().enumerate() {
             self.buildings[typ].level =
-                soft_into(data[524 + idx], "building lvl", 0);
+                data.csiget(524 + idx, "building lvl", 0)?;
         }
-        self._some_level = soft_into(data[598], "group bonus level", 0);
+        self._some_level = data.csiget(598, "group bonus level", 0)?;
 
         // Units
         for (idx, typ) in FortressUnitType::iter().enumerate() {
-            self.units[typ].upgrade_began = server_time.convert_to_local(
-                data[550 + idx],
-                "fortress unit upgrade start",
-            );
-            self.units[typ].upgrade_finish = server_time.convert_to_local(
-                data[553 + idx],
-                "fortress unit upgrade finish",
-            );
+            let msg = "fortress unit upgrade start";
+            self.units[typ].upgrade_began =
+                server_time.convert_to_local(data.cget(550 + idx, msg)?, msg);
+            let msg = "fortress unit upgrade finish";
+            self.units[typ].upgrade_finish =
+                server_time.convert_to_local(data.cget(553 + idx, msg)?, msg);
         }
         use FortressBuildingType::*;
         use FortressUnitType::*;
@@ -240,36 +196,36 @@ impl Fortress {
         );
 
         self.units[Soldier].count =
-            soft_into(data[547] & 0xFFFF, "soldier count", 0);
+            data.csiget(547 & 0xFFFF, "soldier count", 0)?;
         self.units[Soldier].in_que =
-            soft_into(data[548] >> 16, "soldier in que", 0);
+            data.csiget(548 >> 16, "soldier in que", 0)?;
 
         self.units[Magician].count =
-            soft_into(data[547] >> 16, "magician count", 0);
+            data.csiget(547 >> 16, "magician count", 0)?;
         self.units[Magician].in_que =
-            soft_into(data[549] & 0xFFFF, "magicians in que", 0);
+            data.csiget(549 & 0xFFFF, "magicians in que", 0)?;
 
         self.units[Archer].count =
-            soft_into(data[548] & 0xFFFF, "archer count", 0);
+            data.csiget(548 & 0xFFFF, "archer count", 0)?;
         self.units[Archer].in_que =
-            soft_into(data[549] >> 16, "archer in que", 0);
+            data.csiget(549 >> 16, "archer in que", 0)?;
 
         // Items
         for (idx, typ) in FortressResourceType::iter().enumerate() {
             if idx != 2 {
                 // self.resources[idx].saved =
-                //     soft_into(data[544 + idx], "saved resource", 0);
+                //     data.csiget(544 + idx, "saved resource", 0);
                 self.resources[typ].max_limit_next =
-                    soft_into(data[584 + idx], "max saved next resource", 0);
+                    data.csiget(584 + idx, "max saved next resource", 0)?;
             }
             self.resources[typ].current =
-                soft_into(data[562 + idx], "resource in store", 0);
+                data.csiget(562 + idx, "resource in store", 0)?;
             self.resources[typ].max_in_building =
-                soft_into(data[565 + idx], "resource max in store", 0);
+                data.csiget(565 + idx, "resource max in store", 0)?;
             self.resources[typ].max_save =
-                soft_into(data[568 + idx], "resource max save", 0);
+                data.csiget(568 + idx, "resource max save", 0)?;
             self.resources[typ].per_hour =
-                soft_into(data[574 + idx], "resource per hour", 0);
+                data.csiget(574 + idx, "resource per hour", 0)?;
         }
         self.time_stamp =
             server_time.convert_to_local(data[577], "resource time");
@@ -279,9 +235,9 @@ impl Fortress {
         self.building_upgrade_began =
             server_time.convert_to_local(data[573], "fortress expand begin");
 
-        self.level = soft_into(data[581], "fortress lvl", 0);
-        self.honor = soft_into(data[582], "fortress honor", 0);
-        self.rank = soft_into(data[583], "fortress rank", 0);
+        self.level = data.csiget(581, "fortress lvl", 0)?;
+        self.honor = data.csiget(582, "fortress honor", 0)?;
+        self.rank = data.csiget(583, "fortress rank", 0)?;
         self.gem_stone_target = GemType::parse(data[594]);
         self.gem_search_finish =
             server_time.convert_to_local(data[595], "gem search start");
@@ -290,37 +246,55 @@ impl Fortress {
         self.attack_target = warning_try_into(data[587], "fortress enemy");
         self.attack_free_reroll =
             server_time.convert_to_local(data[586], "fortress attack reroll");
+        Ok(())
     }
 
-    pub(crate) fn update_unit_prices(&mut self, data: &[i64]) {
+    pub(crate) fn update_unit_prices(
+        &mut self,
+        data: &[i64],
+    ) -> Result<(), SFError> {
         for (i, typ) in FortressUnitType::iter().enumerate() {
-            self.units[typ].training_cost = FortressCost::parse(&data[i * 4..]);
+            self.units[typ].training_cost =
+                FortressCost::parse(&data[i * 4..])?;
         }
+        Ok(())
     }
 
-    pub(crate) fn update_unit_upgrade_info(&mut self, data: &[i64]) {
+    pub(crate) fn update_unit_upgrade_info(
+        &mut self,
+        data: &[i64],
+    ) -> Result<(), SFError> {
         for (i, typ) in FortressUnitType::iter().enumerate() {
             self.units[typ].next_lvl =
-                soft_into(data[i * 3], "unit next lvl", 0);
+                data.csiget(i * 3, "unit next lvl", 0)?;
             self.units[typ].upgrade_stone_cost =
-                soft_into(data[1 + i * 3], "stone price next unit lvl", 0);
+                data.csiget(1 + i * 3, "stone price next unit lvl", 0)?;
             self.units[typ].upgrade_wood_cost =
-                soft_into(data[2 + i * 3], "wood price next unit lvl", 0);
+                data.csiget(2 + i * 3, "wood price next unit lvl", 0)?;
         }
+        Ok(())
     }
 
-    pub(crate) fn update_levels(&mut self, data: &[i64]) {
+    pub(crate) fn update_levels(
+        &mut self,
+        data: &[i64],
+    ) -> Result<(), SFError> {
         use FortressUnitType::*;
-        self.units[Soldier].level = soft_into(data[1], "soldier level", 0);
-        self.units[Magician].level = soft_into(data[2], "magician level", 0);
-        self.units[Archer].level = soft_into(data[3], "archer level", 0);
+        self.units[Soldier].level = data.csiget(1, "soldier level", 0)?;
+        self.units[Magician].level = data.csiget(2, "magician level", 0)?;
+        self.units[Archer].level = data.csiget(3, "archer level", 0)?;
+        Ok(())
     }
 
-    pub(crate) fn update_prices(&mut self, data: &[i64]) {
+    pub(crate) fn update_prices(
+        &mut self,
+        data: &[i64],
+    ) -> Result<(), SFError> {
         for (i, typ) in FortressBuildingType::iter().enumerate() {
             self.buildings[typ].upgrade_cost =
-                FortressCost::parse(&data[i * 4..]);
+                FortressCost::parse(&data[i * 4..])?;
         }
-        self.gem_search_cost = FortressCost::parse(&data[48..]);
+        self.gem_search_cost = FortressCost::parse(&data[48..])?;
+        Ok(())
     }
 }

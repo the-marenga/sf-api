@@ -319,14 +319,18 @@ impl GameState {
                     self.unlocks.pending_unlocks =
                         Unlockable::parse(&val.into_list("unlock")?);
                 }
-                "dungeonprogresslight" => self.unlocks.dungeons.update_progress(
-                    &val.into_list("dungeon progress light")?,
-                    DungeonType::Light,
-                ),
-                "dungeonprogressshadow" => self.unlocks.dungeons.update_progress(
-                    &val.into_list("dungeon progress shadow")?,
-                    DungeonType::Shadow,
-                ),
+                "dungeonprogresslight" => {
+                    self.unlocks.dungeons.update_progress(
+                        &val.into_list("dungeon progress light")?,
+                        DungeonType::Light,
+                    )
+                }
+                "dungeonprogressshadow" => {
+                    self.unlocks.dungeons.update_progress(
+                        &val.into_list("dungeon progress shadow")?,
+                        DungeonType::Shadow,
+                    )
+                }
                 "portalprogress" => {
                     self.unlocks
                         .portal

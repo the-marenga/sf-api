@@ -225,18 +225,6 @@ impl Dungeons {
             }
         };
     }
-
-    #[deprecated(note = "You should access the dungeon member map directly")]
-    pub fn get_light(&self, typ: LightDungeon) -> DungeonProgress {
-        #[allow(clippy::indexing_slicing)]
-        self.light_dungeons[typ]
-    }
-
-    #[deprecated(note = "You should access the dungeon member map directly")]
-    pub fn get_shadow(&self, typ: ShadowDungeon) -> DungeonProgress {
-        #[allow(clippy::indexing_slicing)]
-        self.shadow_dungeons[typ]
-    }
 }
 
 #[derive(
