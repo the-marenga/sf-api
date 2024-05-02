@@ -169,11 +169,19 @@ pub(crate) trait CCGet<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> {
 }
 
 pub(crate) trait CSGet<T: FromStr> {
-    fn cfsget(&self, pos: usize, name: &'static str) -> Result<Option<T>, SFError>;
+    fn cfsget(
+        &self,
+        pos: usize,
+        name: &'static str,
+    ) -> Result<Option<T>, SFError>;
 }
 
 impl<T: FromStr> CSGet<T> for [&str] {
-    fn cfsget(&self, pos: usize, name: &'static str) -> Result<Option<T>, SFError> {
+    fn cfsget(
+        &self,
+        pos: usize,
+        name: &'static str,
+    ) -> Result<Option<T>, SFError> {
         let raw = self.cget(pos, name)?;
         Ok(warning_from_str(raw, name))
     }

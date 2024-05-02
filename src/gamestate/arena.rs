@@ -189,11 +189,13 @@ impl Fighter {
         let mut attributes = Attributes::default();
 
         let raw_atrs =
-            parse_vec(&data[10..15], "fighter attributes", |a| a.parse().ok())
-                .ok()?;
+            parse_vec(data.get(10..15)?, "fighter attributes", |a| {
+                a.parse().ok()
+            })
+            .ok()?;
         attributes.update(&raw_atrs);
 
-        let class: i32 = warning_from_str(data[27], "fighter class")?;
+        let class: i32 = data.cfsget(27, "fighter class").ok().flatten()?;
         let class: Class = FromPrimitive::from_i32(class - 1)?;
 
         let id = data.cfsget(5, "fighter id").ok()?.unwrap_or_default();
@@ -210,19 +212,18 @@ impl Fighter {
             }
             Ok(..=-1) => None,
             Ok(0) => {
+                let id = data.cget(15, "fighter uwm").ok()?;
                 // No idea if this correct
-                if ["-910", "-935", "-933", "-924"].contains(&data[15]) {
+                if ["-910", "-935", "-933", "-924"].contains(&id) {
                     fighter_type = FighterTyp::UnderworldMinion;
                 }
                 None
             }
-            Ok(pid)
-                if pid == id && fighter_type == FighterTyp::Player =>
-            {
+            Ok(pid) if pid == id && fighter_type == FighterTyp::Player => {
                 fighter_type = FighterTyp::Pet;
                 None
             }
-            _ => Some(data[6].to_string()),
+            _ => Some(data.cget(6, "fighter name").ok()?.to_string()),
         };
 
         Some(Fighter {
