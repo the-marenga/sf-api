@@ -193,6 +193,7 @@ impl GameState {
                         .unlocks
                         .companions
                         .get_or_insert_with(Default::default);
+
                     for (i, class) in CompanionClass::iter().enumerate() {
                         let comp_start = 3 + i * 148;
                         companions[class].level = data[comp_start];

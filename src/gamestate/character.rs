@@ -99,7 +99,8 @@ pub struct Character {
 }
 
 /// All the exclusively cosmetic info necessary to build a player image, that is
-/// otherwise useless
+/// otherwise useless. As these values might change their based on each other,
+/// some of them are not fully parsed (to a more descriptive enum)
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]

@@ -10,6 +10,7 @@ use crate::misc::soft_into;
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The personal demon portal
 pub struct Portal {
     /// The current position in the portal. Starts with 1.
     /// (current - 1) / 10 => act
@@ -40,27 +41,39 @@ impl Portal {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The information about all generic dungeons in the game. Information about
+/// special dungeons like the portal
 pub struct Dungeons {
+    /// All the light dungeons. Noteably tower information is also in here
     pub light_dungeons: EnumMap<LightDungeon, DungeonProgress>,
+    /// All the shadow dungeons. Noteably twister & cont. loop of idols is also
+    /// in here
     pub shadow_dungeons: EnumMap<ShadowDungeon, DungeonProgress>,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The current state of a dungeon
 pub enum DungeonProgress {
     #[default]
+    /// The dungeon has not yet been unlocked
     Locked,
+    /// The dungeon is open and can be fought in
     Open {
         /// The amount of enemies already finished
         finished: u16,
         /// The level of the enemy currently
         level: u16,
     },
+    /// The dungeon has been fully cleared and can not be entered anymore
     Finished,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// The category of a dungeon. This is only used internally, so there is no
+/// real point for you to use this
 pub enum DungeonType {
     Light,
     Shadow,
@@ -70,6 +83,10 @@ pub enum DungeonType {
     Debug, Clone, Copy, PartialEq, Eq, EnumCount, EnumIter, Enum, FromPrimitive,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// All possible light dungeons. They are NOT numbered continuously (17 is
+/// missing), so you should use `LightDungeon::iter()`, if you want to iterate
+/// these
 pub enum LightDungeon {
     DesecratedCatacombs = 0,
     MinesOfGloria = 1,
@@ -106,6 +123,9 @@ pub enum LightDungeon {
     Debug, Clone, Copy, PartialEq, Eq, EnumCount, EnumIter, Enum, FromPrimitive,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// All possible shadow dungeons. You can use `ShadowDungeon::iter()`, if you
+/// want to iterate these
 pub enum ShadowDungeon {
     DesecratedCatacombs = 0,
     MinesOfGloria = 1,
@@ -183,9 +203,8 @@ macro_rules! update_levels {
                 continue;
             }
 
-            use DungeonProgress::*;
             let stage = match dungeon {
-                Open {
+                DungeonProgress::Open {
                     finished: stage, ..
                 } => *stage,
                 _ => 0,
@@ -223,16 +242,27 @@ impl Dungeons {
     Debug, Clone, Copy, PartialEq, Eq, EnumCount, Enum, EnumIter, Hash,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The class of a companion. There is only 1 companion per class, so this is
+/// also a ident of the characters
 pub enum CompanionClass {
+    /// Bert
     Warrior = 0,
+    /// Mark
     Mage = 1,
+    /// Kunigunde
     Scout = 2,
 }
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// All the information about a single companion. The class is not included
+/// here, as you access this via a map, where the key will be the class
 pub struct Companion {
+    /// I can not recall, if I made this signed on purpose, because this should
+    /// always be > 0
     pub level: i64,
+    /// The equipment this companion is wearing
     pub equipment: Equipment,
+    /// The total attributes of this companion
     pub attributes: EnumMap<AttributeType, u32>,
 }
