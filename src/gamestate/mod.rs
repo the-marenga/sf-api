@@ -34,7 +34,7 @@ use crate::{
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GameState {
-    pub character: CharacterState,
+    pub character: Character,
 
     /// Information about quests and work
     pub tavern: Tavern,
@@ -93,7 +93,7 @@ impl GameState {
         if res.character.level == 0 || res.character.name.is_empty() {
             return Err(SFError::ParsingError(
                 "response did not contain full player state",
-                "".to_string(),
+                String::new(),
             ));
         }
         Ok(res)

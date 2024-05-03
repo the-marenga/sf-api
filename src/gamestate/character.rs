@@ -10,7 +10,7 @@ use crate::{command::*, gamestate::items::*, misc::*, PlayerId};
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct CharacterState {
+pub struct Character {
     pub player_id: PlayerId,
 
     pub name: String,

@@ -1,11 +1,19 @@
 #![warn(
+    clippy::pedantic,
     missing_debug_implementations,
+    missing_docs,
     clippy::indexing_slicing,
     clippy::unwrap_used,
     clippy::expect_used,
+    clippy::print_stdout,
+    clippy::print_stderr,
     clippy::missing_panics_doc
 )]
-#![allow(clippy::field_reassign_with_default)]
+#![allow(
+    clippy::wildcard_imports,
+    clippy::too_many_lines,
+    clippy::field_reassign_with_default
+)]
 
 pub mod command;
 pub mod error;
