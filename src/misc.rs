@@ -1,4 +1,7 @@
-use std::{fmt::Display, str::FromStr};
+use std::{
+    fmt::{Debug, Display},
+    str::FromStr,
+};
 
 use aho_corasick::AhoCorasick;
 use enum_map::{Enum, EnumArray, EnumMap};
@@ -246,7 +249,9 @@ pub(crate) fn update_enum_map<
     }
 }
 
-/// This is a workaround for clippy index warnings for safe index ops
+/// This is a workaround for clippy index warnings for safe index ops. It
+/// also is more convenient in some cases to use these fundtions if you want
+/// to make sure something is &mut, or &
 pub trait EnumMapGet<K, V> {
     fn get(&self, key: K) -> &V;
     fn get_mut(&mut self, key: K) -> &mut V;
@@ -261,5 +266,24 @@ impl<K: Enum + EnumArray<V>, V> EnumMapGet<K, V> for EnumMap<K, V> {
     fn get_mut(&mut self, key: K) -> &mut V {
         #[allow(clippy::indexing_slicing)]
         &mut self[key]
+    }
+}
+
+pub(crate) trait ArrSkip<T: Debug> {
+    /// Basically does the equivalent of [pos..], but bounds checked with
+    /// correct errors
+    fn skip(&self, pos: usize, name: &'static str) -> Result<&[T], SFError>;
+}
+
+impl<T: Debug> ArrSkip<T> for [T] {
+    fn skip(&self, pos: usize, name: &'static str) -> Result<&[T], SFError> {
+        if pos > self.len() {
+            return Err(SFError::TooShortResponse {
+                name,
+                pos,
+                array: format!("{:?}", self),
+            });
+        }
+        Ok(self.split_at(pos).1)
     }
 }

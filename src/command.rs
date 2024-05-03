@@ -452,6 +452,7 @@ pub enum Command {
     /// Change your password. Note that I have not tested this and this might
     /// invalidate your session
     ChangePassword {
+        username: String,
         old: String,
         new: String,
     },
@@ -956,10 +957,10 @@ impl Command {
                 "PlayerTutorialStatus:{}",
                 if *show_tips { 0 } else { 268435455 }
             ),
-            ChangePassword { old, new } => {
+            ChangePassword { username, old, new } => {
                 let old = sha1_hash(&format!("{}{}", old, HASH_CONST));
                 let new = sha1_hash(&format!("{}{}", new, HASH_CONST));
-                format!("AccountPasswordChange:Lexi Belle/{old}/106/{new}/")
+                format!("AccountPasswordChange:{username}/{old}/106/{new}/")
             }
             ChangeMailAddress {
                 old_mail,

@@ -206,23 +206,15 @@ impl Dungeons {
         dungeon_type: DungeonType,
     ) {
         match dungeon_type {
-            DungeonType::Light => {
-                update_progress!(data, self.light_dungeons)
-            }
-            DungeonType::Shadow => {
-                update_progress!(data, self.shadow_dungeons)
-            }
+            DungeonType::Light => update_progress!(data, self.light_dungeons),
+            DungeonType::Shadow => update_progress!(data, self.shadow_dungeons),
         };
     }
 
     pub(crate) fn update_levels(&mut self, data: &[u16], typ: DungeonType) {
         match typ {
-            DungeonType::Light => {
-                update_levels!(self.light_dungeons, data)
-            }
-            DungeonType::Shadow => {
-                update_levels!(self.shadow_dungeons, data)
-            }
+            DungeonType::Light => update_levels!(self.light_dungeons, data),
+            DungeonType::Shadow => update_levels!(self.shadow_dungeons, data),
         };
     }
 }

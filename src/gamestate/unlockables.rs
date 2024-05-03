@@ -34,7 +34,7 @@ pub struct Unlockables {
     pub guild: Option<Guild>,
     pub idle_game: Option<IdleGame>,
 
-    /// Contains the features this is able to unlock right now
+    /// Contains the features this char is able to unlock right now
     pub pending_unlocks: Vec<Unlockable>,
 }
 

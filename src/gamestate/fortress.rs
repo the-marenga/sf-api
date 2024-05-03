@@ -6,10 +6,10 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter, IntoEnumIterator};
 
-use super::{items::GemType, CCGet, SFError, ServerTime};
+use super::{items::GemType, ArrSkip, CCGet, SFError, ServerTime};
 use crate::{
     gamestate::{CGet, EnumMapGet},
-    misc::{soft_into, warning_try_into},
+    misc::soft_into,
     PlayerId,
 };
 
@@ -243,7 +243,7 @@ impl Fortress {
             server_time.convert_to_local(data[595], "gem search start");
         self.gem_search_began =
             server_time.convert_to_local(data[596], "gem search end");
-        self.attack_target = warning_try_into(data[587], "fortress enemy");
+        self.attack_target = data.cwiget(587, "fortress enemy")?;
         self.attack_free_reroll =
             server_time.convert_to_local(data[586], "fortress attack reroll");
         Ok(())
@@ -255,7 +255,7 @@ impl Fortress {
     ) -> Result<(), SFError> {
         for (i, typ) in FortressUnitType::iter().enumerate() {
             self.units.get_mut(typ).training_cost =
-                FortressCost::parse(&data[i * 4..])?;
+                FortressCost::parse(data.skip(i * 4, "unit prices")?)?;
         }
         Ok(())
     }

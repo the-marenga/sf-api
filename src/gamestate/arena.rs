@@ -75,11 +75,7 @@ impl Fight {
 
         self.rank_pre_fight = data.csiget(7, "fight rank pre", 0)?;
         self.rank_post_fight = data.csiget(8, "fight rank post", 0)?;
-        let item = data.get(9..).ok_or_else(|| SFError::TooShortResponse {
-            name: "fight item",
-            pos: 9,
-            array: format!("{data:?}"),
-        })?;
+        let item = data.skip(9, "fight item")?;
         self.item_won = Item::parse(item, server_time);
         Ok(())
     }
