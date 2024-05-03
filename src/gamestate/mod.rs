@@ -123,6 +123,7 @@ impl GameState {
         let mut other_player: Option<OtherPlayer> = None;
         let mut other_guild: Option<OtherGuild> = None;
 
+        #[allow(clippy::match_same_arms)]
         for (key, val) in new_vals.iter().map(|(a, b)| (*a, *b)) {
             match key {
                 "timestamp" => {
@@ -748,7 +749,12 @@ impl GameState {
                     // Pretty sure this has been replaced
                 }
                 "fortressGroupPrice" => {
-                    // No idea what this is: "0/0/21880000/7200000"
+                    self.unlocks
+                        .fortress
+                        .get_or_insert_with(Default::default)
+                        .hall_of_knights_upgrade_price = FortressCost::parse(
+                        &val.into_list("hall of knights prices")?,
+                    )?;
                 }
                 "goldperhournextlevel" => {
                     // I dont think this matters

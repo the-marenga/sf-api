@@ -15,42 +15,57 @@ use crate::{
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The information about a characters fortress
 pub struct Fortress {
+    /// All the buildings, that a fortress can have. If they are not yet build,
+    /// they are level 0
     pub buildings: EnumMap<FortressBuildingType, FortressBuilding>,
+    /// Information about all the buildable units in the fortress
     pub units: EnumMap<FortressUnitType, FortressUnit>,
+    /// All information about ressources in the fortress
     pub resources: EnumMap<FortressResourceType, FortessRessource>,
 
     /// The highest level buildings can be upgraded to
     pub building_max_lvl: u8,
+    /// The level the fortress wall will have when defending against another
+    /// player
     pub wall_combat_lvl: u16,
     /// This seems to be the last time resources were collected, but this also
-    /// seems to get set by something else
+    /// seems to get set by something else. If you have any idea, what this is,
+    /// please open an issue
     pub time_stamp: Option<DateTime<Local>>,
 
     /// The building, that is currently being upgraded
     pub building_upgrade: Option<FortressBuildingType>,
     /// The time at which the upgrade is finished
     pub building_upgrade_finish: Option<DateTime<Local>>,
-    // The time the building upgrade began
+    /// The time the building upgrade began
     pub building_upgrade_began: Option<DateTime<Local>>,
 
     /// The level visible on the HOF screen for fortress. Should be all
     /// building levels summed up
     pub level: u16,
-
+    /// The honor you have in the fortress Hall of Fame
     pub honor: u32,
+    /// The rank you have in the fortress Hall of Fame
     pub rank: u32,
 
+    /// The type of gem, that is currently being searched
     pub gem_stone_target: Option<GemType>,
+    /// The time at which the serach for the gem will be finished
     pub gem_search_finish: Option<DateTime<Local>>,
+    /// The time at which the search was started
     pub gem_search_began: Option<DateTime<Local>>,
+    /// The price to start the search for gems
     pub gem_search_cost: FortressCost,
 
-    // This is some level of a building or smth.
-    // TODO: Check what this is
-    _some_level: u16,
+    /// The level of the hall of knights
+    pub hall_of_knights_level: u16,
+    /// The price to upgrade the hall of knights. Note, that the duration here
+    /// will be 0, as the game does not tell you how long it will take
+    pub hall_of_knights_upgrade_price: FortressCost,
 
-    /// The next enemy you can choose to battle. This should always be Some(),
+    /// The next enemy you can choose to battle. This should always be Some,
     /// but there is the edgecase of being the first player on a server to get
     /// a fortress, which I can not even test for, so I just assume this could
     /// be none then.
@@ -59,6 +74,7 @@ pub struct Fortress {
     pub attack_free_reroll: Option<DateTime<Local>>,
     /// The price in silver rerolling costs
     pub opponent_reroll_price: u64,
+
     /// The amount of stone the quarry produces on the next level per hour
     pub quarry_next_level_production: u64,
     /// The amount of wood the woodcutter produces on the next level per hour
@@ -67,10 +83,17 @@ pub struct Fortress {
 
 #[derive(Debug, Default, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(clippy::module_name_repetitions)]
+/// The price an upgrade, or building something in the fortress costs. These
+/// are always for one upgrade/build, which is important for unit builds
 pub struct FortressCost {
+    /// The time it takes to complete one build/upgrade
     pub time: Duration,
+    /// The price in wood this costs
     pub wood: u64,
+    /// The price in stone this costs
     pub stone: u64,
+    /// The price in silver this costs
     pub silver: u64,
 }
 
@@ -166,7 +189,8 @@ impl Fortress {
             self.buildings.get_mut(typ).level =
                 data.csiget(524 + idx, "building lvl", 0)?;
         }
-        self._some_level = data.csiget(598, "group bonus level", 0)?;
+        self.hall_of_knights_level =
+            data.csiget(598, "hall of knights level", 0)?;
 
         // Units
         for (idx, typ) in FortressUnitType::iter().enumerate() {
@@ -297,6 +321,7 @@ impl Fortress {
                 FortressCost::parse(&data[i * 4..])?;
         }
         self.gem_search_cost = FortressCost::parse(&data[48..])?;
+
         Ok(())
     }
 }
