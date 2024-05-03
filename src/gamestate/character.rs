@@ -10,38 +10,60 @@ use crate::{command::*, gamestate::items::*, misc::*, PlayerId};
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Everything, that can be considered part of the character and not the rest
+/// of the world
 pub struct Character {
+    /// This is the unique identifier of this character. Can be used to compare
+    /// against places, that also have `player_ids` to make sure a Hall of
+    /// Fame entry or similar is not the player
     pub player_id: PlayerId,
-
+    /// The name of this character
     pub name: String,
+    /// The current level of this character
     pub level: u16,
-    // The amount of silver a player has. 100 silver = 1 gold
+    /// The amount of silver a player has. 100 silver = 1 gold
     pub silver: u64,
+    /// The amount of moshrooms a player has
     pub mushrooms: u32,
 
+    /// The class of this character
     pub class: Class,
+    /// Iff this character is a druid, this will be the currently equiped mask
     pub druid_mask: Option<DruidMask>,
+    /// Iff this character is a bard, this will be the currently equiped
+    /// instrument
     pub bard_instrument: Option<BardInstrument>,
 
+    /// The race of this character. Has some effects on attributes, which is
+    /// why this is not in portrait
     pub race: Race,
+    /// Everything that determines the players looks except for the race
     pub portrait: Portrait,
+    /// The description of this character
     pub description: String,
 
     /// The amount of experience already earned in the current level
     pub experience: u64,
-    /// The amount of experience required to level up
+    /// The amount of experience required to level up.
+    /// `next_level_xp - experience` is the amount of xp missing to level up
     pub next_level_xp: u64,
     /// The amount of honor earned through the arena
     pub honor: u32,
     /// The rank in the hall of fame
     pub rank: u32,
 
+    /// All the items this character has stored. These are all the slots right
+    /// next to the portrait in the web ui
     pub inventory: Inventory,
-    /// Equiped items
+    /// All items the character has currently equipped (on the body)
     pub equipment: Equipment,
 
-    /// Equiped items
+    /// If the character has a manequin, this will contain all the equipment
+    /// stored in it
     pub manequin: Option<Equipment>,
+    /// The potions currently active. The `ItemType` will always be
+    /// `ItemType::Potion`
+    // TODO: Make this explicit by having potion as a seperate struct
     pub active_potions: [Option<ItemType>; 3],
 
     /// The total armor of our character. Basically all equiped armor combined
@@ -52,18 +74,27 @@ pub struct Character {
     /// The max amount of damage the weapon claims it can do without any bonus
     pub max_damage: u32,
 
+    /// The base attributes without any equipment, or other boosts
     pub attribute_basis: EnumMap<AttributeType, u32>,
+    /// All bonus attributes from quipment/pets/potions
     pub attribute_additions: EnumMap<AttributeType, u32>,
-    /// The amount of times an atribute has been bought already
+    /// The amount of times an atribute has been bought already.
+    /// Important to calculate the price of the next attribute to buy
     pub attribute_times_bought: EnumMap<AttributeType, u32>,
 
+    /// The mount this character has rented
     pub mount: Option<Mount>,
+    /// The point at which the mount will end. Note that this might be None,
+    /// whilst mount is Some
     pub mount_end: Option<DateTime<Local>>,
     /// The silver you get for buying a dragon
     pub mount_dragon_refund: u64,
 
+    /// The amount of lucky coins you have to spin the weel
     pub lucky_coins: u32,
+    /// The amount of times you have spun the wheel today already (0 -> 20)
     pub wheel_spins_today: u8,
+    /// The next time you can spin the wheel for free
     pub wheel_next_free_spin: Option<DateTime<Local>>,
 }
 
@@ -71,7 +102,9 @@ pub struct Character {
 /// otherwise useless
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
 pub struct Portrait {
+    /// The gender (m/w)
     pub gender: Gender,
     pub hair_color: u8,
     pub hair: u8,
@@ -109,6 +142,7 @@ impl Portrait {
 
 #[derive(Debug, Clone, Default, Copy, PartialEq, Eq, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
 pub enum Gender {
     #[default]
     Female = 0,
@@ -117,6 +151,7 @@ pub enum Gender {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
 pub enum Class {
     #[default]
     Warrior = 0,
@@ -133,6 +168,7 @@ pub enum Class {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
 pub enum DruidMask {
     Cat = 4,
     Bear = 5,
@@ -140,6 +176,7 @@ pub enum DruidMask {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
 pub enum BardInstrument {
     Harp = 1,
     Lute,
@@ -148,6 +185,7 @@ pub enum BardInstrument {
 
 #[derive(Debug, PartialEq, Eq, Default, Clone, Copy, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
 pub enum Race {
     #[default]
     Human = 1,
@@ -162,6 +200,7 @@ pub enum Race {
 
 #[derive(Debug, Copy, Clone, FromPrimitive, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
 pub enum Mount {
     Cow = 1,
     Horse = 2,
