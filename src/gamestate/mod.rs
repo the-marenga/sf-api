@@ -353,15 +353,17 @@ impl GameState {
                     self.unlocks
                         .fortress
                         .get_or_insert_with(Default::default)
-                        .quarry_next_level_production =
-                        val.into("stone next lvl")?;
+                        .resources[FortressResourceType::Stone]
+                        .production
+                        .per_hour_next_lvl = val.into("stone next lvl")?;
                 }
                 "woodperhournextlevel" => {
                     self.unlocks
                         .fortress
                         .get_or_insert_with(Default::default)
-                        .woodcutter_next_level_production =
-                        val.into("wood next lvl")?;
+                        .resources[FortressResourceType::Wood]
+                        .production
+                        .per_hour_next_lvl = val.into("wood next lvl")?;
                 }
                 "shadowlevel" => {
                     self.unlocks.dungeons.update_levels(
@@ -1393,9 +1395,9 @@ impl GameState {
         bs.arcane = soft_into(res[10], "bs arcane", 0);
         let fortress =
             self.unlocks.fortress.get_or_insert_with(Default::default);
-        fortress.resources[FortressResourceType::Wood].limit =
+        fortress.resources[FortressResourceType::Wood].current =
             soft_into(res[5], "saved wood ", 0);
-        fortress.resources[FortressResourceType::Stone].limit =
+        fortress.resources[FortressResourceType::Stone].current =
             soft_into(res[7], "saved stone", 0);
 
         let pets = self

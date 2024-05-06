@@ -23,17 +23,22 @@ pub struct Fortress {
     /// Information about all the buildable units in the fortress
     pub units: EnumMap<FortressUnitType, FortressUnit>,
     /// All information about ressources in the fortress
-    pub resources: EnumMap<FortressResourceType, FortessRessource>,
+    pub resources: EnumMap<FortressResourceType, FortessResource>,
+    /// The `collectable` variable in `FortessProduction` is NOT calculated
+    /// whenever you did the last request, instead the server calculates it at
+    /// regular points in time and whenever you collect resources. That point
+    /// in time is this variable here. That means if you want to know the exact
+    /// current value, that you can collect, you need to calculate that
+    /// yourself based on the current time, this time, the collectable
+    /// value and the per hour production of whatever you are looking at
+    // TODO: Make such a function as a convenient helper
+    pub last_collectable_update: Option<DateTime<Local>>,
 
     /// The highest level buildings can be upgraded to
     pub building_max_lvl: u8,
     /// The level the fortress wall will have when defending against another
     /// player
     pub wall_combat_lvl: u16,
-    /// This seems to be the last time resources were collected, but this also
-    /// seems to get set by something else. If you have any idea, what this is,
-    /// please open an issue
-    pub time_stamp: Option<DateTime<Local>>,
 
     /// The building, that is currently being upgraded
     pub building_upgrade: Option<FortressBuildingType>,
@@ -74,11 +79,6 @@ pub struct Fortress {
     pub attack_free_reroll: Option<DateTime<Local>>,
     /// The price in silver rerolling costs
     pub opponent_reroll_price: u64,
-
-    /// The amount of stone the quarry produces on the next level per hour
-    pub quarry_next_level_production: u64,
-    /// The amount of wood the woodcutter produces on the next level per hour
-    pub woodcutter_next_level_production: u64,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -111,14 +111,41 @@ impl FortressCost {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct FortessRessource {
-    pub limit: u64,
+/// Information about one of the three resources, that the fortress can produce.
+pub struct FortessResource {
+    /// The amount of this resource you have available to spend on upgrades and
+    /// recruitment
     pub current: u64,
-    pub max_in_building: u64,
-    pub max_save: u64,
+    /// The maximum amount of this resource, that you can store without. If
+    /// `current == limit`, you will not be able to collect resources from
+    /// buildings
+    pub limit: u64,
+    /// Information about the production building, that produces this resource.
+    pub production: FortessProduction,
+}
+
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Information about the producion of a resource in the fortress.  Note that
+/// experience will not have some of these fields
+pub struct FortessProduction {
+    /// The amount the production building has already produced, that you can
+    /// collect. Note that this value will for some reason be delayed. That
+    /// means you this is NOT the value you see ticking up every second in
+    /// the webui, that value is not in the API. This here seems to be the
+    /// collectable amount at a recent amount of time, from which the ui
+    /// then calculates the amount your building should have produces since
+    /// that point in time and adds that to this value. The
+    pub collectable: u64,
+    /// The maximum amount of this resource, that this building can store. If
+    /// `building_collectable == building_limit` the production stops
+    pub limit: u64,
+    /// The amount of this resource the coresponding production building
+    /// produces per hour
     pub per_hour: u64,
-    /// The limit after the next upgrade
-    pub max_limit_next: u64,
+    /// The amount of this resource the building produces on the next level per
+    /// hour. If the resouce is Experience, this will be 0
+    pub per_hour_next_lvl: u64,
 }
 
 #[derive(Debug, Clone, Copy, EnumCount, EnumIter, PartialEq, Eq, Enum)]
@@ -236,23 +263,24 @@ impl Fortress {
 
         // Items
         for (idx, typ) in FortressResourceType::iter().enumerate() {
-            if idx != 2 {
-                // self.resources[idx].saved =
-                //     data.csiget(544 + idx, "saved resource", 0);
-                self.resources.get_mut(typ).max_limit_next =
+            if typ != FortressResourceType::Experience {
+                self.resources.get_mut(typ).production.per_hour_next_lvl =
                     data.csiget(584 + idx, "max saved next resource", 0)?;
             }
-            self.resources.get_mut(typ).current =
-                data.csiget(562 + idx, "resource in store", 0)?;
-            self.resources.get_mut(typ).max_in_building =
-                data.csiget(565 + idx, "resource max in store", 0)?;
-            self.resources.get_mut(typ).max_save =
+
+            self.resources.get_mut(typ).limit =
                 data.csiget(568 + idx, "resource max save", 0)?;
-            self.resources.get_mut(typ).per_hour =
+            self.resources.get_mut(typ).production.collectable =
+                data.csiget(562 + idx, "resource in collectable", 0)?;
+            self.resources.get_mut(typ).production.limit =
+                data.csiget(565 + idx, "resource max in store", 0)?;
+            self.resources.get_mut(typ).production.per_hour =
                 data.csiget(574 + idx, "resource per hour", 0)?;
         }
-        self.time_stamp =
+
+        self.last_collectable_update =
             server_time.convert_to_local(data[577], "resource time");
+
         self.building_upgrade = FromPrimitive::from_i64(data[571] - 1);
         self.building_upgrade_finish =
             server_time.convert_to_local(data[572], "fortress expand end");
