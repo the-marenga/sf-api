@@ -56,7 +56,7 @@ pub struct Fortress {
     pub rank: u32,
 
     /// The type of gem, that is currently being searched
-    pub gem_stone_target: Option<GemType>,
+    pub gem_search_target: Option<GemType>,
     /// The time at which the serach for the gem will be finished
     pub gem_search_finish: Option<DateTime<Local>>,
     /// The time at which the search was started
@@ -117,9 +117,8 @@ pub struct FortressResource {
     /// The amount of this resource you have available to spend on upgrades and
     /// recruitment
     pub current: u64,
-    /// The maximum amount of this resource, that you can store without. If
-    /// `current == limit`, you will not be able to collect resources from
-    /// buildings
+    /// The maximum amount of this resource, that you can store. If `current ==
+    /// limit`, you will not be able to collect resources from buildings
     pub limit: u64,
     /// Information about the production building, that produces this resource.
     pub production: FortressProduction,
@@ -245,45 +244,49 @@ impl Fortress {
 
         // Units
         for (idx, typ) in FortressUnitType::iter().enumerate() {
-            let msg = "fortress unit upgrade start";
+            let msg = "fortress unit training start";
             self.units.get_mut(typ).training_began =
                 server_time.convert_to_local(data.cget(550 + idx, msg)?, msg);
-            let msg = "fortress unit upgrade finish";
+            let msg = "fortress unit training finish";
             self.units.get_mut(typ).training_finish =
                 server_time.convert_to_local(data.cget(553 + idx, msg)?, msg);
         }
-        use FortressBuildingType::*;
-        use FortressUnitType::*;
-        self.units.get_mut(Soldier).limit = soft_into(
-            self.buildings.get_mut(Barracks).level * 3,
-            "soldier max count",
-            0,
-        );
-        self.units.get_mut(Magician).limit = soft_into(
-            self.buildings.get_mut(MagesTower).level,
-            "magician max count",
-            0,
-        );
-        self.units.get_mut(Archer).limit = soft_into(
-            self.buildings.get_mut(ArcheryGuild).level * 2,
-            "archer max count",
-            0,
-        );
 
-        self.units.get_mut(Soldier).count =
-            data.csiget(547 & 0xFFFF, "soldier count", 0)?;
-        self.units.get_mut(Soldier).in_training =
-            data.csiget(548 >> 16, "soldier in que", 0)?;
+        #[allow(clippy::enum_glob_use)]
+        {
+            use FortressBuildingType::*;
+            use FortressUnitType::*;
+            self.units.get_mut(Soldier).limit = soft_into(
+                self.buildings.get_mut(Barracks).level * 3,
+                "soldier max count",
+                0,
+            );
+            self.units.get_mut(Magician).limit = soft_into(
+                self.buildings.get_mut(MagesTower).level,
+                "magician max count",
+                0,
+            );
+            self.units.get_mut(Archer).limit = soft_into(
+                self.buildings.get_mut(ArcheryGuild).level * 2,
+                "archer max count",
+                0,
+            );
 
-        self.units.get_mut(Magician).count =
-            data.csiget(547 >> 16, "magician count", 0)?;
-        self.units.get_mut(Magician).in_training =
-            data.csiget(549 & 0xFFFF, "magicians in que", 0)?;
+            self.units.get_mut(Soldier).count =
+                data.csimget(547, "soldier count", 0, |x| x & 0xFFFF)?;
+            self.units.get_mut(Soldier).in_training =
+                data.csimget(548, "soldier in que", 0, |x| x >> 16)?;
 
-        self.units.get_mut(Archer).count =
-            data.csiget(548 & 0xFFFF, "archer count", 0)?;
-        self.units.get_mut(Archer).in_training =
-            data.csiget(549 >> 16, "archer in que", 0)?;
+            self.units.get_mut(Magician).count =
+                data.csimget(547, "magician count", 0, |x| x >> 16)?;
+            self.units.get_mut(Magician).in_training =
+                data.csimget(549, "magicians in que", 0, |x| x & 0xFFFF)?;
+
+            self.units.get_mut(Archer).count =
+                data.csimget(548, "archer count", 0, |x| x & 0xFFFF)?;
+            self.units.get_mut(Archer).in_training =
+                data.csimget(549, "archer in que", 0, |x| x >> 16)?;
+        }
 
         // Items
         for (idx, typ) in FortressResourceType::iter().enumerate() {
@@ -302,26 +305,30 @@ impl Fortress {
                 data.csiget(574 + idx, "resource per hour", 0)?;
         }
 
-        self.last_collectable_update =
-            server_time.convert_to_local(data[577], "resource time");
+        let get_local = |spot, name| {
+            let val = data.cget(spot, name)?;
+            Ok(server_time.convert_to_local(val, name))
+        };
 
-        self.building_upgrade = FromPrimitive::from_i64(data[571] - 1);
-        self.building_upgrade_finish =
-            server_time.convert_to_local(data[572], "fortress expand end");
-        self.building_upgrade_began =
-            server_time.convert_to_local(data[573], "fortress expand begin");
+        self.last_collectable_update =
+            get_local(577, "fortress collection update")?;
+
+        self.building_upgrade = FromPrimitive::from_i64(
+            data.cget(571, "fortress building upgrade")? - 1,
+        );
+        self.building_upgrade_finish = get_local(572, "fortress upgrade end")?;
+        self.building_upgrade_began = get_local(573, "fortress upgrade begin")?;
 
         self.level = data.csiget(581, "fortress lvl", 0)?;
         self.honor = data.csiget(582, "fortress honor", 0)?;
         self.rank = data.csiget(583, "fortress rank", 0)?;
-        self.gem_stone_target = GemType::parse(data[594]);
-        self.gem_search_finish =
-            server_time.convert_to_local(data[595], "gem search start");
-        self.gem_search_began =
-            server_time.convert_to_local(data[596], "gem search end");
+
+        self.gem_search_target = GemType::parse(data.cget(594, "gem target")?);
+        self.gem_search_finish = get_local(595, "gem search start")?;
+        self.gem_search_began = get_local(596, "gem search end")?;
+
         self.attack_target = data.cwiget(587, "fortress enemy")?;
-        self.attack_free_reroll =
-            server_time.convert_to_local(data[586], "fortress attack reroll");
+        self.attack_free_reroll = get_local(586, "fortress attack reroll")?;
         Ok(())
     }
 
@@ -355,12 +362,12 @@ impl Fortress {
         &mut self,
         data: &[i64],
     ) -> Result<(), SFError> {
-        use FortressUnitType::*;
-        self.units.get_mut(Soldier).level =
+        self.units.get_mut(FortressUnitType::Soldier).level =
             data.csiget(1, "soldier level", 0)?;
-        self.units.get_mut(Magician).level =
+        self.units.get_mut(FortressUnitType::Magician).level =
             data.csiget(2, "magician level", 0)?;
-        self.units.get_mut(Archer).level = data.csiget(3, "archer level", 0)?;
+        self.units.get_mut(FortressUnitType::Archer).level =
+            data.csiget(3, "archer level", 0)?;
         Ok(())
     }
 
@@ -370,10 +377,10 @@ impl Fortress {
     ) -> Result<(), SFError> {
         for (i, typ) in FortressBuildingType::iter().enumerate() {
             self.buildings.get_mut(typ).upgrade_cost =
-                FortressCost::parse(&data[i * 4..])?;
+                FortressCost::parse(data.skip(i * 4, "fortress unit prices")?)?;
         }
-        self.gem_search_cost = FortressCost::parse(&data[48..])?;
-
+        self.gem_search_cost =
+            FortressCost::parse(data.skip(48, "gem_search_cost")?)?;
         Ok(())
     }
 }

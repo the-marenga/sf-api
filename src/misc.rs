@@ -6,6 +6,7 @@ use std::{
 use aho_corasick::AhoCorasick;
 use enum_map::{Enum, EnumArray, EnumMap};
 use log::error;
+use num::FromPrimitive;
 use once_cell::sync::Lazy;
 
 use crate::error::SFError;
@@ -18,7 +19,7 @@ pub(crate) fn sha1_hash(val: &str) -> String {
     hasher.update(val.as_bytes());
     let hash = hasher.finalize();
     let mut result = String::with_capacity(hash.len() * 2);
-    for byte in hash.iter() {
+    for byte in &hash {
         result.push_str(&format!("{byte:02x}"));
     }
     result
@@ -91,7 +92,7 @@ pub(crate) fn to_sf_string(val: &str) -> String {
     pattern_replace::<false>(val)
 }
 
-/// Calling .replace() a bunch of times is bad, as that generates a bunch of
+/// Calling `.replace()` a bunch of times is bad, as that generates a bunch of
 /// strings. regex!() -> replace_all()  would be better, as that uses cow<>
 /// irrc, but we can replace pattern with a linear search an one string, using
 /// this extra crate. We call this function a bunch, so optimizing this is
@@ -109,20 +110,16 @@ fn pattern_replace<const FROM: bool>(str: &str) -> String {
             (aho_corasick::AhoCorasick::new(l.1).unwrap(), l.0)
         });
 
-    let (from, to) = match FROM {
-        true => A.clone(),
-        false => B.clone(),
-    };
+    let (from, to) = if FROM { A.clone() } else { B.clone() };
     let mut wtr = vec![];
     from.try_stream_replace_all(str.as_bytes(), &mut wtr, to)
         .expect("stream_replace_all failed");
 
-    match String::from_utf8(wtr) {
-        Ok(res) => res,
-        Err(_) => {
-            error!("replace generated invalid utf8");
-            String::new()
-        }
+    if let Ok(res) = String::from_utf8(wtr) {
+        res
+    } else {
+        error!("replace generated invalid utf8");
+        String::new()
     }
 }
 
@@ -136,9 +133,8 @@ where
 {
     data.iter()
         .map(|a| {
-            func(*a).ok_or_else(|| {
-                SFError::ParsingError(name, format!("{:?}", data))
-            })
+            func(*a)
+                .ok_or_else(|| SFError::ParsingError(name, format!("{data:?}")))
         })
         .collect()
 }
@@ -154,8 +150,28 @@ const fn sf_str_lookups(
     )
 }
 
+fn raw_cget<T: Copy + std::fmt::Debug>(
+    val: &[T],
+    pos: usize,
+    name: &'static str,
+) -> Result<T, SFError> {
+    val.get(pos)
+        .copied()
+        .ok_or_else(|| SFError::TooShortResponse {
+            name,
+            pos,
+            array: format!("{val:?}"),
+        })
+}
+
 pub(crate) trait CGet<T: Copy + std::fmt::Debug> {
     fn cget(&self, pos: usize, name: &'static str) -> Result<T, SFError>;
+}
+
+impl<T: Copy + std::fmt::Debug + Display> CGet<T> for [T] {
+    fn cget(&self, pos: usize, name: &'static str) -> Result<T, SFError> {
+        raw_cget(self, pos, name)
+    }
 }
 
 pub(crate) trait CCGet<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> {
@@ -165,11 +181,52 @@ pub(crate) trait CCGet<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> {
         name: &'static str,
         def: I,
     ) -> Result<I, SFError>;
+    fn csimget(
+        &self,
+        pos: usize,
+        name: &'static str,
+        def: I,
+        fun: fn(T) -> T,
+    ) -> Result<I, SFError>;
     fn cwiget(
         &self,
         pos: usize,
         name: &'static str,
     ) -> Result<Option<I>, SFError>;
+}
+
+
+impl<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> CCGet<T, I> for [T] {
+    fn csiget(
+        &self,
+        pos: usize,
+        name: &'static str,
+        def: I,
+    ) -> Result<I, SFError> {
+        let raw = raw_cget(self, pos, name)?;
+        Ok(soft_into(raw, name, def))
+    }
+
+    fn cwiget(
+        &self,
+        pos: usize,
+        name: &'static str,
+    ) -> Result<Option<I>, SFError> {
+        let raw = raw_cget(self, pos, name)?;
+        Ok(warning_try_into(raw, name))
+    }
+
+    fn csimget(
+        &self,
+        pos: usize,
+        name: &'static str,
+        def: I,
+        fun: fn(T) -> T,
+    ) -> Result<I, SFError> {
+        let raw = raw_cget(self, pos, name)?;
+        let raw = fun(raw);
+        Ok(soft_into(raw, name, def))
+    }
 }
 
 pub(crate) trait CSGet<T: FromStr> {
@@ -186,54 +243,8 @@ impl<T: FromStr> CSGet<T> for [&str] {
         pos: usize,
         name: &'static str,
     ) -> Result<Option<T>, SFError> {
-        let raw = self.cget(pos, name)?;
+        let raw = raw_cget(self, pos, name)?;
         Ok(warning_from_str(raw, name))
-    }
-}
-
-impl<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> CCGet<T, I> for [T] {
-    fn csiget(
-        &self,
-        pos: usize,
-        name: &'static str,
-        def: I,
-    ) -> Result<I, SFError> {
-        let raw = self.get(pos).copied().ok_or_else(|| {
-            SFError::TooShortResponse {
-                name,
-                pos,
-                array: format!("{:?}", self),
-            }
-        })?;
-
-        Ok(soft_into(raw, name, def))
-    }
-
-    fn cwiget(
-        &self,
-        pos: usize,
-        name: &'static str,
-    ) -> Result<Option<I>, SFError> {
-        let raw = self.get(pos).copied().ok_or_else(|| {
-            SFError::TooShortResponse {
-                name,
-                pos,
-                array: format!("{:?}", self),
-            }
-        })?;
-        Ok(warning_try_into(raw, name))
-    }
-}
-
-impl<T: Copy + std::fmt::Debug + Display> CGet<T> for [T] {
-    fn cget(&self, pos: usize, name: &'static str) -> Result<T, SFError> {
-        self.get(pos)
-            .copied()
-            .ok_or_else(|| SFError::TooShortResponse {
-                name,
-                pos,
-                array: format!("{:?}", self),
-            })
     }
 }
 
@@ -253,7 +264,9 @@ pub(crate) fn update_enum_map<
 /// also is more convenient in some cases to use these fundtions if you want
 /// to make sure something is &mut, or &
 pub trait EnumMapGet<K, V> {
+    /// Gets a normal reference to the value
     fn get(&self, key: K) -> &V;
+    /// Gets a mutable reference to the value
     fn get_mut(&mut self, key: K) -> &mut V;
 }
 
