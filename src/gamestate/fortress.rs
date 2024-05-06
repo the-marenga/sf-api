@@ -23,13 +23,13 @@ pub struct Fortress {
     /// Information about all the buildable units in the fortress
     pub units: EnumMap<FortressUnitType, FortressUnit>,
     /// All information about ressources in the fortress
-    pub resources: EnumMap<FortressResourceType, FortessResource>,
+    pub resources: EnumMap<FortressResourceType, FortressResource>,
     /// The `collectable` variable in `FortessProduction` is NOT calculated
     /// whenever you did the last request, instead the server calculates it at
     /// regular points in time and whenever you collect resources. That point
     /// in time is this variable here. That means if you want to know the exact
     /// current value, that you can collect, you need to calculate that
-    /// yourself based on the current time, this time, the collectable
+    /// yourself based on the current time, this time, the last collectable
     /// value and the per hour production of whatever you are looking at
     // TODO: Make such a function as a convenient helper
     pub last_collectable_update: Option<DateTime<Local>>,
@@ -111,8 +111,9 @@ impl FortressCost {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(clippy::module_name_repetitions)]
 /// Information about one of the three resources, that the fortress can produce.
-pub struct FortessResource {
+pub struct FortressResource {
     /// The amount of this resource you have available to spend on upgrades and
     /// recruitment
     pub current: u64,
@@ -121,21 +122,19 @@ pub struct FortessResource {
     /// buildings
     pub limit: u64,
     /// Information about the production building, that produces this resource.
-    pub production: FortessProduction,
+    pub production: FortressProduction,
 }
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(clippy::module_name_repetitions)]
 /// Information about the producion of a resource in the fortress.  Note that
 /// experience will not have some of these fields
-pub struct FortessProduction {
+pub struct FortressProduction {
     /// The amount the production building has already produced, that you can
-    /// collect. Note that this value will for some reason be delayed. That
-    /// means you this is NOT the value you see ticking up every second in
-    /// the webui, that value is not in the API. This here seems to be the
-    /// collectable amount at a recent amount of time, from which the ui
-    /// then calculates the amount your building should have produces since
-    /// that point in time and adds that to this value. The
+    /// collect. Note that this value will be out of date by some amount of
+    /// time. If you need the exact current amount collectable, look at
+    /// `last_collectable_update`
     pub collectable: u64,
     /// The maximum amount of this resource, that this building can store. If
     /// `building_collectable == building_limit` the production stops
@@ -150,6 +149,8 @@ pub struct FortessProduction {
 
 #[derive(Debug, Clone, Copy, EnumCount, EnumIter, PartialEq, Eq, Enum)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(clippy::module_name_repetitions, missing_docs)]
+/// The type of resource, that the fortress available in the fortress
 pub enum FortressResourceType {
     Wood = 0,
     Stone = 1,
@@ -160,6 +161,8 @@ pub enum FortressResourceType {
     Debug, Clone, Copy, EnumCount, FromPrimitive, PartialEq, Eq, Enum, EnumIter,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(clippy::module_name_repetitions, missing_docs)]
+/// The type of Building, that can be build in the fortress
 pub enum FortressBuildingType {
     Fortress = 0,
     LaborersQuarters = 1,
@@ -177,21 +180,39 @@ pub enum FortressBuildingType {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(clippy::module_name_repetitions)]
+/// Information about a single type of unit
 pub struct FortressUnit {
+    /// The level this unit has
     pub level: u16,
-    pub upgrade_began: Option<DateTime<Local>>,
-    pub upgrade_finish: Option<DateTime<Local>>,
-    pub max_count: u16,
+
+    /// The amount of this unit, that you have available for combat
     pub count: u16,
-    pub in_que: u16,
+    /// The amount of this unit, that are currently being trained/build
+    pub in_training: u16,
+    /// The maximum `count + in_training` you have of this unit
+    pub limit: u16,
+
+    /// The time at which the training of new units was started. Note that the
+    /// server is lazy and almost never seems to clear this, so this can be
+    /// `Some(a year ago)`
+    pub training_began: Option<DateTime<Local>>,
+    /// The time at which the training of new units will have finished
+    pub training_finish: Option<DateTime<Local>>,
+    /// The price to pay to train/build one of this unit
     pub training_cost: FortressCost,
-    pub next_lvl: u64,
-    pub upgrade_stone_cost: u64,
-    pub upgrade_wood_cost: u64,
+
+    /// The price to pay in stone for the next upgrade
+    pub upgrade_cost: FortressCost,
+    /// The price to pay in stone for the next upgrade
+    /// The level this unit will be at, when you upgrade it
+    pub upgrade_next_lvl: u64,
 }
 
 #[derive(Debug, Clone, Copy, EnumCount, PartialEq, Eq, Enum, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(clippy::module_name_repetitions, missing_docs)]
+/// The type of a unit useable in the fortress
 pub enum FortressUnitType {
     Soldier = 0,
     Magician = 1,
@@ -200,6 +221,9 @@ pub enum FortressUnitType {
 
 #[derive(Debug, Default, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(clippy::module_name_repetitions, missing_docs)]
+/// Generic information about a building in the fortress. If you want
+/// information about a production building, you should look at the resources
 pub struct FortressBuilding {
     pub level: u16,
     pub upgrade_cost: FortressCost,
@@ -222,25 +246,25 @@ impl Fortress {
         // Units
         for (idx, typ) in FortressUnitType::iter().enumerate() {
             let msg = "fortress unit upgrade start";
-            self.units.get_mut(typ).upgrade_began =
+            self.units.get_mut(typ).training_began =
                 server_time.convert_to_local(data.cget(550 + idx, msg)?, msg);
             let msg = "fortress unit upgrade finish";
-            self.units.get_mut(typ).upgrade_finish =
+            self.units.get_mut(typ).training_finish =
                 server_time.convert_to_local(data.cget(553 + idx, msg)?, msg);
         }
         use FortressBuildingType::*;
         use FortressUnitType::*;
-        self.units.get_mut(Soldier).max_count = soft_into(
+        self.units.get_mut(Soldier).limit = soft_into(
             self.buildings.get_mut(Barracks).level * 3,
             "soldier max count",
             0,
         );
-        self.units.get_mut(Magician).max_count = soft_into(
+        self.units.get_mut(Magician).limit = soft_into(
             self.buildings.get_mut(MagesTower).level,
             "magician max count",
             0,
         );
-        self.units.get_mut(Archer).max_count = soft_into(
+        self.units.get_mut(Archer).limit = soft_into(
             self.buildings.get_mut(ArcheryGuild).level * 2,
             "archer max count",
             0,
@@ -248,17 +272,17 @@ impl Fortress {
 
         self.units.get_mut(Soldier).count =
             data.csiget(547 & 0xFFFF, "soldier count", 0)?;
-        self.units.get_mut(Soldier).in_que =
+        self.units.get_mut(Soldier).in_training =
             data.csiget(548 >> 16, "soldier in que", 0)?;
 
         self.units.get_mut(Magician).count =
             data.csiget(547 >> 16, "magician count", 0)?;
-        self.units.get_mut(Magician).in_que =
+        self.units.get_mut(Magician).in_training =
             data.csiget(549 & 0xFFFF, "magicians in que", 0)?;
 
         self.units.get_mut(Archer).count =
             data.csiget(548 & 0xFFFF, "archer count", 0)?;
-        self.units.get_mut(Archer).in_que =
+        self.units.get_mut(Archer).in_training =
             data.csiget(549 >> 16, "archer in que", 0)?;
 
         // Items
@@ -317,11 +341,11 @@ impl Fortress {
         data: &[i64],
     ) -> Result<(), SFError> {
         for (i, typ) in FortressUnitType::iter().enumerate() {
-            self.units.get_mut(typ).next_lvl =
+            self.units.get_mut(typ).upgrade_next_lvl =
                 data.csiget(i * 3, "unit next lvl", 0)?;
-            self.units.get_mut(typ).upgrade_stone_cost =
+            self.units.get_mut(typ).upgrade_cost.stone =
                 data.csiget(1 + i * 3, "stone price next unit lvl", 0)?;
-            self.units.get_mut(typ).upgrade_wood_cost =
+            self.units.get_mut(typ).upgrade_cost.wood =
                 data.csiget(2 + i * 3, "wood price next unit lvl", 0)?;
         }
         Ok(())
