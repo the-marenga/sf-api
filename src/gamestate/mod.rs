@@ -719,7 +719,7 @@ impl GameState {
                     .unlocks
                     .underworld
                     .get_or_insert_with(Default::default)
-                    .update_building_prices(&val.into_list("ub prices")?),
+                    .update_building_prices(&val.into_list("ub prices")?)?,
                 "owngroupknights" => self
                     .unlocks
                     .guild
@@ -1411,8 +1411,7 @@ impl GameState {
         self.unlocks
             .underworld
             .get_or_insert_with(Default::default)
-            .resources[UnderWorldResourceType::Souls as usize]
-            .current = soft_into(res[11], "uu souls saved", 0);
+            .souls_current = soft_into(res[11], "uu souls saved", 0);
     }
 
     pub(crate) fn update_gtsave(

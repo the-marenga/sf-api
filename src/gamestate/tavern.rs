@@ -15,8 +15,9 @@ use crate::{
 pub struct Tavern {
     /// All the available quests
     pub quests: [Quest; 3],
-    /// How many seconds of ALU the character still has left
-    pub alu_sec: u32,
+    /// How many seconds the character still has left to do adventures
+    #[doc(alias = "alu")]
+    pub thirst_for_adventure_sec: u32,
     /// Whether or not skipping is allowed
     pub skip_allowed: bool,
     /// The amount of beers we already drank today
@@ -56,7 +57,7 @@ impl Tavern {
             data[46] & 0xFF,
             server_time.convert_to_local(data[47], "current action time"),
         );
-        self.alu_sec = soft_into(data[456], "remaining ALU", 0);
+        self.thirst_for_adventure_sec = soft_into(data[456], "remaining ALU", 0);
         self.beer_drunk = soft_into(data[457], "beer drunk count", 0);
 
         for (quest_index, start_idx) in (235..=237).enumerate() {

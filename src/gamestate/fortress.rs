@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use std::time::Duration;
 
 use chrono::{DateTime, Local};
@@ -21,10 +22,10 @@ pub struct Fortress {
     /// they are level 0
     pub buildings: EnumMap<FortressBuildingType, FortressBuilding>,
     /// Information about all the buildable units in the fortress
-    pub units: EnumMap<FortressUnitType, FortressUnit>,
-    /// All information about ressources in the fortress
+    pub units: EnumMap<FortressUnitType, FortressUnits>,
+    /// All information about resources in the fortress
     pub resources: EnumMap<FortressResourceType, FortressResource>,
-    /// The `collectable` variable in `FortessProduction` is NOT calculated
+    /// The `last_collectable` variable in `FortessProduction` is NOT calculated
     /// whenever you did the last request, instead the server calculates it at
     /// regular points in time and whenever you collect resources. That point
     /// in time is this variable here. That means if you want to know the exact
@@ -32,7 +33,7 @@ pub struct Fortress {
     /// yourself based on the current time, this time, the last collectable
     /// value and the per hour production of whatever you are looking at
     // TODO: Make such a function as a convenient helper
-    pub last_collectable_update: Option<DateTime<Local>>,
+    pub last_collectable_updated: Option<DateTime<Local>>,
 
     /// The highest level buildings can be upgraded to
     pub building_max_lvl: u8,
@@ -83,7 +84,6 @@ pub struct Fortress {
 
 #[derive(Debug, Default, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(clippy::module_name_repetitions)]
 /// The price an upgrade, or building something in the fortress costs. These
 /// are always for one upgrade/build, which is important for unit builds
 pub struct FortressCost {
@@ -111,7 +111,6 @@ impl FortressCost {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(clippy::module_name_repetitions)]
 /// Information about one of the three resources, that the fortress can produce.
 pub struct FortressResource {
     /// The amount of this resource you have available to spend on upgrades and
@@ -126,15 +125,14 @@ pub struct FortressResource {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(clippy::module_name_repetitions)]
 /// Information about the producion of a resource in the fortress.  Note that
 /// experience will not have some of these fields
 pub struct FortressProduction {
     /// The amount the production building has already produced, that you can
     /// collect. Note that this value will be out of date by some amount of
     /// time. If you need the exact current amount collectable, look at
-    /// `last_collectable_update`
-    pub collectable: u64,
+    /// `last_collectable_updated`
+    pub last_collectable: u64,
     /// The maximum amount of this resource, that this building can store. If
     /// `building_collectable == building_limit` the production stops
     pub limit: u64,
@@ -148,7 +146,7 @@ pub struct FortressProduction {
 
 #[derive(Debug, Clone, Copy, EnumCount, EnumIter, PartialEq, Eq, Enum)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(clippy::module_name_repetitions, missing_docs)]
+#[allow(missing_docs)]
 /// The type of resource, that the fortress available in the fortress
 pub enum FortressResourceType {
     Wood = 0,
@@ -160,7 +158,7 @@ pub enum FortressResourceType {
     Debug, Clone, Copy, EnumCount, FromPrimitive, PartialEq, Eq, Enum, EnumIter,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(clippy::module_name_repetitions, missing_docs)]
+#[allow(missing_docs)]
 /// The type of Building, that can be build in the fortress
 pub enum FortressBuildingType {
     Fortress = 0,
@@ -179,9 +177,8 @@ pub enum FortressBuildingType {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(clippy::module_name_repetitions)]
 /// Information about a single type of unit
-pub struct FortressUnit {
+pub struct FortressUnits {
     /// The level this unit has
     pub level: u16,
 
@@ -210,7 +207,7 @@ pub struct FortressUnit {
 
 #[derive(Debug, Clone, Copy, EnumCount, PartialEq, Eq, Enum, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(clippy::module_name_repetitions, missing_docs)]
+#[allow(missing_docs)]
 /// The type of a unit useable in the fortress
 pub enum FortressUnitType {
     Soldier = 0,
@@ -220,7 +217,7 @@ pub enum FortressUnitType {
 
 #[derive(Debug, Default, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(clippy::module_name_repetitions, missing_docs)]
+#[allow(missing_docs)]
 /// Generic information about a building in the fortress. If you want
 /// information about a production building, you should look at the resources
 pub struct FortressBuilding {
@@ -297,7 +294,7 @@ impl Fortress {
 
             self.resources.get_mut(typ).limit =
                 data.csiget(568 + idx, "resource max save", 0)?;
-            self.resources.get_mut(typ).production.collectable =
+            self.resources.get_mut(typ).production.last_collectable =
                 data.csiget(562 + idx, "resource in collectable", 0)?;
             self.resources.get_mut(typ).production.limit =
                 data.csiget(565 + idx, "resource max in store", 0)?;
@@ -310,7 +307,7 @@ impl Fortress {
             Ok(server_time.convert_to_local(val, name))
         };
 
-        self.last_collectable_update =
+        self.last_collectable_updated =
             get_local(577, "fortress collection update")?;
 
         self.building_upgrade = FromPrimitive::from_i64(
