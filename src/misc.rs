@@ -195,7 +195,6 @@ pub(crate) trait CCGet<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> {
     ) -> Result<Option<I>, SFError>;
 }
 
-
 impl<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> CCGet<T, I> for [T] {
     fn csiget(
         &self,

@@ -18,20 +18,21 @@ use crate::{
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The information about a characters fortress
 pub struct Fortress {
-    /// All the buildings, that a fortress can have. If they are not yet build,
+    /// All the buildings, that a fortress can have. If they are not yet built,
     /// they are level 0
     pub buildings: EnumMap<FortressBuildingType, FortressBuilding>,
     /// Information about all the buildable units in the fortress
-    pub units: EnumMap<FortressUnitType, FortressUnits>,
+    pub units: EnumMap<FortressUnitType, FortressUnit>,
     /// All information about resources in the fortress
     pub resources: EnumMap<FortressResourceType, FortressResource>,
-    /// The `last_collectable` variable in `FortessProduction` is NOT calculated
-    /// whenever you did the last request, instead the server calculates it at
-    /// regular points in time and whenever you collect resources. That point
-    /// in time is this variable here. That means if you want to know the exact
-    /// current value, that you can collect, you need to calculate that
-    /// yourself based on the current time, this time, the last collectable
-    /// value and the per hour production of whatever you are looking at
+    /// The `last_collectable` variable in `FortessProduction` is NOT
+    /// calculated whenever you did the last request, instead the server
+    /// calculates it at regular points in time and whenever you collect
+    /// resources. That point in time is this variable here. That means if
+    /// you want to know the exact current value, that you can collect, you
+    /// need to calculate that yourself based on the current time, this
+    /// time, the last collectable value and the per hour production of
+    /// whatever you are looking at
     // TODO: Make such a function as a convenient helper
     pub last_collectable_updated: Option<DateTime<Local>>,
 
@@ -41,12 +42,8 @@ pub struct Fortress {
     /// player
     pub wall_combat_lvl: u16,
 
-    /// The building, that is currently being upgraded
-    pub building_upgrade: Option<FortressBuildingType>,
-    /// The time at which the upgrade is finished
-    pub building_upgrade_finish: Option<DateTime<Local>>,
-    /// The time the building upgrade began
-    pub building_upgrade_began: Option<DateTime<Local>>,
+    /// Information about the building, that is currently being upgraded
+    pub building_upgrade: FortressAction<FortressBuildingType>,
 
     /// The level visible on the HOF screen for fortress. Should be all
     /// building levels summed up
@@ -56,14 +53,8 @@ pub struct Fortress {
     /// The rank you have in the fortress Hall of Fame
     pub rank: u32,
 
-    /// The type of gem, that is currently being searched
-    pub gem_search_target: Option<GemType>,
-    /// The time at which the serach for the gem will be finished
-    pub gem_search_finish: Option<DateTime<Local>>,
-    /// The time at which the search was started
-    pub gem_search_began: Option<DateTime<Local>>,
-    /// The price to start the search for gems
-    pub gem_search_cost: FortressCost,
+    /// Information about searching for gems
+    pub gem_search: FortressAction<GemType>,
 
     /// The level of the hall of knights
     pub hall_of_knights_level: u16,
@@ -159,7 +150,7 @@ pub enum FortressResourceType {
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The type of Building, that can be build in the fortress
+/// The type of building, that can be build in the fortress
 pub enum FortressBuildingType {
     Fortress = 0,
     LaborersQuarters = 1,
@@ -178,7 +169,7 @@ pub enum FortressBuildingType {
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Information about a single type of unit
-pub struct FortressUnits {
+pub struct FortressUnit {
     /// The level this unit has
     pub level: u16,
 
@@ -188,21 +179,41 @@ pub struct FortressUnits {
     pub in_training: u16,
     /// The maximum `count + in_training` you have of this unit
     pub limit: u16,
-
-    /// The time at which the training of new units was started. Note that the
-    /// server is lazy and almost never seems to clear this, so this can be
-    /// `Some(a year ago)`
-    pub training_began: Option<DateTime<Local>>,
-    /// The time at which the training of new units will have finished
-    pub training_finish: Option<DateTime<Local>>,
-    /// The price to pay to train/build one of this unit
-    pub training_cost: FortressCost,
+    /// All information about training up new units of this type
+    pub training: FortressAction<()>,
 
     /// The price to pay in stone for the next upgrade
     pub upgrade_cost: FortressCost,
-    /// The price to pay in stone for the next upgrade
     /// The level this unit will be at, when you upgrade it
     pub upgrade_next_lvl: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// An action, that costs some amount of resources to do and will finish at a
+/// certain point in time
+pub struct FortressAction<T> {
+    /// When this action was started. This can be months in the past, as this
+    /// will often not be cleared by the server
+    pub start: Option<DateTime<Local>>,
+    /// Wheen this action will be finished
+    pub finish: Option<DateTime<Local>>,
+    /// The amount of resources it costs to do this
+    pub cost: FortressCost,
+    /// If it is not clear from the place where this is located, this will
+    /// contain the specific type, that this action will be applied to/for
+    pub target: Option<T>,
+}
+
+impl<T> Default for FortressAction<T> {
+    fn default() -> Self {
+        Self {
+            start: None,
+            finish: None,
+            cost: FortressCost::default(),
+            target: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, EnumCount, PartialEq, Eq, Enum, EnumIter)]
@@ -217,11 +228,13 @@ pub enum FortressUnitType {
 
 #[derive(Debug, Default, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 /// Generic information about a building in the fortress. If you want
 /// information about a production building, you should look at the resources
 pub struct FortressBuilding {
+    /// The current level of this building. If this is 0, it has not yet been
+    /// build
     pub level: u16,
+    /// The amount of resources it costs to upgrade to the next level
     pub upgrade_cost: FortressCost,
 }
 
@@ -242,10 +255,10 @@ impl Fortress {
         // Units
         for (idx, typ) in FortressUnitType::iter().enumerate() {
             let msg = "fortress unit training start";
-            self.units.get_mut(typ).training_began =
+            self.units.get_mut(typ).training.start =
                 server_time.convert_to_local(data.cget(550 + idx, msg)?, msg);
             let msg = "fortress unit training finish";
-            self.units.get_mut(typ).training_finish =
+            self.units.get_mut(typ).training.finish =
                 server_time.convert_to_local(data.cget(553 + idx, msg)?, msg);
         }
 
@@ -310,19 +323,22 @@ impl Fortress {
         self.last_collectable_updated =
             get_local(577, "fortress collection update")?;
 
-        self.building_upgrade = FromPrimitive::from_i64(
-            data.cget(571, "fortress building upgrade")? - 1,
-        );
-        self.building_upgrade_finish = get_local(572, "fortress upgrade end")?;
-        self.building_upgrade_began = get_local(573, "fortress upgrade begin")?;
+        self.building_upgrade = FortressAction {
+            start: get_local(573, "fortress upgrade begin")?,
+            finish: get_local(572, "fortress upgrade end")?,
+            cost: FortressCost::default(),
+            target: FromPrimitive::from_i64(
+                data.cget(571, "fortress building upgrade")? - 1,
+            ),
+        };
 
         self.level = data.csiget(581, "fortress lvl", 0)?;
         self.honor = data.csiget(582, "fortress honor", 0)?;
         self.rank = data.csiget(583, "fortress rank", 0)?;
 
-        self.gem_search_target = GemType::parse(data.cget(594, "gem target")?);
-        self.gem_search_finish = get_local(595, "gem search start")?;
-        self.gem_search_began = get_local(596, "gem search end")?;
+        self.gem_search.start = get_local(595, "gem search start")?;
+        self.gem_search.finish = get_local(596, "gem search end")?;
+        self.gem_search.target = GemType::parse(data.cget(594, "gem target")?);
 
         self.attack_target = data.cwiget(587, "fortress enemy")?;
         self.attack_free_reroll = get_local(586, "fortress attack reroll")?;
@@ -334,7 +350,7 @@ impl Fortress {
         data: &[i64],
     ) -> Result<(), SFError> {
         for (i, typ) in FortressUnitType::iter().enumerate() {
-            self.units.get_mut(typ).training_cost =
+            self.units.get_mut(typ).training.cost =
                 FortressCost::parse(data.skip(i * 4, "unit prices")?)?;
         }
         Ok(())
@@ -376,7 +392,7 @@ impl Fortress {
             self.buildings.get_mut(typ).upgrade_cost =
                 FortressCost::parse(data.skip(i * 4, "fortress unit prices")?)?;
         }
-        self.gem_search_cost =
+        self.gem_search.cost =
             FortressCost::parse(data.skip(48, "gem_search_cost")?)?;
         Ok(())
     }

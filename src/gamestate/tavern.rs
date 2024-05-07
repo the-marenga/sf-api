@@ -57,7 +57,8 @@ impl Tavern {
             data[46] & 0xFF,
             server_time.convert_to_local(data[47], "current action time"),
         );
-        self.thirst_for_adventure_sec = soft_into(data[456], "remaining ALU", 0);
+        self.thirst_for_adventure_sec =
+            soft_into(data[456], "remaining ALU", 0);
         self.beer_drunk = soft_into(data[457], "beer drunk count", 0);
 
         for (quest_index, start_idx) in (235..=237).enumerate() {
