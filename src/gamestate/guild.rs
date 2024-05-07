@@ -6,46 +6,67 @@ use num_traits::FromPrimitive;
 
 use super::{
     items::{ItemType, PotionSize, PotionType},
-    update_enum_map, AttributeType, ServerTime,
+    update_enum_map, ArrSkip, AttributeType, CGet, NormalCost, SFError,
+    ServerTime,
 };
 use crate::misc::{from_sf_string, soft_into, warning_parse};
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Informaion about the characters current guild
 pub struct Guild {
+    /// The internal server id of this guild
+    pub id: u32,
+    /// The name of the guild
     pub name: String,
+    /// The description text of the guild
     pub description: String,
-    pub emblem: String,
+    /// This is guilds emblem. Currently this is unparsed, so you only have
+    /// access to the raw string
+    pub emblem: Emblem,
 
+    /// The honor this guild has earned
+    pub honor: u32,
+    /// The rank in the Hall of Fame this guild has
     pub rank: u32,
     /// The date at which the character joined this guild
     pub joined: DateTime<Local>,
 
-    pub treasure_upgrade_silver: u64,
-    pub treasure_upgrade_mushroom: u16,
-    pub instructor_upgrade_silver: u64,
-    pub instructor_upgrade_mushroom: u16,
+    /// The skill you yourself contribute to the guild
+    pub own_treasure_skill: u16,
+    /// The price to pay to upgrade your treasure by one rank
+    pub own_treasure_upgrade: NormalCost,
 
-    pub honor: u32,
+    /// The skill you yourself contribute to the guild
+    pub own_instructor_skill: u16,
+    /// The price to pay to upgrade tyour instructor by one rank
+    pub own_instructor_upgrade: NormalCost,
 
-    pub id: u32,
-
+    /// Whether or not the guild is currently raiding
     pub is_raiding: bool,
+    /// How many raids this guild has completed already
     pub finished_raids: u16,
 
-    pub defending_against_guild_id: Option<u32>,
-    pub defense_date: Option<DateTime<Local>>,
+    /// If the guild is defending against another guild, this will contain
+    /// information about the upcoming battle
+    pub defending: Option<PlanedBattle>,
+    /// If the guild is attacking another guild, this will contain
+    /// information about the upcoming battle
+    pub attacking: Option<PlanedBattle>,
 
-    pub attacking_guild_id: Option<u32>,
-    pub attack_date: Option<DateTime<Local>>,
-
+    /// The id of the pet, that is currently selected as the guild pet
     pub pet_id: u32,
+    /// The maximum level, that the pet can be at
     pub pet_max_lvl: u16,
+
+    /// The last time the hydra has been fought
     pub hydra_last_battle: Option<DateTime<Local>>,
+    /// The last time the hydra has been seen with full health
     pub hydra_last_full: Option<DateTime<Local>>,
     /// This seems to be last_battle + 30 min. I can only do 1 battle/day, but
     /// I think this should be the next possible fight
     pub hydra_next_battle: Option<DateTime<Local>>,
+
     pub hydra_current_life: u64,
     pub hydra_max_life: u64,
     pub hydra_attributes: EnumMap<AttributeType, u32>,
@@ -56,9 +77,27 @@ pub struct Guild {
     pub members: Vec<GuildMemberData>,
     pub chat: Vec<ChatMessage>,
     pub whispers: Vec<ChatMessage>,
+}
 
-    pub own_treasure_skill: u16,
-    pub own_instruction_skill: u16,
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The customizeable emblem each guild has
+pub struct Emblem {
+    raw: String,
+}
+
+impl Emblem {
+    /// Returns the guild emblem in it's server encoded form
+    #[must_use]
+    pub fn server_encode(&self) -> String {
+        // TODO: Actually parse this
+        self.raw.clone()
+    }
+
+    pub(crate) fn update(&mut self, str: &str) {
+        self.raw.clear();
+        self.raw.push_str(str);
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -92,7 +131,7 @@ impl Guild {
         &mut self,
         data: &[i64],
         server_time: ServerTime,
-    ) {
+    ) -> Result<(), SFError> {
         let member_count = soft_into(data[3], "guild member count", 0);
         self.member_count = member_count;
         self.members
@@ -131,27 +170,15 @@ impl Guild {
         self.is_raiding = data[9] != 0;
         self.finished_raids = soft_into(data[8], "finished raids", 0);
 
-        self.attacking_guild_id = match data[364].try_into() {
-            Ok(x) if x > 1 => Some(x),
-            _ => None,
-        };
+        self.attacking = PlanedBattle::parse(
+            data.skip(364, "attacking guild")?,
+            server_time,
+        )?;
 
-        self.is_raiding = self.attacking_guild_id == Some(1000000);
-
-        if self.is_raiding {
-            // Having an enum (Guild(id)/Raid) would be more correct
-            self.attacking_guild_id = None;
-        }
-
-        self.attack_date =
-            server_time.convert_to_local(data[365], "next guild fight");
-
-        self.defending_against_guild_id = match data[366].try_into() {
-            Ok(x) if x > 1 => Some(x),
-            _ => None,
-        };
-        self.defense_date =
-            server_time.convert_to_local(data[367], "next guild defense");
+        self.defending = PlanedBattle::parse(
+            data.skip(366, "attacking guild")?,
+            server_time,
+        )?;
 
         self.pet_id = soft_into(data[377], "gpet id", 0);
         self.pet_max_lvl = soft_into(data[378], "gpet max lvl", 0);
@@ -172,6 +199,7 @@ impl Guild {
             soft_into(data[6] >> 16, "guild portal life p", 100);
         self.guild_portal.defeated_count =
             soft_into(data[7] >> 16, "guild portal progress", 0);
+        Ok(())
     }
 
     pub(crate) fn update_member_names(&mut self, val: &str) {
@@ -221,12 +249,11 @@ impl Guild {
 
         for member in self.members.iter_mut() {
             for i in 0..3 {
-                let v = match data.next() {
-                    Some(x) => x,
-                    None => {
-                        warn!("Invalid member potion size");
-                        0
-                    }
+                let v = if let Some(x) = data.next() {
+                    x
+                } else {
+                    warn!("Invalid member potion size");
+                    0
                 };
                 member.potions[i] = quick_potion(v);
                 _ = data.next();
@@ -241,19 +268,52 @@ impl Guild {
         };
 
         self.description = from_sf_string(description);
-        self.emblem.clear();
-        self.emblem.push_str(emblem);
+        self.emblem.update(emblem);
     }
 
     pub(crate) fn update_group_prices(&mut self, data: &[i64]) {
-        self.treasure_upgrade_silver =
+        self.own_treasure_upgrade.silver =
             soft_into(data[0], "treasure upgr. silver", 0);
-        self.treasure_upgrade_mushroom =
+        self.own_treasure_upgrade.mushroom =
             soft_into(data[1], "treasure upgr. mush", 0);
-        self.instructor_upgrade_silver =
+        self.own_instructor_upgrade.silver =
             soft_into(data[2], "instr upgr. silver", 0);
-        self.instructor_upgrade_mushroom =
+        self.own_instructor_upgrade.mushroom =
             soft_into(data[3], "instr upgr. mush", 0);
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PlanedBattle {
+    /// The guild this battle will be against
+    pub other: u32,
+    /// The date & time this battle will be at
+    pub date: DateTime<Local>,
+}
+
+impl PlanedBattle {
+    /// Checks if the battle is a raid
+    pub fn is_raid(&self) -> bool {
+        self.other == 1000000
+    }
+
+    #[allow(clippy::similar_names)]
+    fn parse(
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<Option<Self>, SFError> {
+        let other = data.cget(0, "gbattle other")?;
+        let other = match other.try_into() {
+            Ok(x) if x > 1 => Some(x),
+            _ => None,
+        };
+        let date = data.cget(1, "gbattle time")?;
+        let date = server_time.convert_to_local(date, "next guild fight");
+        Ok(match (other, date) {
+            (Some(other), Some(date)) => Some(Self { other, date }),
+            _ => None,
+        })
     }
 }
 

@@ -42,8 +42,9 @@ pub struct Underworld {
     /// The time the building upgrade began
     pub upgrade_begin: Option<DateTime<Local>>,
 
-    /// The combined level of all buildings in the underworld
-    pub total_level: u16,
+    /// The combined level of all buildings in the underworld, which is
+    /// equivalent to honor
+    pub honor: u16,
     /// The amount of players, that have been lured into the underworld today
     pub lured_today: u16,
 }
@@ -149,14 +150,16 @@ impl Underworld {
                 data.csiget(473, "uu alu in building", 0)?;
             self.production.get_mut(ThirstForAdventure).limit =
                 data.csiget(474, "uu max stored alu", 0)?;
+            self.production.get_mut(ThirstForAdventure).per_hour =
+                data.csiget(475, "uu alu per day", 0)?;
         }
 
         self.last_collectable_update = get_local(467, "uw resource time")?;
         self.upgrade_building =
             FromPrimitive::from_i64(data.cget(468, "u building upgrade")? - 1);
         self.upgrade_finish = get_local(469, "u expand end")?;
-        self.upgrade_begin = get_local(470, "u expand begin")?;
-        self.total_level = data.csiget(471, "uu max stored alu", 0)?;
+        self.upgrade_begin = get_local(470, "u upgrade begin")?;
+        self.honor = data.csiget(471, "uu honor", 0)?;
         self.lured_today = data.csiget(472, "u battles today", 0)?;
         Ok(())
     }
@@ -187,7 +190,7 @@ pub struct UnderworldProduction {
     /// `building_collectable == building_limit` the production stops
     pub limit: u64,
     /// The amount of this resource the coresponding production building
-    /// produces per hour
+    /// produces per hour. The adventuromatics amount will be per day here
     pub per_hour: u64,
 }
 

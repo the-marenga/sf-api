@@ -157,7 +157,7 @@ impl GameState {
                     self.tavern
                         .toilet
                         .get_or_insert_with(Default::default)
-                        .used = val.into::<i32>("toilet full status")? != 0
+                        .used = val.into::<i32>("toilet full status")? != 0;
                 }
                 "skipallow" => {
                     self.tavern.skip_allowed =
@@ -486,6 +486,12 @@ impl GameState {
                     if !val.as_str().is_empty() {
                         warn!("oktoberfest response is not empty: {val}")
                     }
+                }
+                "usersettings" => {
+                    // Contains language and flag settings
+                }
+                "mailinvoice" => {
+                    // Incomplete email address
                 }
                 "calenderinfo" => {
                     // This is twice in the original response.
@@ -1232,7 +1238,7 @@ impl GameState {
             }
         }
         if let Some(t) = &self.unlocks.underworld {
-            if t.total_level == 0 {
+            if t.honor == 0 {
                 self.unlocks.underworld = None;
             }
         }
@@ -1351,7 +1357,7 @@ impl GameState {
         guild.guild_portal.damage_bonus = ((data[445] >> 16) % 256) as u8;
         guild.own_treasure_skill =
             soft_into(data[623], "own treasure skill", 0);
-        guild.own_instruction_skill =
+        guild.own_instructor_skill =
             soft_into(data[624], "own instruction skill", 0);
         guild.hydra_next_battle =
             server_time.convert_to_local(data[627], "pet battle");
@@ -1509,4 +1515,11 @@ impl StringSetExt for String {
     fn set(&mut self, s: &str) {
         self.replace_range(.., s);
     }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct NormalCost {
+    pub silver: u64,
+    pub mushroom: u16,
 }
