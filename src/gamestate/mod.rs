@@ -410,7 +410,7 @@ impl GameState {
                     .update_description_embed(val.as_str()),
                 "idle" => {
                     self.unlocks.idle_game = IdleGame::parse_idle_game(
-                        val.into_list("idle game")?,
+                        &val.into_list("idle game")?,
                         server_time,
                     );
                 }

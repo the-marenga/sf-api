@@ -7,7 +7,6 @@ use num_derive::FromPrimitive;
 use strum::{EnumIter, IntoEnumIterator};
 
 use super::{ArrSkip, CCGet, CFPGet, CSTGet, EnumMapGet, SFError, ServerTime};
-use crate::gamestate::CGet;
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
