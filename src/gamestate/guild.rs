@@ -3,7 +3,6 @@ use chrono::{DateTime, Local, NaiveTime};
 use enum_map::EnumMap;
 use log::warn;
 use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
 
 use super::{
     items::{ItemType, PotionSize, PotionType},
@@ -166,7 +165,7 @@ impl Guild {
                 data.cstget(114 + offset, "guild last online", server_time)?;
             member.treasure_skill =
                 data.csiget(214 + offset, "guild member treasure skill", 0)?;
-            member.master_skill =
+            member.instructor_skill =
                 data.csiget(264 + offset, "guild member master skill", 0)?;
             member.guild_rank =
                 match data.cget(314 + offset, "guild member rank")? {
@@ -313,6 +312,7 @@ impl Guild {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A guild battle, that is scheduled to take place at a certain place and time
 pub struct PlanedBattle {
     /// The guild this battle will be against
     pub other: u32,
@@ -348,37 +348,66 @@ impl PlanedBattle {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The portal a guild has
 pub struct GuildPortal {
+    /// The damage bonus in percent the guild portal gives to its members
     pub damage_bonus: u8,
+    /// The amount of times the portal enemy has already been defeated. You can
+    /// easily convert this int oct & stage if you want
     pub defeated_count: u8,
+    /// The percentage of life the portal enemy still has
     pub life_percentage: u8,
 }
 #[derive(Debug, Copy, Clone, FromPrimitive)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Which battles a member will participate in
 pub enum BattlesJoined {
+    /// The player has only joined the offensive attack against another guild
     Attack = 1,
+    /// The player has only joined the defense of the guild
     Defense,
+    /// The player has only joined both the offense and defensive battles of
+    /// the guild
     Both,
 }
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A member of a guild
 pub struct GuildMemberData {
+    /// The name of the member
     pub name: String,
+    /// Which battles this member will participate in
     pub battles_joined: Option<BattlesJoined>,
+    /// The level of this member
     pub level: u16,
+    /// The last time this player was online (last time they send an update
+    /// command)
     pub last_online: Option<DateTime<Local>>,
+    /// The level, that this member has upgraded their treasure to
     pub treasure_skill: u16,
-    pub master_skill: u16,
-    pub guild_rank: GuildRank,
-    pub portal_fought: Option<DateTime<Local>>,
+    /// The level, that this member has upgraded their instructor to
+    pub instructor_skill: u16,
+    /// The level of this members guild pet
     pub guild_pet_lvl: u16,
+
+    /// The rank this member has in the guild
+    pub guild_rank: GuildRank,
+    /// The last time this member has fought the portal. This is basically a
+    /// dynamic check if they have fought it today, because today changes
+    pub portal_fought: Option<DateTime<Local>>,
+    /// The potions this player has active. This will always be potion, no
+    /// other itemtype
+    // TODO: make this explicit
     pub potions: [Option<ItemType>; 3],
+    /// The level of this members hall of knights
     pub knights: u8,
 }
 
 #[derive(Debug, Clone, Copy, FromPrimitive, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// The rank a member can have in a guild
 pub enum GuildRank {
     Leader = 1,
     Officer = 2,
@@ -389,6 +418,8 @@ pub enum GuildRank {
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Something the player can upgrade in the guild
+#[allow(missing_docs)]
 pub enum GuildSkill {
     Treasure = 0,
     Instructor,

@@ -148,10 +148,13 @@ impl Underworld {
                 data.csiget(475, "uu alu per day", 0)?;
         }
 
-        self.last_collectable_update = data.cstget(467, "uw resource time", server_time)?;
-        self.upgrade_building = data.cfpget(468, "u building upgrade", |x| x - 1)?;
+        self.last_collectable_update =
+            data.cstget(467, "uw resource time", server_time)?;
+        self.upgrade_building =
+            data.cfpget(468, "u building upgrade", |x| x - 1)?;
         self.upgrade_finish = data.cstget(469, "u expand end", server_time)?;
-        self.upgrade_begin = data.cstget(470, "u upgrade begin", server_time)?;
+        self.upgrade_begin =
+            data.cstget(470, "u upgrade begin", server_time)?;
         self.honor = data.csiget(471, "uu honor", 0)?;
         self.lured_today = data.csiget(472, "u battles today", 0)?;
         Ok(())
