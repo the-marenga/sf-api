@@ -4,10 +4,11 @@ use std::time::Duration;
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
 use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter, IntoEnumIterator};
 
-use super::{items::GemType, ArrSkip, CCGet, SFError, ServerTime};
+use super::{
+    items::GemType, ArrSkip, CCGet, CFPGet, CSTGet, SFError, ServerTime,
+};
 use crate::{
     gamestate::{CGet, EnumMapGet},
     misc::soft_into,
@@ -315,33 +316,29 @@ impl Fortress {
                 data.csiget(574 + idx, "resource per hour", 0)?;
         }
 
-        let get_local = |spot, name| {
-            let val = data.cget(spot, name)?;
-            Ok(server_time.convert_to_local(val, name))
-        };
-
         self.last_collectable_updated =
-            get_local(577, "fortress collection update")?;
+            data.cstget(577, "fortress collection update", server_time)?;
 
         self.building_upgrade = FortressAction {
-            start: get_local(573, "fortress upgrade begin")?,
-            finish: get_local(572, "fortress upgrade end")?,
+            start: data.cstget(573, "fortress upgrade begin", server_time)?,
+            finish: data.cstget(572, "fortress upgrade end", server_time)?,
             cost: FortressCost::default(),
-            target: FromPrimitive::from_i64(
-                data.cget(571, "fortress building upgrade")? - 1,
-            ),
+            target: data.cfpget(571, "fortress building upgrade", |x| x - 1)?,
         };
 
         self.level = data.csiget(581, "fortress lvl", 0)?;
         self.honor = data.csiget(582, "fortress honor", 0)?;
         self.rank = data.csiget(583, "fortress rank", 0)?;
 
-        self.gem_search.start = get_local(595, "gem search start")?;
-        self.gem_search.finish = get_local(596, "gem search end")?;
+        self.gem_search.start =
+            data.cstget(595, "gem search start", server_time)?;
+        self.gem_search.finish =
+            data.cstget(596, "gem search end", server_time)?;
         self.gem_search.target = GemType::parse(data.cget(594, "gem target")?);
 
         self.attack_target = data.cwiget(587, "fortress enemy")?;
-        self.attack_free_reroll = get_local(586, "fortress attack reroll")?;
+        self.attack_free_reroll =
+            data.cstget(586, "fortress attack reroll", server_time)?;
         Ok(())
     }
 

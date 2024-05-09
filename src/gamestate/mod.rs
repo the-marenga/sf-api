@@ -1354,12 +1354,12 @@ impl GameState {
 
         let guild = self.unlocks.guild.get_or_insert_with(Default::default);
         // TODO: This might be better as & 0xFF?
-        guild.guild_portal.damage_bonus = ((data[445] >> 16) % 256) as u8;
+        guild.portal.damage_bonus = ((data[445] >> 16) % 256) as u8;
         guild.own_treasure_skill =
             soft_into(data[623], "own treasure skill", 0);
         guild.own_instructor_skill =
             soft_into(data[624], "own instruction skill", 0);
-        guild.hydra_next_battle =
+        guild.hydra.next_battle =
             server_time.convert_to_local(data[627], "pet battle");
         self.unlocks
             .pet_collection

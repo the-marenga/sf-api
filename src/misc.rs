@@ -4,12 +4,13 @@ use std::{
 };
 
 use aho_corasick::AhoCorasick;
+use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumArray, EnumMap};
 use log::error;
 use num::FromPrimitive;
 use once_cell::sync::Lazy;
 
-use crate::error::SFError;
+use crate::{error::SFError, gamestate::ServerTime};
 
 pub(crate) const HASH_CONST: &str = "ahHoj2woo1eeChiech6ohphoB7Aithoh";
 
@@ -293,9 +294,59 @@ impl<T: Debug> ArrSkip<T> for [T] {
             return Err(SFError::TooShortResponse {
                 name,
                 pos,
-                array: format!("{:?}", self),
+                array: format!("{self:?}"),
             });
         }
         Ok(self.split_at(pos).1)
+    }
+}
+
+pub(crate) trait CFPGet<T: Into<i64> + Copy + std::fmt::Debug, R: FromPrimitive>
+{
+    fn cfpget(
+        &self,
+        pos: usize,
+        name: &'static str,
+        fun: fn(T) -> T,
+    ) -> Result<Option<R>, SFError>;
+}
+
+impl<T: Into<i64> + Copy + std::fmt::Debug, R: FromPrimitive> CFPGet<T, R>
+    for [T]
+{
+    fn cfpget(
+        &self,
+        pos: usize,
+        name: &'static str,
+        fun: fn(T) -> T,
+    ) -> Result<Option<R>, SFError> {
+        let raw = raw_cget(self, pos, name)?;
+        let raw = fun(raw);
+        let t: i64 = raw.into();
+        Ok(FromPrimitive::from_i64(t))
+    }
+}
+
+
+pub(crate) trait CSTGet<T: Copy + Debug + Into<i64> >
+{
+    fn cstget(
+        &self,
+        pos: usize,
+        name: &'static str,
+        server_time: ServerTime,
+    ) -> Result<Option<DateTime<Local>>, SFError>;
+}
+
+impl <T: Copy + Debug + Into<i64> > CSTGet <T> for [T] {
+    fn cstget(
+        &self,
+        pos: usize,
+        name: &'static str,
+        server_time: ServerTime,
+    ) -> Result<Option<DateTime<Local>>, SFError> {
+        let val = raw_cget(self, pos, name)?;
+        let val = val.into();
+        Ok(server_time.convert_to_local(val, name))
     }
 }

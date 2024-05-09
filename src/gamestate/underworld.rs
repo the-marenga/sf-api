@@ -4,10 +4,9 @@ use std::time::Duration;
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
 use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
 use strum::{EnumIter, IntoEnumIterator};
 
-use super::{ArrSkip, CCGet, EnumMapGet, SFError, ServerTime};
+use super::{ArrSkip, CCGet, CFPGet, CSTGet, EnumMapGet, SFError, ServerTime};
 use crate::gamestate::CGet;
 
 #[derive(Debug, Default, Clone)]
@@ -123,11 +122,6 @@ impl Underworld {
                 data.csiget(start + 3, "uunit level", 0)?;
         }
 
-        let get_local = |spot, name| {
-            let val = data.cget(spot, name)?;
-            Ok(server_time.convert_to_local(val, name))
-        };
-
         #[allow(clippy::enum_glob_use)]
         {
             use UnderWorldResourceType::*;
@@ -154,11 +148,10 @@ impl Underworld {
                 data.csiget(475, "uu alu per day", 0)?;
         }
 
-        self.last_collectable_update = get_local(467, "uw resource time")?;
-        self.upgrade_building =
-            FromPrimitive::from_i64(data.cget(468, "u building upgrade")? - 1);
-        self.upgrade_finish = get_local(469, "u expand end")?;
-        self.upgrade_begin = get_local(470, "u upgrade begin")?;
+        self.last_collectable_update = data.cstget(467, "uw resource time", server_time)?;
+        self.upgrade_building = data.cfpget(468, "u building upgrade", |x| x - 1)?;
+        self.upgrade_finish = data.cstget(469, "u expand end", server_time)?;
+        self.upgrade_begin = data.cstget(470, "u upgrade begin", server_time)?;
         self.honor = data.csiget(471, "uu honor", 0)?;
         self.lured_today = data.csiget(472, "u battles today", 0)?;
         Ok(())

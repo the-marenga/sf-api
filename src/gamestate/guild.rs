@@ -1,3 +1,4 @@
+#![allow(clippy::module_name_repetitions)]
 use chrono::{DateTime, Local, NaiveTime};
 use enum_map::EnumMap;
 use log::warn;
@@ -6,8 +7,8 @@ use num_traits::FromPrimitive;
 
 use super::{
     items::{ItemType, PotionSize, PotionType},
-    update_enum_map, ArrSkip, AttributeType, CGet, NormalCost, SFError,
-    ServerTime,
+    update_enum_map, ArrSkip, AttributeType, CCGet, CFPGet, CGet, CSTGet,
+    NormalCost, SFError, ServerTime,
 };
 use crate::misc::{from_sf_string, soft_into, warning_parse};
 
@@ -42,8 +43,6 @@ pub struct Guild {
     /// The price to pay to upgrade tyour instructor by one rank
     pub own_instructor_upgrade: NormalCost,
 
-    /// Whether or not the guild is currently raiding
-    pub is_raiding: bool,
     /// How many raids this guild has completed already
     pub finished_raids: u16,
 
@@ -58,25 +57,40 @@ pub struct Guild {
     pub pet_id: u32,
     /// The maximum level, that the pet can be at
     pub pet_max_lvl: u16,
+    /// All informations about the hydra the guild pet can fight
+    pub hydra: GuildHydra,
+    /// The thing each player can enter and fight once a day
+    pub portal: GuildPortal,
 
-    /// The last time the hydra has been fought
-    pub hydra_last_battle: Option<DateTime<Local>>,
-    /// The last time the hydra has been seen with full health
-    pub hydra_last_full: Option<DateTime<Local>>,
-    /// This seems to be last_battle + 30 min. I can only do 1 battle/day, but
-    /// I think this should be the next possible fight
-    pub hydra_next_battle: Option<DateTime<Local>>,
-
-    pub hydra_current_life: u64,
-    pub hydra_max_life: u64,
-    pub hydra_attributes: EnumMap<AttributeType, u32>,
-
-    pub guild_portal: GuildPortal,
-
+    // This should just be members.len(). I think this is only in the api
+    // because they are bad at varsize arrays or smth.
     member_count: u8,
+    /// Information about the members of the guild. This includes the player
     pub members: Vec<GuildMemberData>,
+    /// The chat messages, that get send in the guild chat
     pub chat: Vec<ChatMessage>,
+    /// The whisper messages, that a player can receive
     pub whispers: Vec<ChatMessage>,
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The hydra, that the guild pet can fight
+pub struct GuildHydra {
+    /// The last time the hydra has been fought
+    pub last_battle: Option<DateTime<Local>>,
+    /// The last time the hydra has been seen with full health
+    pub last_full: Option<DateTime<Local>>,
+    /// This seems to be `last_battle + 30 min`. I can only do 1 battle/day,
+    /// but I think this should be the next possible fight
+    pub next_battle: Option<DateTime<Local>>,
+
+    /// The current life of the guilds hydra
+    pub current_life: u64,
+    /// The maximum life the hydra can have
+    pub max_life: u64,
+    /// The attributes the hydra has
+    pub attributes: EnumMap<AttributeType, u32>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -102,9 +116,15 @@ impl Emblem {
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A message, that the player has received, or has send to others via the chat
 pub struct ChatMessage {
+    /// The user this message originated from. Note that this might not be in
+    /// the guild member list in some cases
     pub user: String,
+    /// The time at which this message has been sent. I have not checked the
+    /// timezone here. Might be UTC/Your TZ/Server TZ
     pub time: NaiveTime,
+    /// The actual bessage, that got send
     pub message: String,
 }
 
@@ -132,43 +152,43 @@ impl Guild {
         data: &[i64],
         server_time: ServerTime,
     ) -> Result<(), SFError> {
-        let member_count = soft_into(data[3], "guild member count", 0);
+        let member_count = data.csiget(3, "guild member count", 0)?;
         self.member_count = member_count;
         self.members
             .resize_with(member_count as usize, Default::default);
 
         for (offset, member) in self.members.iter_mut().enumerate() {
             member.battles_joined =
-                FromPrimitive::from_i64(data[64 + offset] / 1000);
+                data.cfpget(64 + offset, "member joined", |x| x / 1000)?;
             member.level =
-                soft_into(data[64 + offset] % 1000, "guild member level", 0);
-            member.last_online = server_time
-                .convert_to_local(data[114 + offset], "guild last online");
+                data.csiget(64 + offset % 1000, "guild member level", 0)?;
+            member.last_online =
+                data.cstget(114 + offset, "guild last online", server_time)?;
             member.treasure_skill =
-                soft_into(data[214 + offset], "guild member treasure skill", 0);
+                data.csiget(214 + offset, "guild member treasure skill", 0)?;
             member.master_skill =
-                soft_into(data[264 + offset], "guild member master skill", 0);
-            member.guild_rank = match data[314 + offset] {
-                1 => GuildRank::Leader,
-                2 => GuildRank::Officer,
-                3 => GuildRank::Member,
-                4 => GuildRank::Invited,
-                x => {
-                    warn!("Unknown guild rank: {x}");
-                    GuildRank::Invited
-                }
-            };
-            member.portal_fought = server_time
-                .convert_to_local(data[164 + offset], "portal fought");
+                data.csiget(264 + offset, "guild member master skill", 0)?;
+            member.guild_rank =
+                match data.cget(314 + offset, "guild member rank")? {
+                    1 => GuildRank::Leader,
+                    2 => GuildRank::Officer,
+                    3 => GuildRank::Member,
+                    4 => GuildRank::Invited,
+                    x => {
+                        warn!("Unknown guild rank: {x}");
+                        GuildRank::Invited
+                    }
+                };
+            member.portal_fought =
+                data.cstget(164 + offset, "portal fought", server_time)?;
             member.guild_pet_lvl =
-                soft_into(data[390 + offset], "guild member pet skill", 0);
+                data.csiget(390 + offset, "guild member pet skill", 0)?;
         }
 
-        self.honor = soft_into(data[13], "guild honor", 0);
-        self.id = soft_into(data[0], "guild id", 0);
+        self.honor = data.csiget(13, "guild honor", 0)?;
+        self.id = data.csiget(0, "guild id", 0)?;
 
-        self.is_raiding = data[9] != 0;
-        self.finished_raids = soft_into(data[8], "finished raids", 0);
+        self.finished_raids = data.csiget(8, "finished raids", 0)?;
 
         self.attacking = PlanedBattle::parse(
             data.skip(364, "attacking guild")?,
@@ -180,30 +200,34 @@ impl Guild {
             server_time,
         )?;
 
-        self.pet_id = soft_into(data[377], "gpet id", 0);
-        self.pet_max_lvl = soft_into(data[378], "gpet max lvl", 0);
+        self.pet_id = data.csiget(377, "gpet id", 0)?;
+        self.pet_max_lvl = data.csiget(378, "gpet max lvl", 0)?;
 
-        self.hydra_last_battle =
-            server_time.convert_to_local(data[382], "hydra pet lb");
-        self.hydra_last_full =
-            server_time.convert_to_local(data[381], "hydra last defeat");
+        self.hydra.last_battle =
+            data.cstget(382, "hydra pet lb", server_time)?;
+        self.hydra.last_full =
+            data.cstget(381, "hydra last defeat", server_time)?;
 
-        self.hydra_current_life =
-            soft_into(data[383], "ghydra clife", u64::MAX);
-        self.hydra_max_life =
-            soft_into(data[384], "ghydra max clife", u64::MAX);
+        self.hydra.current_life = data.csiget(383, "ghydra clife", u64::MAX)?;
+        self.hydra.max_life = data.csiget(384, "ghydra max clife", u64::MAX)?;
 
-        update_enum_map(&mut self.hydra_attributes, &data[385..]);
+        update_enum_map(
+            &mut self.hydra.attributes,
+            data.skip(385, "hydra attributes")?,
+        );
 
-        self.guild_portal.life_percentage =
-            soft_into(data[6] >> 16, "guild portal life p", 100);
-        self.guild_portal.defeated_count =
-            soft_into(data[7] >> 16, "guild portal progress", 0);
+        self.portal.life_percentage =
+            data.csiget(6 >> 16, "guild portal life p", 100)?;
+        self.portal.defeated_count =
+            data.csiget(7 >> 16, "guild portal progress", 0)?;
         Ok(())
     }
 
     pub(crate) fn update_member_names(&mut self, val: &str) {
-        let names: Vec<_> = val.split(',').map(|d| d.to_string()).collect();
+        let names: Vec<_> = val
+            .split(',')
+            .map(std::string::ToString::to_string)
+            .collect();
         self.members.resize_with(names.len(), Default::default);
         for (member, name) in self.members.iter_mut().zip(names) {
             member.name = name;
@@ -214,7 +238,7 @@ impl Guild {
         let data: Vec<i64> = val
             .trim_end_matches(',')
             .split(',')
-            .flat_map(|a| a.parse())
+            .flat_map(str::parse)
             .collect();
 
         self.members.resize_with(data.len(), Default::default);
@@ -247,15 +271,15 @@ impl Guild {
             })
         };
 
-        for member in self.members.iter_mut() {
-            for i in 0..3 {
-                let v = if let Some(x) = data.next() {
-                    x
-                } else {
-                    warn!("Invalid member potion size");
-                    0
-                };
-                member.potions[i] = quick_potion(v);
+        for member in &mut self.members {
+            for potion in &mut member.potions {
+                *potion = data
+                    .next()
+                    .or_else(|| {
+                        warn!("Invalid member potion len");
+                        None
+                    })
+                    .and_then(quick_potion);
                 _ = data.next();
             }
         }
@@ -271,15 +295,19 @@ impl Guild {
         self.emblem.update(emblem);
     }
 
-    pub(crate) fn update_group_prices(&mut self, data: &[i64]) {
+    pub(crate) fn update_group_prices(
+        &mut self,
+        data: &[i64],
+    ) -> Result<(), SFError> {
         self.own_treasure_upgrade.silver =
-            soft_into(data[0], "treasure upgr. silver", 0);
+            data.csiget(0, "treasure upgr. silver", 0)?;
         self.own_treasure_upgrade.mushroom =
-            soft_into(data[1], "treasure upgr. mush", 0);
+            data.csiget(1, "treasure upgr. mush", 0)?;
         self.own_instructor_upgrade.silver =
-            soft_into(data[2], "instr upgr. silver", 0);
+            data.csiget(2, "instr upgr. silver", 0)?;
         self.own_instructor_upgrade.mushroom =
-            soft_into(data[3], "instr upgr. mush", 0);
+            data.csiget(3, "instr upgr. mush", 0)?;
+        Ok(())
     }
 }
 
@@ -294,8 +322,9 @@ pub struct PlanedBattle {
 
 impl PlanedBattle {
     /// Checks if the battle is a raid
+    #[must_use]
     pub fn is_raid(&self) -> bool {
-        self.other == 1000000
+        self.other == 1_000_000
     }
 
     #[allow(clippy::similar_names)]
