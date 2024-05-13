@@ -216,9 +216,9 @@ impl Guild {
         );
 
         self.portal.life_percentage =
-            data.csiget(6 >> 16, "guild portal life p", 100)?;
+            data.csimget(6, "guild portal life p", 100, |x| x >> 16)?;
         self.portal.defeated_count =
-            data.csiget(7 >> 16, "guild portal progress", 0)?;
+            data.csimget(7, "guild portal progress", 0, |x| x >> 16)?;
         Ok(())
     }
 

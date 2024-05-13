@@ -209,7 +209,7 @@ impl Fighter {
         update_enum_map(&mut attributes, &raw_atrs);
 
         let class: i32 = data.cfsget(27, "fighter class").ok().flatten()?;
-        let class: Class =  FromPrimitive::from_i32(class - 1)?;
+        let class: Class = FromPrimitive::from_i32(class - 1)?;
 
         let id = data.cfsget(5, "fighter id").ok()?.unwrap_or_default();
 

@@ -24,8 +24,7 @@ use crate::{
     error::*,
     gamestate::{
         arena::*, character::*, dungeons::*, fortress::*, guild::*, idle::*,
-        items::*, rewards::*, social::*, tavern::*, underworld::*,
-        unlockables::*,
+        items::*, rewards::*, social::*, tavern::*, unlockables::*,
     },
     misc::*,
     session::*,
@@ -165,7 +164,7 @@ impl GameState {
                 }
                 "cryptoid not found" => return Err(ConnectionError),
                 "ownplayersave" => {
-                    self.update_player_save(&val.into_list("player save")?)
+                    self.update_player_save(&val.into_list("player save")?)?
                 }
                 "owngroupname" => self
                     .unlocks
@@ -201,7 +200,7 @@ impl GameState {
                         companions[class].equipment = Equipment::parse(
                             &data[(comp_start + 22)..],
                             server_time,
-                        );
+                        )?;
                         update_enum_map(
                             &mut companions[class].attributes,
                             &data[(comp_start + 4)..],
@@ -548,18 +547,19 @@ impl GameState {
                             warn!("Invalid hof class: {class} - {:?}", data);
                             continue;
                         };
+                        let raw_flag = data.get(6).copied().unwrap_or_default();
+                        let flag = Flag::parse(raw_flag);
+
+                        let guild =
+                            Some(data[2].to_string()).filter(|a| !a.is_empty());
                         self.other_players.hall_of_fame.push(HallOfFameEntry {
                             rank,
                             name: data[1].to_string(),
-                            guild: data[2].to_string(),
+                            guild,
                             level,
                             fame,
                             class,
-                            flag: data
-                                .get(6)
-                                .copied()
-                                .unwrap_or_default()
-                                .to_string(),
+                            flag,
                         });
                     }
                 }
@@ -1045,7 +1045,7 @@ impl GameState {
                         )?);
                 }
                 "otherplayer" => {
-                    let Some(mut op) = OtherPlayer::parse(
+                    let Ok(mut op) = OtherPlayer::parse(
                         &val.into_list("other player")?,
                         server_time,
                     ) else {
@@ -1193,7 +1193,7 @@ impl GameState {
                     self.character.manequin = Some(Equipment::parse(
                         &val.into_list("manequin")?,
                         server_time,
-                    ));
+                    )?);
                 }
                 "reward" => {
                     // This is the task reward, which you should already know
@@ -1245,17 +1245,20 @@ impl GameState {
         Ok(())
     }
 
-    pub(crate) fn update_player_save(&mut self, data: &[i64]) {
+    pub(crate) fn update_player_save(
+        &mut self,
+        data: &[i64],
+    ) -> Result<(), SFError> {
         let server_time = self.server_time();
         if data.len() < 700 {
             warn!("Skipping account update");
-            return;
+            return Ok(());
         }
 
         self.character.player_id = soft_into(data[1], "player id", 0);
         self.character.portrait =
             Portrait::parse(&data[17..]).unwrap_or_default();
-        self.character.equipment = Equipment::parse(&data[48..], server_time);
+        self.character.equipment = Equipment::parse(&data[48..], server_time)?;
 
         self.character.armor = soft_into(data[447], "total armor", 0);
         self.character.min_damage = soft_into(data[448], "min damage", 0);
@@ -1375,6 +1378,7 @@ impl GameState {
             server_time.convert_to_local(data[650], "dice next");
         self.tavern.dice_games_remaining =
             soft_into(data[651], "rem dice games", 0);
+        Ok(())
     }
 
     pub(crate) fn update_gttime(

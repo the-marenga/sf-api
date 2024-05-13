@@ -1,6 +1,8 @@
 #![allow(deprecated)]
 use enum_map::Enum;
+use log::warn;
 use num_derive::FromPrimitive;
+use strum::{EnumIter, IntoEnumIterator};
 
 use crate::{
     gamestate::{
@@ -1027,13 +1029,13 @@ impl Command {
             FightShadowDungeon { name, use_mushroom } => format!(
                 "PlayerShadowBattle:{}/{}",
                 *name as u32 + 1,
-                *use_mushroom as u8
+                u8::from(*use_mushroom)
             ),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Flag {
     Australia,
@@ -1078,7 +1080,7 @@ pub enum Flag {
     Vietnam,
 }
 impl Flag {
-    pub(crate) fn code(&self) -> &'static str {
+    pub(crate) fn code(self) -> &'static str {
         match self {
             Flag::Australia => "au",
             Flag::Austria => "at",
@@ -1121,5 +1123,21 @@ impl Flag {
             Flag::UnitedStates => "us",
             Flag::Vietnam => "vn",
         }
+    }
+
+    pub(crate) fn parse(val: &str) -> Option<Self> {
+        if val.is_empty() {
+            return None;
+        };
+
+        // This is not fast, but I am not willing to copy & invert the match
+        // form above
+        for v in Flag::iter() {
+            if v.code() == val {
+                return Some(v);
+            }
+        }
+        warn!("Invalid flag value: {val}");
+        None
     }
 }

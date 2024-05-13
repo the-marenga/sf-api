@@ -5,7 +5,7 @@ use enum_map::EnumMap;
 use log::warn;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use strum::EnumCount;
+use strum::IntoEnumIterator;
 
 use super::{
     character::{Mount, Portrait},
@@ -13,12 +13,14 @@ use super::{
     guild::GuildRank,
     items::{Equipment, ItemType},
     unlockables::Mirror,
-    AttributeType, Class, Race, ServerTime,
+    AttributeType, Class, Flag, Race, SFError, ServerTime,
 };
 use crate::{misc::*, PlayerId};
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Contains information about everything involving other players on the server.
+/// This mainly revolves around the Hall of Fame
 pub struct OtherPlayers {
     /// The amount of accounts on the server
     pub total_player: u32,
@@ -49,19 +51,26 @@ pub struct OtherPlayers {
     /// A list of hall of fame pet players fetched during the last command
     pub underworld_hall_of_fame: Vec<HallOfFameUnderworldEntry>,
 
-    /// This can be accessed by using the lookup_pid/lookup_name methods
-    /// on OtherPlayers
+    /// This can be accessed by using the `lookup_pid()`/`lookup_name()`
+    /// methods on `OtherPlayers`
     other_players: HashMap<PlayerId, OtherPlayer>,
     name_lookup: HashMap<String, PlayerId>,
 
+    /// Guild that the character has looked at
     pub guilds: HashMap<String, OtherGuild>,
 
+    /// All the fights, that the character has stored for some reason
     pub combat_log: Vec<CombatLogEntry>,
 
+    /// The amount of messages the  inbo xcan store
     pub inbox_capacity: u16,
+    /// A meessages and notifications
     pub inbox: Vec<InboxEntry>,
+    /// If you open a message (via command), this here will contain the openeed
+    /// message
     pub open_msg: Option<String>,
-
+    /// A list of other characters, that the set some sort of special relation
+    /// to. Either good, or bad
     pub relations: Vec<RelationEntry>,
 }
 
@@ -72,30 +81,35 @@ impl OtherPlayers {
     }
 
     /// Checks to see if we have queried a player with that player id
+    #[must_use]
     pub fn lookup_pid(&self, pid: PlayerId) -> Option<&OtherPlayer> {
         self.other_players.get(&pid)
     }
 
     /// Checks to see if we have queried a player with the given name
+    #[must_use]
     pub fn lookup_name(&self, name: &str) -> Option<&OtherPlayer> {
         let other_pos = self.name_lookup.get(name)?;
         self.other_players.get(other_pos)
     }
 
     /// Removes the information about another player based on their id
+    #[must_use]
     pub fn remove_pid(&mut self, pid: PlayerId) -> Option<OtherPlayer> {
         self.other_players.remove(&pid)
     }
 
     /// Removes the information about another player based on their name
+    #[must_use]
     pub fn remove_name(&mut self, name: &str) -> Option<OtherPlayer> {
         let other_pos = self.name_lookup.remove(name)?;
         self.other_players.remove(&other_pos)
     }
 
+    /// Clears out all players, that have previously been queried
     pub fn reset_lookups(&mut self) {
-        self.other_players = Default::default();
-        self.name_lookup = Default::default();
+        self.other_players = HashMap::default();
+        self.name_lookup = HashMap::default();
     }
 
     pub(crate) fn updatete_relation_list(&mut self, val: &str) {
@@ -114,8 +128,8 @@ impl OtherPlayers {
                 Some(relation),
             ) = (
                 parts.next().and_then(|a| a.parse().ok()),
-                parts.next().map(|a| a.to_string()),
-                parts.next().map(|a| a.to_string()),
+                parts.next().map(std::string::ToString::to_string),
+                parts.next().map(std::string::ToString::to_string),
                 parts.next().and_then(|a| a.parse().ok()),
                 parts.next().and_then(|a| match a {
                     "-1" => Some(Relationship::Ignored),
@@ -133,21 +147,31 @@ impl OtherPlayers {
                 guild,
                 level,
                 relation,
-            })
+            });
         }
     }
 }
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Basic information about one character on the server. To get more
+/// information, you need to query this player via command
 pub struct HallOfFameEntry {
+    /// The rank of this player
     pub rank: u32,
+    /// The name of this player. Used to query more information
     pub name: String,
-    pub guild: String,
+    /// The guild this player is currently in. If this is None, the player is
+    /// not in a guild
+    pub guild: Option<String>,
+    /// The level of this player
     pub level: u32,
+    /// The amount of fame this player has
     pub fame: u32,
+    /// The class of this player
     pub class: Class,
-    pub flag: String,
+    /// The Flag of this player, if they have set any
+    pub flag: Option<Flag>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -250,7 +274,7 @@ pub struct OtherFortress {
     pub fortress_archers: u16,
     pub fortress_has_mages: bool,
     pub fortress_soldiers: u16,
-    pub fortress_building_level: [u16; FortressBuildingType::COUNT],
+    pub fortress_building_level: EnumMap<FortressBuildingType, u16>,
 
     pub wood_in_cutter: u64,
     pub stone_in_quary: u64,
@@ -287,45 +311,55 @@ impl OtherPlayer {
     pub(crate) fn parse(
         data: &[i64],
         server_time: ServerTime,
-    ) -> Option<OtherPlayer> {
+    ) -> Result<OtherPlayer, SFError> {
         let mut op = OtherPlayer::default();
-        op.player_id = warning_try_into(data[0], "other player id")?;
-        op.level = warning_try_into(data[2], "other level")?;
-        op.experience = warning_try_into(data[3], "other exp")?;
-        op.next_level_xp = warning_try_into(data[4], "other next lvl exp")?;
-        op.honor = warning_try_into(data[5], "other honor")?;
-        op.rank = warning_try_into(data[6], "other rank")?;
-        op.race = warning_parse(data[18], "other race", |a| {
-            FromPrimitive::from_i64(a)
-        })?;
-        op.portrait = Portrait::parse(&data[8..]).ok()?;
-        op.mirror = Mirror::parse(data[19]);
-        op.class = FromPrimitive::from_i64(data[20] - 1)?;
-        update_enum_map(&mut op.base_attributes, &data[21..]);
-        update_enum_map(&mut op.bonus_attributes, &data[26..]);
-        op.equipment = Equipment::parse(&data[39..], server_time);
-        op.mount = FromPrimitive::from_i64(data[159]);
+        op.player_id = data.ciget(0, "other player id")?;
+        op.level = data.ciget(2, "other level")?;
+        op.experience = data.ciget(3, "other exp")?;
+        op.next_level_xp = data.ciget(4, "other next lvl exp")?;
+        op.honor = data.ciget(5, "other honor")?;
+        op.rank = data.ciget(6, "other rank")?;
+        op.race = data.cfpuget(18, "other race", |a| a)?;
+        op.portrait = Portrait::parse(data.skip(8, "other portrait")?)?;
+        op.mirror = Mirror::parse(data.cget(19, "other mirror")?);
+        op.class = data.cfpuget(20, "other class", |a| a - 1)?;
+        update_enum_map(
+            &mut op.base_attributes,
+            data.skip(21, "other base attrs")?,
+        );
+        update_enum_map(
+            &mut op.bonus_attributes,
+            data.skip(26, "other base attrs")?,
+        );
+        op.equipment =
+            Equipment::parse(data.skip(39, "other equipment")?, server_time)?;
+        op.mount = data.cfpget(159, "other mount", |x| x)?;
 
-        if data[163] >= 10000 {
+        let sb_count = data.cget(163, "scrapbook count")?;
+        if sb_count >= 10000 {
             op.scrapbook_count =
-                Some(soft_into(data[163] - 10000, "scrapbook count", 0));
+                Some(soft_into(sb_count - 10000, "scrapbook count", 0));
         }
 
-        op.active_potions =
-            ItemType::parse_active_potions(&data[194..], server_time);
+        op.active_potions = ItemType::parse_active_potions(
+            data.skip(194, "other potions")?,
+            server_time,
+        );
         op.portal_hp_bonus =
-            soft_into(data[252] >> 24, "other portal hp bonus", 0);
+            data.csimget(252, "other portal hp bonus", 0, |a| a >> 24)?;
         op.portal_dmg_bonus =
-            soft_into((data[252] >> 16) & 0xFF, "other portal dmg bonus", 0);
+            data.csimget(252, "other portal dmg bonus", 0, |a| {
+                (a >> 16) & 0xFF
+            })?;
 
-        op.armor = soft_into(data[168], "other armor", 0);
-        op.min_damage_base = soft_into(data[169], "other min damage", 0);
-        op.max_damage_base = soft_into(data[170], "other max damage", 0);
+        op.armor = data.csiget(168, "other armor", 0)?;
+        op.min_damage_base = data.csiget(169, "other min damage", 0)?;
+        op.max_damage_base = data.csiget(170, "other max damage", 0)?;
 
         if op.level >= 25 {
             let mut fortress = OtherFortress {
-                fortress_wood: warning_try_into(data[228], "other s wood")?,
-                fortress_stone: warning_try_into(data[229], "other f stone")?,
+                fortress_wood: data.ciget(228, "other s wood")?,
+                fortress_stone: data.ciget(229, "other f stone")?,
 
                 fortress_soldiers: soft_into(
                     data[230] & 0xFF,
@@ -338,41 +372,32 @@ impl OtherPlayer {
                     "other f archer",
                     0,
                 ),
-                wood_in_cutter: soft_into(data[239], "other wood cutter", 0),
-                stone_in_quary: soft_into(data[240], "other stone q", 0),
-                max_wood_in_cutter: soft_into(data[241], "other max wood c", 0),
-                max_stone_in_quary: soft_into(
-                    data[242],
-                    "other max stone q",
-                    0,
-                ),
-                fortress_soldiers_lvl: soft_into(
-                    data[249],
+                wood_in_cutter: data.csiget(239, "other wood cutter", 0)?,
+                stone_in_quary: data.csiget(240, "other stone q", 0)?,
+                max_wood_in_cutter: data.csiget(241, "other max wood c", 0)?,
+                max_stone_in_quary: data.csiget(242, "other max stone q", 0)?,
+                fortress_soldiers_lvl: data.csiget(
+                    249,
                     "fortress soldiers lvl",
                     0,
-                ),
-                fortress_mages_lvl: soft_into(
-                    data[250],
-                    "other f mages lvl",
-                    0,
-                ),
-                fortress_archers_lvl: soft_into(
-                    data[251],
+                )?,
+                fortress_mages_lvl: data.csiget(250, "other f mages lvl", 0)?,
+                fortress_archers_lvl: data.csiget(
+                    251,
                     "other f archer lvl",
                     0,
-                ),
-                fortress_building_level: Default::default(),
+                )?,
+                fortress_building_level: EnumMap::default(),
             };
-            let end = FortressBuildingType::COUNT;
-            for (idx, lvl) in data[208..(end + 208)].iter().enumerate() {
-                fortress.fortress_building_level[idx] =
-                    soft_into(*lvl, "f build lvl", 0)
-            }
 
+            for (pos, typ) in FortressBuildingType::iter().enumerate() {
+                *fortress.fortress_building_level.get_mut(typ) =
+                    data.csiget(208 + pos, "o f building lvl", 0)?;
+            }
             op.fortress = Some(fortress);
         }
 
-        Some(op)
+        Ok(op)
     }
 }
 
@@ -520,17 +545,21 @@ pub struct OtherGuildMember {
     pub last_active: Option<DateTime<Local>>,
 }
 impl OtherGuild {
-    pub(crate) fn update(&mut self, data: &[i64], server_time: ServerTime) {
-        self.member_count = soft_into(data[3], "member count", 0);
+    pub(crate) fn update(
+        &mut self,
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<(), SFError> {
+        self.member_count = data.csiget(3, "member count", 0)?;
         let member_count = self.member_count as usize;
-        self.finished_raids = soft_into(data[8], "raid count", 0);
-        self.honor = soft_into(data[13], "other guild honor", 0);
+        self.finished_raids = data.csiget(8, "raid count", 0)?;
+        self.honor = data.csiget(13, "other guild honor", 0)?;
 
         self.members.resize_with(member_count, Default::default);
 
         for (i, member) in &mut self.members.iter_mut().enumerate() {
             member.level =
-                soft_into(data[64 + i], "other guild member level", 0);
+                data.csiget(64 + i, "other guild member level", 0)?;
             member.last_active = server_time
                 .convert_to_local(data[114 + i], "other guild member active");
             member.treasure_lvl = soft_into(
@@ -549,8 +578,9 @@ impl OtherGuild {
                 })
                 .unwrap_or_default();
             member.pet_lvl =
-                soft_into(data[390 + i], "other guild pet levels", 0);
+                data.csiget(390 + i, "other guild pet levels", 0)?;
         }
+        Ok(())
     }
 }
 

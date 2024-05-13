@@ -1,6 +1,6 @@
 [package]
 name = "sf-api"
-version = "0.1.3"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 description = "A simple API to send commands to the Shakes & Fidget servers and parse their responses into characters"
@@ -13,6 +13,7 @@ readme = "README.md"
 aho-corasick = "1.1"
 base64 = "0.22"
 chrono = "0.4"
+enum-map = { version = "2.7.3", features = ["serde"] }
 fastrand = "2.0"
 libaes = "0.7"
 log = "0.4"

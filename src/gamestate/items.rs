@@ -1,12 +1,12 @@
 use chrono::{DateTime, Local};
-use enum_map::EnumMap;
+use enum_map::{Enum, EnumMap};
 use log::{error, warn};
+use num::FromPrimitive;
 use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
 
 use super::{
     unlockables::{EquipmentIdent, PetClass},
-    Class, ServerTime,
+    ArrSkip, Class, SFError, ServerTime,
 };
 use crate::{
     command::AttributeType,
@@ -15,11 +15,12 @@ use crate::{
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The basic inventory, that every player has
 pub struct Inventory {
     /// The basic 5 item slots, that everybody has
     pub bag: [Option<Item>; 5],
-    /// Item slots obtained from the fortress. None means not unlocked, as
-    /// len() is the amount of slots unlocked
+    /// Item slots obtained from the fortress. None means not unlocked, and
+    /// `len()` is the amount of slots unlocked
     pub fortress_chest: Option<Vec<Option<Item>>>,
 }
 
@@ -46,7 +47,8 @@ impl Inventory {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// All the parts of ItemPosition, that are owned by the player
+#[allow(missing_docs)]
+/// All the parts of `ItemPosition`, that are owned by the player
 pub enum InventoryType {
     Equipment = 1,
     MainInventory = 2,
@@ -54,6 +56,9 @@ pub enum InventoryType {
 }
 
 impl InventoryType {
+    /// `InventoryType` is a subset of `ItemPosition`. This is a convenient
+    /// function to convert between them
+    #[must_use]
     pub fn item_position(&self) -> ItemPosition {
         match self {
             InventoryType::Equipment => ItemPosition::Equipment,
@@ -67,31 +72,34 @@ impl InventoryType {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// All positions, that items can be dragged to excluding companions
 pub enum ItemPosition {
+    /// The stuff a player can wear
     Equipment = 1,
+    /// All items in the main 5 inventory slots
     MainInventory = 2,
+    /// The items in the weapon slot
     WeaponShop = 3,
+    /// The items in the mage slot
     MageShop = 4,
+    /// The items in the fortress chest slots
     FortressChest = 5,
 }
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Equipment(pub [Option<Item>; 10]);
+pub struct Equipment(pub EnumMap<EquipmentSlot, Option<Item>>);
 
 impl Equipment {
-    pub fn get_mut(&mut self, slot: EquipmentSlot) -> &mut Option<Item> {
-        self.0.get_mut(slot as usize - 1).unwrap()
-    }
-
-    pub fn get(&self, slot: EquipmentSlot) -> &Option<Item> {
-        self.0.get(slot as usize - 1).unwrap()
-    }
-
     /// Expects the input `data` to have items directly at data[0]
-    pub(crate) fn parse(data: &[i64], server_time: ServerTime) -> Equipment {
-        Equipment(core::array::from_fn(|idx| {
-            Item::parse(&data[idx * 12..], server_time)
-        }))
+    pub(crate) fn parse(
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<Equipment, SFError> {
+        let mut res = Equipment::default();
+        for (idx, map_val) in res.0.as_mut_slice().iter_mut().enumerate() {
+            *map_val =
+                Item::parse(data.skip(idx * 12, "equipment")?, server_time);
+        }
+        Ok(res)
     }
 }
 
@@ -210,7 +218,7 @@ impl Item {
                 match atr_typ {
                     0 => {}
                     1..=5 => {
-                        let Some(atr_typ) = AttributeType::from_usize(atr_typ)
+                        let Some(atr_typ) = FromPrimitive::from_usize(atr_typ)
                         else {
                             continue;
                         };
@@ -647,7 +655,7 @@ impl GemType {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Enum)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EquipmentSlot {
     Hat = 1,

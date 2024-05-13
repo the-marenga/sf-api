@@ -194,6 +194,7 @@ pub(crate) trait CCGet<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> {
         pos: usize,
         name: &'static str,
     ) -> Result<Option<I>, SFError>;
+    fn ciget(&self, pos: usize, name: &'static str) -> Result<I, SFError>;
 }
 
 impl<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> CCGet<T, I> for [T] {
@@ -226,6 +227,12 @@ impl<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> CCGet<T, I> for [T] {
         let raw = raw_cget(self, pos, name)?;
         let raw = fun(raw);
         Ok(soft_into(raw, name, def))
+    }
+
+    fn ciget(&self, pos: usize, name: &'static str) -> Result<I, SFError> {
+        let raw = raw_cget(self, pos, name)?;
+        raw.try_into()
+            .map_err(|_| SFError::ParsingError(name, raw.to_string()))
     }
 }
 
@@ -309,6 +316,13 @@ pub(crate) trait CFPGet<T: Into<i64> + Copy + std::fmt::Debug, R: FromPrimitive>
         name: &'static str,
         fun: fn(T) -> T,
     ) -> Result<Option<R>, SFError>;
+
+    fn cfpuget(
+        &self,
+        pos: usize,
+        name: &'static str,
+        fun: fn(T) -> T,
+    ) -> Result<R, SFError>;
 }
 
 impl<T: Into<i64> + Copy + std::fmt::Debug, R: FromPrimitive> CFPGet<T, R>
@@ -325,11 +339,22 @@ impl<T: Into<i64> + Copy + std::fmt::Debug, R: FromPrimitive> CFPGet<T, R>
         let t: i64 = raw.into();
         Ok(FromPrimitive::from_i64(t))
     }
+
+    fn cfpuget(
+        &self,
+        pos: usize,
+        name: &'static str,
+        fun: fn(T) -> T,
+    ) -> Result<R, SFError> {
+        let raw = raw_cget(self, pos, name)?;
+        let raw = fun(raw);
+        let t: i64 = raw.into();
+        FromPrimitive::from_i64(t)
+            .ok_or_else(|| SFError::ParsingError(name, t.to_string()))
+    }
 }
 
-
-pub(crate) trait CSTGet<T: Copy + Debug + Into<i64> >
-{
+pub(crate) trait CSTGet<T: Copy + Debug + Into<i64>> {
     fn cstget(
         &self,
         pos: usize,
@@ -338,7 +363,7 @@ pub(crate) trait CSTGet<T: Copy + Debug + Into<i64> >
     ) -> Result<Option<DateTime<Local>>, SFError>;
 }
 
-impl <T: Copy + Debug + Into<i64> > CSTGet <T> for [T] {
+impl<T: Copy + Debug + Into<i64>> CSTGet<T> for [T] {
     fn cstget(
         &self,
         pos: usize,
