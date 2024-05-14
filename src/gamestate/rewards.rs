@@ -29,7 +29,7 @@ pub enum WheelRewardType {
     Arcane,
     Souls,
     Item,
-    PetItem(PetItemType),
+    PetItem(PetItem),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -44,42 +44,43 @@ impl WheelReward {
         data: &[i64],
         upgraded: bool,
     ) -> Result<WheelReward, SFError> {
-        use WheelRewardType::*;
         let mut amount = data[1];
         let typ = match data[0] {
             // NOTE: I have only tested 2.0 and infered 1.0 from that
-            0 => Mushrooms,
+            0 => WheelRewardType::Mushrooms,
             1 => match upgraded {
-                true => Arcane,
-                false => Wood,
+                true => WheelRewardType::Arcane,
+                false => WheelRewardType::Wood,
             },
-            2 => ExperienceXL,
+            2 => WheelRewardType::ExperienceXL,
             3 => match upgraded {
                 true => {
                     amount = 1;
-                    PetItem(PetItemType::parse(data[1]).ok_or_else(|| {
-                        SFError::ParsingError(
-                            "pet wheel reward type",
-                            data[1].to_string(),
-                        )
-                    })?)
+                    WheelRewardType::PetItem(
+                        PetItem::parse(data[1]).ok_or_else(|| {
+                            SFError::ParsingError(
+                                "pet wheel reward type",
+                                data[1].to_string(),
+                            )
+                        })?,
+                    )
                 }
-                false => Stone,
+                false => WheelRewardType::Stone,
             },
-            4 => SilverXL,
+            4 => WheelRewardType::SilverXL,
             5 => {
                 // The amount does not seem to do anything.
                 // 1 => equipment
                 // 2 => potion
                 amount = 1;
-                Item
+                WheelRewardType::Item
             }
-            6 => WoodXL,
-            7 => Experience,
-            8 => StoneXL,
+            6 => WheelRewardType::WoodXL,
+            7 => WheelRewardType::Experience,
+            8 => WheelRewardType::StoneXL,
             9 => match upgraded {
-                true => Souls,
-                false => Silver,
+                true => WheelRewardType::Souls,
+                false => WheelRewardType::Silver,
             },
             _ => {
                 return Err(SFError::ParsingError(

@@ -7,7 +7,7 @@ use strum::EnumIter;
 
 use super::{
     unlockables::{EquipmentIdent, PetClass},
-    ArrSkip, CFPGet, Class, SFError, ServerTime,
+    ArrSkip, CFPGet, Class, EnumMapGet, SFError, ServerTime,
 };
 use crate::{
     command::AttributeType,
@@ -208,13 +208,12 @@ impl Item {
         let mut attributes: EnumMap<AttributeType, u32> = EnumMap::default();
         if typ.equipment_slot().is_some() {
             for i in 0..3 {
-                use AttributeType::*;
-                let atr_typ = data[i + 4];
+                let atr_typ = data.cget(i + 4, "item atr typ")?;
                 let Ok(atr_typ) = atr_typ.try_into() else {
                     warn!("Invalid attribute typ: {atr_typ}, {typ:?}");
                     continue;
                 };
-                let atr_val = data[i + 7];
+                let atr_val = data.cget(i + 7, "item atr typ")?;
                 let Ok(atr_val): Result<u32, _> = atr_val.try_into() else {
                     warn!("Invalid attribute value: {atr_val}, {typ:?}");
                     continue;
@@ -227,24 +226,36 @@ impl Item {
                         else {
                             continue;
                         };
-                        attributes[atr_typ] = atr_val;
+                        *attributes.get_mut(atr_typ) = atr_val;
                     }
                     6 => {
                         attributes.as_mut_array().fill(atr_val);
                     }
                     21 => {
-                        for atr in [Strength, Constitution, Luck] {
-                            attributes[atr] = atr_val
+                        for atr in [
+                            AttributeType::Strength,
+                            AttributeType::Constitution,
+                            AttributeType::Luck,
+                        ] {
+                            *attributes.get_mut(atr) = atr_val;
                         }
                     }
                     22 => {
-                        for atr in [Dexterity, Constitution, Luck] {
-                            attributes[atr] = atr_val
+                        for atr in [
+                            AttributeType::Dexterity,
+                            AttributeType::Constitution,
+                            AttributeType::Luck,
+                        ] {
+                            *attributes.get_mut(atr) = atr_val;
                         }
                     }
                     23 => {
-                        for atr in [Intelligence, Constitution, Luck] {
-                            attributes[atr] = atr_val
+                        for atr in [
+                            AttributeType::Intelligence,
+                            AttributeType::Constitution,
+                            AttributeType::Luck,
+                        ] {
+                            *attributes.get_mut(atr) = atr_val;
                         }
                     }
                     rune_typ => {
@@ -252,8 +263,7 @@ impl Item {
                         else {
                             warn!(
                                 "Unhandled item val: {atr_typ} -> {atr_val} \
-                                 for {class:?} {typ:?} price: {}",
-                                data[10] / 100
+                                 for {class:?} {typ:?}",
                             );
                             continue;
                         };
@@ -266,12 +276,16 @@ impl Item {
                 }
             }
         }
-        let model_id = ((data[1] & 0xFFFF) % 1000) as u16;
+        let model_id: u16 =
+            data.cimget(1, "item model id", |x| ((x & 0xFFFF) % 1000))?;
 
         let color = match model_id {
-            ..=49 if typ != ItemType::Talisman => {
-                ((data[2..=9].iter().sum::<i64>() % 5) + 1) as u8
-            }
+            ..=49 if typ != ItemType::Talisman => data
+                .get(2..=9)
+                .map(|a| a.iter().sum::<i64>())
+                .map(|a| (a % 5) + 1)
+                .and_then(|a| a.try_into().ok())
+                .unwrap_or(1),
             _ => 1,
         };
 
@@ -417,7 +431,7 @@ pub enum ItemType {
     },
     Gem(Gem),
     PetItem {
-        typ: PetItemType,
+        typ: PetItem,
     },
     QuickSandGlass,
     HeartOfDarkness,
@@ -443,7 +457,6 @@ impl ItemType {
             self,
             ItemType::Hat
                 | ItemType::Belt
-                | ItemType::Ring
                 | ItemType::Gloves
                 | ItemType::FootWear
                 | ItemType::Shield { .. }
@@ -585,7 +598,7 @@ impl ItemType {
                 ItemType::Gem(gem)
             }
             16 => {
-                let Some(typ) = PetItemType::parse(sub_ident & 0xFFFF) else {
+                let Some(typ) = PetItem::parse(sub_ident & 0xFFFF) else {
                     return unknown_item("pet item");
                 };
                 ItemType::PetItem { typ }
@@ -702,14 +715,18 @@ pub enum ResourceType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A gem, that is either socketed in an item, or
+/// A gem, that is either socketed in an item, or in the inventory
 pub struct Gem {
+    /// The type of gem
     pub typ: GemType,
+    /// The strength of this gem
     pub value: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// The type the gam has
 pub enum GemType {
     Strength,
     Dexterity,
@@ -731,17 +748,16 @@ impl GemType {
         }
 
         // NOTE: id / 10 should be the shape
-        use GemType::*;
         Some(match id % 10 {
-            0 => Strength,
-            1 => Dexterity,
-            2 => Intelligence,
-            3 => Constitution,
-            4 => Luck,
-            5 => All,
+            0 => GemType::Strength,
+            1 => GemType::Dexterity,
+            2 => GemType::Intelligence,
+            3 => GemType::Constitution,
+            4 => GemType::Luck,
+            5 => GemType::All,
             // Just put this here because it makes sense. I only ever see 4 for
             // these
-            6 => Legendary,
+            6 => GemType::Legendary,
             _ => {
                 return None;
             }
@@ -749,8 +765,10 @@ impl GemType {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Enum)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Enum, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// Denotes the place, where an item is equiped
 pub enum EquipmentSlot {
     Hat = 1,
     BreastPlate,
@@ -765,30 +783,30 @@ pub enum EquipmentSlot {
 }
 
 impl EquipmentSlot {
+    /// The value the game internally uses for these slots. No idea, why this is
+    /// pub
+    #[must_use]
     pub fn raw_id(&self) -> u8 {
-        use EquipmentSlot::*;
         match self {
-            Weapon => 1,
-            Shield => 2,
-            BreastPlate => 3,
-            FootWear => 4,
-            Gloves => 5,
-            Hat => 6,
-            Belt => 7,
-            Amulet => 8,
-            Ring => 9,
-            Talisman => 10,
+            EquipmentSlot::Weapon => 1,
+            EquipmentSlot::Shield => 2,
+            EquipmentSlot::BreastPlate => 3,
+            EquipmentSlot::FootWear => 4,
+            EquipmentSlot::Gloves => 5,
+            EquipmentSlot::Hat => 6,
+            EquipmentSlot::Belt => 7,
+            EquipmentSlot::Amulet => 8,
+            EquipmentSlot::Ring => 9,
+            EquipmentSlot::Talisman => 10,
         }
     }
 
     // This is just itemtyp * 10, but whatever
-    pub(crate) fn witch_id(&self) -> u32 {
+    pub(crate) fn witch_id(self) -> u32 {
         match self {
             // Wrong, as there are no shield enchantments, but better than
             // panic/erroring I think
-            EquipmentSlot::Shield => 10,
-
-            EquipmentSlot::Weapon => 10,
+            EquipmentSlot::Shield | EquipmentSlot::Weapon => 10,
             EquipmentSlot::BreastPlate => 30,
             EquipmentSlot::FootWear => 40,
             EquipmentSlot::Gloves => 50,
@@ -803,7 +821,9 @@ impl EquipmentSlot {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum PetItemType {
+#[allow(missing_docs)]
+/// An item useable for pets
+pub enum PetItem {
     Egg(PetClass),
     SpecialEgg(PetClass),
     GoldenEgg,
@@ -811,15 +831,14 @@ pub enum PetItemType {
     Fruit(PetClass),
 }
 
-impl PetItemType {
+impl PetItem {
     pub(crate) fn parse(val: i64) -> Option<Self> {
-        use PetItemType::*;
         Some(match val {
-            1..=5 => Egg(PetClass::from_typ_id(val)?),
-            11..=15 => SpecialEgg(PetClass::from_typ_id(val - 10)?),
-            21 => GoldenEgg,
-            22 => Nest,
-            31..=35 => Fruit(PetClass::from_typ_id(val - 30)?),
+            1..=5 => PetItem::Egg(PetClass::from_typ_id(val)?),
+            11..=15 => PetItem::SpecialEgg(PetClass::from_typ_id(val - 10)?),
+            21 => PetItem::GoldenEgg,
+            22 => PetItem::Nest,
+            31..=35 => PetItem::Fruit(PetClass::from_typ_id(val - 30)?),
             _ => return None,
         })
     }
