@@ -13,7 +13,7 @@ use super::{
     guild::GuildRank,
     items::{Equipment, ItemType},
     unlockables::Mirror,
-    AttributeType, Class, Flag, PotionInfo, Race, SFError, ServerTime,
+    AttributeType, Class, Flag, Potion, Race, SFError, ServerTime,
 };
 use crate::{misc::*, PlayerId};
 
@@ -291,7 +291,7 @@ pub struct OtherPlayer {
 
     /// None if they do not have a scrapbook
     pub scrapbook_count: Option<u32>,
-    pub active_potions: [Option<PotionInfo>; 3],
+    pub active_potions: [Option<Potion>; 3],
     pub armor: u64,
     pub min_damage_base: u32,
     pub max_damage_base: u32,

@@ -12,7 +12,6 @@ use super::{
 use crate::{
     command::AttributeType,
     gamestate::{CCGet, CGet, CSTGet},
-    misc::soft_into,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -191,21 +190,19 @@ impl Item {
         data: &[i64],
         server_time: ServerTime,
     ) -> Result<Option<Self>, SFError> {
-        let typ = match ItemType::parse(data, server_time)? {
-            Some(typ) => typ,
-            None => return Ok(None),
+        let Some(typ) = ItemType::parse(data, server_time)? else {
+            return Ok(None);
         };
 
         let enchantment = data.cfpget(0, "item enchantment", |a| a >> 24)?;
+        let gem_slot_val = data.cimget(0, "gem slot val", |a| a >> 16 & 0xF)?;
+        let gem_pwr = data.cimget(11, "gem pwr", |a| a >> 16)?;
+        let gem_slot = GemSlot::parse(gem_slot_val, gem_pwr);
 
-        let gem_slot = GemSlot::parse(data[0] >> 16 & 0xF, data[11] >> 16);
-
-        let class = match typ {
-            ItemType::Talisman
-            | ItemType::Ring
-            | ItemType::Amulet
-            | ItemType::Shard { .. } => None,
-            _ => FromPrimitive::from_i64((data[1] & 0xFFFF) / 1000),
+        let class = if typ.is_class_item() {
+            data.cfpget(1, "item class", |x| (x & 0xFFFF) / 1000)?
+        } else {
+            None
         };
         let mut rune = None;
         let mut attributes: EnumMap<AttributeType, u32> = EnumMap::default();
@@ -264,7 +261,7 @@ impl Item {
                             warn!("Rune value too big for a u8: {atr_val}");
                             continue;
                         };
-                        rune = Some(Rune { typ, value })
+                        rune = Some(Rune { typ, value });
                     }
                 }
             }
@@ -281,10 +278,10 @@ impl Item {
         let item = Item {
             typ,
             model_id,
-            price: soft_into(data[10], "item price", u32::MAX),
-            mushroom_price: soft_into(data[11], "mushroom price", u32::MAX),
+            price: data.csiget(10, "item price", u32::MAX)?,
+            mushroom_price: data.csiget(11, "mushroom price", u32::MAX)?,
             rune,
-            type_specific_val: soft_into(data[2], "effect value", 0),
+            type_specific_val: data.csiget(2, "effect value", 0)?,
             gem_slot,
             enchantment,
             class,
@@ -377,7 +374,7 @@ impl GemSlot {
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A potion. This is not just itemtype to make active potions easier
-pub struct PotionInfo {
+pub struct Potion {
     /// The rtype of potion
     pub typ: PotionType,
     /// The size of potion
@@ -412,13 +409,13 @@ pub enum ItemType {
     Shard {
         piece: u32,
     },
-    Potion(PotionInfo),
+    Potion(Potion),
     Scrapbook,
     DungeonKey {
         id: u32,
         shadow_key: bool,
     },
-    Gem,
+    Gem(Gem),
     PetItem {
         typ: PetItemType,
     },
@@ -439,6 +436,22 @@ pub enum ItemType {
 }
 
 impl ItemType {
+    /// Checks if this type can only be worn by only a particular class
+    #[must_use]
+    pub fn is_class_item(&self) -> bool {
+        matches!(
+            self,
+            ItemType::Hat
+                | ItemType::Belt
+                | ItemType::Ring
+                | ItemType::Gloves
+                | ItemType::FootWear
+                | ItemType::Shield { .. }
+                | ItemType::Weapon { .. }
+                | ItemType::BreastPlate
+        )
+    }
+
     /// Checks, if this item type is unique. Technically they are not always
     /// unique, as the scrapbook/keys can be sold, but it should be clear
     /// what this is
@@ -478,13 +491,13 @@ impl ItemType {
     pub(crate) fn parse_active_potions(
         data: &[i64],
         server_time: ServerTime,
-    ) -> [Option<PotionInfo>; 3] {
+    ) -> [Option<Potion>; 3] {
         if data.len() < 6 {
             return Default::default();
         }
         #[allow(clippy::indexing_slicing)]
         core::array::from_fn(move |i| {
-            Some(PotionInfo {
+            Some(Potion {
                 typ: PotionType::parse(data[i])?,
                 size: PotionSize::parse(data[i])?,
                 expires: server_time
@@ -504,48 +517,47 @@ impl ItemType {
         };
         let sub_ident = data.cget(1, "item sub type")?;
 
-        use ItemType::*;
         Ok(Some(match raw_typ {
             0 => return Ok(None),
-            1 => Weapon {
+            1 => ItemType::Weapon {
                 min_dmg: data.csiget(2, "weapon min dmg", 0)?,
                 max_dmg: data.csiget(3, "weapon min dmg", 0)?,
             },
-            2 => Shield {
+            2 => ItemType::Shield {
                 block_chance: data.csiget(2, "shield block chance", 0)?,
             },
-            3 => BreastPlate,
-            4 => FootWear,
-            5 => Gloves,
-            6 => Hat,
-            7 => Belt,
-            8 => Amulet,
-            9 => Ring,
-            10 => Talisman,
+            3 => ItemType::BreastPlate,
+            4 => ItemType::FootWear,
+            5 => ItemType::Gloves,
+            6 => ItemType::Hat,
+            7 => ItemType::Belt,
+            8 => ItemType::Amulet,
+            9 => ItemType::Ring,
+            10 => ItemType::Talisman,
             11 => {
                 let id = sub_ident & 0xFFFF;
                 let Ok(id) = id.try_into() else {
                     return unknown_item("unique sub ident");
                 };
                 match id {
-                    1..=11 | 17 | 19 | 22 | 69 | 70 => DungeonKey {
+                    1..=11 | 17 | 19 | 22 | 69 | 70 => ItemType::DungeonKey {
                         id,
                         shadow_key: false,
                     },
-                    20 => ToiletKey,
-                    51..=64 | 67..=68 => DungeonKey {
+                    20 => ItemType::ToiletKey,
+                    51..=64 | 67..=68 => ItemType::DungeonKey {
                         id,
                         shadow_key: true,
                     },
-                    10000 => EpicItemBag,
-                    piece => Shard { piece },
+                    10000 => ItemType::EpicItemBag,
+                    piece => ItemType::Shard { piece },
                 }
             }
             12 if sub_ident > 16 => {
                 let Some(typ) = FromPrimitive::from_i64(sub_ident) else {
                     return unknown_item("resource type");
                 };
-                Resource {
+                ItemType::Resource {
                     amount: data.csiget(7, "resource amount", 0)?,
                     typ,
                 }
@@ -557,60 +569,74 @@ impl ItemType {
                 let Some(size) = PotionSize::parse(sub_ident) else {
                     return unknown_item("potion type");
                 };
-                Potion(PotionInfo {
+                ItemType::Potion(Potion {
                     typ,
                     size,
                     expires: data.cstget(4, "potion expires", server_time)?,
                 })
             }
-            13 => Scrapbook,
-            15 => Gem,
+            13 => ItemType::Scrapbook,
+            15 => {
+                let Some(typ) = GemType::parse(sub_ident) else {
+                    return unknown_item("gem type");
+                };
+                let pwr = data.csimget(11, "gem pwr", 0, |a| a >> 16)?;
+                let gem = Gem { typ, value: pwr };
+                ItemType::Gem(gem)
+            }
             16 => {
                 let Some(typ) = PetItemType::parse(sub_ident & 0xFFFF) else {
                     return unknown_item("pet item");
                 };
-                PetItem { typ }
+                ItemType::PetItem { typ }
             }
-            17 if (sub_ident & 0xFFFF) == 4 => Gral,
-            17 => QuickSandGlass,
-            18 => HeartOfDarkness,
-            19 => WheelOfFortune,
-            20 => Mannequin,
+            17 if (sub_ident & 0xFFFF) == 4 => ItemType::Gral,
+            17 => ItemType::QuickSandGlass,
+            18 => ItemType::HeartOfDarkness,
+            19 => ItemType::WheelOfFortune,
+            20 => ItemType::Mannequin,
             _ => {
                 return unknown_item("main ident");
             }
         }))
     }
 
+    /// The id, that the server has associated with this item. I honestly forgot
+    /// why I have this function public
+    #[must_use]
     pub fn raw_id(&self) -> u8 {
-        use ItemType::*;
         match self {
-            Weapon { .. } => 1,
-            Shield { .. } => 2,
-            BreastPlate => 3,
-            FootWear => 4,
-            Gloves => 5,
-            Hat => 6,
-            Belt => 7,
-            Amulet => 8,
-            Ring => 9,
-            Talisman => 10,
-            Shard { .. } | DungeonKey { .. } | ToiletKey | EpicItemBag => 11,
-            Potion { .. } | Resource { .. } => 12,
-            Scrapbook => 13,
-            Gem => 15,
-            PetItem { .. } => 16,
-            QuickSandGlass | Gral => 17,
-            HeartOfDarkness => 18,
-            WheelOfFortune => 19,
-            Mannequin => 20,
-            Unknown(u) => *u,
+            ItemType::Weapon { .. } => 1,
+            ItemType::Shield { .. } => 2,
+            ItemType::BreastPlate => 3,
+            ItemType::FootWear => 4,
+            ItemType::Gloves => 5,
+            ItemType::Hat => 6,
+            ItemType::Belt => 7,
+            ItemType::Amulet => 8,
+            ItemType::Ring => 9,
+            ItemType::Talisman => 10,
+            ItemType::Shard { .. }
+            | ItemType::DungeonKey { .. }
+            | ItemType::ToiletKey
+            | ItemType::EpicItemBag => 11,
+            ItemType::Potion { .. } | ItemType::Resource { .. } => 12,
+            ItemType::Scrapbook => 13,
+            ItemType::Gem(_) => 15,
+            ItemType::PetItem { .. } => 16,
+            ItemType::QuickSandGlass | ItemType::Gral => 17,
+            ItemType::HeartOfDarkness => 18,
+            ItemType::WheelOfFortune => 19,
+            ItemType::Mannequin => 20,
+            ItemType::Unknown(u) => *u,
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// The effect, that the potion is going to have
 pub enum PotionType {
     Strength,
     Dexterity,
@@ -622,25 +648,26 @@ pub enum PotionType {
 
 impl PotionType {
     pub(crate) fn parse(id: i64) -> Option<PotionType> {
-        use PotionType::*;
         if id == 0 {
             return None;
         }
         if id == 16 {
-            return Some(EternalLife);
+            return Some(PotionType::EternalLife);
         }
         Some(match id % 5 {
-            0 => Luck,
-            1 => Strength,
-            2 => Dexterity,
-            3 => Intelligence,
-            _ => Constitution,
+            0 => PotionType::Luck,
+            1 => PotionType::Strength,
+            2 => PotionType::Dexterity,
+            3 => PotionType::Intelligence,
+            _ => PotionType::Constitution,
         })
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// The size and with that, the strength, that this potion has
 pub enum PotionSize {
     Small,
     Medium,
@@ -650,13 +677,12 @@ pub enum PotionSize {
 impl PotionSize {
     pub(crate) fn parse(id: i64) -> Option<Self> {
         if id == 16 {
-            return Some(Large);
+            return Some(PotionSize::Large);
         }
-        use PotionSize::*;
         Some(match id / 6 {
-            0 => Small,
-            1 => Medium,
-            2 => Large,
+            0 => PotionSize::Small,
+            1 => PotionSize::Medium,
+            2 => PotionSize::Large,
             _ => return None,
         })
     }
@@ -664,6 +690,8 @@ impl PotionSize {
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy, FromPrimitive)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// Differenciates resource items
 pub enum ResourceType {
     Wood = 17,
     Stone,
@@ -674,6 +702,7 @@ pub enum ResourceType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A gem, that is either socketed in an item, or
 pub struct Gem {
     pub typ: GemType,
     pub value: u32,

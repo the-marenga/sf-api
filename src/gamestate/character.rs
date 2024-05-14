@@ -62,7 +62,7 @@ pub struct Character {
     /// stored in it
     pub manequin: Option<Equipment>,
     /// The potions currently active
-    pub active_potions: [Option<PotionInfo>; 3],
+    pub active_potions: [Option<Potion>; 3],
 
     /// The total armor of our character. Basically all equiped armor combined
     pub armor: u64,

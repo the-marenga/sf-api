@@ -37,6 +37,7 @@ pub struct GameState {
 
     /// Information about quests and work
     pub tavern: Tavern,
+    /// The place to fight other players
     pub arena: Arena,
     /// The last fight, that this player was involved in
     pub last_fight: Option<Fight>,
