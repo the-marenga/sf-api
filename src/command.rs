@@ -955,10 +955,15 @@ impl Command {
             BlockGuildInvites { block_invites } => {
                 format!("PlayerSetNoGroupInvite:{}", *block_invites as u8)
             }
-            ShowTips { show_tips } => format!(
-                "PlayerTutorialStatus:{}",
-                if *show_tips { 0 } else { 268435455 }
-            ),
+            ShowTips { show_tips } => {
+                #[allow(clippy::unreadable_literal)]
+                {
+                    format!(
+                        "PlayerTutorialStatus:{}",
+                        if *show_tips { 0 } else { 0xFFFFFFF }
+                    )
+                }
+            }
             ChangePassword { username, old, new } => {
                 let old = sha1_hash(&format!("{}{}", old, HASH_CONST));
                 let new = sha1_hash(&format!("{}{}", new, HASH_CONST));

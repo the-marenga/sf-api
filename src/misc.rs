@@ -194,7 +194,19 @@ pub(crate) trait CCGet<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> {
         pos: usize,
         name: &'static str,
     ) -> Result<Option<I>, SFError>;
+    fn cwimget(
+        &self,
+        pos: usize,
+        name: &'static str,
+        fun: fn(T) -> T,
+    ) -> Result<Option<I>, SFError>;
     fn ciget(&self, pos: usize, name: &'static str) -> Result<I, SFError>;
+    fn cimget(
+        &self,
+        pos: usize,
+        name: &'static str,
+        fun: fn(T) -> T,
+    ) -> Result<I, SFError>;
 }
 
 impl<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> CCGet<T, I> for [T] {
@@ -233,6 +245,29 @@ impl<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> CCGet<T, I> for [T] {
         let raw = raw_cget(self, pos, name)?;
         raw.try_into()
             .map_err(|_| SFError::ParsingError(name, raw.to_string()))
+    }
+
+    fn cimget(
+        &self,
+        pos: usize,
+        name: &'static str,
+        fun: fn(T) -> T,
+    ) -> Result<I, SFError> {
+        let raw = raw_cget(self, pos, name)?;
+        let raw = fun(raw);
+        raw.try_into()
+            .map_err(|_| SFError::ParsingError(name, raw.to_string()))
+    }
+
+    fn cwimget(
+        &self,
+        pos: usize,
+        name: &'static str,
+        fun: fn(T) -> T,
+    ) -> Result<Option<I>, SFError> {
+        let raw = raw_cget(self, pos, name)?;
+        let raw = fun(raw);
+        Ok(warning_try_into(raw, name))
     }
 }
 

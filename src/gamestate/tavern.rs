@@ -3,7 +3,7 @@ use log::error;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use super::{items::Item, ServerTime, WheelReward};
+use super::{items::Item, SFError, ServerTime, WheelReward};
 use crate::{
     command::{DiceReward, DiceType},
     gamestate::rewards::Reward,
@@ -51,7 +51,7 @@ pub struct Tavern {
 }
 
 impl Tavern {
-    pub(crate) fn update(&mut self, data: &[i64], server_time: ServerTime) {
+    pub(crate) fn update(&mut self, data: &[i64], server_time: ServerTime) -> Result<(), SFError>{
         self.current_action = CurrentAction::parse(
             data[45] & 0xFF,
             data[46] & 0xFF,
@@ -63,8 +63,9 @@ impl Tavern {
 
         for (quest_index, start_idx) in (235..=237).enumerate() {
             self.quests[quest_index] =
-                Quest::parse(&data[start_idx..], quest_index, server_time)
+                Quest::parse(&data[start_idx..], quest_index, server_time)?
         }
+        Ok(())
     }
 }
 
@@ -123,18 +124,18 @@ impl Quest {
         data: &[i64],
         quest_index: usize,
         server_time: ServerTime,
-    ) -> Quest {
-        Quest {
+    ) -> Result<Quest, SFError> {
+        Ok(Quest {
             base_length: soft_into(data[6], "quest length", 100_000),
             base_silver: soft_into(data[48], "quest silver", 0),
             base_experience: soft_into(data[45], "quest xp", 0),
-            item: Item::parse(&data[9 + quest_index * 11..], server_time),
+            item: Item::parse(&data[9 + quest_index * 11..], server_time)?,
             location_id: warning_parse(data[3], "quest location id", |a| {
                 FromPrimitive::from_i64(a)
             })
             .unwrap_or_default(),
             monster_id: soft_into(-data[0], "quest monster id", 0),
-        }
+        })
     }
 }
 

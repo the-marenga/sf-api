@@ -40,11 +40,9 @@ pub struct GameState {
     pub arena: Arena,
     /// The last fight, that this player was involved in
     pub last_fight: Option<Fight>,
-    // These are only ever none if an item in there was unable to be read,
-    // which should almost never be the case. Oh, and it makes defaulting this
-    // easy
-    pub weapon_shop: Option<Shop>,
-    pub mage_shop: Option<Shop>,
+
+    pub weapon_shop: Shop,
+    pub mage_shop: Shop,
     /// Everything, that is time sensitive, like events, calendar, etc.
     pub special: Special,
     /// Everything, that the player needs
@@ -63,21 +61,49 @@ const SHOP_N: usize = 6;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Shop(pub [Item; SHOP_N]);
 
+impl Default for Shop {
+    fn default() -> Self {
+        Self(core::array::from_fn(|_| Item {
+            typ: ItemType::Unknown(0),
+            price: u32::MAX,
+            mushroom_price: u32::MAX,
+            model_id: 0,
+            class: None,
+            type_specific_val: 0,
+            attributes: EnumMap::default(),
+            gem_slot: None,
+            rune: None,
+            enchantment: None,
+            color: 0,
+        }))
+    }
+}
+
 impl Shop {
-    pub(crate) fn parse(data: &[i64], server_time: ServerTime) -> Option<Shop> {
+    pub(crate) fn parse(
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<Shop, SFError> {
         // NOTE: I have no idea how to do this safely without multiple map()
         // calls, or a Vec to store them, as you can not return from within the
         // closures used to construct arrays
-        let mut res = from_fn(|_| MaybeUninit::uninit());
+        let mut res: [MaybeUninit<Item>; SHOP_N] =
+            from_fn(|_| MaybeUninit::uninit());
         for (idx, uitem) in res.iter_mut().enumerate() {
-            let item = Item::parse(&data[idx * 12..], server_time)?;
+            let d = data.skip(idx * 12, "shop item")?;
+            let Some(item) = Item::parse(d, server_time)? else {
+                return Err(SFError::ParsingError(
+                    "shop item",
+                    format!("{d:?}"),
+                ));
+            };
             *uitem = MaybeUninit::new(item);
         }
         // SAFETY: res is guaranteed to be init, as we iterate all items in the
         // uninit array and return on error. The input & outputs are strongly
         // typed, so we never transmute the wrong thing here in case Item should
         // ever return the wrong thing, or shop changes
-        Some(Shop(unsafe {
+        Ok(Shop(unsafe {
             std::mem::transmute::<[MaybeUninit<Item>; SHOP_N], [Item; SHOP_N]>(
                 res,
             )
@@ -1288,7 +1314,7 @@ impl GameState {
             server_time.convert_to_local(data[451], "mount end");
 
         for (idx, item) in self.character.inventory.bag.iter_mut().enumerate() {
-            *item = Item::parse(&data[(168 + idx * 12)..], server_time);
+            *item = Item::parse(&data[(168 + idx * 12)..], server_time)?;
         }
 
         if self.character.level >= 25 {
@@ -1306,8 +1332,8 @@ impl GameState {
                 server_time.convert_to_local(a, "next lucky turn")
             });
 
-        self.weapon_shop = Shop::parse(&data[288..], server_time);
-        self.mage_shop = Shop::parse(&data[361..], server_time);
+        self.weapon_shop = Shop::parse(&data[288..], server_time)?;
+        self.mage_shop = Shop::parse(&data[361..], server_time)?;
 
         self.unlocks.mirror = Mirror::parse(data[28]);
         if data[438] >= 10000 {

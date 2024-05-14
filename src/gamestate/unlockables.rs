@@ -64,10 +64,14 @@ pub struct Witch {
 }
 
 impl Witch {
-    pub(crate) fn update(&mut self, data: &[i64], server_time: ServerTime) {
+    pub(crate) fn update(
+        &mut self,
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<(), SFError> {
         self.required_item = None;
         if data[5] == 0 {
-            self.required_item = ItemType::parse(&data[3..], server_time);
+            self.required_item = ItemType::parse(&data[3..], server_time)?;
         }
         if self.required_item.is_none() {
             self.cauldron_bubbling = true;
@@ -106,6 +110,7 @@ impl Witch {
                 self.enchant_roles.push((key, i + 1));
             }
         }
+        Ok(())
     }
 }
 

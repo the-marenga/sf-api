@@ -3,14 +3,16 @@ use enum_map::{Enum, EnumMap};
 use log::{error, warn};
 use num::FromPrimitive;
 use num_derive::FromPrimitive;
+use strum::EnumIter;
 
 use super::{
     unlockables::{EquipmentIdent, PetClass},
-    ArrSkip, Class, SFError, ServerTime,
+    ArrSkip, CFPGet, Class, SFError, ServerTime,
 };
 use crate::{
     command::AttributeType,
-    misc::{soft_into, warning_parse, warning_try_into},
+    gamestate::{CCGet, CGet, CSTGet},
+    misc::soft_into,
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -29,10 +31,10 @@ impl Inventory {
         &mut self,
         data: &[i64],
         server_time: ServerTime,
-    ) {
+    ) -> Result<(), SFError> {
         self.fortress_chest = None;
         if data.is_empty() {
-            return;
+            return Ok(());
         }
         if data.len() % 12 != 0 {
             error!("Wrong fortess chest response size:  {data:?}");
@@ -40,12 +42,13 @@ impl Inventory {
         self.fortress_chest = Some(
             data.chunks_exact(12)
                 .map(|a| Item::parse(a, server_time))
-                .collect(),
+                .collect::<Result<Vec<_>, SFError>>()?,
         );
+        Ok(())
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 /// All the parts of `ItemPosition`, that are owned by the player
@@ -68,7 +71,7 @@ impl InventoryType {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// All positions, that items can be dragged to excluding companions
 pub enum ItemPosition {
@@ -98,7 +101,7 @@ impl Equipment {
         let mut res = Equipment::default();
         for (idx, map_val) in res.0.as_mut_slice().iter_mut().enumerate() {
             *map_val =
-                Item::parse(data.skip(idx * 12, "equipment")?, server_time);
+                Item::parse(data.skip(idx * 12, "equipment")?, server_time)?;
         }
         Ok(res)
     }
@@ -106,6 +109,8 @@ impl Equipment {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Information about a single item. This can be anything, that is either in a
+/// inventory, in a reward slot, or similar
 pub struct Item {
     /// The type of this  item. May contain further type specific values
     pub typ: ItemType,
@@ -113,7 +118,7 @@ pub struct Item {
     pub price: u32,
     /// The price you would have to pay for this item. Note that this value is
     /// junk for other players and potentially in other cases, where you should
-    /// not be able to se a price
+    /// not be able to see a price
     pub mushroom_price: u32,
     /// The model id of this item
     pub model_id: u16,
@@ -152,20 +157,27 @@ impl Item {
 
     /// Checks, if this item is unique. Technically they are not always unique,
     /// as the scrapbook/keys can be sold, but it should be clear what this is
+    #[must_use]
     pub fn is_unique(&self) -> bool {
         self.typ.is_unique()
     }
 
+    /// Checks if this item is an epic
+    #[must_use]
     pub fn is_epic(&self) -> bool {
         self.model_id >= 50
     }
 
+    /// Checks if this item is a legendary
+    #[must_use]
     pub fn is_legendary(&self) -> bool {
         self.model_id >= 90
     }
 
     /// The armor rating of this item. This is just the `effect_val`, if any
+    #[must_use]
     pub fn armor(&self) -> u32 {
+        #[allow(clippy::enum_glob_use)]
         use ItemType::*;
         match self.typ {
             Hat | BreastPlate | Gloves | FootWear | Amulet | Belt | Ring
@@ -175,14 +187,16 @@ impl Item {
     }
 
     /// Parses an item, that starts at the start of the given data
-    pub(crate) fn parse(data: &[i64], server_time: ServerTime) -> Option<Self> {
-        if data.len() < 12 {
-            warn!("Invalid item length");
-            return None;
-        }
-        let typ = ItemType::parse(data, server_time)?;
+    pub(crate) fn parse(
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<Option<Self>, SFError> {
+        let typ = match ItemType::parse(data, server_time)? {
+            Some(typ) => typ,
+            None => return Ok(None),
+        };
 
-        let enchantment = FromPrimitive::from_i64(data[0] >> 24);
+        let enchantment = data.cfpget(0, "item enchantment", |a| a >> 24)?;
 
         let gem_slot = GemSlot::parse(data[0] >> 16 & 0xF, data[11] >> 16);
 
@@ -277,33 +291,49 @@ impl Item {
             attributes,
             color,
         };
-        Some(item)
+        Ok(Some(item))
     }
 }
 
-#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, EnumIter, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A enchantment, that gives a bonus to an aspect, if the item
 pub enum Enchantment {
+    /// Increased crit damage
     SwordOfVengeance = 11,
+    /// Finds more mushrooms
     MariosBeard = 32,
+    /// Shortens travel time
     ManyFeetBoots = 41,
+    /// Increased reaction score in combat
     ShadowOfTheCowboy = 51,
+    /// Extra XP on expeditions
     AdventurersArchaeologicalAura = 61,
+    /// Allows an extra beer
     ThirstyWanderer = 71,
+    /// Find items at paths edge (expeditions) more often
     UnholyAcquisitiveness = 81,
+    /// Find extra gold on expeditions
     TheGraveRobbersPrayer = 91,
+    /// Increase the chance of loot against other players
     RobberBaronRitual = 101,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A rune, which has both a type and a strength
 pub struct Rune {
+    /// The type of tune this is
     pub typ: RuneType,
+    /// The "strength" of this rune. So a value like 50 here and a typ of
+    /// `FireResistance` would mean 50% fire resistence
     pub value: u8,
 }
 
-#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, EnumIter, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// The effect of a rune
 pub enum RuneType {
     QuestGold = 31,
     EpicChance,
@@ -321,8 +351,11 @@ pub enum RuneType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A gem slot for an item
 pub enum GemSlot {
+    /// This gemslot has been filled and can only be emptied by the blacksmith
     Filled(Gem),
+    /// A gem can be inserted into this item
     Empty,
 }
 
@@ -343,14 +376,23 @@ impl GemSlot {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct PotionData {
+/// A potion. This is not just itemtype to make active potions easier
+pub struct PotionInfo {
+    /// The rtype of potion
     pub typ: PotionType,
+    /// The size of potion
     pub size: PotionSize,
+    /// The time at which this potion expires. If this is none, the time is not
+    /// known. This can happen for other players
     pub expires: Option<DateTime<Local>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// Identifies a specifix item and contains all values related to the specific
+/// type. The only thing missing is armor, which can be found as a method on
+/// `Item`
 pub enum ItemType {
     Hat,
     BreastPlate,
@@ -370,7 +412,7 @@ pub enum ItemType {
     Shard {
         piece: u32,
     },
-    Potion(PotionData),
+    Potion(PotionInfo),
     Scrapbook,
     DungeonKey {
         id: u32,
@@ -416,19 +458,19 @@ impl ItemType {
     }
 
     /// The equipment slot, that this item type can be equiped to
+    #[must_use]
     pub fn equipment_slot(&self) -> Option<EquipmentSlot> {
-        use EquipmentSlot::*;
         Some(match self {
-            ItemType::Hat => Hat,
-            ItemType::BreastPlate => BreastPlate,
-            ItemType::Gloves => Gloves,
-            ItemType::FootWear => FootWear,
-            ItemType::Weapon { .. } => Weapon,
-            ItemType::Amulet => Amulet,
-            ItemType::Belt => Belt,
-            ItemType::Ring => Ring,
-            ItemType::Talisman => Talisman,
-            ItemType::Shield { .. } => Shield,
+            ItemType::Hat => EquipmentSlot::Hat,
+            ItemType::BreastPlate => EquipmentSlot::BreastPlate,
+            ItemType::Gloves => EquipmentSlot::Gloves,
+            ItemType::FootWear => EquipmentSlot::FootWear,
+            ItemType::Weapon { .. } => EquipmentSlot::Weapon,
+            ItemType::Amulet => EquipmentSlot::Amulet,
+            ItemType::Belt => EquipmentSlot::Belt,
+            ItemType::Ring => EquipmentSlot::Ring,
+            ItemType::Talisman => EquipmentSlot::Talisman,
+            ItemType::Shield { .. } => EquipmentSlot::Shield,
             _ => return None,
         })
     }
@@ -436,9 +478,13 @@ impl ItemType {
     pub(crate) fn parse_active_potions(
         data: &[i64],
         server_time: ServerTime,
-    ) -> [Option<PotionData>; 3] {
-        [0, 1, 2].map(move |i| {
-            Some(PotionData {
+    ) -> [Option<PotionInfo>; 3] {
+        if data.len() < 6 {
+            return Default::default();
+        }
+        #[allow(clippy::indexing_slicing)]
+        core::array::from_fn(move |i| {
+            Some(PotionInfo {
                 typ: PotionType::parse(data[i])?,
                 size: PotionSize::parse(data[i])?,
                 expires: server_time
@@ -447,16 +493,26 @@ impl ItemType {
         })
     }
 
-    pub(crate) fn parse(data: &[i64], server_time: ServerTime) -> Option<Self> {
+    pub(crate) fn parse(
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<Option<Self>, SFError> {
+        let raw_typ: u8 = data.csimget(0, "item type", 255, |a| a & 0xFF)?;
+        let unknown_item = |name: &'static str| {
+            warn!("Could no parse item of type: {raw_typ}. {name} is faulty");
+            Ok(Some(ItemType::Unknown(raw_typ)))
+        };
+        let sub_ident = data.cget(1, "item sub type")?;
+
         use ItemType::*;
-        Some(match data[0] & 0xFF {
-            0 => return None,
+        Ok(Some(match raw_typ {
+            0 => return Ok(None),
             1 => Weapon {
-                min_dmg: soft_into(data[2], "weapon min dmg", 0),
-                max_dmg: soft_into(data[3], "weapon min dmg", 0),
+                min_dmg: data.csiget(2, "weapon min dmg", 0)?,
+                max_dmg: data.csiget(3, "weapon min dmg", 0)?,
             },
             2 => Shield {
-                block_chance: soft_into(data[2], "shield block chance", 0),
+                block_chance: data.csiget(2, "shield block chance", 0)?,
             },
             3 => BreastPlate,
             4 => FootWear,
@@ -467,73 +523,63 @@ impl ItemType {
             9 => Ring,
             10 => Talisman,
             11 => {
-                let unique_id =
-                    warning_try_into(data[1] & 0xFFFF, "unique id")?;
-                match unique_id {
+                let id = sub_ident & 0xFFFF;
+                let Ok(id) = id.try_into() else {
+                    return unknown_item("unique sub ident");
+                };
+                match id {
                     1..=11 | 17 | 19 | 22 | 69 | 70 => DungeonKey {
-                        id: unique_id,
+                        id,
                         shadow_key: false,
                     },
                     20 => ToiletKey,
                     51..=64 | 67..=68 => DungeonKey {
-                        id: unique_id,
+                        id,
                         shadow_key: true,
                     },
                     10000 => EpicItemBag,
-                    _ => Shard { piece: unique_id },
+                    piece => Shard { piece },
+                }
+            }
+            12 if sub_ident > 16 => {
+                let Some(typ) = FromPrimitive::from_i64(sub_ident) else {
+                    return unknown_item("resource type");
+                };
+                Resource {
+                    amount: data.csiget(7, "resource amount", 0)?,
+                    typ,
                 }
             }
             12 => {
-                if data[1] > 16 {
-                    Resource {
-                        amount: soft_into(data[7], "resource amount", 0),
-                        typ: warning_parse(
-                            data[1],
-                            "resource type",
-                            FromPrimitive::from_i64,
-                        )?,
-                    }
-                } else {
-                    Potion(PotionData {
-                        typ: warning_parse(
-                            data[1],
-                            "potion type",
-                            PotionType::parse,
-                        )?,
-                        size: warning_parse(
-                            data[1],
-                            "potion size",
-                            PotionSize::parse,
-                        )?,
-                        expires: server_time
-                            .convert_to_local(data[4], "potion expires"),
-                    })
-                }
+                let Some(typ) = PotionType::parse(sub_ident) else {
+                    return unknown_item("potion type");
+                };
+                let Some(size) = PotionSize::parse(sub_ident) else {
+                    return unknown_item("potion type");
+                };
+                Potion(PotionInfo {
+                    typ,
+                    size,
+                    expires: data.cstget(4, "potion expires", server_time)?,
+                })
             }
             13 => Scrapbook,
             15 => Gem,
-            16 => PetItem {
-                typ: warning_parse(
-                    data[1] & 0xFFFF,
-                    "pet item typ",
-                    PetItemType::parse,
-                )?,
-            },
-            17 => {
-                if (data[1] & 0xFFFF) == 4 {
-                    Gral
-                } else {
-                    QuickSandGlass
-                }
+            16 => {
+                let Some(typ) = PetItemType::parse(sub_ident & 0xFFFF) else {
+                    return unknown_item("pet item");
+                };
+                PetItem { typ }
             }
+            17 if (sub_ident & 0xFFFF) == 4 => Gral,
+            17 => QuickSandGlass,
             18 => HeartOfDarkness,
             19 => WheelOfFortune,
             20 => Mannequin,
-            x => {
-                error!("Unknown item typ id {x}");
-                Unknown(x.try_into().unwrap_or(0))
+            _ => {
+                return unknown_item("main ident");
             }
-        })
+        }))
     }
 
     pub fn raw_id(&self) -> u8 {
