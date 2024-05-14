@@ -45,7 +45,7 @@ pub struct GameState {
     pub weapon_shop: Shop,
     pub mage_shop: Shop,
     /// Everything, that is time sensitive, like events, calendar, etc.
-    pub special: Special,
+    pub special: TimedSpecials,
     /// Everything, that the player needs
     pub unlocks: Unlockables,
     //  pub idle_game: Option<IdleGame>,
@@ -200,11 +200,11 @@ impl GameState {
                     .name
                     .set(val.as_str()),
                 "tavernspecialsub" => {
-                    self.special.events.clear();
+                    self.special.events.active.clear();
                     let flags = val.into::<i32>("tavern special sub")?;
                     for (idx, event) in Event::iter().enumerate() {
                         if (flags & (1 << idx)) > 0 {
-                            self.special.events.insert(event);
+                            self.special.events.active.insert(event);
                         }
                     }
                 }
@@ -212,7 +212,7 @@ impl GameState {
                     self.character.inventory.update_fortress_chest(
                         &val.into_list("fortress chest")?,
                         server_time,
-                    );
+                    )?;
                 }
                 "owntower" => {
                     let data = val.into_list("tower")?;
@@ -223,13 +223,13 @@ impl GameState {
 
                     for (i, class) in CompanionClass::iter().enumerate() {
                         let comp_start = 3 + i * 148;
-                        companions[class].level = data[comp_start];
-                        companions[class].equipment = Equipment::parse(
+                        companions.get_mut(class).level = data[comp_start];
+                        companions.get_mut(class).equipment = Equipment::parse(
                             &data[(comp_start + 22)..],
                             server_time,
                         )?;
                         update_enum_map(
-                            &mut companions[class].attributes,
+                            &mut companions.get_mut(class).attributes,
                             &data[(comp_start + 4)..],
                         )
                     }
@@ -237,7 +237,7 @@ impl GameState {
                     self.unlocks
                         .underworld
                         .get_or_insert_with(Default::default)
-                        .update(&data, server_time);
+                        .update(&data, server_time)?;
                 }
                 "owngrouprank" => {
                     self.unlocks
@@ -366,7 +366,7 @@ impl GameState {
                         .update(&val.into_list("portal progress")?);
                 }
                 "tavernspecialend" => {
-                    self.special.events_ends = server_time
+                    self.special.events.ends = server_time
                         .convert_to_local(val.into("event end")?, "event end");
                 }
                 "owntowerlevel" => {
@@ -495,7 +495,7 @@ impl GameState {
                     let upgraded = self.character.level >= 95
                         && self.unlocks.pet_collection.is_some()
                         && self.unlocks.underworld.is_some();
-                    self.tavern.wheel_result = Some(WheelReward::parse(
+                    self.special.wheel.result = Some(WheelReward::parse(
                         &val.into_list("wheel result")?,
                         upgraded,
                     )?);
@@ -523,14 +523,10 @@ impl GameState {
                     // This is twice in the original response.
                     // This API sucks LMAO
                     let data: Vec<i64> = val.into_list("calendar")?;
-                    self.special.calendar.clear();
+                    self.special.calendar.rewards.clear();
                     for p in data.chunks_exact(2) {
-                        if let Some(reward) = CalendarReward::parse(p) {
-                            self.special.calendar.push(reward)
-                        } else {
-                            warn!("Could not parse calendar value: {p:?}");
-                            break;
-                        }
+                        let reward = CalendarReward::parse(p)?;
+                        self.special.calendar.rewards.push(reward);
                     }
                 }
                 "othergroupattack" => {
@@ -732,12 +728,12 @@ impl GameState {
                     }
                 }
                 "gamblegoldvalue" => {
-                    self.special.gamble_result = Some(
+                    self.tavern.gamble_result = Some(
                         GambleResult::SilverChange(val.into("gold gamble")?),
                     );
                 }
                 "gamblecoinvalue" => {
-                    self.special.gamble_result = Some(
+                    self.tavern.gamble_result = Some(
                         GambleResult::MushroomChange(val.into("gold gamble")?),
                     );
                 }
@@ -798,7 +794,7 @@ impl GameState {
                     for (chunk, chest) in val
                         .into_list("event task reward preview")?
                         .chunks_exact(5)
-                        .zip(&mut self.special.daily_quest_rewards)
+                        .zip(&mut self.special.tasks.daily.rewards)
                     {
                         *chest = RewardChest::parse(chunk)
                     }
@@ -946,56 +942,46 @@ impl GameState {
                 }
                 "eventtasklist" => {
                     let data: Vec<i64> = val.into_list("etl")?;
-                    self.special.event_tasks.clear();
+                    self.special.tasks.event.tasks.clear();
                     for c in data.chunks_exact(4) {
-                        match EventTask::parse(c) {
-                            Some(x) => self.special.event_tasks.push(x),
-                            None => {
-                                warn!(
-                                    "Could not parse {c:?} into an event task"
-                                )
-                            }
-                        }
+                        let task = EventTask::parse(c)?;
+                        self.special.tasks.event.tasks.push(task);
                     }
                 }
                 "eventtaskrewardpreview" => {
                     let data: Vec<i64> =
                         val.into_list("event task reward preview")?;
 
-                    self.special.event_tasks_rewards[0] =
+                    self.special.tasks.event.rewards[0] =
                         RewardChest::parse(&data[0..5]);
-                    self.special.event_tasks_rewards[1] =
+                    self.special.tasks.event.rewards[1] =
                         RewardChest::parse(&data[5..10]);
-                    self.special.event_tasks_rewards[2] =
+                    self.special.tasks.event.rewards[2] =
                         RewardChest::parse(&data[10..]);
                 }
                 "dailytasklist" => {
                     let data: Vec<i64> = val.into_list("daily tasks list")?;
-                    self.special.daily_quests.clear();
+                    self.special.tasks.daily.tasks.clear();
 
                     // I think the first value here is the amount of > 1 bell
                     // quests
                     for d in data[1..].chunks_exact(4) {
-                        match DailyQuest::parse(d) {
-                            Some(d) => self.special.daily_quests.push(d),
-                            None => {
-                                warn!("Bad daily quest: {d:?}");
-                                continue;
-                            }
-                        }
+                        self.special
+                            .tasks
+                            .daily
+                            .tasks
+                            .push(DailyTask::parse(d)?);
                     }
                 }
                 "eventtaskinfo" => {
                     let data: Vec<i64> = val.into_list("eti")?;
-                    self.special.event_task_typ = warning_parse(
-                        data[2],
-                        "event task typ",
-                        FromPrimitive::from_i64,
-                    );
-                    self.special.event_task_start =
-                        server_time.convert_to_local(data[0], "event t start");
-                    self.special.event_task_end =
-                        server_time.convert_to_local(data[1], "event t end");
+                    self.special.tasks.event.theme = data
+                        .cfpget(2, "event task typ", |a| a)?
+                        .unwrap_or(EventTaskTheme::Unknown);
+                    self.special.tasks.event.start =
+                        data.cstget(0, "event t start", server_time)?;
+                    self.special.tasks.event.end =
+                        data.cstget(1, "event t end", server_time)?;
                 }
                 "scrapbook" => {
                     self.unlocks.scrapbok = ScrapBook::parse(val.as_str());
@@ -1011,7 +997,7 @@ impl GameState {
                     for msg in data.split(';').filter(|a| !a.trim().is_empty())
                     {
                         if let Some(msg) = InboxEntry::parse(msg, server_time) {
-                            self.other_players.inbox.push(msg)
+                            self.other_players.inbox.push(msg);
                         };
                     }
                 }
@@ -1326,9 +1312,8 @@ impl GameState {
 
         self.character.active_potions =
             ItemType::parse_active_potions(&data[493..], server_time);
-        self.character.wheel_spins_today =
-            soft_into(data[579], "lucky turns", 0);
-        self.character.wheel_next_free_spin =
+        self.special.wheel.spins_today = soft_into(data[579], "lucky turns", 0);
+        self.special.wheel.next_free_spin =
             warning_parse(data[580], "next lucky turn", |a| {
                 server_time.convert_to_local(a, "next lucky turn")
             });
@@ -1396,7 +1381,7 @@ impl GameState {
         self.character.druid_mask = FromPrimitive::from_i64(data[653]);
         self.character.bard_instrument = FromPrimitive::from_i64(data[701]);
 
-        self.special.calendar_next_possible =
+        self.special.calendar.next_possible =
             server_time.convert_to_local(data[649], "calendar next");
         self.tavern.dice_games_next_free =
             server_time.convert_to_local(data[650], "dice next");
@@ -1423,7 +1408,7 @@ impl GameState {
         self.tavern.quicksand_glasses =
             soft_into(res[4], "quicksand glass count", 0);
 
-        self.character.lucky_coins = soft_into(res[3], "lucky coins", 0);
+        self.special.wheel.lucky_coins = soft_into(res[3], "lucky coins", 0);
         let bs = self.unlocks.blacksmith.get_or_insert_with(Default::default);
         bs.metal = soft_into(res[9], "bs metal", 0);
         bs.arcane = soft_into(res[10], "bs arcane", 0);

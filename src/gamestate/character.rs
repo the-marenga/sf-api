@@ -87,13 +87,6 @@ pub struct Character {
     pub mount_end: Option<DateTime<Local>>,
     /// The silver you get for buying a dragon
     pub mount_dragon_refund: u64,
-
-    /// The amount of lucky coins you have to spin the weel
-    pub lucky_coins: u32,
-    /// The amount of times you have spun the wheel today already (0 -> 20)
-    pub wheel_spins_today: u8,
-    /// The next time you can spin the wheel for free
-    pub wheel_next_free_spin: Option<DateTime<Local>>,
 }
 
 /// All the exclusively cosmetic info necessary to build a player image, that is

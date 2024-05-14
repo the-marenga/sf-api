@@ -3,7 +3,7 @@ use log::error;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use super::{items::Item, SFError, ServerTime, WheelReward};
+use super::{items::Item, SFError, ServerTime};
 use crate::{
     command::{DiceReward, DiceType},
     gamestate::rewards::Reward,
@@ -40,18 +40,22 @@ pub struct Tavern {
     /// Whatever we won in the dice game
     pub dice_reward: Option<DiceReward>,
 
-    pub wheel_result: Option<WheelReward>,
-
     pub expedition_start: Option<DateTime<Local>>,
     pub expedition_end: Option<DateTime<Local>>,
 
     pub expeditions: Option<[ExpeditionInfo; 2]>,
 
     pub expedition: Option<Expedition>,
+
+    pub gamble_result: Option<GambleResult>,
 }
 
 impl Tavern {
-    pub(crate) fn update(&mut self, data: &[i64], server_time: ServerTime) -> Result<(), SFError>{
+    pub(crate) fn update(
+        &mut self,
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<(), SFError> {
         self.current_action = CurrentAction::parse(
             data[45] & 0xFF,
             data[46] & 0xFF,
@@ -318,4 +322,11 @@ pub struct ExpeditionInfo {
     // No idea how these work
     pub(crate) location1_id: i64,
     pub(crate) location2_id: i64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum GambleResult {
+    SilverChange(i64),
+    MushroomChange(i32),
 }

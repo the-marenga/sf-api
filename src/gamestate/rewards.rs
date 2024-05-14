@@ -7,15 +7,20 @@ use num_traits::FromPrimitive;
 
 use super::{
     character::Class, items::*, tavern::QuestLocation, unlockables::PetClass,
+    CCGet, CGet,
 };
 use crate::{
     command::AttributeType,
     error::SFError,
-    misc::{soft_into, warning_parse, warning_try_into},
+    misc::{soft_into, warning_parse},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+#[allow(missing_docs)]
+/// The type of a reward you can win by spinning the wheel. The wheel can be
+/// upgraded, so some rewards may not always eb available
 pub enum WheelRewardType {
     Mushrooms,
     Stone,
@@ -30,12 +35,16 @@ pub enum WheelRewardType {
     Souls,
     Item,
     PetItem(PetItem),
+    Unknown,
 }
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The thing you won from spinning the wheel
 pub struct WheelReward {
+    /// The type of item you have won
     pub typ: WheelRewardType,
+    /// The amount of the type you have won
     pub amount: i64,
 }
 
@@ -44,29 +53,35 @@ impl WheelReward {
         data: &[i64],
         upgraded: bool,
     ) -> Result<WheelReward, SFError> {
-        let mut amount = data[1];
-        let typ = match data[0] {
-            // NOTE: I have only tested 2.0 and infered 1.0 from that
+        let raw_typ = data.cget(0, "wheel reward typ")?;
+        let mut amount = data.cget(1, "wheel reward amount")?;
+        // NOTE: I have only tested upgraded and infered not upgraded from that
+        let typ = match raw_typ {
             0 => WheelRewardType::Mushrooms,
-            1 => match upgraded {
-                true => WheelRewardType::Arcane,
-                false => WheelRewardType::Wood,
-            },
+            1 => {
+                if upgraded {
+                    WheelRewardType::Arcane
+                } else {
+                    WheelRewardType::Wood
+                }
+            }
             2 => WheelRewardType::ExperienceXL,
-            3 => match upgraded {
-                true => {
-                    amount = 1;
-                    WheelRewardType::PetItem(
-                        PetItem::parse(data[1]).ok_or_else(|| {
+            3 => {
+                if upgraded {
+                    let res = WheelRewardType::PetItem(
+                        PetItem::parse(amount).ok_or_else(|| {
                             SFError::ParsingError(
                                 "pet wheel reward type",
-                                data[1].to_string(),
+                                amount.to_string(),
                             )
                         })?,
-                    )
+                    );
+                    amount = 1;
+                    res
+                } else {
+                    WheelRewardType::Stone
                 }
-                false => WheelRewardType::Stone,
-            },
+            }
             4 => WheelRewardType::SilverXL,
             5 => {
                 // The amount does not seem to do anything.
@@ -78,15 +93,16 @@ impl WheelReward {
             6 => WheelRewardType::WoodXL,
             7 => WheelRewardType::Experience,
             8 => WheelRewardType::StoneXL,
-            9 => match upgraded {
-                true => WheelRewardType::Souls,
-                false => WheelRewardType::Silver,
-            },
-            _ => {
-                return Err(SFError::ParsingError(
-                    "unknown wheel reward type",
-                    data[0].to_string(),
-                ))
+            9 => {
+                if upgraded {
+                    WheelRewardType::Souls
+                } else {
+                    WheelRewardType::Silver
+                }
+            }
+            x => {
+                warn!("unknown wheel reward type: {x}");
+                WheelRewardType::Unknown
             }
         };
         Ok(WheelReward { typ, amount })
@@ -95,15 +111,20 @@ impl WheelReward {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A possible reward on the calendar
 pub struct CalendarReward {
     /// Note that this is technically correct, but at low levels, these are
     /// often overwritten to silver
+    // FIXME: figure out how exactly
     pub typ: CalendarRewardType,
+    /// The mount of the type this reward yielded
     pub amount: i64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// The type of reward gainable by collecting the calendar
 pub enum CalendarRewardType {
     Silver,
     Mushrooms,
@@ -120,85 +141,189 @@ pub enum CalendarRewardType {
     Potion(PotionType),
     TenQuicksandGlasses,
     LevelUp,
+    Unknown,
 }
 
 impl CalendarReward {
-    pub(crate) fn parse(data: &[i64]) -> Option<CalendarReward> {
-        use CalendarRewardType::*;
-        let amount = data[1];
-        let typ = match data[0] {
-            1 => Silver,
-            2 => Mushrooms,
-            3 => Experience,
-            4 => Wood,
-            5 => Stone,
-            6 => Souls,
-            7 => Arcane,
-            8 => Runes,
-            10 => Item,
-            11 => Attribute(AttributeType::Intelligence),
-            12 => Attribute(AttributeType::Dexterity),
-            13 => Attribute(AttributeType::Intelligence),
-            14 => Attribute(AttributeType::Constitution),
-            15 => Attribute(AttributeType::Luck),
-            16..=20 => Fruit(PetClass::from_typ_id(data[0] - 15)?),
-            21 => LevelUp,
-            22 => Potion(PotionType::EternalLife),
-            23 => TenQuicksandGlasses,
-            24 => Potion(PotionType::Strength),
-            25 => Potion(PotionType::Dexterity),
-            26 => Potion(PotionType::Intelligence),
-            27 => Potion(PotionType::Constitution),
-            28 => Potion(PotionType::Luck),
+    pub(crate) fn parse(data: &[i64]) -> Result<CalendarReward, SFError> {
+        let amount = data.cget(1, "c reward amount")?;
+        let typ = data.cget(0, "c reward typ")?;
+        let typ = match typ {
+            1 => CalendarRewardType::Silver,
+            2 => CalendarRewardType::Mushrooms,
+            3 => CalendarRewardType::Experience,
+            4 => CalendarRewardType::Wood,
+            5 => CalendarRewardType::Stone,
+            6 => CalendarRewardType::Souls,
+            7 => CalendarRewardType::Arcane,
+            8 => CalendarRewardType::Runes,
+            10 => CalendarRewardType::Item,
+            11 => CalendarRewardType::Attribute(AttributeType::Strength),
+            12 => CalendarRewardType::Attribute(AttributeType::Dexterity),
+            13 => CalendarRewardType::Attribute(AttributeType::Intelligence),
+            14 => CalendarRewardType::Attribute(AttributeType::Constitution),
+            15 => CalendarRewardType::Attribute(AttributeType::Luck),
+            x @ 16..=20 => {
+                if let Some(typ) = PetClass::from_typ_id(x - 15) {
+                    CalendarRewardType::Fruit(typ)
+                } else {
+                    warn!("unknown pet class in c rewards");
+                    CalendarRewardType::Unknown
+                }
+            }
+            21 => CalendarRewardType::LevelUp,
+            22 => CalendarRewardType::Potion(PotionType::EternalLife),
+            23 => CalendarRewardType::TenQuicksandGlasses,
+            24 => CalendarRewardType::Potion(PotionType::Strength),
+            25 => CalendarRewardType::Potion(PotionType::Dexterity),
+            26 => CalendarRewardType::Potion(PotionType::Intelligence),
+            27 => CalendarRewardType::Potion(PotionType::Constitution),
+            28 => CalendarRewardType::Potion(PotionType::Luck),
             x => {
                 warn!("Unknown calendar reward: {x}");
-                return None;
+                CalendarRewardType::Unknown
             }
         };
 
-        Some(CalendarReward { typ, amount })
+        Ok(CalendarReward { typ, amount })
     }
 }
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Special {
+/// Everything, that changes over time
+pub struct TimedSpecials {
     /// All of the events active in the tavern
-    pub events: HashSet<Event>,
-    /// The time at which all of the events end. Mostly just Sunday 23:59.
-    pub events_ends: Option<DateTime<Local>>,
-
-    pub event_task_end: Option<DateTime<Local>>,
-    pub event_task_start: Option<DateTime<Local>>,
-
-    /// I do not know if this is even correct, or if there are > 1 possible
-    pub(crate) event_task_typ: Option<EventTaskSetting>,
-
-    pub event_tasks: Vec<EventTask>,
-    pub event_tasks_rewards: [RewardChest; 3],
-
-    pub daily_quests: Vec<DailyQuest>,
-    pub daily_quest_rewards: [RewardChest; 3],
-
-    pub calendar: Vec<CalendarReward>,
-    /// The time at which the calendar door wll be unlocked. If this is in the
-    /// past, that means it is available to open
-    pub calendar_next_possible: Option<DateTime<Local>>,
-
-    pub gamble_result: Option<GambleResult>,
+    pub events: Events,
+    /// The stuff you can do for bonus rewards
+    pub tasks: Tasks,
+    /// Grants rewards once a day
+    pub calendar: Calendar,
+    /// Dr. Abawuwu's wheel
+    pub wheel: Wheel,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum GambleResult {
-    SilverChange(i64),
-    MushroomChange(i32),
+/// Information about the events active in the tavern
+pub struct Events {
+    /// All of the events active in the tavern
+    pub active: HashSet<Event>,
+    /// The time at which all of the events end. Mostly just Sunday 23:59.
+    pub ends: Option<DateTime<Local>>,
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[doc(alias = "DailyLoginBonus")]
+/// Grants rewards once a day
+pub struct Calendar {
+    /// The things you can get from the calendar
+    pub rewards: Vec<CalendarReward>,
+    /// The time at which the calendar door wll be unlocked. If this is in the
+    /// past, that means it is available to open
+    pub next_possible: Option<DateTime<Local>>,
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The tasks you get from the goblin gleeman
+pub struct Tasks {
+    /// The tasks, that update daily
+    pub daily: DailyTasks,
+    /// The tasks, that follow some server wide theme
+    pub event: EventTasks,
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Information about the tasks, that reset every day
+pub struct DailyTasks {
+    /// The tasks you have to do
+    pub tasks: Vec<DailyTask>,
+    /// The rewards available for completing tasks.
+    pub rewards: [RewardChest; 3],
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Information about the tasks, that are based on some event theme
+pub struct EventTasks {
+    /// The "theme" the event task has. This is mainly irrelevant
+    pub theme: EventTaskTheme,
+    /// The time at which the event tasks have been set
+    pub start: Option<DateTime<Local>>,
+    /// The time at which the event tasks will reset
+    pub end: Option<DateTime<Local>>,
+    /// The actual tasks you have to complete
+    pub tasks: Vec<EventTask>,
+    /// The rewards available for completing tasks.
+    pub rewards: [RewardChest; 3],
+}
+
+macro_rules! impl_tasks {
+    ($t:ty) => {
+        impl $t {
+            /// The amount of tasks you have collected
+            #[must_use]
+            pub fn completed(&self) -> usize {
+                self.tasks.iter().filter(|a| a.is_completed()).count()
+            }
+
+            /// The amount of points you have collected from completing tasks
+            #[must_use]
+            pub fn earned_points(&self) -> u32 {
+                self.tasks
+                    .iter()
+                    .filter(|a| a.is_completed())
+                    .map(|a| a.point_reward)
+                    .sum()
+            }
+            /// The amount of points, that are available in total
+            #[must_use]
+            pub fn total_points(&self) -> u32 {
+                self.tasks.iter().map(|a| a.point_reward).sum()
+            }
+        }
+    };
+}
+
+impl_tasks!(DailyTasks);
+impl_tasks!(EventTasks);
+
+macro_rules! impl_task {
+    ($t:ty) => {
+        impl $t {
+            /// The amount of tasks you have collected
+            #[must_use]
+            pub fn is_completed(&self) -> bool {
+                self.current >= self.target
+            }
+        }
+    };
+}
+
+impl_task!(EventTask);
+impl_task!(DailyTask);
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Dr. Abawuwu's wheel
+pub struct Wheel {
+    /// The amount of lucky coins you have to spin the weel
+    pub lucky_coins: u32,
+    /// The amount of times you have spun the wheel today already (0 -> 20)
+    pub spins_today: u8,
+    /// The next time you can spin the wheel for free
+    pub next_free_spin: Option<DateTime<Local>>,
+    /// The result of spinning the wheel
+    pub result: Option<WheelReward>,
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum EventTaskSetting {
+pub enum EventTaskTheme {
     ShoppingSpree = 4,
     TimeSkipper = 5,
     RuffianReset = 6,
@@ -206,6 +331,8 @@ pub enum EventTaskSetting {
     Scrimper = 8,
     Scholar = 9,
     UnderworldFigure = 11,
+    #[default]
+    Unknown = 245,
 }
 
 #[non_exhaustive]
@@ -236,12 +363,13 @@ pub enum EventTaskTyp {
     GainXpFromAdventuromatic,
     ClaimSoulsFromExtractor,
     FillMushroomsInAdventuromatic,
+    Unknown,
 }
 
 impl EventTaskTyp {
-    pub fn parse(num: i64) -> Option<EventTaskTyp> {
+    pub fn parse(num: i64) -> EventTaskTyp {
         use EventTaskTyp::*;
-        Some(match num {
+        match num {
             12 => LureHeroesIntoUnderworld,
             48 => WinFightsAgainst(Class::Warrior),
             49 => WinFightsAgainst(Class::Mage),
@@ -275,8 +403,11 @@ impl EventTaskTyp {
             90 => ClaimSoulsFromExtractor,
             91 => FillMushroomsInAdventuromatic,
             92 => WinFightsAgainst(Class::Necromancer),
-            _ => return None,
-        })
+            x => {
+                warn!("Unknown event task typ: {x}");
+                Unknown
+            }
+        }
     }
 }
 
@@ -286,16 +417,17 @@ pub struct EventTask {
     pub typ: EventTaskTyp,
     pub current: u64,
     pub target: u64,
-    pub reward: u8,
+    pub point_reward: u32,
 }
 
 impl EventTask {
-    pub(crate) fn parse(data: &[i64]) -> Option<EventTask> {
-        Some(EventTask {
-            typ: warning_parse(data[0], "event task typ", EventTaskTyp::parse)?,
+    pub(crate) fn parse(data: &[i64]) -> Result<EventTask, SFError> {
+        let raw_typ = data.cget(0, "event task typ")?;
+        Ok(EventTask {
+            typ: EventTaskTyp::parse(raw_typ),
             current: soft_into(data[1], "current eti", 0),
             target: soft_into(data[2], "target eti", u64::MAX),
-            reward: soft_into(data[3], "reward eti", 0),
+            point_reward: soft_into(data[3], "reward eti", 0),
         })
     }
 }
@@ -394,20 +526,20 @@ pub enum Event {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct DailyQuest {
+pub struct DailyTask {
     pub typ: DailyQuestType,
     pub current: u64,
     pub target: u64,
-    pub bell_reward: u32,
+    pub point_reward: u32,
 }
 
-impl DailyQuest {
-    pub(crate) fn parse(data: &[i64]) -> Option<Self> {
-        Some(DailyQuest {
-            bell_reward: warning_try_into(data[3], "bells")?,
-            typ: DailyQuestType::parse(data[0])?,
-            current: warning_try_into(data[1], "current")?,
-            target: warning_try_into(data[2], "target")?,
+impl DailyTask {
+    pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
+        Ok(DailyTask {
+            point_reward: data.csiget(3, "daily bells", 0)?,
+            typ: DailyQuestType::parse(data[0]),
+            current: data.csiget(1, "daily current", 0)?,
+            target: data.csiget(2, "daily target", 999)?,
         })
     }
 }
@@ -444,12 +576,13 @@ pub enum DailyQuestType {
     BuyOfferFromArenaManager,
     FightInPetHabitat,
     WinFightsWithoutEpics,
+    Unknown,
 }
 
 impl DailyQuestType {
-    pub(crate) fn parse(val: i64) -> Option<DailyQuestType> {
+    pub(crate) fn parse(val: i64) -> DailyQuestType {
         use DailyQuestType::*;
-        Some(match val {
+        match val {
             1 => DrinkBeer,
             2 => ConsumeThirstForAdventure,
             3 => WinFights(None),
@@ -474,7 +607,12 @@ impl DailyQuestType {
             22 => FightInPetHabitat,
             23 => UpgradeArenaManager,
             24 => SacrificeRunes,
-            25..=45 => TravelTo(FromPrimitive::from_i64(val - 24)?),
+            25..=45 => {
+                let Some(location) = FromPrimitive::from_i64(val - 24) else {
+                    return Unknown;
+                };
+                TravelTo(location)
+            }
             46 => ThrowEpicInToilet,
             47 => BuyOfferFromArenaManager,
             48 => WinFights(Some(Class::Warrior)),
@@ -492,8 +630,8 @@ impl DailyQuestType {
             92 => WinFights(Some(Class::Necromancer)),
             x => {
                 warn!("Unknown daily quest: {x}");
-                return None;
+                Unknown
             }
-        })
+        }
     }
 }
