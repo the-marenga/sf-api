@@ -13,7 +13,7 @@ use super::{
     guild::GuildRank,
     items::{Equipment, ItemType},
     unlockables::Mirror,
-    AttributeType, Class, Flag, Race, SFError, ServerTime,
+    AttributeType, Class, Flag, PotionData, Race, SFError, ServerTime,
 };
 use crate::{misc::*, PlayerId};
 
@@ -28,7 +28,7 @@ pub struct OtherPlayers {
     pub hall_of_fame: Vec<HallOfFameEntry>,
 
     /// The amount of guilds on this server. Will only be set after querying
-    /// the guild HOF
+    /// the guild HoF, or looking at your own guild
     pub total_guilds: Option<u32>,
     /// A list of hall of fame guilds fetched during the last command
     pub guild_hall_of_fame: Vec<HallOfFameGuildEntry>,
@@ -94,13 +94,13 @@ impl OtherPlayers {
     }
 
     /// Removes the information about another player based on their id
-    #[must_use]
+    #[allow(clippy::must_use_unit)]
     pub fn remove_pid(&mut self, pid: PlayerId) -> Option<OtherPlayer> {
         self.other_players.remove(&pid)
     }
 
     /// Removes the information about another player based on their name
-    #[must_use]
+    #[allow(clippy::must_use_unit)]
     pub fn remove_name(&mut self, name: &str) -> Option<OtherPlayer> {
         let other_pos = self.name_lookup.remove(name)?;
         self.other_players.remove(&other_pos)
@@ -155,7 +155,7 @@ impl OtherPlayers {
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Basic information about one character on the server. To get more
-/// information, you need to query this player via command
+/// information, you need to query this player via the `ViewPlayer` command
 pub struct HallOfFameEntry {
     /// The rank of this player
     pub rank: u32,
@@ -176,34 +176,57 @@ pub struct HallOfFameEntry {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Basic information about one guild on the server. To get more information,
+/// you need to query this player via the `ViewGuild` command
 pub struct HallOfFameGuildEntry {
-    pub rank: u32,
+    /// The name of the guild
     pub name: String,
+    /// The rank of the guild
+    pub rank: u32,
+    /// The leader of the guild
     pub leader: String,
-    pub member: u32,
+    /// The amount of members this guild has
+    pub member_count: u32,
+    /// The amount of honor this guild has
     pub honor: u32,
+    /// Whether or not this guild is already being attacked
     pub is_attacked: bool,
 }
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Basic information about one guild on the server
 pub struct HallOfFameFortressEntry {
-    pub rank: u32,
+    /// The name of the person, that owns this fort
     pub name: String,
-    pub guild: String,
+    /// The rank of this fortress in the fortress Hall of Fame
+    pub rank: u32,
+    /// If the player, that owns this fort is in a guild, this will contain the
+    /// guild name
+    pub guild: Option<String>,
+    /// The amount of upgrades, that have been built in this fortress
     pub upgrade: u32,
+    /// The amount of honor this fortress has gained
     pub honor: u32,
-    pub unknown: i64,
 }
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Basic information about one players pet collection on the server
 pub struct HallOfFamePetsEntry {
-    pub rank: u32,
+    /// The name of the player, that has these pets
     pub name: String,
-    pub guild: String,
+    /// The rank of this players pet collection
+    pub rank: u32,
+    /// If the player, that owns these pets is in a guild, this will contain
+    /// the guild name
+    pub guild: Option<String>,
+    /// The amount of pets collected
     pub collected: u32,
+    /// The amount of honro this pet collection has gained
     pub honor: u32,
+    /// For guilds the value at this position is the attacked status, but no
+    /// idea, what it means here
     pub unknown: i64,
 }
 
@@ -220,18 +243,29 @@ pub struct HallOfFameUnderworldEntry {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// All information about another player, that was queried via the `ViewPlayer`
+/// command
 pub struct OtherPlayer {
+    /// The id of this player. This is mainly just useful to lookup this player
+    /// in `OtherPlayers`, if you do not know the name
     pub player_id: PlayerId,
+    /// The name of the player
     pub name: String,
+    /// The level of the player
     pub level: u16,
+    /// The description this player has set for themselfes
     pub description: String,
-    pub guild_name: String,
+    /// If the player is in a guild, this will contain the name
+    pub guild: Option<String>,
+    /// The mount the player currently ahs rented
     pub mount: Option<Mount>,
+    /// Information about the players visual apperarence
     pub portrait: Portrait,
-
+    /// The relation the own character has set towards this player
     pub relationship: Relationship,
+    /// The level their fortress wall would have in combat
     pub wall_combat_lvl: u16,
-
+    /// The equipment this player is currently wearing
     pub equipment: Equipment,
 
     pub experience: u64,
@@ -257,7 +291,7 @@ pub struct OtherPlayer {
 
     /// None if they do not have a scrapbook
     pub scrapbook_count: Option<u32>,
-    pub active_potions: [Option<ItemType>; 3],
+    pub active_potions: [Option<PotionData>; 3],
     pub armor: u64,
     pub min_damage_base: u32,
     pub max_damage_base: u32,
@@ -360,12 +394,12 @@ impl OtherPlayer {
             let mut fortress = OtherFortress {
                 fortress_wood: data.ciget(228, "other s wood")?,
                 fortress_stone: data.ciget(229, "other f stone")?,
-
-                fortress_soldiers: soft_into(
-                    data[230] & 0xFF,
+                fortress_soldiers: data.csimget(
+                    230,
                     "other f soldiers",
                     0,
-                ),
+                    |a| a & 0xFF,
+                )?,
                 fortress_has_mages: data[230] >> 16 > 0,
                 fortress_archers: soft_into(
                     data[231] & 0xFF,

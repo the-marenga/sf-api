@@ -435,10 +435,10 @@ impl GameState {
                         .description = from_sf_string(val.as_str());
                 }
                 "otherplayergroupname" => {
-                    other_player
-                        .get_or_insert_with(Default::default)
-                        .guild_name
-                        .set(val.as_str());
+                    let guild = Some(val.as_str().to_string())
+                        .filter(|a| !a.is_empty());
+                    other_player.get_or_insert_with(Default::default).guild =
+                        guild;
                 }
                 "otherplayername" => {
                     other_player
@@ -590,7 +590,7 @@ impl GameState {
                                 rank,
                                 name: data[1].to_string(),
                                 leader: data[2].to_string(),
-                                member,
+                                member_count: member,
                                 honor,
                                 is_attacked: attack_status == 1,
                             },
@@ -599,11 +599,11 @@ impl GameState {
                 }
                 "maxrankgroup" => {
                     self.other_players.total_guilds =
-                        Some(val.into("guild max")?)
+                        Some(val.into("guild max")?);
                 }
                 "maxrankPets" => {
                     self.other_players.total_pet_players =
-                        Some(val.into("pet rank max")?)
+                        Some(val.into("pet rank max")?);
                 }
                 "RanklistPets" => {
                     self.other_players.pets_hall_of_fame.clear();
@@ -627,11 +627,14 @@ impl GameState {
                         else {
                             continue;
                         };
+                        let raw_guild = Some(data[2].to_string());
+                        let guild = raw_guild.filter(|a| !a.is_empty());
+
                         self.other_players.pets_hall_of_fame.push(
                             HallOfFamePetsEntry {
                                 rank,
                                 name: data[1].to_string(),
-                                guild: data[2].to_string(),
+                                guild,
                                 collected,
                                 honor,
                                 unknown,
@@ -643,32 +646,26 @@ impl GameState {
                     self.other_players.fortress_hall_of_fame.clear();
                     for guild in val.as_str().trim_matches(';').split(';') {
                         let data: Vec<_> = guild.split(',').collect();
-                        if data.len() != 6 {
-                            warn!("Invalid hof guild: {:?}", data);
+                        if data.len() != 5 {
+                            warn!("Invalid hof fortress: {:?}", data);
                             continue;
                         }
-                        let (
-                            Some(rank),
-                            Some(upgrade),
-                            Some(honor),
-                            Some(unknown),
-                        ) = (
+                        let (Some(rank), Some(upgrade), Some(honor)) = (
                             warning_from_str(data[0], "invalid hof rank"),
                             warning_from_str(data[3], "invalid hof level"),
                             warning_from_str(data[4], "invalid hof fame"),
-                            warning_from_str(data[5], "invalid hof atk"),
-                        )
-                        else {
+                        ) else {
                             continue;
                         };
+                        let raw_guild = Some(data[2].to_string());
+                        let guild = raw_guild.filter(|a| !a.is_empty());
                         self.other_players.fortress_hall_of_fame.push(
                             HallOfFameFortressEntry {
                                 rank,
                                 name: data[1].to_string(),
-                                guild: data[2].to_string(),
+                                guild,
                                 upgrade,
                                 honor,
-                                unknown,
                             },
                         );
                     }
@@ -1058,7 +1055,7 @@ impl GameState {
                     if let Some(oop) = other_player {
                         op.name = oop.name;
                         op.description = oop.description;
-                        op.guild_name = oop.guild_name;
+                        op.guild = oop.guild;
                         op.relationship = oop.relationship;
                         op.pet_attribute_bonus_perc =
                             oop.pet_attribute_bonus_perc;
@@ -1233,7 +1230,7 @@ impl GameState {
             }
         }
         if let Some(t) = &self.unlocks.fortress {
-            if t.level == 0 {
+            if t.upgrades == 0 {
                 self.unlocks.fortress = None;
             }
         }

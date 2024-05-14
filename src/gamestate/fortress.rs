@@ -46,9 +46,9 @@ pub struct Fortress {
     /// Information about the building, that is currently being upgraded
     pub building_upgrade: FortressAction<FortressBuildingType>,
 
-    /// The level visible on the HOF screen for fortress. Should be all
-    /// building levels summed up
-    pub level: u16,
+    /// The upgrades count visible on the HOF screen for fortress. Should be
+    /// all building levels summed up
+    pub upgrades: u16,
     /// The honor you have in the fortress Hall of Fame
     pub honor: u32,
     /// The rank you have in the fortress Hall of Fame
@@ -326,7 +326,7 @@ impl Fortress {
             target: data.cfpget(571, "fortress building upgrade", |x| x - 1)?,
         };
 
-        self.level = data.csiget(581, "fortress lvl", 0)?;
+        self.upgrades = data.csiget(581, "fortress lvl", 0)?;
         self.honor = data.csiget(582, "fortress honor", 0)?;
         self.rank = data.csiget(583, "fortress rank", 0)?;
 

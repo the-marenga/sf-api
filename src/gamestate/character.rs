@@ -61,10 +61,8 @@ pub struct Character {
     /// If the character has a manequin, this will contain all the equipment
     /// stored in it
     pub manequin: Option<Equipment>,
-    /// The potions currently active. The `ItemType` will always be
-    /// `ItemType::Potion`
-    // TODO: Make this explicit by having potion as a seperate struct
-    pub active_potions: [Option<ItemType>; 3],
+    /// The potions currently active
+    pub active_potions: [Option<PotionData>; 3],
 
     /// The total armor of our character. Basically all equiped armor combined
     pub armor: u64,

@@ -7,7 +7,7 @@ use num_derive::FromPrimitive;
 use super::{
     items::{ItemType, PotionSize, PotionType},
     update_enum_map, ArrSkip, AttributeType, CCGet, CFPGet, CGet, CSTGet,
-    NormalCost, SFError, ServerTime,
+    NormalCost, PotionData, SFError, ServerTime,
 };
 use crate::misc::{from_sf_string, soft_into, warning_parse};
 
@@ -263,11 +263,11 @@ impl Guild {
         let mut data = data.into_iter();
 
         let quick_potion = |int: i64| {
-            Some(ItemType::Potion {
+            Some(ItemType::Potion(PotionData {
                 typ: PotionType::parse(int)?,
                 size: PotionSize::parse(int)?,
                 expires: None,
-            })
+            }))
         };
 
         for member in &mut self.members {

@@ -2,6 +2,9 @@ use std::{error::Error, fmt::Display};
 
 #[derive(Debug)]
 #[non_exhaustive]
+#[allow(clippy::module_name_repetitions)]
+/// An error, that occured during the communication (sending/receiving/parsing)
+/// of requests to the S&F server
 pub enum SFError {
     /// Whatever you were trying to send was not possible to send. This is
     /// either our issue when you were doing something normal, or you were
@@ -27,8 +30,11 @@ pub enum SFError {
     UnsupportedVersion(u32),
     /// The server responded with a response, that was too short
     TooShortResponse {
+        /// The name of the item, that was accessed
         name: &'static str,
+        /// The position at which the array access failed
         pos: usize,
+        /// The full array in debug print
         array: String,
     },
 }

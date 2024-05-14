@@ -86,6 +86,7 @@ pub enum ItemPosition {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// All the equipment a player is weraing
 pub struct Equipment(pub EnumMap<EquipmentSlot, Option<Item>>);
 
 impl Equipment {
@@ -129,13 +130,17 @@ pub struct Item {
     pub gem_slot: Option<GemSlot>,
     /// The rune on this item
     pub rune: Option<Rune>,
-    /// The enchantment applied to this item^
+    /// The enchantment applied to this item
     pub enchantment: Option<Enchantment>,
-    /// This is the color, or other cosmetic variation of an item
+    /// This is the color, or other cosmetic variation of an item. There is no
+    /// clear 1 => red mapping, so only the raw value here
     pub color: u8,
 }
 
 impl Item {
+    /// Maps an item to its ident. This is mainly useful, if you want to see,
+    /// if a item is already in your scrapbook
+    #[must_use]
     pub fn equipment_ident(&self) -> Option<EquipmentIdent> {
         Some(EquipmentIdent {
             class: self.class,
@@ -148,18 +153,7 @@ impl Item {
     /// Checks, if this item is unique. Technically they are not always unique,
     /// as the scrapbook/keys can be sold, but it should be clear what this is
     pub fn is_unique(&self) -> bool {
-        use ItemType::*;
-        matches!(
-            self.typ,
-            Scrapbook
-                | HeartOfDarkness
-                | WheelOfFortune
-                | Mannequin
-                | ToiletKey
-                | Gral
-                | EpicItemBag
-                | DungeonKey { .. }
-        )
+        self.typ.is_unique()
     }
 
     pub fn is_epic(&self) -> bool {
@@ -347,6 +341,13 @@ impl GemSlot {
         }
     }
 }
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PotionData {
+    pub typ: PotionType,
+    pub size: PotionSize,
+    pub expires: Option<DateTime<Local>>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -369,11 +370,7 @@ pub enum ItemType {
     Shard {
         piece: u32,
     },
-    Potion {
-        typ: PotionType,
-        size: PotionSize,
-        expires: Option<DateTime<Local>>,
-    },
+    Potion(PotionData),
     Scrapbook,
     DungeonKey {
         id: u32,
@@ -394,9 +391,30 @@ pub enum ItemType {
     ToiletKey,
     Gral,
     EpicItemBag,
+    /// If there is a new item added to the game, this will be the placeholder
+    /// to make sure you never think a place is empty somewhere, if it is not
+    Unknown(u8),
 }
 
 impl ItemType {
+    /// Checks, if this item type is unique. Technically they are not always
+    /// unique, as the scrapbook/keys can be sold, but it should be clear
+    /// what this is
+    #[must_use]
+    pub fn is_unique(&self) -> bool {
+        matches!(
+            self,
+            ItemType::Scrapbook
+                | ItemType::HeartOfDarkness
+                | ItemType::WheelOfFortune
+                | ItemType::Mannequin
+                | ItemType::ToiletKey
+                | ItemType::Gral
+                | ItemType::EpicItemBag
+                | ItemType::DungeonKey { .. }
+        )
+    }
+
     /// The equipment slot, that this item type can be equiped to
     pub fn equipment_slot(&self) -> Option<EquipmentSlot> {
         use EquipmentSlot::*;
@@ -418,9 +436,9 @@ impl ItemType {
     pub(crate) fn parse_active_potions(
         data: &[i64],
         server_time: ServerTime,
-    ) -> [Option<ItemType>; 3] {
+    ) -> [Option<PotionData>; 3] {
         [0, 1, 2].map(move |i| {
-            Some(ItemType::Potion {
+            Some(PotionData {
                 typ: PotionType::parse(data[i])?,
                 size: PotionSize::parse(data[i])?,
                 expires: server_time
@@ -476,7 +494,7 @@ impl ItemType {
                         )?,
                     }
                 } else {
-                    Potion {
+                    Potion(PotionData {
                         typ: warning_parse(
                             data[1],
                             "potion type",
@@ -489,7 +507,7 @@ impl ItemType {
                         )?,
                         expires: server_time
                             .convert_to_local(data[4], "potion expires"),
-                    }
+                    })
                 }
             }
             13 => Scrapbook,
@@ -513,7 +531,7 @@ impl ItemType {
             20 => Mannequin,
             x => {
                 error!("Unknown item typ id {x}");
-                return None;
+                Unknown(x.try_into().unwrap_or(0))
             }
         })
     }
@@ -540,6 +558,7 @@ impl ItemType {
             HeartOfDarkness => 18,
             WheelOfFortune => 19,
             Mannequin => 20,
+            Unknown(u) => *u,
         }
     }
 }
