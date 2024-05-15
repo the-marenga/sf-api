@@ -14,10 +14,11 @@ use crate::{
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Unlockables {
-    /// Whether this character has the mirror completed
+    /// Whether this character has the mirror completed, or is still collecting
+    /// pieces
     pub mirror: Mirror,
     pub scrapbok: Option<ScrapBook>,
-    pub scrapbook_count: Option<u32>,
+    pub scrapbook_count: u32,
     pub dungeon_timer: Option<DateTime<Local>>,
     pub dungeons: Dungeons,
     pub portal: Option<Portal>,
@@ -446,6 +447,7 @@ pub struct EquipmentIdent {
     pub color: u8,
 }
 
+#[allow(clippy::to_string_trait_impl)]
 impl ToString for EquipmentIdent {
     fn to_string(&self) -> String {
         let item_typ = self.typ.raw_id();
@@ -465,50 +467,50 @@ fn parse_scrapbook_item(index: i64) -> Option<EquipmentIdent> {
     use Class::*;
     use EquipmentSlot::*;
     let slots: [(_, _, _, &[_]); 44] = [
-        (801..=1011 - 1, Amulet, None, &[]),
-        (1011..=1051 - 1, Amulet, None, &[]),
-        (1051..=1211 - 1, Ring, None, &[]),
-        (1211..=1251 - 1, Ring, None, &[]),
-        (1251..=1325 - 1, Talisman, None, &[]),
-        (1325..=1365 - 1, Talisman, None, &[]),
-        (1365..=1665 - 1, Weapon, Some(Warrior), &[]),
-        (1665..=1705 - 1, Weapon, Some(Warrior), &[]),
-        (1705..=1805 - 1, Shield, Some(Warrior), &[]),
-        (1805..=1845 - 1, Shield, Some(Warrior), &[]),
-        (1845..=1945 - 1, BreastPlate, Some(Warrior), &[]),
-        (1945..=1985 - 1, BreastPlate, Some(Warrior), &[1954, 1955]),
-        (1985..=2085 - 1, FootWear, Some(Warrior), &[]),
-        (2085..=2125 - 1, FootWear, Some(Warrior), &[2094, 2095]),
-        (2125..=2225 - 1, Gloves, Some(Warrior), &[]),
-        (2225..=2265 - 1, Gloves, Some(Warrior), &[2234, 2235]),
-        (2265..=2365 - 1, Hat, Some(Warrior), &[]),
-        (2365..=2405 - 1, Hat, Some(Warrior), &[2374, 2375]),
-        (2405..=2505 - 1, Belt, Some(Warrior), &[]),
-        (2505..=2545 - 1, Belt, Some(Warrior), &[2514, 2515]),
-        (2545..=2645 - 1, Weapon, Some(Mage), &[]),
-        (2645..=2685 - 1, Weapon, Some(Mage), &[]),
-        (2685..=2785 - 1, BreastPlate, Some(Mage), &[]),
-        (2785..=2825 - 1, BreastPlate, Some(Mage), &[2794, 2795]),
-        (2825..=2925 - 1, FootWear, Some(Mage), &[]),
-        (2925..=2965 - 1, FootWear, Some(Mage), &[2934, 2935]),
-        (2965..=3065 - 1, Gloves, Some(Mage), &[]),
-        (3065..=3105 - 1, Gloves, Some(Mage), &[3074, 3075]),
-        (3105..=3205 - 1, Hat, Some(Mage), &[]),
-        (3205..=3245 - 1, Hat, Some(Mage), &[3214, 3215]),
-        (3245..=3345 - 1, Belt, Some(Mage), &[]),
-        (3345..=3385 - 1, Belt, Some(Mage), &[3354, 3355]),
-        (3385..=3485 - 1, Weapon, Some(Scout), &[]),
-        (3485..=3525 - 1, Weapon, Some(Scout), &[]),
-        (3525..=3625 - 1, BreastPlate, Some(Scout), &[]),
-        (3625..=3665 - 1, BreastPlate, Some(Scout), &[3634, 3635]),
-        (3665..=3765 - 1, FootWear, Some(Scout), &[]),
-        (3765..=3805 - 1, FootWear, Some(Scout), &[3774, 3775]),
-        (3805..=3905 - 1, Gloves, Some(Scout), &[]),
-        (3905..=3945 - 1, Gloves, Some(Scout), &[3914, 3915]),
-        (3945..=4045 - 1, Hat, Some(Scout), &[]),
-        (4045..=4085 - 1, Hat, Some(Scout), &[4054, 4055]),
-        (4085..=4185 - 1, Belt, Some(Scout), &[]),
-        (4185..=4225 - 1, Belt, Some(Scout), &[4194, 4195]),
+        (801..1011, Amulet, None, &[]),
+        (1011..1051, Amulet, None, &[]),
+        (1051..1211, Ring, None, &[]),
+        (1211..1251, Ring, None, &[]),
+        (1251..1325, Talisman, None, &[]),
+        (1325..1365, Talisman, None, &[]),
+        (1365..1665, Weapon, Some(Warrior), &[]),
+        (1665..1705, Weapon, Some(Warrior), &[]),
+        (1705..1805, Shield, Some(Warrior), &[]),
+        (1805..1845, Shield, Some(Warrior), &[]),
+        (1845..1945, BreastPlate, Some(Warrior), &[]),
+        (1945..1985, BreastPlate, Some(Warrior), &[1954, 1955]),
+        (1985..2085, FootWear, Some(Warrior), &[]),
+        (2085..2125, FootWear, Some(Warrior), &[2094, 2095]),
+        (2125..2225, Gloves, Some(Warrior), &[]),
+        (2225..2265, Gloves, Some(Warrior), &[2234, 2235]),
+        (2265..2365, Hat, Some(Warrior), &[]),
+        (2365..2405, Hat, Some(Warrior), &[2374, 2375]),
+        (2405..2505, Belt, Some(Warrior), &[]),
+        (2505..2545, Belt, Some(Warrior), &[2514, 2515]),
+        (2545..2645, Weapon, Some(Mage), &[]),
+        (2645..2685, Weapon, Some(Mage), &[]),
+        (2685..2785, BreastPlate, Some(Mage), &[]),
+        (2785..2825, BreastPlate, Some(Mage), &[2794, 2795]),
+        (2825..2925, FootWear, Some(Mage), &[]),
+        (2925..2965, FootWear, Some(Mage), &[2934, 2935]),
+        (2965..3065, Gloves, Some(Mage), &[]),
+        (3065..3105, Gloves, Some(Mage), &[3074, 3075]),
+        (3105..3205, Hat, Some(Mage), &[]),
+        (3205..3245, Hat, Some(Mage), &[3214, 3215]),
+        (3245..3345, Belt, Some(Mage), &[]),
+        (3345..3385, Belt, Some(Mage), &[3354, 3355]),
+        (3385..3485, Weapon, Some(Scout), &[]),
+        (3485..3525, Weapon, Some(Scout), &[]),
+        (3525..3625, BreastPlate, Some(Scout), &[]),
+        (3625..3665, BreastPlate, Some(Scout), &[3634, 3635]),
+        (3665..3765, FootWear, Some(Scout), &[]),
+        (3765..3805, FootWear, Some(Scout), &[3774, 3775]),
+        (3805..3905, Gloves, Some(Scout), &[]),
+        (3905..3945, Gloves, Some(Scout), &[3914, 3915]),
+        (3945..4045, Hat, Some(Scout), &[]),
+        (4045..4085, Hat, Some(Scout), &[4054, 4055]),
+        (4085..4185, Belt, Some(Scout), &[]),
+        (4185..4225, Belt, Some(Scout), &[4194, 4195]),
     ];
 
     let mut is_epic = true;
@@ -521,7 +523,7 @@ fn parse_scrapbook_item(index: i64) -> Option<EquipmentIdent> {
             return None;
         }
 
-        let relative_pos = index - range.start() + 1;
+        let relative_pos = index - range.start + 1;
 
         let color = match relative_pos % 10 {
             _ if typ == Talisman || is_epic => 1,

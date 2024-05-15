@@ -20,9 +20,9 @@ use crate::{
     PlayerId,
 };
 
-// A command, that can be send to the sf server
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A command, that can be send to the sf server
 pub enum Command {
     /// If there is a command you somehow know/reverse engineered, or need to
     /// extend the functionality of one of the existing commands, this is the
@@ -439,7 +439,7 @@ pub enum Command {
     },
     /// Switch equipment with the manequin, if it is unlocked
     SwapManequin,
-    /// Updates your flag in the HoF
+    /// Updates your flag in the Hall of Fame
     UpdateFlag {
         flag: Option<Flag>,
     },
@@ -559,11 +559,14 @@ pub enum DiceType {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DiceReward {
     pub win_typ: DiceType,
+    /// The amounts of
     pub amount: u32,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Enum, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// A type of attribute
 pub enum AttributeType {
     Strength = 1,
     Dexterity = 2,
@@ -572,8 +575,10 @@ pub enum AttributeType {
     Luck = 5,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Enum, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// A type of shop. This is a subset of `ItemPosition`
 pub enum ShopType {
     Weapon = 3,
     Magic = 4,
@@ -581,6 +586,8 @@ pub enum ShopType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// The "curency" you want to use to skip a quest
 pub enum QuestSkip {
     Mushroom = 1,
     Glass = 2,
@@ -592,12 +599,11 @@ impl Command {
     #[allow(deprecated, clippy::useless_format)]
     pub(crate) fn request_string(&self) -> String {
         const APP_VERSION: &str = "1800000000000";
-        use Command::*;
         match self {
-            Custom { cmd_name, values } => {
+            Command::Custom { cmd_name, values } => {
                 format!("{cmd_name}:{}", values.join("/"))
             }
-            Login {
+            Command::Login {
                 username,
                 pw_hash,
                 login_count,
@@ -609,13 +615,13 @@ impl Command {
                 )
             }
             #[cfg(feature = "sso")]
-            SSOLogin {
+            Command::SSOLogin {
                 uuid, character_id, ..
             } => format!(
                 "SFAccountCharLogin:{uuid}/{character_id}/unity3d_webglplayer/\
                  /{APP_VERSION}"
             ),
-            Register {
+            Command::Register {
                 username,
                 password,
                 gender,
@@ -631,123 +637,141 @@ impl Command {
                     *class as usize + 1
                 )
             }
-            UpdatePlayer => "Poll:".to_string(),
-            HallOfFamePage { page } => {
+            Command::UpdatePlayer => "Poll:".to_string(),
+            Command::HallOfFamePage { page } => {
                 let per_page = 51;
                 let pos = 26 + (per_page * page);
                 format!("PlayerGetHallOfFame:{pos}//25/25")
             }
-            HallOfFameFortressPage { page } => {
+            Command::HallOfFameFortressPage { page } => {
                 let per_page = 51;
                 let pos = 26 + (per_page * page);
                 format!("FortressGetHallOfFame:{pos}//25/25")
             }
-            HallOfFameGroupPage { page } => {
+            Command::HallOfFameGroupPage { page } => {
                 let per_page = 51;
                 let pos = 26 + (per_page * page);
                 format!("GroupGetHallOfFame:{pos}//25/25")
             }
-            HallOfFameUnderworldPage { page } => {
+            Command::HallOfFameUnderworldPage { page } => {
                 let per_page = 51;
                 let pos = 26 + (per_page * page);
                 format!("UnderworldGetHallOfFame:{pos}//25/25")
             }
-            HallOfFamePetsPage { page } => {
+            Command::HallOfFamePetsPage { page } => {
                 let per_page = 51;
                 let pos = 26 + (per_page * page);
                 format!("PetsGetHallOfFame:{pos}//25/25")
             }
-            ViewPlayer { ident } => format!("PlayerLookAt:{ident}"),
-            BuyBeer => format!("PlayerBeerBuy:"),
-            StartQuest {
+            Command::ViewPlayer { ident } => format!("PlayerLookAt:{ident}"),
+            Command::BuyBeer => format!("PlayerBeerBuy:"),
+            Command::StartQuest {
                 quest_pos,
                 overwrite_inv,
             } => {
                 format!(
                     "PlayerAdventureStart:{}/{}",
                     quest_pos + 1,
-                    *overwrite_inv as u8
+                    u8::from(*overwrite_inv)
                 )
             }
-            CancelQuest => format!("PlayerAdventureStop:"),
-            FinishQuest { skip } => {
+            Command::CancelQuest => format!("PlayerAdventureStop:"),
+            Command::FinishQuest { skip } => {
                 format!(
                     "PlayerAdventureFinished:{}",
                     skip.map(|a| a as u8).unwrap_or(0)
                 )
             }
-            WorkStart { hours } => format!("PlayerWorkStart:{hours}"),
-            WorkCancel => format!("PlayerWorkStop:"),
-            WorkFinish => format!("PlayerWorkFinished:"),
-            CheckNameAvailable { name } => format!("AccountCheck:{name}"),
-            BuyMount { mount } => format!("PlayerMountBuy:{}", *mount as usize),
-            IncreaseAttribute {
+            Command::WorkStart { hours } => format!("PlayerWorkStart:{hours}"),
+            Command::WorkCancel => format!("PlayerWorkStop:"),
+            Command::WorkFinish => format!("PlayerWorkFinished:"),
+            Command::CheckNameAvailable { name } => {
+                format!("AccountCheck:{name}")
+            }
+            Command::BuyMount { mount } => {
+                format!("PlayerMountBuy:{}", *mount as usize)
+            }
+            Command::IncreaseAttribute {
                 attribute,
                 increase_to,
             } => format!(
                 "PlayerAttributIncrease:{}/{increase_to}",
                 *attribute as u8
             ),
-            RemovePotion { pos } => format!("PlayerPotionKill:{}", pos + 1),
-            CheckArena => format!("PlayerArenaEnemy:"),
-            Fight { name, use_mushroom } => {
-                format!("PlayerArenaFight:{name}/{}", *use_mushroom as u8)
+            Command::RemovePotion { pos } => {
+                format!("PlayerPotionKill:{}", pos + 1)
             }
-            CollectCalendar => format!("PlayerOpenCalender:"),
-            UpgradeSkill {
+            Command::CheckArena => format!("PlayerArenaEnemy:"),
+            Command::Fight { name, use_mushroom } => {
+                format!("PlayerArenaFight:{name}/{}", u8::from(*use_mushroom))
+            }
+            Command::CollectCalendar => format!("PlayerOpenCalender:"),
+            Command::UpgradeSkill {
                 attribute,
                 next_attribute,
             } => format!(
                 "PlayerAttributIncrease:{}/{next_attribute}",
                 *attribute as i64
             ),
-            RefreshShop { shop } => {
+            Command::RefreshShop { shop } => {
                 format!("PlayerNewWares:{}", *shop as usize - 2)
             }
-            ViewGuild { guild_ident } => {
+            Command::ViewGuild { guild_ident } => {
                 format!("GroupLookAt:{guild_ident}")
             }
-            GuildFound { name } => format!("GroupFound:{name}"),
-            GuildInvitePlayer { name } => format!("GroupInviteMember:{name}"),
-            GuildKickPlayer { name } => format!("GroupRemoveMember:{name}"),
-            GuildSetLeader { name } => format!("GroupSetLeader:{name}"),
-            GuildToggleOfficer { name } => format!("GroupSetOfficer:{name}"),
-            GuildLoadMushrooms => {
+            Command::GuildFound { name } => format!("GroupFound:{name}"),
+            Command::GuildInvitePlayer { name } => {
+                format!("GroupInviteMember:{name}")
+            }
+            Command::GuildKickPlayer { name } => {
+                format!("GroupRemoveMember:{name}")
+            }
+            Command::GuildSetLeader { name } => {
+                format!("GroupSetLeader:{name}")
+            }
+            Command::GuildToggleOfficer { name } => {
+                format!("GroupSetOfficer:{name}")
+            }
+            Command::GuildLoadMushrooms => {
                 format!("GroupIncreaseBuilding:0")
             }
-            GuildIncreaseSkill { skill, current } => {
+            Command::GuildIncreaseSkill { skill, current } => {
                 format!("GroupSkillIncrease:{}/{current}", *skill as usize)
             }
-            GuildJoinAttack => format!("GroupReadyAttack:"),
-            GuildJoinDefense => format!("GroupReadyDefense:"),
-            GuildAttack { guild } => format!("GroupAttackDeclare:{guild}"),
-            GuildRaid => format!("GroupRaidDeclare:"),
-            ToiletFlush => format!("PlayerToilettFlush:"),
-            ToiletOpen => format!("PlayerToilettOpenWithKey:"),
-            FightTower {
+            Command::GuildJoinAttack => format!("GroupReadyAttack:"),
+            Command::GuildJoinDefense => format!("GroupReadyDefense:"),
+            Command::GuildAttack { guild } => {
+                format!("GroupAttackDeclare:{guild}")
+            }
+            Command::GuildRaid => format!("GroupRaidDeclare:"),
+            Command::ToiletFlush => format!("PlayerToilettFlush:"),
+            Command::ToiletOpen => format!("PlayerToilettOpenWithKey:"),
+            Command::FightTower {
                 current_level: progress,
                 use_mush,
             } => {
-                format!("PlayerTowerBattle:{progress}/{}", *use_mush as u8)
+                format!("PlayerTowerBattle:{progress}/{}", u8::from(*use_mush))
             }
-            ToiletDrop { inventory, pos } => {
+            Command::ToiletDrop { inventory, pos } => {
                 format!("PlayerToilettLoad:{}/{}", *inventory as usize, pos + 1)
             }
-            GuildPortalBattle => format!("GroupPortalBattle:"),
-            PlayerPortalBattle => format!("PlayerPortalBattle:"),
-            MessageOpen { index } => {
+            Command::GuildPortalBattle => format!("GroupPortalBattle:"),
+            Command::PlayerPortalBattle => format!("PlayerPortalBattle:"),
+            Command::MessageOpen { index } => {
                 format!("PlayerMessageView:{}", *index + 1)
             }
-            MessageDelete { index } => format!(
+            Command::MessageDelete { index } => format!(
                 "PlayerMessageDelete:{}",
                 match index {
                     -1 => -1,
                     x => *x + 1,
                 }
             ),
-            ViewScrapbook => format!("PlayerPollScrapbook:"),
-            ViewPet { pet_index } => format!("PetsGetStats:{pet_index}"),
-            BuyShop {
+            Command::ViewScrapbook => format!("PlayerPollScrapbook:"),
+            Command::ViewPet { pet_index } => {
+                format!("PetsGetStats:{pet_index}")
+            }
+            Command::BuyShop {
                 shop_type,
                 shop_pos,
                 inventory,
@@ -759,7 +783,7 @@ impl Command {
                 *inventory as usize,
                 *inventory_pos + 1
             ),
-            SellShop {
+            Command::SellShop {
                 inventory,
                 inventory_pos,
                 shop_type,
@@ -771,7 +795,7 @@ impl Command {
                 *shop_type as usize,
                 *shop_pos + 1,
             ),
-            InventoryMove {
+            Command::InventoryMove {
                 inventory_from,
                 inventory_from_pos,
                 inventory_to,
@@ -783,7 +807,7 @@ impl Command {
                 *inventory_to as usize,
                 *inventory_to_pos + 1
             ),
-            ItemMove {
+            Command::ItemMove {
                 from,
                 from_pos,
                 to,
@@ -795,34 +819,38 @@ impl Command {
                 *to as usize,
                 *to_pos + 1
             ),
-            UnlockFeature { unlockable } => format!(
+            Command::UnlockFeature { unlockable } => format!(
                 "UnlockFeature:{}/{}",
                 unlockable.main_ident, unlockable.sub_ident
             ),
-            FightLightDungeon { name, use_mushroom } => format!(
+            Command::FightLightDungeon { name, use_mushroom } => format!(
                 "PlayerDungeonBattle:{}/{}",
                 *name as usize + 1,
                 if *use_mushroom { 1 } else { 2 }
             ),
-            GuildSetInfo {
+            Command::GuildSetInfo {
                 description,
                 emblem_code,
             } => format!(
                 "GroupSetDescription:{emblem_code}§{}",
                 to_sf_string(description)
             ),
-            SetDescription { description } => {
+            Command::SetDescription { description } => {
                 format!("PlayerSetDescription:{}", &to_sf_string(description))
             }
-            GuildSendChat { message } => {
+            Command::GuildSendChat { message } => {
                 format!("GroupChat:{}", &to_sf_string(message))
             }
-            GambleSilver { amount } => format!("PlayerGambleGold:{amount}"),
-            GambleMushrooms { amount } => format!("PlayerGambleCoins:{amount}"),
-            SendMessage { to, msg } => {
+            Command::GambleSilver { amount } => {
+                format!("PlayerGambleGold:{amount}")
+            }
+            Command::GambleMushrooms { amount } => {
+                format!("PlayerGambleCoins:{amount}")
+            }
+            Command::SendMessage { to, msg } => {
                 format!("PlayerMessageSend:{to}/{}", to_sf_string(msg))
             }
-            WitchDropCauldron {
+            Command::WitchDropCauldron {
                 inventory_t,
                 position,
             } => format!(
@@ -830,7 +858,7 @@ impl Command {
                 *inventory_t as usize,
                 position + 1
             ),
-            Blacksmith {
+            Command::Blacksmith {
                 inventory_t,
                 position,
                 action,
@@ -840,16 +868,16 @@ impl Command {
                 position + 1,
                 *action as usize
             ),
-            WitchEnchant { position } => {
+            Command::WitchEnchant { position } => {
                 format!("PlayerWitchEnchantItem:{}/1", position.witch_id())
             }
-            SpinWheelOfFortune { fortune_payment } => {
+            Command::SpinWheelOfFortune { fortune_payment } => {
                 format!("WheelOfFortune:{}", *fortune_payment as usize)
             }
-            FortressGather { resource } => {
+            Command::FortressGather { resource } => {
                 format!("FortressGather:{}", *resource as usize + 1)
             }
-            EquipCompanion {
+            Command::EquipCompanion {
                 inventory,
                 position,
                 equipment_slot,
@@ -859,32 +887,38 @@ impl Command {
                 position + 1,
                 *equipment_slot as usize
             ),
-            FortressBuildStart { f_type } => {
+            Command::FortressBuildStart { f_type } => {
                 format!("FortressBuildStart:{}/0", *f_type as usize + 1)
             }
-            FortressBuildCancel { f_type } => {
+            Command::FortressBuildCancel { f_type } => {
                 format!("FortressBuildStop:{}", *f_type as usize + 1)
             }
-            FortressBuildFinish { f_type, mushrooms } => format!(
+            Command::FortressBuildFinish { f_type, mushrooms } => format!(
                 "FortressBuildFinish:{}/{mushrooms}",
                 *f_type as usize + 1
             ),
-            FortressBuildUnitStart { unit, count } => {
+            Command::FortressBuildUnitStart { unit, count } => {
                 format!("FortressBuildUnitStart:{}/{count}", *unit as usize + 1)
             }
-            FortressGemStoneStart => format!("FortressGemstoneStart:",),
-            FortressGemStoneCancel => format!("FortressGemStoneStop:0"),
-            FortressGemStoneFinish { mushrooms } => {
+            Command::FortressGemStoneStart => {
+                format!("FortressGemstoneStart:",)
+            }
+            Command::FortressGemStoneCancel => {
+                format!("FortressGemStoneStop:0")
+            }
+            Command::FortressGemStoneFinish { mushrooms } => {
                 format!("FortressGemstoneFinished:{mushrooms}",)
             }
-            FortressAttack { soldiers } => format!("FortressAttack:{soldiers}"),
-            FortressNewEnemy { use_mushroom: pay } => {
-                format!("FortressEnemy:{}", *pay as usize)
+            Command::FortressAttack { soldiers } => {
+                format!("FortressAttack:{soldiers}")
             }
-            FortressSetCAEnemy { msg_id } => {
+            Command::FortressNewEnemy { use_mushroom: pay } => {
+                format!("FortressEnemy:{}", usize::from(*pay))
+            }
+            Command::FortressSetCAEnemy { msg_id } => {
                 format!("FortressEnemy:0/{}", *msg_id)
             }
-            Whisper {
+            Command::Whisper {
                 player_name: player,
                 message,
             } => format!(
@@ -892,68 +926,68 @@ impl Command {
                 player,
                 to_sf_string(message)
             ),
-            UnderworldCollect {
+            Command::UnderworldCollect {
                 resource: resource_t,
             } => {
                 format!("UnderworldGather:{}", *resource_t as usize + 1)
             }
-            UnderworldUnitUpgrade { unit: unit_t } => {
+            Command::UnderworldUnitUpgrade { unit: unit_t } => {
                 format!("UnderworldUpgradeUnit:{}", *unit_t as usize + 1)
             }
-            UnderworldUpgradeStart {
+            Command::UnderworldUpgradeStart {
                 building,
                 mushrooms,
             } => format!(
                 "UnderworldBuildStart:{}/{mushrooms}",
                 *building as usize + 1
             ),
-            UnderworldUpgradeCancel { building } => {
+            Command::UnderworldUpgradeCancel { building } => {
                 format!("UnderworldBuildStop:{}", *building as usize + 1)
             }
-            UnderworldUpgradeComplete {
+            Command::UnderworldUpgradeComplete {
                 building,
                 mushrooms,
             } => format!(
                 "UnderworldBuildFinished:{}/{mushrooms}",
                 *building as usize + 1
             ),
-            UnderworldAttack { player_id } => {
+            Command::UnderworldAttack { player_id } => {
                 format!("UnderworldAttack:{player_id}")
             }
-            RollDice { payment, dices } => {
-                let mut dices =
-                    dices.iter().fold("".to_string(), |mut a, b| {
-                        if !a.is_empty() {
-                            a.push('/')
-                        }
-                        a.push((*b as u8 + b'0') as char);
-                        a
-                    });
+            Command::RollDice { payment, dices } => {
+                let mut dices = dices.iter().fold(String::new(), |mut a, b| {
+                    if !a.is_empty() {
+                        a.push('/');
+                    }
+                    a.push((*b as u8 + b'0') as char);
+                    a
+                });
 
                 if dices.is_empty() {
-                    dices = "0/0/0/0/0".to_string()
+                    // FIXME: This is dead code, right?
+                    dices = "0/0/0/0/0".to_string();
                 }
                 format!("RollDice:{}/{}", *payment as usize, dices)
             }
-            PetFeed { pet_id, fruit_idx } => {
+            Command::PetFeed { pet_id, fruit_idx } => {
                 format!("PlayerPetFeed:{pet_id}/{fruit_idx}")
             }
-            GuildPetBattle { use_mushroom } => {
-                format!("GroupPetBattle:{}", *use_mushroom as usize)
+            Command::GuildPetBattle { use_mushroom } => {
+                format!("GroupPetBattle:{}", usize::from(*use_mushroom))
             }
-            IdleUpgrade { typ: kind, amount } => {
+            Command::IdleUpgrade { typ: kind, amount } => {
                 format!("IdleIncrease:{}/{}", *kind as usize, amount)
             }
-            IdleSacrifice => format!("IdlePrestige:0"),
-            SwapManequin => format!("PlayerDummySwap:301/1"),
-            UpdateFlag { flag } => format!(
+            Command::IdleSacrifice => format!("IdlePrestige:0"),
+            Command::SwapManequin => format!("PlayerDummySwap:301/1"),
+            Command::UpdateFlag { flag } => format!(
                 "PlayerSetFlag:{}",
-                flag.map(|a| a.code()).unwrap_or_default()
+                flag.map(Flag::code).unwrap_or_default()
             ),
-            BlockGuildInvites { block_invites } => {
-                format!("PlayerSetNoGroupInvite:{}", *block_invites as u8)
+            Command::BlockGuildInvites { block_invites } => {
+                format!("PlayerSetNoGroupInvite:{}", u8::from(*block_invites))
             }
-            ShowTips { show_tips } => {
+            Command::ShowTips { show_tips } => {
                 #[allow(clippy::unreadable_literal)]
                 {
                     format!(
@@ -962,40 +996,40 @@ impl Command {
                     )
                 }
             }
-            ChangePassword { username, old, new } => {
-                let old = sha1_hash(&format!("{}{}", old, HASH_CONST));
-                let new = sha1_hash(&format!("{}{}", new, HASH_CONST));
+            Command::ChangePassword { username, old, new } => {
+                let old = sha1_hash(&format!("{old}{HASH_CONST}"));
+                let new = sha1_hash(&format!("{new}{HASH_CONST}"));
                 format!("AccountPasswordChange:{username}/{old}/106/{new}/")
             }
-            ChangeMailAddress {
+            Command::ChangeMailAddress {
                 old_mail,
                 new_mail,
                 password,
                 username,
             } => {
-                let pass = sha1_hash(&format!("{}{}", password, HASH_CONST));
+                let pass = sha1_hash(&format!("{password}{HASH_CONST}"));
                 format!(
                     "AccountMailChange:{old_mail}/{new_mail}/{username}/\
                      {pass}/106"
                 )
             }
-            SetLanguage { language } => {
+            Command::SetLanguage { language } => {
                 format!("AccountSetLanguage:{language}")
             }
-            SetPlayerRelation {
+            Command::SetPlayerRelation {
                 player_id,
                 relation,
             } => format!("PlayerFriendSet:{player_id}/{}", *relation as i32),
-            SetPortraitFrame { portrait_id } => {
+            Command::SetPortraitFrame { portrait_id } => {
                 format!("PlayerSetActiveFrame:{portrait_id}")
             }
-            CollectDailyQuestReward { pos } => {
+            Command::CollectDailyQuestReward { pos } => {
                 format!("DailyTaskClaim:1/{}", pos + 1)
             }
-            CollectEventTaskReward { pos } => {
+            Command::CollectEventTaskReward { pos } => {
                 format!("DailyTaskClaim:2/{}", pos + 1)
             }
-            SwapRunes {
+            Command::SwapRunes {
                 from,
                 from_pos,
                 to,
@@ -1009,7 +1043,7 @@ impl Command {
                     *to_pos + 1
                 )
             }
-            ChangeItemLook {
+            Command::ChangeItemLook {
                 inv,
                 pos,
                 raw_model_id: model_id,
@@ -1021,15 +1055,17 @@ impl Command {
                     model_id
                 )
             }
-            ExpeditionChooseStreet { pos } => {
+            Command::ExpeditionChooseStreet { pos } => {
                 format!("ExpeditionProceed:{}", pos + 1)
             }
-            ExpeditionContinue => format!("ExpeditionProceed:1"),
-            ExpeditionPickItem { pos } => {
+            Command::ExpeditionContinue => format!("ExpeditionProceed:1"),
+            Command::ExpeditionPickItem { pos } => {
                 format!("ExpeditionProceed:{}", pos + 1)
             }
-            ExpeditionStart { pos } => format!("ExpeditionStart:{}", pos + 1),
-            FightShadowDungeon { name, use_mushroom } => format!(
+            Command::ExpeditionStart { pos } => {
+                format!("ExpeditionStart:{}", pos + 1)
+            }
+            Command::FightShadowDungeon { name, use_mushroom } => format!(
                 "PlayerShadowBattle:{}/{}",
                 *name as u32 + 1,
                 u8::from(*use_mushroom)
@@ -1040,6 +1076,8 @@ impl Command {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// The flag of a country, that will be visible in the Hall of Fame
 pub enum Flag {
     Australia,
     Austria,
@@ -1134,7 +1172,7 @@ impl Flag {
         };
 
         // This is not fast, but I am not willing to copy & invert the match
-        // form above
+        // from above
         for v in Flag::iter() {
             if v.code() == val {
                 return Some(v);

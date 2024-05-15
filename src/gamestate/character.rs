@@ -118,7 +118,7 @@ impl Portrait {
             mouth: data.csiget(0, "mouth", 1)?,
             hair_color: data.csimget(1, "hair color", 100, |a| a / 100)?,
             hair: data.csimget(1, "hair", 1, |a| a % 100)?,
-            brows: data.csiget(2, "brows", 1)? % 100,
+            brows: data.csimget(2, "brows", 1, |a| a % 100)?,
             eyes: data.csiget(3, "eyes", 1)?,
             beards: data.csimget(4, "beards", 1, |a| a % 100)?,
             nose: data.csiget(5, "nose", 1)?,

@@ -30,24 +30,41 @@ pub struct Tavern {
     pub guard_wage: u64,
     /// The toilet, if it has been unlocked
     pub toilet: Option<Toilet>,
+    /// The dice game you can play with the weird guy in the tavern
+    pub dice_game: DiceGame,
+    /// Informations about everything related to expeditions
+    pub expeditions: Expeditions,
+    /// The result of playing the shell game
+    pub gamble_result: Option<GambleResult>,
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Informations about everything related to expeditions
+pub struct Expeditions {
+    /// The time the expeditions mechanic was enabled at
+    pub start: Option<DateTime<Local>>,
+    /// The time until which expeditions will be available
+    pub end: Option<DateTime<Local>>,
+    /// The expeditions available to do
+    pub available: Vec<AvailableExpedition>,
+    /// The expedition the player is currenty doing
+    pub current: Option<CurrentExpedition>,
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Information about the current state of the dice game
+pub struct DiceGame {
     /// The amount of dice games you can still play today
-    pub dice_games_remaining: u8,
+    pub remaining: u8,
     /// The next free dice game can be played at this point in time
-    pub dice_games_next_free: Option<DateTime<Local>>,
+    pub next_free: Option<DateTime<Local>>,
     /// These are the dices, that are laying on the table after the first
     /// round. The ones you can select to keep from
     pub current_dice: Vec<DiceType>,
     /// Whatever we won in the dice game
-    pub dice_reward: Option<DiceReward>,
-
-    pub expedition_start: Option<DateTime<Local>>,
-    pub expedition_end: Option<DateTime<Local>>,
-
-    pub expeditions: Option<[ExpeditionInfo; 2]>,
-
-    pub expedition: Option<Expedition>,
-
-    pub gamble_result: Option<GambleResult>,
+    pub reward: Option<DiceReward>,
 }
 
 impl Tavern {
@@ -206,10 +223,11 @@ impl Toilet {
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Expedition {
-    pub crossroads: [ExpeditionEncounter; 3],
+pub struct CurrentExpedition {
+    /// The different crossroads, that you can choose between. Should be 3
+    pub crossroads: Vec<ExpeditionEncounter>,
+    /// The items
     pub items: [Option<ExpeditionThing>; 4],
-
     /// The amount of the target item we have found
     pub current: u8,
     /// The amount of the target item that we are supposed to find
@@ -315,7 +333,7 @@ pub enum ExpeditionThing {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ExpeditionInfo {
+pub struct AvailableExpedition {
     pub target: ExpeditionThing,
     pub alu_sec: u32,
 

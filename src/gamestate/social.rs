@@ -19,13 +19,27 @@ use crate::{misc::*, PlayerId};
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Mail {
+    /// All the fights, that the character has stored for some reason
+    pub combat_log: Vec<CombatLogEntry>,
+    /// The amount of messages the  inbo xcan store
+    pub inbox_capacity: u16,
+    /// A meessages and notifications
+    pub inbox: Vec<InboxEntry>,
+    /// If you open a message (via command), this here will contain the openeed
+    /// message
+    pub open_msg: Option<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Contains information about everything involving other players on the server.
 /// This mainly revolves around the Hall of Fame
-pub struct OtherPlayers {
+pub struct HallOfFames {
     /// The amount of accounts on the server
-    pub total_player: u32,
+    pub total_players: u32,
     /// A list of hall of fame players fetched during the last command
-    pub hall_of_fame: Vec<HallOfFameEntry>,
+    pub player_hall_of_fame: Vec<HallOfFameEntry>,
 
     /// The amount of guilds on this server. Will only be set after querying
     /// the guild HoF, or looking at your own guild
@@ -57,24 +71,10 @@ pub struct OtherPlayers {
     name_lookup: HashMap<String, PlayerId>,
 
     /// Guild that the character has looked at
-    pub guilds: HashMap<String, OtherGuild>,
-
-    /// All the fights, that the character has stored for some reason
-    pub combat_log: Vec<CombatLogEntry>,
-
-    /// The amount of messages the  inbo xcan store
-    pub inbox_capacity: u16,
-    /// A meessages and notifications
-    pub inbox: Vec<InboxEntry>,
-    /// If you open a message (via command), this here will contain the openeed
-    /// message
-    pub open_msg: Option<String>,
-    /// A list of other characters, that the set some sort of special relation
-    /// to. Either good, or bad
-    pub relations: Vec<RelationEntry>,
+    pub other_guilds: HashMap<String, OtherGuild>,
 }
 
-impl OtherPlayers {
+impl HallOfFames {
     pub(crate) fn insert_lookup(&mut self, other: OtherPlayer) {
         self.name_lookup.insert(other.name.clone(), other.player_id);
         self.other_players.insert(other.player_id, other);
@@ -110,45 +110,6 @@ impl OtherPlayers {
     pub fn reset_lookups(&mut self) {
         self.other_players = HashMap::default();
         self.name_lookup = HashMap::default();
-    }
-
-    pub(crate) fn updatete_relation_list(&mut self, val: &str) {
-        self.relations.clear();
-        for entry in val
-            .trim_end_matches(';')
-            .split(';')
-            .filter(|a| !a.is_empty())
-        {
-            let mut parts = entry.split(',');
-            let (
-                Some(id),
-                Some(name),
-                Some(guild),
-                Some(level),
-                Some(relation),
-            ) = (
-                parts.next().and_then(|a| a.parse().ok()),
-                parts.next().map(std::string::ToString::to_string),
-                parts.next().map(std::string::ToString::to_string),
-                parts.next().and_then(|a| a.parse().ok()),
-                parts.next().and_then(|a| match a {
-                    "-1" => Some(Relationship::Ignored),
-                    "1" => Some(Relationship::Friend),
-                    _ => None,
-                }),
-            )
-            else {
-                warn!("bad friendslist entry: {entry}");
-                continue;
-            };
-            self.relations.push(RelationEntry {
-                id,
-                name,
-                guild,
-                level,
-                relation,
-            });
-        }
     }
 }
 

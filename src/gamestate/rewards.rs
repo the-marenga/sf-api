@@ -8,7 +8,7 @@ use strum::EnumIter;
 
 use super::{
     character::Class, items::*, tavern::QuestLocation, unlockables::PetClass,
-    CCGet, CGet,
+    CCGet, CFPGet, CGet,
 };
 use crate::{
     command::AttributeType,
@@ -455,17 +455,18 @@ pub struct Reward {
 }
 
 impl Reward {
-    pub(crate) fn parse(data: &[i64]) -> Reward {
-        Reward {
-            typ: warning_parse(data[0], "reward typ", FromPrimitive::from_i64)
+    pub(crate) fn parse(data: &[i64]) -> Result<Reward, SFError> {
+        Ok(Reward {
+            typ: data
+                .cfpget(0, "reward typ", |a| a)?
                 .unwrap_or(RewardTyp::Unknown),
-            amount: soft_into(data[1], "reward amount", 0),
-        }
+            amount: data.csiget(1, "reward amount", 0)?,
+        })
     }
 }
 
 impl RewardChest {
-    pub(crate) fn parse(data: &[i64]) -> RewardChest {
+    pub(crate) fn parse(data: &[i64]) -> Result<RewardChest, SFError> {
         let mut reward: [Option<Reward>; 2] = Default::default();
 
         let indices: &[usize] = match data.len() {
@@ -474,13 +475,13 @@ impl RewardChest {
         };
 
         for (i, reward) in indices.iter().copied().zip(&mut reward) {
-            *reward = Some(Reward::parse(&data[i..]));
+            *reward = Some(Reward::parse(&data[i..])?);
         }
 
-        RewardChest {
+        Ok(RewardChest {
             opened: data[0] == 1,
             reward,
-        }
+        })
     }
 }
 
