@@ -1,5 +1,5 @@
 use chrono::{DateTime, Local};
-use log::error;
+use log::{error, warn};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
@@ -59,6 +59,13 @@ impl ExpeditionsEvent {
     /// expedition, that has elapsed, you access expeditions with this
     pub fn active(&self) -> Option<&Expedition> {
         self.active.as_ref().filter(|a| !a.is_finished())
+    }
+
+    /// Expeditions finish after the last timer elapses. That means, this can
+    /// happen without any new requests. To make sure you do not access an
+    /// expedition, that has elapsed, you access expeditions with this
+    pub fn active_mut(&mut self) -> Option<&mut Expedition> {
+        self.active.as_mut().filter(|a| !a.is_finished())
     }
 }
 
@@ -241,7 +248,7 @@ impl Toilet {
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Expedition {
-    /// The items
+    /// The items collected durign the expedition
     pub items: [Option<ExpeditionThing>; 4],
 
     /// The thing, that we are searching on this expedition
@@ -252,12 +259,16 @@ pub struct Expedition {
     pub target_amount: u8,
 
     /// The level we are currently clearing. Starts at 1
-    pub(crate) current_floor: u8,
+    pub current_floor: u8,
     ///  The heroism we have collected so far
     pub heroism: i32,
 
+    pub(crate) adjusted_bounty_heroism: bool,
+
+    pub(crate) floor_stage: i64,
+
     /// Choose one of these rewards
-    pub(crate) halftime_rewards: Vec<Reward>,
+    pub(crate) rewards: Vec<Reward>,
     pub(crate) halftime_for_boss_id: i64,
     /// If we encountered a boss, this will contain information about it
     pub(crate) boss: ExpeditionBoss,
@@ -267,23 +278,39 @@ pub struct Expedition {
 }
 
 impl Expedition {
-    #[must_use]
-    /// Returns the current floor the player is on. This is dependant on time,
-    /// because the timers are lazily evaluated. That means it might flip
-    /// from 5->6, 10 -> None between calls. None here means the expedition
-    /// is finished
-    pub fn current_floor(&self) -> Option<u8> {
-        if matches!(self.current_floor, 5 | 10) {
-            if let Some(busy_until) = self.busy_until {
-                if busy_until < Local::now() {
-                    if self.current_floor == 5 {
-                        return Some(6);
-                    }
-                    return None;
+    pub(crate) fn adjust_bounty_heroism(&mut self) {
+        if self.adjusted_bounty_heroism {
+            return;
+        }
+
+        for ExpeditionEncounter { typ, heroism } in &mut self.crossroads {
+            if let Some(possible_bounty) = typ.required_bounty() {
+                if self.items.iter().flatten().any(|a| a == &possible_bounty) {
+                    *heroism += 10;
                 }
             }
         }
-        Some(self.current_floor)
+        self.adjusted_bounty_heroism = true;
+    }
+
+    pub(crate) fn update_cross_roads(&mut self, data: &[i64]) {
+        if data.len() % 2 != 0 {
+            warn!("weird crossroads: {data:?}");
+        }
+        let default_ecp = |ci| {
+            warn!("Unknown crossroad enc: {ci}");
+            ExpeditionThing::Unknown
+        };
+        self.crossroads = data
+            .chunks_exact(2)
+            .filter_map(|ci| {
+                let raw = *ci.first()?;
+                let typ = FromPrimitive::from_i64(raw)
+                    .unwrap_or_else(|| default_ecp(raw));
+                let heroism = soft_into(*ci.get(1)?, "e heroism", 0);
+                Some(ExpeditionEncounter { typ, heroism })
+            })
+            .collect();
     }
 
     #[must_use]
@@ -291,17 +318,21 @@ impl Expedition {
     /// time, because the timers are lazily evaluated. That means it might
     /// flip from Waiting->Crossroads/Finished between calls
     pub fn current_stage(&self) -> ExpeditionStage {
-        match self.current_floor() {
-            None => ExpeditionStage::Finished,
-            Some(5 | 10) => {
-                if self.halftime_rewards.is_empty()
-                    || self.halftime_for_boss_id != self.boss.id
-                {
-                    return ExpeditionStage::Boss(self.boss);
+        let cross_roads =
+            || ExpeditionStage::Crossroads(self.crossroads.clone());
+
+        match self.floor_stage {
+            1 => cross_roads(),
+            2 => ExpeditionStage::Boss(self.boss),
+            3 => ExpeditionStage::Rewards(self.rewards.clone()),
+            4 => match self.busy_until {
+                Some(x) if x > Local::now() => ExpeditionStage::Waiting(x),
+                Some(_) if self.current_floor == 10 => {
+                    ExpeditionStage::Finished
                 }
-                ExpeditionStage::Rewards(self.halftime_rewards.clone())
-            }
-            _ => ExpeditionStage::Crossroads(self.crossroads.clone()),
+                _ => cross_roads(),
+            },
+            _ => ExpeditionStage::Unknown,
         }
     }
 
@@ -328,6 +359,9 @@ pub enum ExpeditionStage {
     Waiting(DateTime<Local>),
     /// The expedition has finished and you can choose another one
     Finished,
+    /// Something strange happened and the current stage is not known. Feel
+    /// free to try anything from logging in again to just continuing
+    Unknown,
 }
 
 impl Default for ExpeditionStage {
@@ -348,12 +382,11 @@ pub struct ExpeditionBoss {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ExpeditionEncounter {
+    /// The type of thing you engage, or find on this path
     pub typ: ExpeditionThing,
-    /// The heroism you get from picking this encounter. Note that this is only
-    /// the base  value, so for the alst encounter, or if you have a
-    /// corresponding item, you may need to adjust this +10
-    // TODO: Do this automatically
-    pub base_heroism: i32,
+    /// The heroism you get from picking this encounter. This contains bonus
+    /// from bounties, but no further boni from
+    pub heroism: i32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Default)]
@@ -423,6 +456,52 @@ pub enum ExpeditionThing {
     BaloonBounty = 1010,
     FrogBounty = 1011,
     KlausBounty = 1012,
+}
+
+impl ExpeditionThing {
+    #[must_use]
+    #[allow(clippy::enum_glob_use)]
+    /// Returns the associated bounty item required to get a +10 bonus for
+    /// picking up this item
+    pub fn required_bounty(&self) -> Option<ExpeditionThing> {
+        use ExpeditionThing::*;
+        Some(match self {
+            Dummy1 | Dummy2 | Dumy3 => DummyBounty,
+            ToiletPaper => ToiletPaperBounty,
+            Dragon => DragonBounty,
+            BurntCampfire => BurntCampfireBounty,
+            Unicorn => UnicornBounty,
+            WinnersPodium => WinnerPodiumBounty,
+            RevealingCouple => RevealingCoupleBounty,
+            BrokenSword => BrokenSwordBounty,
+            Balloons => BaloonBounty,
+            RoyalFrog => FrogBounty,
+            Klaus => KlausBounty,
+            _ => return None,
+        })
+    }
+
+    #[must_use]
+    #[allow(clippy::enum_glob_use)]
+    /// If the thing is a bounty, this will contain all the things, that receive
+    /// a bonus
+    pub fn is_bounty_for(&self) -> Option<&'static [ExpeditionThing]> {
+        use ExpeditionThing::*;
+        Some(match self {
+            DummyBounty => &[Dummy1, Dummy2, Dumy3],
+            ToiletPaperBounty => &[ToiletPaper],
+            DragonBounty => &[Dragon],
+            BurntCampfireBounty => &[BurntCampfire],
+            UnicornBounty => &[Unicorn],
+            WinnerPodiumBounty => &[WinnersPodium],
+            RevealingCoupleBounty => &[RevealingCouple],
+            BrokenSwordBounty => &[BrokenSword],
+            BaloonBounty => &[Balloons],
+            FrogBounty => &[RoyalFrog],
+            KlausBounty => &[Klaus],
+            _ => return None,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

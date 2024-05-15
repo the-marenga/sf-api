@@ -877,7 +877,7 @@ impl GameState {
                         .get_or_insert_with(Default::default);
 
                     exp.halftime_for_boss_id = -data[0];
-                    exp.halftime_rewards = data
+                    exp.rewards = data
                         .skip(1, "halftime choice")?
                         .chunks_exact(2)
                         .map(Reward::parse)
@@ -890,6 +890,7 @@ impl GameState {
                         .expeditions
                         .active
                         .get_or_insert_with(Default::default);
+                    exp.floor_stage = data[2];
 
                     exp.target_thing = warning_parse(
                         data[3],
@@ -931,27 +932,7 @@ impl GameState {
                         .expeditions
                         .active
                         .get_or_insert_with(Default::default);
-                    if data.len() % 2 != 0 {
-                        warn!("weird crossroads: {data:?}");
-                    }
-                    let default_ecp = |ci| {
-                        warn!("Unknown crossroad enc: {ci}");
-                        ExpeditionThing::Unknown
-                    };
-                    exp.crossroads = data
-                        .chunks_exact(2)
-                        .filter_map(|ci| {
-                            let raw = *ci.first()?;
-                            let typ = FromPrimitive::from_i64(raw)
-                                .unwrap_or_else(|| default_ecp(raw));
-                            let heroism =
-                                soft_into(*ci.get(1)?, "e heroism", 0);
-                            Some(ExpeditionEncounter {
-                                typ,
-                                base_heroism: heroism,
-                            })
-                        })
-                        .collect();
+                    exp.update_cross_roads(&data);
                 }
                 "eventtasklist" => {
                     let data: Vec<i64> = val.into_list("etl")?;
@@ -967,7 +948,7 @@ impl GameState {
                         .chunks_exact(5)
                         .zip(&mut self.specials.tasks.event.rewards)
                     {
-                        *chest = RewardChest::parse(chunk)?
+                        *chest = RewardChest::parse(chunk)?;
                     }
                 }
                 "dailytasklist" => {
@@ -1220,17 +1201,21 @@ impl GameState {
                 x if x.starts_with("attbonus") => {
                     // This is always 0s, so I have no idea what this could be
                 }
-                _x => {
-                    warn!("Update ignored {_x} -> {val:?}");
+                x => {
+                    warn!("Update ignored {x} -> {val:?}");
                 }
             }
+        }
+
+        if let Some(exp) = self.tavern.expeditions.active_mut() {
+            exp.adjust_bounty_heroism();
         }
 
         if let Some(og) = other_guild {
             self.hall_of_fames.other_guilds.insert(og.name.clone(), og);
         }
         if let Some(other_player) = other_player {
-            self.hall_of_fames.insert_lookup(other_player)
+            self.hall_of_fames.insert_lookup(other_player);
         }
         if let Some(t) = &self.dungeons.portal {
             if t.current == 0 {
@@ -1239,7 +1224,7 @@ impl GameState {
         }
         if let Some(pets) = &self.pets {
             if pets.rank == 0 {
-                self.pets = None
+                self.pets = None;
             }
         }
         if let Some(t) = &self.guild {
