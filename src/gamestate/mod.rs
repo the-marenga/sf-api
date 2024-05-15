@@ -231,7 +231,7 @@ impl GameState {
                         update_enum_map(
                             &mut companions.get_mut(class).attributes,
                             &data[(comp_start + 4)..],
-                        )
+                        );
                     }
                     // Why would they include this in the tower response???
                     self.unlocks
@@ -504,13 +504,13 @@ impl GameState {
                     // Dead since last update
                 }
                 "calenderreward" => {
-                    // Probably removed and shoould be irrelevant
+                    // Probably removed and should be irrelevant
                 }
                 "oktoberfest" => {
                     // Not sure if this is still used, but it seems to just be
                     // empty.
                     if !val.as_str().is_empty() {
-                        warn!("oktoberfest response is not empty: {val}")
+                        warn!("oktoberfest response is not empty: {val}");
                     }
                 }
                 "usersettings" => {
@@ -977,7 +977,7 @@ impl GameState {
                     let data: Vec<i64> = val.into_list("eti")?;
                     self.special.tasks.event.theme = data
                         .cfpget(2, "event task typ", |a| a)?
-                        .unwrap_or(EventTaskTheme::Unknown);
+                        .unwrap_or(EventTasksTheme::Unknown);
                     self.special.tasks.event.start =
                         data.cstget(0, "event t start", server_time)?;
                     self.special.tasks.event.end =
@@ -1380,13 +1380,15 @@ impl GameState {
             soft_into(data[628], "remaining pet battles", 0);
         self.character.druid_mask = FromPrimitive::from_i64(data[653]);
         self.character.bard_instrument = FromPrimitive::from_i64(data[701]);
-
+        self.special.calendar.collected =
+            data.csimget(648, "calendat collected", 245, |a| a >> 16)?;
         self.special.calendar.next_possible =
             server_time.convert_to_local(data[649], "calendar next");
         self.tavern.dice_games_next_free =
             server_time.convert_to_local(data[650], "dice next");
         self.tavern.dice_games_remaining =
             soft_into(data[651], "rem dice games", 0);
+
         Ok(())
     }
 

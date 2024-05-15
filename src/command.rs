@@ -562,9 +562,7 @@ pub struct DiceReward {
     pub amount: u32,
 }
 
-#[derive(
-    Debug, Copy, Clone, strum::EnumCount, PartialEq, Eq, Enum, FromPrimitive,
-)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Enum, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum AttributeType {
     Strength = 1,

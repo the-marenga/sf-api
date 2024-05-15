@@ -4,6 +4,7 @@ use chrono::{DateTime, Local};
 use log::warn;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
+use strum::EnumIter;
 
 use super::{
     character::Class, items::*, tavern::QuestLocation, unlockables::PetClass,
@@ -218,6 +219,10 @@ pub struct Events {
 #[doc(alias = "DailyLoginBonus")]
 /// Grants rewards once a day
 pub struct Calendar {
+    /// The amount of times the calendar has been collected already.
+    /// `rewards[collected]` will give you the position in the rewards you will
+    /// get for collecting today (if you can)
+    pub collected: usize,
     /// The things you can get from the calendar
     pub rewards: Vec<CalendarReward>,
     /// The time at which the calendar door wll be unlocked. If this is in the
@@ -250,7 +255,7 @@ pub struct DailyTasks {
 /// Information about the tasks, that are based on some event theme
 pub struct EventTasks {
     /// The "theme" the event task has. This is mainly irrelevant
-    pub theme: EventTaskTheme,
+    pub theme: EventTasksTheme,
     /// The time at which the event tasks have been set
     pub start: Option<DateTime<Local>>,
     /// The time at which the event tasks will reset
@@ -321,9 +326,11 @@ pub struct Wheel {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Default, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum EventTaskTheme {
+#[allow(missing_docs)]
+/// The theme the event tasks have
+pub enum EventTasksTheme {
     ShoppingSpree = 4,
     TimeSkipper = 5,
     RuffianReset = 6,
@@ -336,8 +343,10 @@ pub enum EventTaskTheme {
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// The type of task you have to do
 pub enum EventTaskTyp {
     LureHeroesIntoUnderworld,
     WinFightsAgainst(Class),
@@ -367,45 +376,44 @@ pub enum EventTaskTyp {
 }
 
 impl EventTaskTyp {
-    pub fn parse(num: i64) -> EventTaskTyp {
-        use EventTaskTyp::*;
+    pub(crate) fn parse(num: i64) -> EventTaskTyp {
         match num {
-            12 => LureHeroesIntoUnderworld,
-            48 => WinFightsAgainst(Class::Warrior),
-            49 => WinFightsAgainst(Class::Mage),
-            50 => WinFightsAgainst(Class::Scout),
-            51 => WinFightsAgainst(Class::Assassin),
-            52 => WinFightsAgainst(Class::Druid),
-            53 => WinFightsAgainst(Class::Bard),
-            54 => WinFightsAgainst(Class::BattleMage),
-            55 => WinFightsAgainst(Class::Berserker),
-            56 => WinFightsAgainst(Class::DemonHunter),
-            57 => WinFightsBareHands,
-            65 => SpendGoldInShop,
-            66 => SpendGoldOnUpgrades,
-            67 => RequestNewGoods,
-            68 => BuyHourGlasses,
-            69 => SkipQuest,
-            70 => SkipGameOfDiceWait,
-            71 => WinFights,
-            72 => WinFightsBackToBack,
-            75 => WinFightsNoChestplate,
-            76 => WinFightsNoGear,
-            77 => WinFightsNoEpicsLegendaries,
-            78 => EarnMoneyCityGuard,
-            79 => EarnMoneyFromHoFFights,
-            80 => EarnMoneySellingItems,
-            81 => ColectGoldFromPit,
-            82 => GainXpFromQuests,
-            83 => GainXpFromAcademy,
-            84 => GainXpFromArenaFights,
-            85 => GainXpFromAdventuromatic,
-            90 => ClaimSoulsFromExtractor,
-            91 => FillMushroomsInAdventuromatic,
-            92 => WinFightsAgainst(Class::Necromancer),
+            12 => EventTaskTyp::LureHeroesIntoUnderworld,
+            48 => EventTaskTyp::WinFightsAgainst(Class::Warrior),
+            49 => EventTaskTyp::WinFightsAgainst(Class::Mage),
+            50 => EventTaskTyp::WinFightsAgainst(Class::Scout),
+            51 => EventTaskTyp::WinFightsAgainst(Class::Assassin),
+            52 => EventTaskTyp::WinFightsAgainst(Class::Druid),
+            53 => EventTaskTyp::WinFightsAgainst(Class::Bard),
+            54 => EventTaskTyp::WinFightsAgainst(Class::BattleMage),
+            55 => EventTaskTyp::WinFightsAgainst(Class::Berserker),
+            56 => EventTaskTyp::WinFightsAgainst(Class::DemonHunter),
+            57 => EventTaskTyp::WinFightsBareHands,
+            65 => EventTaskTyp::SpendGoldInShop,
+            66 => EventTaskTyp::SpendGoldOnUpgrades,
+            67 => EventTaskTyp::RequestNewGoods,
+            68 => EventTaskTyp::BuyHourGlasses,
+            69 => EventTaskTyp::SkipQuest,
+            70 => EventTaskTyp::SkipGameOfDiceWait,
+            71 => EventTaskTyp::WinFights,
+            72 => EventTaskTyp::WinFightsBackToBack,
+            75 => EventTaskTyp::WinFightsNoChestplate,
+            76 => EventTaskTyp::WinFightsNoGear,
+            77 => EventTaskTyp::WinFightsNoEpicsLegendaries,
+            78 => EventTaskTyp::EarnMoneyCityGuard,
+            79 => EventTaskTyp::EarnMoneyFromHoFFights,
+            80 => EventTaskTyp::EarnMoneySellingItems,
+            81 => EventTaskTyp::ColectGoldFromPit,
+            82 => EventTaskTyp::GainXpFromQuests,
+            83 => EventTaskTyp::GainXpFromAcademy,
+            84 => EventTaskTyp::GainXpFromArenaFights,
+            85 => EventTaskTyp::GainXpFromAdventuromatic,
+            90 => EventTaskTyp::ClaimSoulsFromExtractor,
+            91 => EventTaskTyp::FillMushroomsInAdventuromatic,
+            92 => EventTaskTyp::WinFightsAgainst(Class::Necromancer),
             x => {
                 warn!("Unknown event task typ: {x}");
-                Unknown
+                EventTaskTyp::Unknown
             }
         }
     }
@@ -425,9 +433,9 @@ impl EventTask {
         let raw_typ = data.cget(0, "event task typ")?;
         Ok(EventTask {
             typ: EventTaskTyp::parse(raw_typ),
-            current: soft_into(data[1], "current eti", 0),
-            target: soft_into(data[2], "target eti", u64::MAX),
-            point_reward: soft_into(data[3], "reward eti", 0),
+            current: data.csiget(1, "current eti", 0)?,
+            target: data.csiget(2, "target eti", u64::MAX)?,
+            point_reward: data.csiget(3, "reward eti", 0)?,
         })
     }
 }
@@ -492,18 +500,10 @@ pub enum RewardTyp {
     Unknown = 999,
 }
 
-#[derive(
-    Debug,
-    Clone,
-    Copy,
-    FromPrimitive,
-    PartialEq,
-    Eq,
-    Hash,
-    strum::EnumCount,
-    strum::EnumIter,
-)]
+#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// The type of event, that is currently happening on the server
 pub enum Event {
     ExceptionalXPEvent = 0,
     GloriousGoldGalore,
@@ -526,28 +526,35 @@ pub enum Event {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Something you have to do to get bells
 pub struct DailyTask {
-    pub typ: DailyQuestType,
+    /// The thing you have to do to get points
+    pub typ: DailyTaskType,
+    /// The amount of `typ` you have currently alredy done
     pub current: u64,
+    /// The amount of `typ` you have to do to get the points
     pub target: u64,
+    /// The amount of points/bells you get
     pub point_reward: u32,
 }
 
 impl DailyTask {
     pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
         Ok(DailyTask {
-            point_reward: data.csiget(3, "daily bells", 0)?,
-            typ: DailyQuestType::parse(data[0]),
+            typ: DailyTaskType::parse(data.cget(0, "daily task type")?),
             current: data.csiget(1, "daily current", 0)?,
             target: data.csiget(2, "daily target", 999)?,
+            point_reward: data.csiget(3, "daily bells", 0)?,
         })
     }
 }
 
 #[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum DailyQuestType {
+#[allow(missing_docs)]
+/// The type of quest you have to complete to get the points of a daily task
+pub enum DailyTaskType {
     DrinkBeer,
     FindGemInFortress,
     ConsumeThirstForAdventure,
@@ -579,58 +586,57 @@ pub enum DailyQuestType {
     Unknown,
 }
 
-impl DailyQuestType {
-    pub(crate) fn parse(val: i64) -> DailyQuestType {
-        use DailyQuestType::*;
+impl DailyTaskType {
+    pub(crate) fn parse(val: i64) -> DailyTaskType {
         match val {
-            1 => DrinkBeer,
-            2 => ConsumeThirstForAdventure,
-            3 => WinFights(None),
-            4 => SpinWheelOfFortune,
-            5 => FightGuildHydra,
-            6 => FightGuildPortal,
-            7 => FeedPets,
-            8 => FightOtherPets,
-            9 => BlacksmithDismantle,
-            10 => ThrowItemInToilet,
-            11 => PlayDice,
-            12 => LureHeoesInUnderworld,
-            13 => EnterDemonPortal,
-            14 => DefeatGambler,
-            15 => Upgrade(AttributeType::Strength),
-            16 => Upgrade(AttributeType::Dexterity),
-            17 => Upgrade(AttributeType::Intelligence),
-            18 => ConsumeThirstFromUnderworld,
-            19 => GuildReadyFight,
-            20 => FindGemInFortress,
-            21 => ThrowItemInCauldron,
-            22 => FightInPetHabitat,
-            23 => UpgradeArenaManager,
-            24 => SacrificeRunes,
+            1 => DailyTaskType::DrinkBeer,
+            2 => DailyTaskType::ConsumeThirstForAdventure,
+            3 => DailyTaskType::WinFights(None),
+            4 => DailyTaskType::SpinWheelOfFortune,
+            5 => DailyTaskType::FightGuildHydra,
+            6 => DailyTaskType::FightGuildPortal,
+            7 => DailyTaskType::FeedPets,
+            8 => DailyTaskType::FightOtherPets,
+            9 => DailyTaskType::BlacksmithDismantle,
+            10 => DailyTaskType::ThrowItemInToilet,
+            11 => DailyTaskType::PlayDice,
+            12 => DailyTaskType::LureHeoesInUnderworld,
+            13 => DailyTaskType::EnterDemonPortal,
+            14 => DailyTaskType::DefeatGambler,
+            15 => DailyTaskType::Upgrade(AttributeType::Strength),
+            16 => DailyTaskType::Upgrade(AttributeType::Dexterity),
+            17 => DailyTaskType::Upgrade(AttributeType::Intelligence),
+            18 => DailyTaskType::ConsumeThirstFromUnderworld,
+            19 => DailyTaskType::GuildReadyFight,
+            20 => DailyTaskType::FindGemInFortress,
+            21 => DailyTaskType::ThrowItemInCauldron,
+            22 => DailyTaskType::FightInPetHabitat,
+            23 => DailyTaskType::UpgradeArenaManager,
+            24 => DailyTaskType::SacrificeRunes,
             25..=45 => {
                 let Some(location) = FromPrimitive::from_i64(val - 24) else {
-                    return Unknown;
+                    return DailyTaskType::Unknown;
                 };
-                TravelTo(location)
+                DailyTaskType::TravelTo(location)
             }
-            46 => ThrowEpicInToilet,
-            47 => BuyOfferFromArenaManager,
-            48 => WinFights(Some(Class::Warrior)),
-            49 => WinFights(Some(Class::Mage)),
-            50 => WinFights(Some(Class::Scout)),
-            51 => WinFights(Some(Class::Assassin)),
-            52 => WinFights(Some(Class::Druid)),
-            53 => WinFights(Some(Class::Bard)),
-            54 => WinFights(Some(Class::BattleMage)),
-            55 => WinFights(Some(Class::Berserker)),
-            56 => WinFights(Some(Class::DemonHunter)),
-            57 => WinFightsWithBareHands,
-            58 => DefeatOtherPet,
-            77 => WinFightsWithoutEpics,
-            92 => WinFights(Some(Class::Necromancer)),
+            46 => DailyTaskType::ThrowEpicInToilet,
+            47 => DailyTaskType::BuyOfferFromArenaManager,
+            48 => DailyTaskType::WinFights(Some(Class::Warrior)),
+            49 => DailyTaskType::WinFights(Some(Class::Mage)),
+            50 => DailyTaskType::WinFights(Some(Class::Scout)),
+            51 => DailyTaskType::WinFights(Some(Class::Assassin)),
+            52 => DailyTaskType::WinFights(Some(Class::Druid)),
+            53 => DailyTaskType::WinFights(Some(Class::Bard)),
+            54 => DailyTaskType::WinFights(Some(Class::BattleMage)),
+            55 => DailyTaskType::WinFights(Some(Class::Berserker)),
+            56 => DailyTaskType::WinFights(Some(Class::DemonHunter)),
+            57 => DailyTaskType::WinFightsWithBareHands,
+            58 => DailyTaskType::DefeatOtherPet,
+            77 => DailyTaskType::WinFightsWithoutEpics,
+            92 => DailyTaskType::WinFights(Some(Class::Necromancer)),
             x => {
                 warn!("Unknown daily quest: {x}");
-                Unknown
+                DailyTaskType::Unknown
             }
         }
     }

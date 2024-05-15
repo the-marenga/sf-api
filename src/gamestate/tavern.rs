@@ -90,7 +90,7 @@ pub struct Quest {
     pub monster_id: u16,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Copy, FromPrimitive)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Copy, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum QuestLocation {
     #[default]

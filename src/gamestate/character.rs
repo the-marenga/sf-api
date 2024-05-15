@@ -116,17 +116,17 @@ impl Portrait {
     pub(crate) fn parse(data: &[i64]) -> Result<Portrait, SFError> {
         Ok(Self {
             mouth: data.csiget(0, "mouth", 1)?,
-            hair_color: data.csiget(1, "hair color", 100)? / 100,
-            hair: data.csiget(1, "hair", 1)? % 100,
+            hair_color: data.csimget(1, "hair color", 100, |a| a / 100)?,
+            hair: data.csimget(1, "hair", 1, |a| a % 100)?,
             brows: data.csiget(2, "brows", 1)? % 100,
             eyes: data.csiget(3, "eyes", 1)?,
-            beards: data.csiget(4, "beards", 1)? % 100,
+            beards: data.csimget(4, "beards", 1, |a| a % 100)?,
             nose: data.csiget(5, "nose", 1)?,
             ears: data.csiget(6, "ears", 1)?,
             extra: data.csiget(7, "extra", 1)?,
-            horns: data.csiget(8, "horns", 1)? % 100,
+            horns: data.csimget(8, "horns", 1, |a| a % 100)?,
             special_portrait: data.cget(9, "special portrait")?,
-            gender: Gender::from_i64(data.cget(11, "gender")? % 2)
+            gender: Gender::from_i64(data.csimget(11, "gender", 1, |a| a % 2)?)
                 .unwrap_or_default(),
         })
     }
