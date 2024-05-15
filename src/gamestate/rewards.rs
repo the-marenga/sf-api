@@ -7,14 +7,10 @@ use num_traits::FromPrimitive;
 use strum::EnumIter;
 
 use super::{
-    character::Class, items::*, tavern::QuestLocation, unlockables::PetClass,
-    CCGet, CFPGet, CGet,
+    character::Class, items::*, tavern::QuestLocation,
+    unlockables::HabitatType, CCGet, CFPGet, CGet,
 };
-use crate::{
-    command::AttributeType,
-    error::SFError,
-    misc::{soft_into, warning_parse},
-};
+use crate::{command::AttributeType, error::SFError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -137,7 +133,7 @@ pub enum CalendarRewardType {
     Runes,
     Item,
     Attribute(AttributeType),
-    Fruit(PetClass),
+    Fruit(HabitatType),
     Level,
     Potion(PotionType),
     TenQuicksandGlasses,
@@ -165,7 +161,7 @@ impl CalendarReward {
             14 => CalendarRewardType::Attribute(AttributeType::Constitution),
             15 => CalendarRewardType::Attribute(AttributeType::Luck),
             x @ 16..=20 => {
-                if let Some(typ) = PetClass::from_typ_id(x - 15) {
+                if let Some(typ) = HabitatType::from_typ_id(x - 15) {
                     CalendarRewardType::Fruit(typ)
                 } else {
                     warn!("unknown pet class in c rewards");

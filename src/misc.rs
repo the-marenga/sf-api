@@ -302,6 +302,21 @@ pub(crate) fn update_enum_map<
     }
 }
 
+pub(crate) fn update_enum_map_key<
+    C: Default + TryFrom<i64>,
+    B,
+    A: enum_map::Enum + enum_map::EnumArray<B>,
+>(
+    map: &mut enum_map::EnumMap<A, B>,
+    vals: &[i64],
+    fun: fn(&mut B) -> &mut C,
+) {
+    for (map_val, val) in map.as_mut_slice().iter_mut().zip(vals) {
+        let map_val = fun(map_val);
+        *map_val = soft_into(*val, "attribute val", C::default());
+    }
+}
+
 /// This is a workaround for clippy index warnings for safe index ops. It
 /// also is more convenient in some cases to use these fundtions if you want
 /// to make sure something is &mut, or &

@@ -14,7 +14,7 @@ use crate::{
         items::*,
         social::Relationship,
         underworld::*,
-        unlockables::Unlockable,
+        unlockables::{HabitatType, Unlockable},
     },
     misc::{sha1_hash, to_sf_string, HASH_CONST},
     PlayerId,
@@ -256,6 +256,22 @@ pub enum Command {
         current_level: u8,
         use_mush: bool,
     },
+    /// Fights the player opponent with your pet
+    FightPetOpponent {
+        habitat: HabitatType,
+        opponent_id: PlayerId,
+    },
+    FightPetDungeon {
+        use_mush: bool,
+        /// The
+        habitat: HabitatType,
+        /// This is `explored + 1` of the given habitat. Note that 20 explored
+        /// is the max, so providing 21 here will err
+        enemy_pos: u32,
+        /// This pet_id the id of the pet you want to send into battle.
+        /// The pet has to be from the same habitat, as the
+        player_pet_id: u32,
+    },
     /// Sets the guild info. Note the info about length limit from
     /// SetDescription
     GuildSetInfo {
@@ -300,10 +316,10 @@ pub enum Command {
     GuildSendChat {
         message: String,
     },
-    /// Enchants an item, if you have the scroll unlocked. Note that providing
-    /// shield here is undefined
+    /// Enchants the currently worn item, associated with this enchantment,
+    /// with the enchantment
     WitchEnchant {
-        position: EquipmentSlot,
+        enchantment: Enchantment,
     },
     SpinWheelOfFortune {
         fortune_payment: FortunePayment,
@@ -868,8 +884,8 @@ impl Command {
                 position + 1,
                 *action as usize
             ),
-            Command::WitchEnchant { position } => {
-                format!("PlayerWitchEnchantItem:{}/1", position.witch_id())
+            Command::WitchEnchant { enchantment } => {
+                format!("PlayerWitchEnchantItem:{}/1", enchantment.enchant_id())
             }
             Command::SpinWheelOfFortune { fortune_payment } => {
                 format!("WheelOfFortune:{}", *fortune_payment as usize)
@@ -1070,6 +1086,24 @@ impl Command {
                 *name as u32 + 1,
                 u8::from(*use_mushroom)
             ),
+            Command::FightPetOpponent {
+                opponent_id,
+                habitat: element,
+            } => {
+                format!("PetsPvPFight:0/{opponent_id}/{}", *element as u32 + 1)
+            }
+            Command::FightPetDungeon {
+                use_mush,
+                habitat: element,
+                enemy_pos,
+                player_pet_id,
+            } => {
+                format!(
+                    "PetsDungeonFight:{}/{}/{enemy_pos}/{player_pet_id}",
+                    u8::from(*use_mush),
+                    *element as u8 + 1,
+                )
+            }
         }
     }
 }

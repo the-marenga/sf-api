@@ -1,10 +1,20 @@
 use chrono::{DateTime, Local};
+use enum_map::Enum;
 use log::error;
 use num_traits::FromPrimitive;
-use strum::EnumCount;
+use strum::EnumIter;
 
 use super::*;
 use crate::{gamestate::items::*, misc::*, PlayerId};
+
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct HellevatorEvent {
+    pub start: Option<DateTime<Local>>,
+    pub end: Option<DateTime<Local>>,
+    pub collect_time_end: Option<DateTime<Local>>,
+    pub active: Option<Hellevator>,
+}
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -14,21 +24,42 @@ pub struct Hellevator {
     pub points: u32,
     pub has_final_reward: bool,
     pub points_today: u32,
-    pub event_start: Option<DateTime<Local>>,
-    pub event_end: Option<DateTime<Local>>,
-    pub collect_time_end: Option<DateTime<Local>>,
     pub next_card_generated: Option<DateTime<Local>>,
     pub next_reset: Option<DateTime<Local>>,
     pub start_contrib_date: Option<DateTime<Local>>,
 }
 
+impl Hellevator {
+    pub(crate) fn parse(
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<Option<Hellevator>, SFError> {
+        Ok(Some(Hellevator {
+            key_cards: soft_into(data[0], "h key cards", 0),
+            next_card_generated: server_time
+                .convert_to_local(data[1], "next card"),
+            next_reset: server_time.convert_to_local(data[2], "next reset"),
+            current_floor: soft_into(data[3], "h current floor", 0),
+            points: soft_into(data[4], "h points", 0),
+            start_contrib_date: server_time
+                .convert_to_local(data[5], "start contrib"),
+            has_final_reward: data[6] == 1,
+            points_today: soft_into(data[10], "h points today", 0),
+        }))
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Witch {
-    pub required_item: Option<ItemType>,
+    /// The item type the witch wants today
+    pub required_item: Option<EquipmentSlot>,
+    /// Whether or not the cauldron is bubbling
     pub cauldron_bubbling: bool,
-    pub progress_prec: u32,
-    pub enchant_roles: Vec<(ItemType, usize)>,
+    /// The enchant role collection progress from 0-100
+    pub progress: u32,
+    /// Whether or not each enchantment has been unlocked yet
+    pub enchantments: EnumMap<Enchantment, bool>,
 }
 
 impl Witch {
@@ -38,8 +69,10 @@ impl Witch {
         server_time: ServerTime,
     ) -> Result<(), SFError> {
         self.required_item = None;
-        if data[5] == 0 {
-            self.required_item = ItemType::parse(&data[3..], server_time)?;
+        if data.cget(5, "w current item")? == 0 {
+            self.required_item =
+                ItemType::parse(data.skip(3, "witch item")?, server_time)?
+                    .and_then(|a| a.equipment_slot());
         }
         if self.required_item.is_none() {
             self.cauldron_bubbling = true;
@@ -47,36 +80,33 @@ impl Witch {
             // I would like to offer the raw values here, but the -1 just
             // makes this annoying. A Option<(u32, u32)> is also weird
             if data[1] == -1 || data[2] < 1 {
-                self.progress_prec = 100;
+                self.progress = 100;
+            } else {
+                let current = data[1] as f64;
+                let target = data[2] as f64;
+                self.progress = ((current / target) * 100.0) as u32;
             }
-            let current = data[1] as f64;
-            let target = data[2] as f64;
-            self.progress_prec = ((current / target) * 100.0) as u32;
         }
 
         for i in 0..data[7] as usize {
             let iid = data[9 + 3 * i] - 1;
-            if let Some(key) = match iid {
-                10 => Some(ItemType::Weapon {
-                    min_dmg: 0,
-                    max_dmg: 0,
-                }),
-                30 => Some(ItemType::BreastPlate),
-                40 => Some(ItemType::FootWear),
-                50 => Some(ItemType::Gloves),
-                60 => Some(ItemType::Hat),
-                70 => Some(ItemType::Belt),
-                80 => Some(ItemType::Amulet),
-                90 => Some(ItemType::Ring),
-                100 => Some(ItemType::Talisman),
-                0 => None,
+            let key = match iid {
+                0 => continue,
+                10 => Enchantment::SwordOfVengeance,
+                30 => Enchantment::MariosBeard,
+                40 => Enchantment::ManyFeetBoots,
+                50 => Enchantment::ShadowOfTheCowboy,
+                60 => Enchantment::AdventurersArchaeologicalAura,
+                70 => Enchantment::ThirstyWanderer,
+                80 => Enchantment::UnholyAcquisitiveness,
+                90 => Enchantment::TheGraveRobbersPrayer,
+                100 => Enchantment::RobberBaronRitual,
                 x => {
                     warn!("Unknown witch enchant itemtype: {x}");
-                    None
+                    continue;
                 }
-            } {
-                self.enchant_roles.push((key, i + 1));
-            }
+            };
+            *self.enchantments.get_mut(key) = true;
         }
         Ok(())
     }
@@ -96,83 +126,127 @@ const PETS_PER_HABITAT: usize = 20;
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct PetCollection {
+pub struct Pets {
+    /// The total amount of pets collected in all habitats
     pub total_collected: u16,
-    pub next_free_fight: Option<DateTime<Local>>,
     pub rank: u32,
     pub honor: u32,
     pub max_pet_level: u16,
-    pub remaining_pet_battles: u16,
-
-    pub enemy_id: Option<PlayerId>,
-    pub enemy_pet_count: u32,
-    pub enemy_level_total: u32,
-
-    pub enemy_reroll_date: Option<DateTime<Local>>,
-    pub enemy_pet_type: Option<PetClass>,
-
-    pub pets: [[Pet; PETS_PER_HABITAT]; PetClass::COUNT],
-
-    pub explored_pets: [u32; PetClass::COUNT],
-    /// The amount of fruits corresponding to that PetClass
-    pub fruits: [u16; PetClass::COUNT],
-    pub habitat_fights_finished: [bool; PetClass::COUNT],
-    pub next_explore_pet_lvl: [u16; PetClass::COUNT],
-
+    /// Information about the pvp opponent you can attack with your pets
+    pub opponent: PetOpponent,
+    /// Information about all the different habitats
+    pub habitats: EnumMap<HabitatType, Habitat>,
+    /// The next time the exploration will be possible without spending a
+    /// mushroom
+    pub next_free_exploration: Option<DateTime<Local>>,
+    /// The bonus the player receives from pets
     pub atr_bonus: EnumMap<AttributeType, u32>,
-    pub dungeon_timer: Option<DateTime<Local>>,
 }
 
-impl PetCollection {
-    pub(crate) fn update(&mut self, data: &[i64], server_time: ServerTime) {
-        for (idx, p) in data[210..215].iter().copied().enumerate() {
-            self.explored_pets[idx] = soft_into(p, "pet exp", 0);
-        }
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Habitat {
+    /// The state of the exploration of this habitat
+    pub exploration: HabitatExploration,
+    /// The amount of fruits you have for this class
+    pub fruits: u16,
+    /// Has this habitat already fought an opponent today. If so, they can not
+    /// do this until the next day
+    pub battled_opponent: bool,
+    pub pets: [Pet; PETS_PER_HABITAT],
+}
 
-        for i in 0..PETS_PER_HABITAT * PetClass::COUNT {
-            let pet_id = (i + 1) as u32;
-            let element = PetClass::from_pet_id(pet_id as i64).unwrap();
-            self.pets[i / 20][i % 20] = Pet {
-                index: pet_id,
-                level: soft_into(data[i + 2], "pet level", 0),
-                fruits_today: soft_into(data[i + 110], "fruits today", 0),
-                element,
-                can_be_found: data[i + 2] == 0
-                    && 3.max(self.explored_pets[element as usize])
-                        >= pet_id % 20,
-                stats: None,
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Represents the current state of the habitat exploration
+pub enum HabitatExploration {
+    #[default]
+    /// Explored/won all 20 habitat battles. This means you can no longer fight
+    /// in the habitat
+    Finished,
+    /// The habitat has not yet been fully explored
+    Exploring {
+        /// The amount of pets you have already won fights against (explored)
+        /// 0..=19
+        fights_won: u32,
+        /// The level of the next habitat exploration fight
+        next_fight_lvl: u16,
+    },
+}
+
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PetOpponent {
+    pub id: PlayerId,
+    pub pet_count: u32,
+    pub level_total: u32,
+    /// The next time a battle against this opponent will cost no mushroom
+    pub next_free_battle: Option<DateTime<Local>>,
+    /// The time the opponent was chosen
+    pub reroll_date: Option<DateTime<Local>>,
+    pub habitat: Option<HabitatType>,
+}
+
+impl Pets {
+    pub(crate) fn update(
+        &mut self,
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<(), SFError> {
+        let mut pet_id = 0;
+        for (element_idx, element) in HabitatType::iter().enumerate() {
+            let info = self.habitats.get_mut(element);
+            let explored = data.csiget(210 + element_idx, "pet exp", 20)?;
+            info.exploration = if explored == 20 {
+                HabitatExploration::Finished
+            } else {
+                let next_lvl =
+                    data.csiget(238 + element_idx, "next exp pet lvl", 1_000)?;
+                HabitatExploration::Exploring {
+                    fights_won: explored,
+                    next_fight_lvl: next_lvl,
+                }
             };
+            for (pet_pos, pet) in info.pets.iter_mut().enumerate() {
+                pet_id += 1;
+                pet.id = pet_id;
+                pet.level =
+                    data.csiget((pet_id + 1) as usize, "pet level", 0)?;
+                pet.fruits_today =
+                    data.csiget((pet_id + 109) as usize, "pet fruits td", 0)?;
+                pet.element = element;
+                pet.can_be_found =
+                    pet.level == 0 && explored as usize >= pet_pos;
+            }
+            info.battled_opponent =
+                1 == data.cget(223 + element_idx, "element ff")?;
         }
 
         self.total_collected = soft_into(data[103], "total pets", 0);
-
-        for i in 0..5 {
-            self.habitat_fights_finished[i] = data[223 + i] == 1;
-        }
-
-        self.enemy_id = data[231].try_into().ok();
-        self.next_free_fight =
+        self.opponent.id = data[231].try_into().unwrap_or_default();
+        self.opponent.next_free_battle =
             server_time.convert_to_local(data[232], "next free pet fight");
         self.rank = soft_into(data[233], "pet rank", 0);
         self.honor = soft_into(data[234], "pet honor", 0);
 
-        self.enemy_pet_count = soft_into(data[235], "pet enemy count", 0);
-        self.enemy_level_total = soft_into(data[236], "pet enemy lvl total", 0);
-        self.enemy_reroll_date =
+        self.opponent.pet_count = soft_into(data[235], "pet enemy count", 0);
+        self.opponent.level_total =
+            soft_into(data[236], "pet enemy lvl total", 0);
+        self.opponent.reroll_date =
             server_time.convert_to_local(data[237], "pet enemy reroll date");
 
-        for (idx, lvl) in data[238..243].iter().enumerate() {
-            self.next_explore_pet_lvl[idx] =
-                soft_into(*lvl, "next exp pet lvl", 100)
-        }
-
-        update_enum_map(&mut self.atr_bonus, &data[250..]);
+        update_enum_map(&mut self.atr_bonus, data.skip(250, "pet atr boni")?);
+        Ok(())
     }
 
     pub(crate) fn update_pet_stat(&mut self, data: &[i64]) {
         if let Some(ps) = PetStats::parse(data) {
-            let idx = ps.index;
-            self.pets[idx / 20][idx % 20].stats = Some(ps)
+            let idx = ps.id;
+            if let Some(pet) =
+                self.habitats.get_mut(ps.element).pets.get_mut(idx % 20)
+            {
+                pet.stats = Some(ps);
+            }
         } else {
             error!("Could not parse pet stats");
         }
@@ -182,11 +256,11 @@ impl PetCollection {
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pet {
-    pub index: u32,
+    pub id: u32,
     pub level: u16,
     /// The amount of fruits this pet got today
     pub fruits_today: u16,
-    pub element: PetClass,
+    pub element: HabitatType,
     /// This is None until you look at your pets again
     pub stats: Option<PetStats>,
     /// Check if this pet can be found already
@@ -196,7 +270,7 @@ pub struct Pet {
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PetStats {
-    pub index: usize,
+    pub id: usize,
     pub level: u16,
     pub armor: u16,
     pub class: Class,
@@ -204,12 +278,12 @@ pub struct PetStats {
     pub bonus_attributes: EnumMap<AttributeType, u32>,
     pub min_damage: u16,
     pub max_damage: u16,
-    pub element: PetClass,
+    pub element: HabitatType,
 }
 
-#[derive(Debug, Default, Clone, Copy, strum::EnumCount, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Enum, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum PetClass {
+pub enum HabitatType {
     #[default]
     Water = 0,
     Light = 1,
@@ -218,9 +292,9 @@ pub enum PetClass {
     Fire = 4,
 }
 
-impl PetClass {
+impl HabitatType {
     pub(crate) fn from_pet_id(id: i64) -> Option<Self> {
-        use PetClass::*;
+        use HabitatType::*;
         Some(match id {
             1..=20 => Shadow,
             21..=40 => Light,
@@ -232,7 +306,7 @@ impl PetClass {
     }
 
     pub(crate) fn from_typ_id(id: i64) -> Option<Self> {
-        use PetClass::*;
+        use HabitatType::*;
         Some(match id {
             1 => Shadow,
             2 => Light,
@@ -247,7 +321,7 @@ impl PetClass {
 impl PetStats {
     pub(crate) fn parse(data: &[i64]) -> Option<Self> {
         let mut s = Self {
-            index: soft_into(data[0], "pet index", 0),
+            id: soft_into(data[0], "pet index", 0),
             level: soft_into(data[1], "pet lvl", 0),
             armor: soft_into(data[2], "pet armor", 0),
             class: warning_parse(
@@ -259,8 +333,8 @@ impl PetStats {
             max_damage: soft_into(data[15], "max damage", 0),
 
             element: match data[16] {
-                0 => PetClass::from_pet_id(data[0])?,
-                x => PetClass::from_typ_id(x)?,
+                0 => HabitatType::from_pet_id(data[0])?,
+                x => HabitatType::from_typ_id(x)?,
             },
             ..Default::default()
         };
@@ -320,40 +394,46 @@ impl Unlockable {
 pub struct Achievements(pub Vec<Achievement>);
 
 impl Achievements {
-    pub(crate) fn update(&mut self, data: &[i64]) {
+    pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
+        self.0.clear();
         let total_count = data.len() / 2;
         if data.len() % 2 != 0 {
             warn!("achievement data has the wrong length: {}", data.len());
-            return;
+            return Ok(());
         }
 
-        self.0.clear();
         for i in 0..total_count {
             self.0.push(Achievement {
-                achieved: data[i] == 1,
-                progress: data[i + total_count],
+                achieved: data.cget(i, "achievement achieved")? == 1,
+                progress: data.cget(i + total_count, "achievement achieved")?,
             });
         }
+        Ok(())
     }
 
     /// The amount of achievements, that have been earned
+    #[must_use]
     pub fn owned(&self) -> u32 {
-        self.0.iter().map(|a| a.achieved as u32).sum()
+        self.0.iter().map(|a| u32::from(a.achieved)).sum()
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A small challenge you can complete in the game
 pub struct Achievement {
+    /// Whether or not this achievement has been completed
     pub achieved: bool,
+    /// The progress of doing this achievement
     pub progress: i64,
 }
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Contains all the items & monsters you have found in the scrapbook
 pub struct ScrapBook {
     /// All the items, that this player has already collected. To check if an
-    /// item is in this, you should call equipment_ident() on an item and see
+    /// item is in this, you should call `equipment_ident()` on an item and see
     /// if this item contains that
     pub items: HashSet<EquipmentIdent>,
     /// All the monsters, that the player has seen already. I have only checked
@@ -388,7 +468,7 @@ impl ScrapBook {
                 }
                 if index < 801 {
                     // Monster
-                    monster.insert(index as u16);
+                    monster.insert(index.try_into().unwrap_or_default());
                 } else if let Some(ident) = parse_scrapbook_item(index) {
                     // Items
                     if !items.insert(ident) {
@@ -407,10 +487,15 @@ impl ScrapBook {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The identification of items in the scrapbook
 pub struct EquipmentIdent {
+    /// The class the item has and thus the wearer must have
     pub class: Option<Class>,
+    /// The position at which the item is worn
     pub typ: EquipmentSlot,
+    /// The model id, this is basically the "name"" of the item
     pub model_id: u16,
+    /// The color variation of this item
     pub color: u8,
 }
 
@@ -430,6 +515,7 @@ impl ToString for EquipmentIdent {
     }
 }
 
+#[allow(clippy::enum_glob_use)]
 fn parse_scrapbook_item(index: i64) -> Option<EquipmentIdent> {
     use Class::*;
     use EquipmentSlot::*;
@@ -481,6 +567,7 @@ fn parse_scrapbook_item(index: i64) -> Option<EquipmentIdent> {
     ];
 
     let mut is_epic = true;
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     for (range, typ, class, ignore) in slots {
         is_epic = !is_epic;
         if !range.contains(&index) {

@@ -35,8 +35,8 @@ use crate::{
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Represent the full state of the game at some point in time
 pub struct GameState {
-    /// Everything, that can be considered part of the character and not the
-    /// rest of the world
+    /// Everything, that can be considered part of the character, or his
+    /// immediate surrounding and not the rest of the world
     pub character: Character,
     /// Information about quests and work
     pub tavern: Tavern,
@@ -58,9 +58,9 @@ pub struct GameState {
     /// Contains information about the fortress, if it has been unlocked
     pub fortress: Option<Fortress>,
     /// Information the pet collection, that a player can build over time
-    pub pets: Option<PetCollection>,
+    pub pets: Option<Pets>,
     /// Contains information about the hellevator, if it is currently active
-    pub hellevator: Option<Hellevator>,
+    pub hellevator: HellevatorEvent,
     /// Contains information about the blacksmith, if it has been unlocked
     pub blacksmith: Option<Blacksmith>,
     /// Contains information about the witch, if it has been unlocked
@@ -76,9 +76,6 @@ pub struct GameState {
     pub hall_of_fames: HallOfFames,
     /// Anything you can find in the mail tab of the official client
     pub mail: Mail,
-    /// A list of other characters, that the set some sort of special relation
-    /// to. Either good, or bad
-    pub relations: Vec<RelationEntry>,
     /// The raw timestamp, that the server has send us
     last_request_timestamp: i64,
     /// The amount of sec, that the server is ahead of us in seconds (can be
@@ -414,7 +411,10 @@ impl GameState {
                     self.update_gttime(&val.into_list("gttime")?, server_time);
                 }
                 "gtsave" => {
-                    self.update_gtsave(&val.into_list("gtsave")?, server_time);
+                    self.hellevator.active = Hellevator::parse(
+                        &val.into_list("gtsave")?,
+                        server_time,
+                    )?;
                 }
                 "maxrank" => {
                     self.hall_of_fames.total_players =
@@ -428,7 +428,7 @@ impl GameState {
                         .get_or_insert_with(Default::default)
                         .update_group_prices(
                             &val.into_list("guild skill prices")?,
-                        );
+                        )?;
                 }
                 "soldieradvice" => {
                     // I think they removed this
@@ -1051,8 +1051,9 @@ impl GameState {
                     let pet_id = val.into("pet def typ")?;
                     self.pets
                         .get_or_insert_with(Default::default)
-                        .enemy_pet_type =
-                        Some(PetClass::from_typ_id(pet_id).ok_or(
+                        .opponent
+                        .habitat =
+                        Some(HabitatType::from_typ_id(pet_id).ok_or(
                             ParsingError("pet def typ", format!("{pet_id}")),
                         )?);
                 }
@@ -1256,7 +1257,7 @@ impl GameState {
     }
 
     pub(crate) fn updatete_relation_list(&mut self, val: &str) {
-        self.relations.clear();
+        self.character.relations.clear();
         for entry in val
             .trim_end_matches(';')
             .split(';')
@@ -1284,7 +1285,7 @@ impl GameState {
                 warn!("bad friendslist entry: {entry}");
                 continue;
             };
-            self.relations.push(RelationEntry {
+            self.character.relations.push(RelationEntry {
                 id,
                 name,
                 guild,
@@ -1386,8 +1387,10 @@ impl GameState {
         self.dungeons.next_free_fight =
             server_time.convert_to_local(data[459], "dungeon timer");
 
-        self.pets.get_or_insert_with(Default::default).dungeon_timer =
-            server_time.convert_to_local(data[660], "pet dungeon time");
+        self.pets
+            .get_or_insert_with(Default::default)
+            .next_free_exploration =
+            server_time.convert_to_local(data[660], "pet next free exp");
 
         self.dungeons
             .portal
@@ -1403,9 +1406,7 @@ impl GameState {
             soft_into(data[624], "own instruction skill", 0);
         guild.hydra.next_battle =
             server_time.convert_to_local(data[627], "pet battle");
-        self.pets
-            .get_or_insert_with(Default::default)
-            .remaining_pet_battles =
+        guild.hydra.remaining_fights =
             soft_into(data[628], "remaining pet battles", 0);
         self.character.druid_mask = FromPrimitive::from_i64(data[653]);
         self.character.bard_instrument = FromPrimitive::from_i64(data[701]);
@@ -1426,9 +1427,9 @@ impl GameState {
         data: &[i64],
         server_time: ServerTime,
     ) {
-        let d = self.hellevator.get_or_insert_with(Default::default);
-        d.event_start = server_time.convert_to_local(data[0], "event start");
-        d.event_end = server_time.convert_to_local(data[1], "event end");
+        let d = &mut self.hellevator;
+        d.start = server_time.convert_to_local(data[0], "event start");
+        d.end = server_time.convert_to_local(data[1], "event end");
         d.collect_time_end =
             server_time.convert_to_local(data[3], "claim time end");
     }
@@ -1450,31 +1451,14 @@ impl GameState {
             soft_into(res[7], "saved stone", 0);
 
         let pets = self.pets.get_or_insert_with(Default::default);
-        for i in 0..5 {
-            pets.fruits[i] = soft_into(res[12 + i], "fruits", 0);
+        for (e_pos, element) in HabitatType::iter().enumerate() {
+            pets.habitats.get_mut(element).fruits =
+                soft_into(res[12 + e_pos], "fruits", 0);
         }
 
         self.underworld
             .get_or_insert_with(Default::default)
             .souls_current = soft_into(res[11], "uu souls saved", 0);
-    }
-
-    pub(crate) fn update_gtsave(
-        &mut self,
-        data: &[i64],
-        server_time: ServerTime,
-    ) {
-        let d = self.hellevator.get_or_insert_with(Default::default);
-        d.key_cards = soft_into(data[0], "h key cards", 0);
-        d.next_card_generated =
-            server_time.convert_to_local(data[1], "next card");
-        d.next_reset = server_time.convert_to_local(data[2], "next reset");
-        d.current_floor = soft_into(data[3], "h current floor", 0);
-        d.points = soft_into(data[4], "h points", 0);
-        d.start_contrib_date =
-            server_time.convert_to_local(data[5], "start contrib");
-        d.has_final_reward = data[6] == 1;
-        d.points_today = soft_into(data[10], "h points today", 0);
     }
 
     /// Returns the time of the server. This is just an 8 byte copy behind the

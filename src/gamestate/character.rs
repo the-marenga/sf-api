@@ -5,7 +5,7 @@ use enum_map::EnumMap;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use super::{Mirror, SFError, ScrapBook};
+use super::{Mirror, RelationEntry, SFError, ScrapBook};
 use crate::{command::*, gamestate::items::*, misc::*, PlayerId};
 
 #[derive(Debug, Clone, Default)]
@@ -93,6 +93,10 @@ pub struct Character {
     pub mirror: Mirror,
     /// If the scrapbook has been unlocked, it can be found here
     pub scrapbok: Option<ScrapBook>,
+
+    /// A list of other characters, that the set some sort of special relation
+    /// to. Either good, or bad
+    pub relations: Vec<RelationEntry>,
 }
 
 /// All the exclusively cosmetic info necessary to build a player image, that is

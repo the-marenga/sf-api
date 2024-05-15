@@ -83,7 +83,8 @@ pub struct GuildHydra {
     /// This seems to be `last_battle + 30 min`. I can only do 1 battle/day,
     /// but I think this should be the next possible fight
     pub next_battle: Option<DateTime<Local>>,
-
+    /// The amount of times the player can still fight the hydra
+    pub remaining_fights: u16,
     /// The current life of the guilds hydra
     pub current_life: u64,
     /// The maximum life the hydra can have

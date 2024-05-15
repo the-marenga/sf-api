@@ -6,8 +6,8 @@ use num_derive::FromPrimitive;
 use strum::EnumIter;
 
 use super::{
-    unlockables::{EquipmentIdent, PetClass},
-    ArrSkip, CFPGet, Class, EnumMapGet, SFError, ServerTime,
+    unlockables::EquipmentIdent, ArrSkip, CFPGet, Class, EnumMapGet,
+    HabitatType, SFError, ServerTime,
 };
 use crate::{
     command::AttributeType,
@@ -306,7 +306,9 @@ impl Item {
     }
 }
 
-#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, EnumIter, Hash)]
+#[derive(
+    Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, EnumIter, Hash, Enum,
+)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A enchantment, that gives a bonus to an aspect, if the item
 pub enum Enchantment {
@@ -328,6 +330,12 @@ pub enum Enchantment {
     TheGraveRobbersPrayer = 91,
     /// Increase the chance of loot against other players
     RobberBaronRitual = 101,
+}
+
+impl Enchantment {
+    pub(crate) fn enchant_id(self) -> u32 {
+        ((self as u32) / 10) * 10
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -800,23 +808,6 @@ impl EquipmentSlot {
             EquipmentSlot::Talisman => 10,
         }
     }
-
-    // This is just itemtyp * 10, but whatever
-    pub(crate) fn witch_id(self) -> u32 {
-        match self {
-            // Wrong, as there are no shield enchantments, but better than
-            // panic/erroring I think
-            EquipmentSlot::Shield | EquipmentSlot::Weapon => 10,
-            EquipmentSlot::BreastPlate => 30,
-            EquipmentSlot::FootWear => 40,
-            EquipmentSlot::Gloves => 50,
-            EquipmentSlot::Hat => 60,
-            EquipmentSlot::Belt => 70,
-            EquipmentSlot::Amulet => 80,
-            EquipmentSlot::Ring => 90,
-            EquipmentSlot::Talisman => 100,
-        }
-    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -824,21 +815,21 @@ impl EquipmentSlot {
 #[allow(missing_docs)]
 /// An item useable for pets
 pub enum PetItem {
-    Egg(PetClass),
-    SpecialEgg(PetClass),
+    Egg(HabitatType),
+    SpecialEgg(HabitatType),
     GoldenEgg,
     Nest,
-    Fruit(PetClass),
+    Fruit(HabitatType),
 }
 
 impl PetItem {
     pub(crate) fn parse(val: i64) -> Option<Self> {
         Some(match val {
-            1..=5 => PetItem::Egg(PetClass::from_typ_id(val)?),
-            11..=15 => PetItem::SpecialEgg(PetClass::from_typ_id(val - 10)?),
+            1..=5 => PetItem::Egg(HabitatType::from_typ_id(val)?),
+            11..=15 => PetItem::SpecialEgg(HabitatType::from_typ_id(val - 10)?),
             21 => PetItem::GoldenEgg,
             22 => PetItem::Nest,
-            31..=35 => PetItem::Fruit(PetClass::from_typ_id(val - 30)?),
+            31..=35 => PetItem::Fruit(HabitatType::from_typ_id(val - 30)?),
             _ => return None,
         })
     }
