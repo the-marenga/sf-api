@@ -1,3 +1,4 @@
+use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
 use num::FromPrimitive;
 use num_derive::FromPrimitive;
@@ -44,11 +45,17 @@ impl Portal {
 /// The information about all generic dungeons in the game. Information about
 /// special dungeons like the portal
 pub struct Dungeons {
+    /// The next time you can fight in the dungeons for free
+    pub next_free_fight: Option<DateTime<Local>>,
     /// All the light dungeons. Noteably tower information is also in here
     pub light_dungeons: EnumMap<LightDungeon, DungeonProgress>,
     /// All the shadow dungeons. Noteably twister & cont. loop of idols is also
     /// in here
     pub shadow_dungeons: EnumMap<ShadowDungeon, DungeonProgress>,
+    pub portal: Option<Portal>,
+    /// The companions unlocked from unlocking the tower. Note that the tower
+    /// info itself is just handled as a normal light dungeon
+    pub companions: Option<EnumMap<CompanionClass, Companion>>,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]

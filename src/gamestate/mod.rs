@@ -19,6 +19,7 @@ use log::warn;
 use num_traits::FromPrimitive;
 use strum::IntoEnumIterator;
 
+use self::underworld::Underworld;
 use crate::{
     command::*,
     error::*,
@@ -46,20 +47,41 @@ pub struct GameState {
     /// Both shops. You can access a specific one either with `get()`,
     /// `get_mut()`, or `[]` and the `ShopType` as the key.
     pub shops: EnumMap<ShopType, Shop>,
+    /// If the player is in a guild, this will contain information about it
+    pub guild: Option<Guild>,
     /// Everything, that is time sensitive, like events, calendar, etc.
-    pub special: TimedSpecials,
-    /// Everything, that the player needs
-    pub unlocks: Unlockables,
-    ///
+    pub specials: TimedSpecials,
+    /// Everything, that can be found under the Dungeon tab
+    pub dungeons: Dungeons,
+    /// Contains information about the underworld, if it has been unlocked
+    pub underworld: Option<Underworld>,
+    /// Contains information about the fortress, if it has been unlocked
+    pub fortress: Option<Fortress>,
+    /// Information the pet collection, that a player can build over time
+    pub pets: Option<PetCollection>,
+    /// Contains information about the hellevator, if it is currently active
+    pub hellevator: Option<Hellevator>,
+    /// Contains information about the blacksmith, if it has been unlocked
+    pub blacksmith: Option<Blacksmith>,
+    /// Contains information about the witch, if it has been unlocked
+    pub witch: Option<Witch>,
+    /// Tracker for small challenges, that a player can complete
+    pub achievements: Achievements,
+    /// The boring idle game
+    pub idle_game: Option<IdleGame>,
+    /// Contains the features this char is able to unlock right now
+    pub pending_unlocks: Vec<Unlockable>,
+    /// Anything related to hall of fames and other players on the server. You
+    /// can find anything related to viewing other players here
     pub hall_of_fames: HallOfFames,
-
+    /// Anything you can find in the mail tab of the official client
     pub mail: Mail,
     /// A list of other characters, that the set some sort of special relation
     /// to. Either good, or bad
     pub relations: Vec<RelationEntry>,
     /// The raw timestamp, that the server has send us
     last_request_timestamp: i64,
-    /// The amount of sec, that the server is ahead of us in seconds (can we
+    /// The amount of sec, that the server is ahead of us in seconds (can be
     /// negative)
     server_time_diff: i64,
 }
@@ -201,17 +223,16 @@ impl GameState {
                     self.update_player_save(&val.into_list("player save")?)?
                 }
                 "owngroupname" => self
-                    .unlocks
                     .guild
                     .get_or_insert_with(Default::default)
                     .name
                     .set(val.as_str()),
                 "tavernspecialsub" => {
-                    self.special.events.active.clear();
+                    self.specials.events.active.clear();
                     let flags = val.into::<i32>("tavern special sub")?;
                     for (idx, event) in Event::iter().enumerate() {
                         if (flags & (1 << idx)) > 0 {
-                            self.special.events.active.insert(event);
+                            self.specials.events.active.insert(event);
                         }
                     }
                 }
@@ -224,7 +245,7 @@ impl GameState {
                 "owntower" => {
                     let data = val.into_list("tower")?;
                     let companions = self
-                        .unlocks
+                        .dungeons
                         .companions
                         .get_or_insert_with(Default::default);
 
@@ -241,23 +262,19 @@ impl GameState {
                         );
                     }
                     // Why would they include this in the tower response???
-                    self.unlocks
-                        .underworld
+                    self.underworld
                         .get_or_insert_with(Default::default)
                         .update(&data, server_time)?;
                 }
                 "owngrouprank" => {
-                    self.unlocks
-                        .guild
-                        .get_or_insert_with(Default::default)
-                        .rank = val.into("group rank")?;
+                    self.guild.get_or_insert_with(Default::default).rank =
+                        val.into("group rank")?;
                 }
                 "owngroupattack" | "owngroupdefense" => {
                     // Annoying
                 }
                 "owngroupsave" => {
-                    self.unlocks
-                        .guild
+                    self.guild
                         .get_or_insert_with(Default::default)
                         .update_group_save(
                             &val.into_list("guild save")?,
@@ -265,19 +282,16 @@ impl GameState {
                         );
                 }
                 "owngroupmember" => self
-                    .unlocks
                     .guild
                     .get_or_insert_with(Default::default)
                     .update_member_names(val.as_str()),
                 "owngrouppotion" => {
-                    self.unlocks
-                        .guild
+                    self.guild
                         .get_or_insert_with(Default::default)
                         .update_member_potions(val.as_str());
                 }
                 "unitprice" => {
-                    self.unlocks
-                        .fortress
+                    self.fortress
                         .get_or_insert_with(Default::default)
                         .update_unit_prices(&val.into_list("fortress units")?);
                 }
@@ -304,77 +318,64 @@ impl GameState {
                     });
                 }
                 "chathistory" => {
-                    self.unlocks
-                        .guild
-                        .get_or_insert_with(Default::default)
-                        .chat = ChatMessage::parse_messages(val.as_str());
+                    self.guild.get_or_insert_with(Default::default).chat =
+                        ChatMessage::parse_messages(val.as_str());
                 }
                 "chatwhisper" => {
-                    self.unlocks
-                        .guild
-                        .get_or_insert_with(Default::default)
-                        .whispers = ChatMessage::parse_messages(val.as_str());
+                    self.guild.get_or_insert_with(Default::default).whispers =
+                        ChatMessage::parse_messages(val.as_str());
                 }
                 "upgradeprice" => {
-                    self.unlocks
-                        .fortress
+                    self.fortress
                         .get_or_insert_with(Default::default)
                         .update_unit_upgrade_info(
                             &val.into_list("fortress unit upgrade prices")?,
                         );
                 }
                 "unitlevel" => {
-                    self.unlocks
-                        .fortress
+                    self.fortress
                         .get_or_insert_with(Default::default)
                         .update_levels(&val.into_list("fortress unit levels")?);
                 }
                 "fortressprice" => {
-                    self.unlocks
-                        .fortress
+                    self.fortress
                         .get_or_insert_with(Default::default)
                         .update_prices(
                             &val.into_list("fortress upgrade prices")?,
                         );
                 }
                 "witch" => {
-                    self.unlocks
-                        .witch
+                    self.witch
                         .get_or_insert_with(Default::default)
                         .update(&val.into_list("witch")?, server_time);
                 }
                 "underworldupgradeprice" => {
-                    self.unlocks
-                        .underworld
+                    self.underworld
                         .get_or_insert_with(Default::default)
                         .update_underworld_unit_prices(
                             &val.into_list("underworld upgrade prices")?,
                         );
                 }
                 "unlockfeature" => {
-                    self.unlocks.pending_unlocks =
+                    self.pending_unlocks =
                         Unlockable::parse(&val.into_list("unlock")?);
                 }
-                "dungeonprogresslight" => {
-                    self.unlocks.dungeons.update_progress(
-                        &val.into_list("dungeon progress light")?,
-                        DungeonType::Light,
-                    )
-                }
-                "dungeonprogressshadow" => {
-                    self.unlocks.dungeons.update_progress(
-                        &val.into_list("dungeon progress shadow")?,
-                        DungeonType::Shadow,
-                    )
-                }
+                "dungeonprogresslight" => self.dungeons.update_progress(
+                    &val.into_list("dungeon progress light")?,
+                    DungeonType::Light,
+                ),
+                "dungeonprogressshadow" => self.dungeons.update_progress(
+                    &val.into_list("dungeon progress shadow")?,
+                    DungeonType::Shadow,
+                ),
                 "portalprogress" => {
-                    self.unlocks
+                    self.dungeons
                         .portal
                         .get_or_insert_with(Default::default)
                         .update(&val.into_list("portal progress")?);
                 }
                 "tavernspecialend" => {
-                    self.special.events.ends = server_time
+                    self.specials.events.ends = server_time
                         .convert_to_local(val.into("event end")?, "event end");
                 }
                 "owntowerlevel" => {
@@ -384,29 +385,27 @@ impl GameState {
                     // Handled in session
                 }
                 "stoneperhournextlevel" => {
-                    self.unlocks
-                        .fortress
+                    self.fortress
                         .get_or_insert_with(Default::default)
                         .resources[FortressResourceType::Stone]
                         .production
                         .per_hour_next_lvl = val.into("stone next lvl")?;
                 }
                 "woodperhournextlevel" => {
-                    self.unlocks
-                        .fortress
+                    self.fortress
                         .get_or_insert_with(Default::default)
                         .resources[FortressResourceType::Wood]
                         .production
                         .per_hour_next_lvl = val.into("wood next lvl")?;
                 }
                 "shadowlevel" => {
-                    self.unlocks.dungeons.update_levels(
+                    self.dungeons.update_levels(
                         &val.into_list("shadow dungeon levels")?,
                         DungeonType::Shadow,
                     );
                 }
                 "dungeonlevel" => {
-                    self.unlocks.dungeons.update_levels(
+                    self.dungeons.update_levels(
                         &val.into_list("shadow dungeon levels")?,
                         DungeonType::Light,
                     );
@@ -422,13 +421,10 @@ impl GameState {
                         val.into("player count")?;
                 }
                 "achievement" => {
-                    self.unlocks
-                        .achievements
-                        .update(&val.into_list("achievements")?);
+                    self.achievements.update(&val.into_list("achievements")?);
                 }
                 "groupskillprice" => {
-                    self.unlocks
-                        .guild
+                    self.guild
                         .get_or_insert_with(Default::default)
                         .update_group_prices(
                             &val.into_list("guild skill prices")?,
@@ -438,12 +434,11 @@ impl GameState {
                     // I think they removed this
                 }
                 "owngroupdescription" => self
-                    .unlocks
                     .guild
                     .get_or_insert_with(Default::default)
                     .update_description_embed(val.as_str()),
                 "idle" => {
-                    self.unlocks.idle_game = IdleGame::parse_idle_game(
+                    self.idle_game = IdleGame::parse_idle_game(
                         &val.into_list("idle game")?,
                         server_time,
                     );
@@ -459,8 +454,7 @@ impl GameState {
                     // time
                 }
                 "maxpetlevel" => {
-                    self.unlocks
-                        .pet_collection
+                    self.pets
                         .get_or_insert_with(Default::default)
                         .max_pet_level = val.into("max pet lvl")?;
                 }
@@ -482,14 +476,12 @@ impl GameState {
                         .set(val.as_str());
                 }
                 "fortresspricereroll" => {
-                    self.unlocks
-                        .fortress
+                    self.fortress
                         .get_or_insert_with(Default::default)
                         .opponent_reroll_price = val.into("fortress reroll")?;
                 }
                 "fortresswalllevel" => {
-                    self.unlocks
-                        .fortress
+                    self.fortress
                         .get_or_insert_with(Default::default)
                         .wall_combat_lvl = val.into("fortress wall lvl")?;
                 }
@@ -501,9 +493,9 @@ impl GameState {
                     // NOTE: These are the reqs to unlock the upgrade, not a
                     // check if it is actually upgraded
                     let upgraded = self.character.level >= 95
-                        && self.unlocks.pet_collection.is_some()
-                        && self.unlocks.underworld.is_some();
-                    self.special.wheel.result = Some(WheelReward::parse(
+                        && self.pets.is_some()
+                        && self.underworld.is_some();
+                    self.specials.wheel.result = Some(WheelReward::parse(
                         &val.into_list("wheel result")?,
                         upgraded,
                     )?);
@@ -531,10 +523,10 @@ impl GameState {
                     // This is twice in the original response.
                     // This API sucks LMAO
                     let data: Vec<i64> = val.into_list("calendar")?;
-                    self.special.calendar.rewards.clear();
+                    self.specials.calendar.rewards.clear();
                     for p in data.chunks_exact(2) {
                         let reward = CalendarReward::parse(p)?;
-                        self.special.calendar.rewards.push(reward);
+                        self.specials.calendar.rewards.push(reward);
                     }
                 }
                 "othergroupattack" => {
@@ -751,12 +743,10 @@ impl GameState {
                         Some(val.into("fortress max")?)
                 }
                 "underworldprice" => self
-                    .unlocks
                     .underworld
                     .get_or_insert_with(Default::default)
                     .update_building_prices(&val.into_list("ub prices")?)?,
                 "owngroupknights" => self
-                    .unlocks
                     .guild
                     .get_or_insert_with(Default::default)
                     .update_group_knights(val.as_str()),
@@ -770,10 +760,8 @@ impl GameState {
                 }
                 "smith" => {
                     let data: Vec<i64> = val.into_list("smith")?;
-                    let bs = self
-                        .unlocks
-                        .blacksmith
-                        .get_or_insert_with(Default::default);
+                    let bs =
+                        self.blacksmith.get_or_insert_with(Default::default);
 
                     bs.dismantle_left =
                         soft_into(data[0], "dismantles left", 0);
@@ -784,8 +772,7 @@ impl GameState {
                     // Pretty sure this has been replaced
                 }
                 "fortressGroupPrice" => {
-                    self.unlocks
-                        .fortress
+                    self.fortress
                         .get_or_insert_with(Default::default)
                         .hall_of_knights_upgrade_price = FortressCost::parse(
                         &val.into_list("hall of knights prices")?,
@@ -801,7 +788,7 @@ impl GameState {
                     for (chunk, chest) in val
                         .into_list("daily task reward preview")?
                         .chunks_exact(5)
-                        .zip(&mut self.special.tasks.daily.rewards)
+                        .zip(&mut self.specials.tasks.daily.rewards)
                     {
                         *chest = RewardChest::parse(chunk)?;
                     }
@@ -829,7 +816,7 @@ impl GameState {
                     };
                     self.tavern.expeditions.available = data
                         .chunks_exact(8)
-                        .map(|a| AvailableExpedition {
+                        .map(|data| AvailableExpedition {
                             target: warning_parse(
                                 data[0],
                                 "expedition typ",
@@ -964,29 +951,29 @@ impl GameState {
                 }
                 "eventtasklist" => {
                     let data: Vec<i64> = val.into_list("etl")?;
-                    self.special.tasks.event.tasks.clear();
+                    self.specials.tasks.event.tasks.clear();
                     for c in data.chunks_exact(4) {
                         let task = EventTask::parse(c)?;
-                        self.special.tasks.event.tasks.push(task);
+                        self.specials.tasks.event.tasks.push(task);
                     }
                 }
                 "eventtaskrewardpreview" => {
                     for (chunk, chest) in val
                         .into_list("event task reward preview")?
                         .chunks_exact(5)
-                        .zip(&mut self.special.tasks.event.rewards)
+                        .zip(&mut self.specials.tasks.event.rewards)
                     {
                         *chest = RewardChest::parse(chunk)?
                     }
                 }
                 "dailytasklist" => {
                     let data: Vec<i64> = val.into_list("daily tasks list")?;
-                    self.special.tasks.daily.tasks.clear();
+                    self.specials.tasks.daily.tasks.clear();
 
                     // I think the first value here is the amount of > 1 bell
                     // quests
                     for d in data[1..].chunks_exact(4) {
-                        self.special
+                        self.specials
                             .tasks
                             .daily
                             .tasks
@@ -995,16 +982,16 @@ impl GameState {
                 }
                 "eventtaskinfo" => {
                     let data: Vec<i64> = val.into_list("eti")?;
-                    self.special.tasks.event.theme = data
+                    self.specials.tasks.event.theme = data
                         .cfpget(2, "event task typ", |a| a)?
                         .unwrap_or(EventTasksTheme::Unknown);
-                    self.special.tasks.event.start =
+                    self.specials.tasks.event.start =
                         data.cstget(0, "event t start", server_time)?;
-                    self.special.tasks.event.end =
+                    self.specials.tasks.event.end =
                         data.cstget(1, "event t end", server_time)?;
                 }
                 "scrapbook" => {
-                    self.unlocks.scrapbok = ScrapBook::parse(val.as_str());
+                    self.character.scrapbok = ScrapBook::parse(val.as_str());
                 }
                 "dungeonfaces" | "shadowfaces" => {
                     // Gets returned after winning a dungeon fight. This looks a
@@ -1039,34 +1026,30 @@ impl GameState {
                     }
                 }
                 "maxupgradelevel" => {
-                    self.unlocks
-                        .fortress
+                    self.fortress
                         .get_or_insert_with(Default::default)
                         .building_max_lvl = val.into("max upgrade lvl")?
                 }
                 "singleportalenemylevel" => {
-                    self.unlocks
+                    self.dungeons
                         .portal
                         .get_or_insert_with(Default::default)
                         .enemy_level = val.into("portal lvl")?;
                 }
                 "ownpetsstats" => {
-                    self.unlocks
-                        .pet_collection
+                    self.pets
                         .get_or_insert_with(Default::default)
                         .update_pet_stat(&val.into_list("pet stats")?);
                 }
                 "ownpets" => {
                     let data = val.into_list("own pets")?;
-                    self.unlocks
-                        .pet_collection
+                    self.pets
                         .get_or_insert_with(Default::default)
                         .update(&data, server_time);
                 }
                 "petsdefensetype" => {
                     let pet_id = val.into("pet def typ")?;
-                    self.unlocks
-                        .pet_collection
+                    self.pets
                         .get_or_insert_with(Default::default)
                         .enemy_pet_type =
                         Some(PetClass::from_typ_id(pet_id).ok_or(
@@ -1121,10 +1104,8 @@ impl GameState {
                         .wall_combat_lvl = soft_into(data[0], "wall_lvl", 0);
                 }
                 "petsrank" => {
-                    self.unlocks
-                        .pet_collection
-                        .get_or_insert_with(Default::default)
-                        .rank = val.into("pet rank")?;
+                    self.pets.get_or_insert_with(Default::default).rank =
+                        val.into("pet rank")?;
                 }
 
                 "maxrankUnderworld" => {
@@ -1246,29 +1227,29 @@ impl GameState {
         if let Some(other_player) = other_player {
             self.hall_of_fames.insert_lookup(other_player)
         }
-        if let Some(t) = &self.unlocks.portal {
+        if let Some(t) = &self.dungeons.portal {
             if t.current == 0 {
-                self.unlocks.portal = None;
+                self.dungeons.portal = None;
             }
         }
-        if let Some(pets) = &self.unlocks.pet_collection {
+        if let Some(pets) = &self.pets {
             if pets.rank == 0 {
-                self.unlocks.pet_collection = None
+                self.pets = None
             }
         }
-        if let Some(t) = &self.unlocks.guild {
+        if let Some(t) = &self.guild {
             if t.name.is_empty() {
-                self.unlocks.guild = None;
+                self.guild = None;
             }
         }
-        if let Some(t) = &self.unlocks.fortress {
+        if let Some(t) = &self.fortress {
             if t.upgrades == 0 {
-                self.unlocks.fortress = None;
+                self.fortress = None;
             }
         }
-        if let Some(t) = &self.unlocks.underworld {
+        if let Some(t) = &self.underworld {
             if t.honor == 0 {
-                self.unlocks.underworld = None;
+                self.underworld = None;
             }
         }
         Ok(())
@@ -1362,15 +1343,15 @@ impl GameState {
         }
 
         if self.character.level >= 25 {
-            let fortress =
-                self.unlocks.fortress.get_or_insert_with(Default::default);
+            let fortress = self.fortress.get_or_insert_with(Default::default);
             fortress.update(data, server_time);
         }
 
         self.character.active_potions =
             ItemType::parse_active_potions(&data[493..], server_time);
-        self.special.wheel.spins_today = soft_into(data[579], "lucky turns", 0);
-        self.special.wheel.next_free_spin =
+        self.specials.wheel.spins_today =
+            soft_into(data[579], "lucky turns", 0);
+        self.specials.wheel.next_free_spin =
             warning_parse(data[580], "next lucky turn", |a| {
                 server_time.convert_to_local(a, "next lucky turn")
             });
@@ -1380,11 +1361,7 @@ impl GameState {
         *self.shops.get_mut(ShopType::Magic) =
             Shop::parse(&data[361..], server_time)?;
 
-        self.unlocks.mirror = Mirror::parse(data[28]);
-        if data[438] >= 10000 {
-            self.unlocks.scrapbook_count =
-                soft_into(data[438] - 10000, "scrapbook count", 0);
-        };
+        self.character.mirror = Mirror::parse(data[28]);
         self.arena.next_free_fight =
             server_time.convert_to_local(data[460], "next battle time");
 
@@ -1403,27 +1380,21 @@ impl GameState {
         if let Some(jg) =
             server_time.convert_to_local(data[443], "guild join date")
         {
-            self.unlocks
-                .guild
-                .get_or_insert_with(Default::default)
-                .joined = jg;
+            self.guild.get_or_insert_with(Default::default).joined = jg;
         }
 
-        self.unlocks.dungeon_timer =
+        self.dungeons.next_free_fight =
             server_time.convert_to_local(data[459], "dungeon timer");
 
-        self.unlocks
-            .pet_collection
-            .get_or_insert_with(Default::default)
-            .dungeon_timer =
+        self.pets.get_or_insert_with(Default::default).dungeon_timer =
             server_time.convert_to_local(data[660], "pet dungeon time");
 
-        self.unlocks
+        self.dungeons
             .portal
             .get_or_insert_with(Default::default)
             .player_hp_bonus = soft_into(data[445] >> 24, "portal hp bonus", 0);
 
-        let guild = self.unlocks.guild.get_or_insert_with(Default::default);
+        let guild = self.guild.get_or_insert_with(Default::default);
         // TODO: This might be better as & 0xFF?
         guild.portal.damage_bonus = ((data[445] >> 16) % 256) as u8;
         guild.own_treasure_skill =
@@ -1432,16 +1403,15 @@ impl GameState {
             soft_into(data[624], "own instruction skill", 0);
         guild.hydra.next_battle =
             server_time.convert_to_local(data[627], "pet battle");
-        self.unlocks
-            .pet_collection
+        self.pets
             .get_or_insert_with(Default::default)
             .remaining_pet_battles =
             soft_into(data[628], "remaining pet battles", 0);
         self.character.druid_mask = FromPrimitive::from_i64(data[653]);
         self.character.bard_instrument = FromPrimitive::from_i64(data[701]);
-        self.special.calendar.collected =
+        self.specials.calendar.collected =
             data.csimget(648, "calendat collected", 245, |a| a >> 16)?;
-        self.special.calendar.next_possible =
+        self.specials.calendar.next_possible =
             server_time.convert_to_local(data[649], "calendar next");
         self.tavern.dice_game.next_free =
             server_time.convert_to_local(data[650], "dice next");
@@ -1456,7 +1426,7 @@ impl GameState {
         data: &[i64],
         server_time: ServerTime,
     ) {
-        let d = self.unlocks.hellevator.get_or_insert_with(Default::default);
+        let d = self.hellevator.get_or_insert_with(Default::default);
         d.event_start = server_time.convert_to_local(data[0], "event start");
         d.event_end = server_time.convert_to_local(data[1], "event end");
         d.collect_time_end =
@@ -1469,27 +1439,22 @@ impl GameState {
         self.tavern.quicksand_glasses =
             soft_into(res[4], "quicksand glass count", 0);
 
-        self.special.wheel.lucky_coins = soft_into(res[3], "lucky coins", 0);
-        let bs = self.unlocks.blacksmith.get_or_insert_with(Default::default);
+        self.specials.wheel.lucky_coins = soft_into(res[3], "lucky coins", 0);
+        let bs = self.blacksmith.get_or_insert_with(Default::default);
         bs.metal = soft_into(res[9], "bs metal", 0);
         bs.arcane = soft_into(res[10], "bs arcane", 0);
-        let fortress =
-            self.unlocks.fortress.get_or_insert_with(Default::default);
+        let fortress = self.fortress.get_or_insert_with(Default::default);
         fortress.resources[FortressResourceType::Wood].current =
             soft_into(res[5], "saved wood ", 0);
         fortress.resources[FortressResourceType::Stone].current =
             soft_into(res[7], "saved stone", 0);
 
-        let pets = self
-            .unlocks
-            .pet_collection
-            .get_or_insert_with(Default::default);
+        let pets = self.pets.get_or_insert_with(Default::default);
         for i in 0..5 {
             pets.fruits[i] = soft_into(res[12 + i], "fruits", 0);
         }
 
-        self.unlocks
-            .underworld
+        self.underworld
             .get_or_insert_with(Default::default)
             .souls_current = soft_into(res[11], "uu souls saved", 0);
     }
@@ -1499,7 +1464,7 @@ impl GameState {
         data: &[i64],
         server_time: ServerTime,
     ) {
-        let d = self.unlocks.hellevator.get_or_insert_with(Default::default);
+        let d = self.hellevator.get_or_insert_with(Default::default);
         d.key_cards = soft_into(data[0], "h key cards", 0);
         d.next_card_generated =
             server_time.convert_to_local(data[1], "next card");
@@ -1548,6 +1513,7 @@ pub struct ServerTime(i64);
 
 impl ServerTime {
     /// Converts the raw timestamp from the server to the local time.
+    #[must_use]
     pub fn convert_to_local(
         &self,
         timestamp: i64,
@@ -1562,10 +1528,10 @@ impl ServerTime {
             warn!("Weird time stamp: {timestamp} for {name}");
             return None;
         }
-        Some(
-            DateTime::from_timestamp(timestamp - self.0, 0)?
-                .with_timezone(&Local),
-        )
+        DateTime::from_timestamp(timestamp - self.0, 0)?
+            .naive_utc()
+            .and_local_timezone(Local)
+            .latest()
     }
 
     /// The current time of the server in their time zone (whatever that might

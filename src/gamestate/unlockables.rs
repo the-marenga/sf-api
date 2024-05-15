@@ -4,40 +4,7 @@ use num_traits::FromPrimitive;
 use strum::EnumCount;
 
 use super::*;
-use crate::{
-    gamestate::{dungeons::*, fortress::*, guild::*, items::*, underworld::*},
-    misc::*,
-    PlayerId,
-};
-
-/// All the aspects of the game you do not have at the start
-#[derive(Debug, Clone, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Unlockables {
-    /// Whether this character has the mirror completed, or is still collecting
-    /// pieces
-    pub mirror: Mirror,
-    pub scrapbok: Option<ScrapBook>,
-    pub scrapbook_count: u32,
-    pub dungeon_timer: Option<DateTime<Local>>,
-    pub dungeons: Dungeons,
-    pub portal: Option<Portal>,
-    /// The companions unlocked from unlocking the tower. Note that the tower
-    /// info itself is just handled as a normal light dungeon
-    pub companions: Option<EnumMap<CompanionClass, Companion>>,
-    pub underworld: Option<Underworld>,
-    pub fortress: Option<Fortress>,
-    pub pet_collection: Option<PetCollection>,
-    pub blacksmith: Option<Blacksmith>,
-    pub witch: Option<Witch>,
-    pub hellevator: Option<Hellevator>,
-    pub achievements: Achievements,
-    pub guild: Option<Guild>,
-    pub idle_game: Option<IdleGame>,
-
-    /// Contains the features this char is able to unlock right now
-    pub pending_unlocks: Vec<Unlockable>,
-}
+use crate::{gamestate::items::*, misc::*, PlayerId};
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -398,12 +365,12 @@ pub struct ScrapBook {
 impl ScrapBook {
     // 99% based on Hubert Lipińskis Code
     // https://github.com/HubertLipinski/sfgame-scrapbook-helper
-    pub fn parse(val: &str) -> Option<ScrapBook> {
+    pub(crate) fn parse(val: &str) -> Option<ScrapBook> {
         let text = base64::Engine::decode(
             &base64::engine::general_purpose::URL_SAFE,
             val,
         )
-        .unwrap();
+        .ok()?;
         if text.iter().all(|a| *a == 0) {
             return None;
         }
@@ -412,7 +379,7 @@ impl ScrapBook {
         let mut items = HashSet::new();
         let mut monster = HashSet::new();
 
-        for byte in text.into_iter() {
+        for byte in text {
             for bit_pos in (0..=7).rev() {
                 index += 1;
                 let is_owned = ((byte >> bit_pos) & 1) == 1;
@@ -430,7 +397,7 @@ impl ScrapBook {
                         );
                     }
                 } else {
-                    error!("Owned, but not parsed: {index}")
+                    error!("Owned, but not parsed: {index}");
                 }
             }
         }

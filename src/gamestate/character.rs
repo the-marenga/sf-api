@@ -5,7 +5,7 @@ use enum_map::EnumMap;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use super::SFError;
+use super::{Mirror, SFError, ScrapBook};
 use crate::{command::*, gamestate::items::*, misc::*, PlayerId};
 
 #[derive(Debug, Clone, Default)]
@@ -87,6 +87,12 @@ pub struct Character {
     pub mount_end: Option<DateTime<Local>>,
     /// The silver you get for buying a dragon
     pub mount_dragon_refund: u64,
+
+    /// Whether this character has the mirror completed, or is still collecting
+    /// pieces
+    pub mirror: Mirror,
+    /// If the scrapbook has been unlocked, it can be found here
+    pub scrapbok: Option<ScrapBook>,
 }
 
 /// All the exclusively cosmetic info necessary to build a player image, that is
