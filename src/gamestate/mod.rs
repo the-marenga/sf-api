@@ -823,9 +823,13 @@ impl GameState {
                                 FromPrimitive::from_i64,
                             )
                             .unwrap_or_default(),
-                            alu_sec: soft_into(data[6], "exp alu", 600),
-                            location1_id: data[4],
-                            location2_id: data[5],
+                            thirst_for_adventure_sec: soft_into(
+                                data[6], "exp alu", 600,
+                            ),
+                            location1: FromPrimitive::from_i64(data[4])
+                                .unwrap_or_default(),
+                            location2: FromPrimitive::from_i64(data[5])
+                                .unwrap_or_default(),
                         })
                         .collect();
                 }
@@ -847,14 +851,10 @@ impl GameState {
                     let exp = self
                         .tavern
                         .expeditions
-                        .current
+                        .active
                         .get_or_insert_with(Default::default);
 
-                    if data[0] == -100 {
-                        exp.boss = None;
-                        continue;
-                    };
-                    exp.boss = Some(ExpeditionBoss {
+                    exp.boss = ExpeditionBoss {
                         id: warning_parse(
                             -data[0],
                             "expedition monster",
@@ -866,16 +866,18 @@ impl GameState {
                             "exp monster items",
                             3,
                         ),
-                    });
+                    };
                 }
                 "expeditionhalftime" => {
                     let data: Vec<i64> = val.into_list("halftime exp")?;
                     let exp = self
                         .tavern
                         .expeditions
-                        .current
+                        .active
                         .get_or_insert_with(Default::default);
-                    exp.halftime_choice = data
+
+                    exp.halftime_for_boss_id = -data[0];
+                    exp.halftime_rewards = data
                         .skip(1, "halftime choice")?
                         .chunks_exact(2)
                         .map(Reward::parse)
@@ -886,24 +888,23 @@ impl GameState {
                     let exp = self
                         .tavern
                         .expeditions
-                        .current
+                        .active
                         .get_or_insert_with(Default::default);
 
-                    exp.target = warning_parse(
+                    exp.target_thing = warning_parse(
                         data[3],
                         "expedition target",
                         FromPrimitive::from_i64,
                     )
                     .unwrap_or_default();
-                    exp.current = soft_into(data[7], "exp current", 100);
+                    exp.target_current = soft_into(data[7], "exp current", 100);
                     exp.target_amount = soft_into(data[8], "exp target", 100);
 
-                    exp.clearing = soft_into(data[0], "clearing", 0);
-                    exp.heroism = soft_into(data[13], "clearing", 0);
+                    exp.current_floor = soft_into(data[0], "clearing", 0);
+                    exp.heroism = soft_into(data[13], "heroism", 0);
 
                     let _busy_since =
                         server_time.convert_to_local(data[15], "exp start");
-
                     exp.busy_until =
                         server_time.convert_to_local(data[16], "exp busy");
 
@@ -928,7 +929,7 @@ impl GameState {
                     let exp = self
                         .tavern
                         .expeditions
-                        .current
+                        .active
                         .get_or_insert_with(Default::default);
                     if data.len() % 2 != 0 {
                         warn!("weird crossroads: {data:?}");
@@ -945,7 +946,10 @@ impl GameState {
                                 .unwrap_or_else(|| default_ecp(raw));
                             let heroism =
                                 soft_into(*ci.get(1)?, "e heroism", 0);
-                            Some(ExpeditionEncounter { typ, heroism })
+                            Some(ExpeditionEncounter {
+                                typ,
+                                base_heroism: heroism,
+                            })
                         })
                         .collect();
                 }
@@ -1408,6 +1412,7 @@ impl GameState {
             server_time.convert_to_local(data[627], "pet battle");
         guild.hydra.remaining_fights =
             soft_into(data[628], "remaining pet battles", 0);
+
         self.character.druid_mask = FromPrimitive::from_i64(data[653]);
         self.character.bard_instrument = FromPrimitive::from_i64(data[701]);
         self.specials.calendar.collected =

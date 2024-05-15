@@ -7,8 +7,8 @@ use num_traits::FromPrimitive;
 use strum::EnumIter;
 
 use super::{
-    character::Class, items::*, tavern::QuestLocation,
-    unlockables::HabitatType, CCGet, CFPGet, CGet,
+    character::Class, items::*, tavern::Location, unlockables::HabitatType,
+    CCGet, CFPGet, CGet,
 };
 use crate::{command::AttributeType, error::SFError};
 
@@ -567,7 +567,7 @@ pub enum DailyTaskType {
     EnterDemonPortal,
     GuildReadyFight,
     SacrificeRunes,
-    TravelTo(QuestLocation),
+    TravelTo(Location),
     WinFights(Option<Class>),
     DefeatOtherPet,
     ThrowItemInCauldron,

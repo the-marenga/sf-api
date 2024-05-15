@@ -33,7 +33,7 @@ pub struct Tavern {
     /// The dice game you can play with the weird guy in the tavern
     pub dice_game: DiceGame,
     /// Informations about everything related to expeditions
-    pub expeditions: Expeditions,
+    pub expeditions: ExpeditionsEvent,
     /// The result of playing the shell game
     pub gamble_result: Option<GambleResult>,
 }
@@ -41,15 +41,25 @@ pub struct Tavern {
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Informations about everything related to expeditions
-pub struct Expeditions {
+pub struct ExpeditionsEvent {
     /// The time the expeditions mechanic was enabled at
     pub start: Option<DateTime<Local>>,
     /// The time until which expeditions will be available
     pub end: Option<DateTime<Local>>,
     /// The expeditions available to do
     pub available: Vec<AvailableExpedition>,
-    /// The expedition the player is currenty doing
-    pub current: Option<CurrentExpedition>,
+    /// The expedition the player is currenty doing. Accessable via the
+    /// `active()` method.
+    pub(crate) active: Option<Expedition>,
+}
+
+impl ExpeditionsEvent {
+    /// Expeditions finish after the last timer elapses. That means, this can
+    /// happen without any new requests. To make sure you do not access an
+    /// expedition, that has elapsed, you access expeditions with this
+    pub fn active(&self) -> Option<&Expedition> {
+        self.active.as_ref().filter(|a| !a.is_finished())
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -97,19 +107,21 @@ pub struct Quest {
     pub base_length: u32,
     /// The silver reward for this quest (without item enchantment)
     pub base_silver: u32,
-    /// The xp reward for this quest  (without item enchantment)
+    /// The xp reward for this quest (without item enchantment)
     pub base_experience: u32,
     /// The item reward for this quest
     pub item: Option<Item>,
     /// The place where this quest takes place. Usefull for the scrapbook
-    pub location_id: QuestLocation,
+    pub location_id: Location,
     /// The enemy you fight in this quest. Usefull for the scrapbook
     pub monster_id: u16,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Copy, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum QuestLocation {
+#[allow(missing_docs)]
+/// The background/location for a quest, or another activity
+pub enum Location {
     #[default]
     SprawlingJungle = 1,
     SkullIsland,
@@ -164,6 +176,7 @@ impl Quest {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum CurrentAction {
     #[default]
+    /// The character is not doing anything and can basically do anything
     Idle,
     CityGuard {
         hours: u8,
@@ -207,48 +220,126 @@ impl CurrentAction {
 #[derive(Debug, Clone, Default, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Toilet {
+    /// Has the toilet been used today?
     pub used: bool,
-    pub aura_level: u32,
-    pub aura_now: u32,
-    pub aura_missing: u32,
+    /// The level the aura is at currently
+    pub aura: u32,
+    /// The amount of mana currently in the toilet
+    pub mana_currently: u32,
+    /// The total amount of mana you have to collect to flush the toilet
+    pub mana_total: u32,
 }
 
 impl Toilet {
     pub(crate) fn update(&mut self, data: &[i64]) {
-        self.aura_level = soft_into(data[491], "aura level", 0);
-        self.aura_now = soft_into(data[492], "aura now", 0);
-        self.aura_missing = soft_into(data[515], "aura missing", 1000);
+        self.aura = soft_into(data[491], "aura level", 0);
+        self.mana_currently = soft_into(data[492], "aura now", 0);
+        self.mana_total = soft_into(data[515], "aura missing", 1000);
     }
 }
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct CurrentExpedition {
-    /// The different crossroads, that you can choose between. Should be 3
-    pub crossroads: Vec<ExpeditionEncounter>,
+pub struct Expedition {
     /// The items
     pub items: [Option<ExpeditionThing>; 4],
+
+    /// The thing, that we are searching on this expedition
+    pub target_thing: ExpeditionThing,
     /// The amount of the target item we have found
-    pub current: u8,
+    pub target_current: u8,
     /// The amount of the target item that we are supposed to find
     pub target_amount: u8,
-    /// The level we are currently clearing
-    pub clearing: u8,
 
+    /// The level we are currently clearing. Starts at 1
+    pub(crate) current_floor: u8,
+    ///  The heroism we have collected so far
     pub heroism: i32,
 
-    pub target: ExpeditionThing,
-
-    pub boss: Option<ExpeditionBoss>,
-
-    pub halftime_choice: Vec<Reward>,
-
-    pub busy_until: Option<DateTime<Local>>,
+    /// Choose one of these rewards
+    pub(crate) halftime_rewards: Vec<Reward>,
+    pub(crate) halftime_for_boss_id: i64,
+    /// If we encountered a boss, this will contain information about it
+    pub(crate) boss: ExpeditionBoss,
+    /// The different crossroads, that you can choose between. Should be 3
+    pub(crate) crossroads: Vec<ExpeditionEncounter>,
+    pub(crate) busy_until: Option<DateTime<Local>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+impl Expedition {
+    #[must_use]
+    /// Returns the current floor the player is on. This is dependant on time,
+    /// because the timers are lazily evaluated. That means it might flip
+    /// from 5->6, 10 -> None between calls. None here means the expedition
+    /// is finished
+    pub fn current_floor(&self) -> Option<u8> {
+        if matches!(self.current_floor, 5 | 10) {
+            if let Some(busy_until) = self.busy_until {
+                if busy_until < Local::now() {
+                    if self.current_floor == 5 {
+                        return Some(6);
+                    }
+                    return None;
+                }
+            }
+        }
+        Some(self.current_floor)
+    }
+
+    #[must_use]
+    /// Returns the current stage the player is doing. This is dependant on
+    /// time, because the timers are lazily evaluated. That means it might
+    /// flip from Waiting->Crossroads/Finished between calls
+    pub fn current_stage(&self) -> ExpeditionStage {
+        match self.current_floor() {
+            None => ExpeditionStage::Finished,
+            Some(5 | 10) => {
+                if self.halftime_rewards.is_empty()
+                    || self.halftime_for_boss_id != self.boss.id
+                {
+                    return ExpeditionStage::Boss(self.boss);
+                }
+                ExpeditionStage::Rewards(self.halftime_rewards.clone())
+            }
+            _ => ExpeditionStage::Crossroads(self.crossroads.clone()),
+        }
+    }
+
+    #[must_use]
+    /// Cheks, if the last timer of this expedition has run out
+    pub fn is_finished(&self) -> bool {
+        matches!(self.current_stage(), ExpeditionStage::Finished)
+    }
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ExpeditionStage {
+    /// Choose one of these rewards after winning against the boss
+    Rewards(Vec<Reward>),
+    /// If we encountered a boss, this will contain information about it
+    Boss(ExpeditionBoss),
+    /// The different crossroads, that you can choose between. Should be 3
+    Crossroads(Vec<ExpeditionEncounter>),
+    /// We have to wait until the specified time to continue in the expedition.
+    /// When this is `< Local::now()`, you can can send teh update command to
+    /// update the expedition stage, which will make `current_stage()` yield
+    /// the new crossroads
+    Waiting(DateTime<Local>),
+    /// The expedition has finished and you can choose another one
+    Finished,
+}
+
+impl Default for ExpeditionStage {
+    fn default() -> Self {
+        ExpeditionStage::Crossroads(Vec::new())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ExpeditionBoss {
+    /// The monster id of this boss
     pub id: i64,
     /// The amount of items this boss is supposed to drop
     pub items: u8,
@@ -258,8 +349,11 @@ pub struct ExpeditionBoss {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ExpeditionEncounter {
     pub typ: ExpeditionThing,
-    /// Note that this value will be +10 for the last one
-    pub heroism: i32,
+    /// The heroism you get from picking this encounter. Note that this is only
+    /// the base  value, so for the alst encounter, or if you have a
+    /// corresponding item, you may need to adjust this +10
+    // TODO: Do this automatically
+    pub base_heroism: i32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Default)]
@@ -335,11 +429,11 @@ pub enum ExpeditionThing {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct AvailableExpedition {
     pub target: ExpeditionThing,
-    pub alu_sec: u32,
+    pub thirst_for_adventure_sec: u32,
 
     // No idea how these work
-    pub(crate) location1_id: i64,
-    pub(crate) location2_id: i64,
+    pub(crate) location1: Location,
+    pub(crate) location2: Location,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
