@@ -100,7 +100,7 @@ pub enum Command {
     /// Finishes the current quest, which starts the battle. This can be used
     /// with a QuestSkip to skip the remaining time
     FinishQuest {
-        skip: Option<QuestSkip>,
+        skip: Option<TimeSkip>,
     },
     /// Goes working for the specified amount of hours (1-10)
     WorkStart {
@@ -521,16 +521,22 @@ pub enum Command {
     },
     /// Continues the expedition, if you are currently in a situation, where
     /// there is only one option. This can be starting a fighting, or starting
-    /// the wait after a fight (collecting the non item reward)
+    /// the wait after a fight (collecting the non item reward). Behind the
+    /// scenes this is just ExpeditionPickReward(0)
     ExpeditionContinue,
     /// If there are multiple items to choose from after fighting a boss, you
     /// can choose which one to take here. [0,1,2]
-    ExpeditionPickItem {
+    ExpeditionPickReward {
         pos: usize,
     },
     /// Starts one of the two expeditions [0,1]
     ExpeditionStart {
         pos: usize,
+    },
+    /// Skips the waiting period of the current expedition. Note that mushroom
+    /// may not always be possible
+    ExpeditionSkipWait {
+        typ: TimeSkip,
     },
 }
 #[derive(Debug, Clone, Copy)]
@@ -604,7 +610,7 @@ pub enum ShopType {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 /// The "curency" you want to use to skip a quest
-pub enum QuestSkip {
+pub enum TimeSkip {
     Mushroom = 1,
     Glass = 2,
 }
@@ -1075,7 +1081,7 @@ impl Command {
                 format!("ExpeditionProceed:{}", pos + 1)
             }
             Command::ExpeditionContinue => format!("ExpeditionProceed:1"),
-            Command::ExpeditionPickItem { pos } => {
+            Command::ExpeditionPickReward { pos } => {
                 format!("ExpeditionProceed:{}", pos + 1)
             }
             Command::ExpeditionStart { pos } => {
@@ -1103,6 +1109,9 @@ impl Command {
                     u8::from(*use_mush),
                     *element as u8 + 1,
                 )
+            }
+            Command::ExpeditionSkipWait { typ } => {
+                format!("ExpeditionTimeSkip:{}", *typ as u8)
             }
         }
     }

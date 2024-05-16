@@ -13,7 +13,7 @@ use url::Url;
 use crate::{
     error::SFError,
     misc::sha1_hash,
-    session::{reqwest_client, CharacterSession, ConnectionOptions, PWHash},
+    session::{reqwest_client, ConnectionOptions, PWHash, Session},
 };
 
 #[derive(Debug)]
@@ -164,7 +164,7 @@ impl SFAccount {
     /// around anyways
     pub async fn characters(
         self,
-    ) -> Result<Vec<Result<CharacterSession, SFError>>, SFError> {
+    ) -> Result<Vec<Result<Session, SFError>>, SFError> {
         // This could be passed in as an argument in case of multiple SSO
         // accounts to safe on requests, but I dont think people have multiple
         // and this is way easier
@@ -184,12 +184,8 @@ impl SFAccount {
         let mut chars = vec![];
         for char in characters {
             chars.push(
-                CharacterSession::from_sso_char(
-                    char,
-                    account.clone(),
-                    &server_lookup,
-                )
-                .await,
+                Session::from_sso_char(char, account.clone(), &server_lookup)
+                    .await,
             )
         }
 

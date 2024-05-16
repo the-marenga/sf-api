@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use chrono::{DateTime, Local};
 use log::{error, warn};
 use num_derive::FromPrimitive;
@@ -200,6 +202,11 @@ pub enum CurrentAction {
 }
 
 impl CurrentAction {
+    /// Wether or not the player is able to do anything the moment
+    pub fn is_idle(&self) -> bool {
+        self == &CurrentAction::Idle
+    }
+
     pub(crate) fn parse(
         id: i64,
         sec: i64,
@@ -327,9 +334,7 @@ impl Expedition {
             3 => ExpeditionStage::Rewards(self.rewards.clone()),
             4 => match self.busy_until {
                 Some(x) if x > Local::now() => ExpeditionStage::Waiting(x),
-                Some(_) if self.current_floor == 10 => {
-                    ExpeditionStage::Finished
-                }
+                _ if self.current_floor == 10 => ExpeditionStage::Finished,
                 _ => cross_roads(),
             },
             _ => ExpeditionStage::Unknown,

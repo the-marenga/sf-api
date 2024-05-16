@@ -1,4 +1,5 @@
 use std::{
+    borrow::Borrow,
     collections::HashMap,
     fmt::Debug,
     str::FromStr,
@@ -18,7 +19,7 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct CharacterSession {
+pub struct Session {
     /// The information necessary to log in
     login_data: LoginData,
     /// The server this account is on
@@ -58,7 +59,7 @@ impl PWHash {
     }
 }
 
-impl CharacterSession {
+impl Session {
     pub fn new(
         username: &str,
         password: &str,
@@ -191,10 +192,11 @@ impl CharacterSession {
     /// you only do predictable simple requests (no login, etc), or you
     /// want to update them yourself, because that is easier to handle for you,
     /// you can use this function to increase your commands/account/sec speed
-    pub async fn send_command_raw(
+    pub async fn send_command_raw<T: Borrow<Command>>(
         &self,
-        command: &Command,
+        command: T,
     ) -> Result<Response, SFError> {
+        let command = command.borrow();
         trace!("Sending a {command:?} command");
 
         let mut command_str =
@@ -262,9 +264,9 @@ impl CharacterSession {
     /// response and returns the response. When this returns an error, the
     /// Session might be in an invalid state, so you should login again just to
     /// be safe
-    pub async fn send_command(
+    pub async fn send_command<T: Borrow<Command>>(
         &mut self,
-        command: &Command,
+        command: T,
     ) -> Result<Response, SFError> {
         let res = self.send_command_raw(command).await?;
         self.update(&res);
@@ -295,13 +297,13 @@ impl CharacterSession {
         character: crate::sso::SSOCharacter,
         account: std::sync::Arc<tokio::sync::Mutex<crate::sso::SFAccount>>,
         server_lookup: &crate::sso::ServerLookup,
-    ) -> Result<CharacterSession, SFError> {
+    ) -> Result<Session, SFError> {
         let server = server_lookup.get(character.server_id)?;
         let session = account.lock().await.session.clone();
         let client = account.lock().await.client.clone();
         let options = account.lock().await.options.clone();
 
-        Ok(CharacterSession {
+        Ok(Session {
             login_data: LoginData::SSO {
                 username: character.name,
                 character_id: character.id,
