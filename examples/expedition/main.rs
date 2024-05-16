@@ -107,7 +107,7 @@ pub async fn main() {
                     panic!("No crossroads to choose from");
                 }
                 // We should pick the best crossroad here
-                println!("Continuing on crossroad");
+                println!("Choosing crossroad");
                 Command::ExpeditionChooseStreet { pos: 0 }
             }
             ExpeditionStage::Finished => {

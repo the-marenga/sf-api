@@ -518,7 +518,7 @@ impl GameState {
                     let vals: Vec<_> = val.as_str().split('/').collect();
                     let v = match vals.as_slice().cget(4, "questing setting")? {
                         "a" => ExpeditionSetting::PreferExpeditions,
-                        "b" => ExpeditionSetting::PreferQuests,
+                        "0" | "b" => ExpeditionSetting::PreferQuests,
                         x => {
                             error!("Weird expedition settings: {x}");
                             ExpeditionSetting::PreferQuests
