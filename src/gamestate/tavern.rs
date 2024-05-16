@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use chrono::{DateTime, Local};
 use log::{error, warn};
 use num_derive::FromPrimitive;
@@ -469,7 +467,6 @@ pub enum ExpeditionThing {
     Unicorn = 44,
 
     CupCake = 51,
-
     Cake = 61,
 
     SmallHurdle = 71,
@@ -565,13 +562,13 @@ pub struct AvailableExpedition {
     pub target: ExpeditionThing,
     pub thirst_for_adventure_sec: u32,
 
-    // No idea how these work
-    pub(crate) location1: Location,
-    pub(crate) location2: Location,
+    pub location1: Location,
+    pub location2: Location,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The amount, that you either won or lost gambling
 pub enum GambleResult {
     SilverChange(i64),
     MushroomChange(i32),

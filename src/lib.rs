@@ -93,7 +93,7 @@ impl SimpleSession {
         self.gamestate.as_mut()
     }
 
-    pub async fn send_cmd<T: Borrow<Command>>(
+    pub async fn send_command<T: Borrow<Command>>(
         &mut self,
         cmd: T,
     ) -> Result<&mut GameState, SFError> {

@@ -52,9 +52,11 @@ pub async fn main() {
                         }
                         println!("Changing expedition setting");
                         session
-                            .send_cmd(Command::SetQuestsInsteadOfExpeditions {
-                                value: ExpeditionSetting::PreferExpeditions,
-                            })
+                            .send_command(
+                                Command::SetQuestsInsteadOfExpeditions {
+                                    value: ExpeditionSetting::PreferExpeditions,
+                                },
+                            )
                             .await
                             .unwrap();
                         continue;
@@ -82,7 +84,7 @@ pub async fn main() {
             // We should be all good to start the expedition
             println!("Starting expedition");
             session
-                .send_cmd(Command::ExpeditionStart { pos: 0 })
+                .send_command(Command::ExpeditionStart { pos: 0 })
                 .await
                 .unwrap();
             continue;
@@ -135,7 +137,7 @@ pub async fn main() {
             ExpeditionStage::Unknown => panic!("unknown expedition stage"),
         };
         sleep(Duration::from_secs(1)).await;
-        session.send_cmd(cmd).await.unwrap();
+        session.send_command(cmd).await.unwrap();
     }
 }
 
