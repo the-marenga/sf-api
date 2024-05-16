@@ -5,7 +5,7 @@ use log::{error, warn};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use super::{items::Item, SFError, ServerTime};
+use super::{items::Item, ExpeditionSetting, SFError, ServerTime};
 use crate::{
     command::{DiceReward, DiceType},
     gamestate::rewards::Reward,
@@ -36,6 +36,9 @@ pub struct Tavern {
     pub dice_game: DiceGame,
     /// Informations about everything related to expeditions
     pub expeditions: ExpeditionsEvent,
+    /// Decides if you can on on expeditions, or quests, when this event is
+    /// currently ongoing
+    pub questing_preference: ExpeditionSetting,
     /// The result of playing the shell game
     pub gamble_result: Option<GambleResult>,
 }
@@ -56,9 +59,18 @@ pub struct ExpeditionsEvent {
 }
 
 impl ExpeditionsEvent {
+    /// Checks if the event has started and not yet ended compared to the
+    /// current time
+    #[must_use]
+    pub fn is_event_ongoing(&self) -> bool {
+        let now = Local::now();
+        matches!((self.start, self.end), (Some(start), Some(end)) if end > now && start < now)
+    }
+
     /// Expeditions finish after the last timer elapses. That means, this can
     /// happen without any new requests. To make sure you do not access an
     /// expedition, that has elapsed, you access expeditions with this
+    #[must_use]
     pub fn active(&self) -> Option<&Expedition> {
         self.active.as_ref().filter(|a| !a.is_finished())
     }
@@ -66,6 +78,7 @@ impl ExpeditionsEvent {
     /// Expeditions finish after the last timer elapses. That means, this can
     /// happen without any new requests. To make sure you do not access an
     /// expedition, that has elapsed, you access expeditions with this
+    #[must_use]
     pub fn active_mut(&mut self) -> Option<&mut Expedition> {
         self.active.as_mut().filter(|a| !a.is_finished())
     }
@@ -86,7 +99,49 @@ pub struct DiceGame {
     pub reward: Option<DiceReward>,
 }
 
+#[derive(Debug, Clone)]
+pub enum AvailableTasks<'a> {
+    Quests(&'a [Quest; 3]),
+    Expeditions(&'a [AvailableExpedition]),
+}
+
 impl Tavern {
+    /// Checks if the player is currently doing anything. Note that this may
+    /// change between calls, as expeditions finish without sending any collect
+    /// commands. In most cases you should match on the `current_action`
+    /// yourself and collect/wait, if necessary, but if you want a quick sanity
+    /// check somewhere, to make sure you are idle, this is the function for you
+    #[must_use]
+    pub fn is_idle(&self) -> bool {
+        match self.current_action {
+            CurrentAction::Idle => true,
+            CurrentAction::Expedition => self.expeditions.active.is_none(),
+            _ => false,
+        }
+    }
+
+    /// Gives you the same tasks, that the person in the tavern would present
+    /// you with. When expeditions are available and they are not disabled by
+    /// the `questing_preference`, they will be shown. Otherwise you will get
+    /// quests
+    #[must_use]
+    pub fn available_tasks(&self) -> AvailableTasks {
+        if self.questing_preference == ExpeditionSetting::PreferExpeditions
+            && self.expeditions.is_event_ongoing()
+        {
+            AvailableTasks::Expeditions(&self.expeditions.available)
+        } else {
+            AvailableTasks::Quests(&self.quests)
+        }
+    }
+
+    /// The expedition/questing setting can only be changed, before any
+    /// alu/thirst for adventure is used that day
+    #[must_use]
+    pub fn can_change_questing_preference(&self) -> bool {
+        self.thirst_for_adventure_sec == 6000 && self.beer_drunk == 0
+    }
+
     pub(crate) fn update(
         &mut self,
         data: &[i64],
@@ -202,11 +257,6 @@ pub enum CurrentAction {
 }
 
 impl CurrentAction {
-    /// Wether or not the player is able to do anything the moment
-    pub fn is_idle(&self) -> bool {
-        self == &CurrentAction::Idle
-    }
-
     pub(crate) fn parse(
         id: i64,
         sec: i64,

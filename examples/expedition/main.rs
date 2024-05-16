@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use chrono::{DateTime, Local};
 use sf_api::{
-    command::{Command, TimeSkip},
-    gamestate::tavern::ExpeditionStage,
+    command::{Command, ExpeditionSetting, TimeSkip},
+    gamestate::tavern::{AvailableTasks, ExpeditionStage},
     SimpleSession,
 };
 use tokio::time::sleep;
@@ -19,7 +19,7 @@ pub async fn main() {
         let Some(active) = exp.active() else {
             // We do not currently have an expedition running. Make sure we are
             // idle
-            if !gs.tavern.current_action.is_idle() {
+            if !gs.tavern.is_idle() {
                 println!(
                     "Waiting/Collection other actions is not part of this \
                      example"
@@ -27,22 +27,47 @@ pub async fn main() {
                 break;
             }
 
-            // Make sure expeditions can be started
-            let now = &Local::now();
-            match (&exp.start, &exp.end) {
-                (Some(start), Some(end)) if end > now && start < now => {}
-                _ => {
-                    println!(
-                        "Expeditions are currrently not enabled, so we can \
-                         not do anything"
-                    );
+            let expeditions = match gs.tavern.available_tasks() {
+                AvailableTasks::Quests(_) => {
+                    // We can only do quest, lets figure out why. Note that
+                    // normally you could just do quests here
+                    if !exp.is_event_ongoing() {
+                        println!(
+                            "Expeditions are currrently not enabled, so we \
+                             can not do anything"
+                        );
+                        break;
+                    }
+                    if gs.tavern.questing_preference
+                        == ExpeditionSetting::PreferQuests
+                    {
+                        // This means we could do expeditions, but they are
+                        // disabled in the settings
+                        if !gs.tavern.can_change_questing_preference() {
+                            println!(
+                                "Expeditions are disabled in the settings and \
+                                 that setting can not be changed today"
+                            );
+                            break;
+                        }
+                        println!("Changing expedition setting");
+                        session
+                            .send_cmd(Command::SetQuestsInsteadOfExpeditions {
+                                value: ExpeditionSetting::PreferExpeditions,
+                            })
+                            .await
+                            .unwrap();
+                        continue;
+                    }
+                    println!("There seem to be no expeditions");
                     break;
                 }
-            }
+                AvailableTasks::Expeditions(expeditions) => expeditions,
+            };
 
             // We would normally have to choose which expedition is the best.
             // For now we just choose the first one though
-            let target = exp.available.first().unwrap();
+            let target = expeditions.first().unwrap();
 
             // Make sure we have enough thirst for adventure to do the
             // expeditions
@@ -103,7 +128,7 @@ pub async fn main() {
                         "Waiting {}s until next expedition step",
                         remaining.as_secs(),
                     );
-                    sleep(remaining).await;
+                    sleep_until(&until).await;
                     Command::UpdatePlayer
                 }
             }
@@ -116,7 +141,9 @@ pub async fn main() {
 
 pub async fn sleep_until(time: &DateTime<Local>) {
     let duration = *time - Local::now();
-    sleep(duration.to_std().unwrap_or_default()).await;
+    // We wait a bit longer, because there is always bit of time difference
+    // between us and the server
+    sleep(duration.to_std().unwrap_or_default() + Duration::from_secs(1)).await;
 }
 
 pub async fn login_with_env() -> SimpleSession {

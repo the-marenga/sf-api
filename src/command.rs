@@ -1,4 +1,6 @@
 #![allow(deprecated)]
+use std::default;
+
 use enum_map::Enum;
 use log::warn;
 use num_derive::FromPrimitive;
@@ -538,7 +540,33 @@ pub enum Command {
     ExpeditionSkipWait {
         typ: TimeSkip,
     },
+    /// This sets the "Questing instead of expeditions" value in the settings.
+    /// This will decide if you can go on expeditions, or do quests, when
+    /// expeditions are available. Going on the "wrong" one will return an
+    /// error. Similarly this setting can only be changed, when no Thirst for
+    /// Adventure has been used today, so make sure to check if that is full
+    /// and `beer_drunk == 0`
+    SetQuestsInsteadOfExpeditions {
+        value: ExpeditionSetting,
+    },
 }
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// This is the "Questing instead of expeditions" value in the settings
+pub enum ExpeditionSetting {
+    /// When expeditions are available, this setting will enable expeditions to
+    /// be started. This will disable questing, until either this setting is
+    /// disabled, or expeditions have ended. Trying to start a quest with this
+    /// setting set will return an error
+    PreferExpeditions,
+    /// When expeditions are available, they will be ignored, until either this
+    /// setting is disabled, or expeditions have ended. Starting an
+    /// expedition with this setting set will error
+    #[default]
+    PreferQuests,
+}
+
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BlacksmithAction {
@@ -1112,6 +1140,13 @@ impl Command {
             }
             Command::ExpeditionSkipWait { typ } => {
                 format!("ExpeditionTimeSkip:{}", *typ as u8)
+            }
+            Command::SetQuestsInsteadOfExpeditions { value } => {
+                let value = match value {
+                    ExpeditionSetting::PreferExpeditions => 'a',
+                    ExpeditionSetting::PreferQuests => 'b',
+                };
+                format!("UserSettingsUpdate:5/{value}")
             }
         }
     }

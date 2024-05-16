@@ -15,7 +15,7 @@ use std::{array::from_fn, collections::HashSet, i64, mem::MaybeUninit};
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use enum_map::EnumMap;
-use log::warn;
+use log::{error, warn};
 use num_traits::FromPrimitive;
 use strum::IntoEnumIterator;
 
@@ -515,6 +515,16 @@ impl GameState {
                 }
                 "usersettings" => {
                     // Contains language and flag settings
+                    let vals: Vec<_> = val.as_str().split('/').collect();
+                    let v = match vals.as_slice().cget(4, "questing setting")? {
+                        "a" => ExpeditionSetting::PreferExpeditions,
+                        "b" => ExpeditionSetting::PreferQuests,
+                        x => {
+                            error!("Weird expedition settings: {x}");
+                            ExpeditionSetting::PreferQuests
+                        }
+                    };
+                    self.tavern.questing_preference = v;
                 }
                 "mailinvoice" => {
                     // Incomplete email address
