@@ -836,9 +836,9 @@ impl GameState {
                             thirst_for_adventure_sec: soft_into(
                                 data[6], "exp alu", 600,
                             ),
-                            location1: FromPrimitive::from_i64(data[4])
+                            location_1: FromPrimitive::from_i64(data[4])
                                 .unwrap_or_default(),
-                            location2: FromPrimitive::from_i64(data[5])
+                            location_2: FromPrimitive::from_i64(data[5])
                                 .unwrap_or_default(),
                         })
                         .collect();

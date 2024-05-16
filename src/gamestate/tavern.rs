@@ -3,7 +3,10 @@ use log::{error, warn};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use super::{items::Item, ExpeditionSetting, SFError, ServerTime};
+use super::{
+    items::Item, ArrSkip, CCGet, CFPGet, CGet, CSTGet, ExpeditionSetting,
+    SFError, ServerTime,
+};
 use crate::{
     command::{DiceReward, DiceType},
     gamestate::rewards::Reward,
@@ -146,17 +149,16 @@ impl Tavern {
         server_time: ServerTime,
     ) -> Result<(), SFError> {
         self.current_action = CurrentAction::parse(
-            data[45] & 0xFF,
-            data[46] & 0xFF,
-            server_time.convert_to_local(data[47], "current action time"),
+            data.cget(45, "action id")? & 0xFF,
+            data.cget(46, "action sec")? & 0xFF,
+            data.cstget(47, "current action time", server_time)?,
         );
-        self.thirst_for_adventure_sec =
-            soft_into(data[456], "remaining ALU", 0);
-        self.beer_drunk = soft_into(data[457], "beer drunk count", 0);
+        self.thirst_for_adventure_sec = data.csiget(456, "remaining ALU", 0)?;
+        self.beer_drunk = data.csiget(457, "beer drunk count", 0)?;
 
-        for (quest_index, start_idx) in (235..=237).enumerate() {
-            self.quests[quest_index] =
-                Quest::parse(&data[start_idx..], quest_index, server_time)?
+        for (qidx, quest) in self.quests.iter_mut().enumerate() {
+            let quest_start = data.skip(235 + qidx, "tavern quest")?;
+            *quest = Quest::parse(quest_start, qidx, server_time)?;
         }
         Ok(())
     }
@@ -164,6 +166,7 @@ impl Tavern {
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// One of the three possible quests in the tavern
 pub struct Quest {
     /// The legth of this quest in sec (without item enchantment)
     pub base_length: u32,
@@ -211,6 +214,7 @@ pub enum Location {
 impl Quest {
     /// Checks if this is a red quest, which means a special enemy + extra
     /// rewards
+    #[must_use]
     pub fn is_red(&self) -> bool {
         matches!(self.monster_id, 139 | 145 | 148 | 152 | 155 | 157)
     }
@@ -220,34 +224,45 @@ impl Quest {
         quest_index: usize,
         server_time: ServerTime,
     ) -> Result<Quest, SFError> {
+        let item_start = data.skip(9 + quest_index * 11, "quest item")?;
         Ok(Quest {
-            base_length: soft_into(data[6], "quest length", 100_000),
-            base_silver: soft_into(data[48], "quest silver", 0),
-            base_experience: soft_into(data[45], "quest xp", 0),
-            item: Item::parse(&data[9 + quest_index * 11..], server_time)?,
-            location_id: warning_parse(data[3], "quest location id", |a| {
-                FromPrimitive::from_i64(a)
-            })
-            .unwrap_or_default(),
-            monster_id: soft_into(-data[0], "quest monster id", 0),
+            base_length: data.csiget(6, "quest length", 100_000)?,
+            base_silver: data.csiget(48, "quest silver", 0)?,
+            base_experience: data.csiget(45, "quest xp", 0)?,
+            item: Item::parse(item_start, server_time)?,
+            location_id: data
+                .cfpget(3, "quest location id", |a| a)?
+                .unwrap_or_default(),
+            monster_id: data.csimget(0, "quest monster id", 0, |a| -a)?,
         })
     }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The thing the player is currently doing
 pub enum CurrentAction {
     #[default]
     /// The character is not doing anything and can basically do anything
     Idle,
+    /// The character is working on guard duty rn. If `busy_until <
+    /// Local::now()`, you can send a `WorkFinish` command
     CityGuard {
+        /// The total amount of hours the character has decided to work
         hours: u8,
+        /// The time at which the guard job will be over
         busy_until: DateTime<Local>,
     },
+    /// The character is doing a quest rn. If `busy_until < Local::now()` you
+    /// can send a `FinishQuest` command
     Quest {
+        /// 0-2 index into tavern quest array
         quest_idx: u8,
+        /// The time, at which the quest can be finished
         busy_until: DateTime<Local>,
     },
+    /// The player is currently doing an expedition. This can be wrong, if the
+    /// last expedition timer elapsed since sending the last request
     Expedition,
     /// The character is not able to do something, but we do not know what.
     /// Most likely something from a new update
@@ -281,6 +296,7 @@ impl CurrentAction {
 
 #[derive(Debug, Clone, Default, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The unlocked toilet, that you can throw items into
 pub struct Toilet {
     /// Has the toilet been used today?
     pub used: bool,
@@ -293,15 +309,17 @@ pub struct Toilet {
 }
 
 impl Toilet {
-    pub(crate) fn update(&mut self, data: &[i64]) {
-        self.aura = soft_into(data[491], "aura level", 0);
-        self.mana_currently = soft_into(data[492], "aura now", 0);
-        self.mana_total = soft_into(data[515], "aura missing", 1000);
+    pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
+        self.aura = data.csiget(491, "aura level", 0)?;
+        self.mana_currently = data.csiget(492, "mana now", 0)?;
+        self.mana_total = data.csiget(515, "mana missing", 1000)?;
+        Ok(())
     }
 }
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The state of an ongoing expedition
 pub struct Expedition {
     /// The items collected durign the expedition
     pub items: [Option<ExpeditionThing>; 4],
@@ -398,6 +416,7 @@ impl Expedition {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The current thing, that would be on screen, when using the web client
 pub enum ExpeditionStage {
     /// Choose one of these rewards after winning against the boss
     Rewards(Vec<Reward>),
@@ -425,6 +444,7 @@ impl Default for ExpeditionStage {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The monster you fight after 5 and 10 expedition crossroads
 pub struct ExpeditionBoss {
     /// The monster id of this boss
     pub id: i64,
@@ -434,16 +454,21 @@ pub struct ExpeditionBoss {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The encounter on a crossroad. In comparison to `ExpeditionThing`, this also
+/// includes the expected heroism
 pub struct ExpeditionEncounter {
     /// The type of thing you engage, or find on this path
     pub typ: ExpeditionThing,
-    /// The heroism you get from picking this encounter. This contains bonus
-    /// from bounties, but no further boni from
+    /// The heroism you get from picking this encounter. This contains the
+    /// bonus from bounties, but no further boni from
     pub heroism: i32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The type of something you can encounter on the expedition crossroads. Can
+/// also be found as the target, or in the items section
+#[allow(missing_docs)]
 pub enum ExpeditionThing {
     #[default]
     Unknown = 0,
@@ -558,17 +583,26 @@ impl ExpeditionThing {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Information about a possible expedition, that you could start
 pub struct AvailableExpedition {
+    /// The target, that will be collected during the expedition
     pub target: ExpeditionThing,
+    /// The amount of thirst for adventure, that selecting this expedition
+    /// costs and also the expected time the two waiting periods take
     pub thirst_for_adventure_sec: u32,
-
-    pub location1: Location,
-    pub location2: Location,
+    /// The first location, that you visit during the expedition. Might
+    /// influence the haltime monsters type
+    pub location_1: Location,
+    /// The second location, that you visit during the expedition. Might
+    /// influence the final monsters type
+    pub location_2: Location,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The amount, that you either won or lost gambling
+#[allow(missing_docs)]
+/// The amount, that you either won or lost gambling. If the value is negative,
+/// you lost
 pub enum GambleResult {
     SilverChange(i64),
     MushroomChange(i32),

@@ -1,6 +1,4 @@
 #![allow(deprecated)]
-use std::default;
-
 use enum_map::Enum;
 use log::warn;
 use num_derive::FromPrimitive;
