@@ -10,11 +10,12 @@ use super::{
 use crate::{
     command::{DiceReward, DiceType},
     gamestate::rewards::Reward,
-    misc::{soft_into, warning_parse},
+    misc::soft_into,
 };
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Anything relatied to things you can do in the tavern
 pub struct Tavern {
     /// All the available quests
     pub quests: [Quest; 3],
@@ -101,6 +102,10 @@ pub struct DiceGame {
 }
 
 #[derive(Debug, Clone)]
+#[allow(missing_docs)]
+/// The tasks you will presented with, when clicking the person in the tavern.
+/// Make sure you are not currently busy and have enough ALU/thirst of adventure
+/// before trying to start them
 pub enum AvailableTasks<'a> {
     Quests(&'a [Quest; 3]),
     Expeditions(&'a [AvailableExpedition]),
@@ -345,8 +350,8 @@ pub struct Expedition {
     pub(crate) halftime_for_boss_id: i64,
     /// If we encountered a boss, this will contain information about it
     pub(crate) boss: ExpeditionBoss,
-    /// The different crossroads, that you can choose between. Should be 3
-    pub(crate) crossroads: Vec<ExpeditionEncounter>,
+    /// The different encounters, that you can choose between. Should be 3
+    pub(crate) encounters: Vec<ExpeditionEncounter>,
     pub(crate) busy_until: Option<DateTime<Local>>,
 }
 
@@ -356,7 +361,7 @@ impl Expedition {
             return;
         }
 
-        for ExpeditionEncounter { typ, heroism } in &mut self.crossroads {
+        for ExpeditionEncounter { typ, heroism } in &mut self.encounters {
             if let Some(possible_bounty) = typ.required_bounty() {
                 if self.items.iter().flatten().any(|a| a == &possible_bounty) {
                     *heroism += 10;
@@ -366,15 +371,15 @@ impl Expedition {
         self.adjusted_bounty_heroism = true;
     }
 
-    pub(crate) fn update_cross_roads(&mut self, data: &[i64]) {
+    pub(crate) fn update_encounters(&mut self, data: &[i64]) {
         if data.len() % 2 != 0 {
-            warn!("weird crossroads: {data:?}");
+            warn!("weird encounters: {data:?}");
         }
         let default_ecp = |ci| {
-            warn!("Unknown crossroad enc: {ci}");
+            warn!("Unknown encounter: {ci}");
             ExpeditionThing::Unknown
         };
-        self.crossroads = data
+        self.encounters = data
             .chunks_exact(2)
             .filter_map(|ci| {
                 let raw = *ci.first()?;
@@ -389,10 +394,10 @@ impl Expedition {
     #[must_use]
     /// Returns the current stage the player is doing. This is dependant on
     /// time, because the timers are lazily evaluated. That means it might
-    /// flip from Waiting->Crossroads/Finished between calls
+    /// flip from Waiting->Encounters/Finished between calls
     pub fn current_stage(&self) -> ExpeditionStage {
         let cross_roads =
-            || ExpeditionStage::Crossroads(self.crossroads.clone());
+            || ExpeditionStage::Encounters(self.encounters.clone());
 
         match self.floor_stage {
             1 => cross_roads(),
@@ -422,12 +427,12 @@ pub enum ExpeditionStage {
     Rewards(Vec<Reward>),
     /// If we encountered a boss, this will contain information about it
     Boss(ExpeditionBoss),
-    /// The different crossroads, that you can choose between. Should be 3
-    Crossroads(Vec<ExpeditionEncounter>),
+    /// The different encounters, that you can choose between. Should be <= 3
+    Encounters(Vec<ExpeditionEncounter>),
     /// We have to wait until the specified time to continue in the expedition.
     /// When this is `< Local::now()`, you can can send teh update command to
     /// update the expedition stage, which will make `current_stage()` yield
-    /// the new crossroads
+    /// the new encounters
     Waiting(DateTime<Local>),
     /// The expedition has finished and you can choose another one
     Finished,
@@ -438,13 +443,13 @@ pub enum ExpeditionStage {
 
 impl Default for ExpeditionStage {
     fn default() -> Self {
-        ExpeditionStage::Crossroads(Vec::new())
+        ExpeditionStage::Encounters(Vec::new())
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The monster you fight after 5 and 10 expedition crossroads
+/// The monster you fight after 5 and 10 expedition encounters
 pub struct ExpeditionBoss {
     /// The monster id of this boss
     pub id: i64,
@@ -454,8 +459,8 @@ pub struct ExpeditionBoss {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The encounter on a crossroad. In comparison to `ExpeditionThing`, this also
-/// includes the expected heroism
+/// One of up to three encounters you can find. In comparison to
+/// `ExpeditionThing`, this also includes the expected heroism
 pub struct ExpeditionEncounter {
     /// The type of thing you engage, or find on this path
     pub typ: ExpeditionThing,
@@ -466,8 +471,8 @@ pub struct ExpeditionEncounter {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The type of something you can encounter on the expedition crossroads. Can
-/// also be found as the target, or in the items section
+/// The type of something you can encounter on the expedition. Can also be found
+/// as the target, or in the items section
 #[allow(missing_docs)]
 pub enum ExpeditionThing {
     #[default]

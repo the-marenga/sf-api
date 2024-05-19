@@ -86,11 +86,14 @@ pub struct GameState {
 const SHOP_N: usize = 6;
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Shop(pub [Item; SHOP_N]);
+/// The ites a shop sells
+pub struct Shop {
+    pub items: [Item; SHOP_N],
+}
 
 impl Default for Shop {
     fn default() -> Self {
-        Self(core::array::from_fn(|_| Item {
+        let items = core::array::from_fn(|_| Item {
             typ: ItemType::Unknown(0),
             price: u32::MAX,
             mushroom_price: u32::MAX,
@@ -102,7 +105,9 @@ impl Default for Shop {
             rune: None,
             enchantment: None,
             color: 0,
-        }))
+        });
+
+        Self { items }
     }
 }
 
@@ -111,30 +116,18 @@ impl Shop {
         data: &[i64],
         server_time: ServerTime,
     ) -> Result<Shop, SFError> {
-        // NOTE: I have no idea how to do this safely without multiple map()
-        // calls, or a Vec to store them, as you can not return from within the
-        // closures used to construct arrays
-        let mut res: [MaybeUninit<Item>; SHOP_N] =
-            from_fn(|_| MaybeUninit::uninit());
-        for (idx, uitem) in res.iter_mut().enumerate() {
+        let mut shop = Shop::default();
+        for (idx, item) in shop.items.iter_mut().enumerate() {
             let d = data.skip(idx * 12, "shop item")?;
-            let Some(item) = Item::parse(d, server_time)? else {
+            let Some(p_item) = Item::parse(d, server_time)? else {
                 return Err(SFError::ParsingError(
                     "shop item",
                     format!("{d:?}"),
                 ));
             };
-            *uitem = MaybeUninit::new(item);
+            *item = p_item;
         }
-        // SAFETY: res is guaranteed to be init, as we iterate all items in the
-        // uninit array and return on error. The input & outputs are strongly
-        // typed, so we never transmute the wrong thing here in case Item should
-        // ever return the wrong thing, or shop changes
-        Ok(Shop(unsafe {
-            std::mem::transmute::<[MaybeUninit<Item>; SHOP_N], [Item; SHOP_N]>(
-                res,
-            )
-        }))
+        Ok(shop)
     }
 }
 
@@ -942,7 +935,7 @@ impl GameState {
                         .expeditions
                         .active
                         .get_or_insert_with(Default::default);
-                    exp.update_cross_roads(&data);
+                    exp.update_encounters(&data);
                 }
                 "eventtasklist" => {
                     let data: Vec<i64> = val.into_list("etl")?;

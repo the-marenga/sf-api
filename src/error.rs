@@ -9,7 +9,7 @@ pub enum SFError {
     /// Whatever you were trying to send was not possible to send. This is
     /// either our issue when you were doing something normal, or you were
     /// sending invalid stuff, like a ssologin on a normal logged in character
-    InvalidRequest,
+    InvalidRequest(&'static str),
     /// The server replied with an empty response. This could have a range of
     /// reasons. Could be a bad request, not logged in, or something else
     EmptyResponse,
@@ -56,8 +56,8 @@ impl Error for SFError {
 impl Display for SFError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SFError::InvalidRequest => {
-                f.write_str("Tried to send an invalid request")
+            SFError::InvalidRequest(msg) => {
+                f.write_str("Tried to send an invalid request: {msg}")
             }
             SFError::EmptyResponse => {
                 f.write_str("Received an empty response from the server")

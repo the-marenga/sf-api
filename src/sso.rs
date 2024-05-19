@@ -118,7 +118,10 @@ impl SFAccount {
             _ => {
                 // I do not think there is a way to reauth without going through
                 // the SSO process again for these
-                return Err(SFError::InvalidRequest);
+                return Err(SFError::InvalidRequest(
+                    "Refreshing the SSO-login is only supported for \
+                     SSO-Accounts",
+                ));
             }
         };
 
@@ -354,7 +357,7 @@ impl ServerLookup {
         self.0
             .get(&server_id)
             .cloned()
-            .ok_or(SFError::InvalidRequest)
+            .ok_or(SFError::InvalidRequest("There is no server with this id"))
     }
 
     pub fn all(&self) -> HashSet<Url> {
@@ -479,7 +482,7 @@ impl SSOAuth {
         Self::new_with_options(provider, Default::default()).await
     }
 
-    /// The same as new(), but with optional connection options
+    /// The same as `new()`, but with optional connection options
     pub async fn new_with_options(
         provider: SSOProvider,
         options: ConnectionOptions,

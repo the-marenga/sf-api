@@ -7,8 +7,6 @@ description = "A simple API to send commands to the Shakes & Fidget servers and 
 repository = "https://github.com/the-marenga/sf-api"
 readme = "README.md"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 aho-corasick = "1.1"
 base64 = "0.22"

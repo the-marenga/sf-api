@@ -104,13 +104,13 @@ pub async fn main() {
                 // We should pick the best reward here
                 Command::ExpeditionPickReward { pos: 0 }
             }
-            ExpeditionStage::Crossroads(roads) => {
+            ExpeditionStage::Encounters(roads) => {
                 if roads.is_empty() {
                     panic!("No crossroads to choose from");
                 }
                 // We should pick the best crossroad here
                 println!("Choosing crossroad");
-                Command::ExpeditionChooseStreet { pos: 0 }
+                Command::ExpeditionPickEncounter { pos: 0 }
             }
             ExpeditionStage::Finished => {
                 // Between calling current_stage and now the expedition

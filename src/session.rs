@@ -200,7 +200,7 @@ impl Session {
         trace!("Sending a {command:?} command");
 
         let mut command_str =
-            format!("{}|{}", self.session_id, command.request_string());
+            format!("{}|{}", self.session_id, command.request_string()?);
 
         while command_str.len() % 16 > 0 {
             command_str.push('|');
@@ -219,7 +219,9 @@ impl Session {
         trace!("Full request url: {url}");
 
         // Make sure we dont have any weird stuff in our url
-        url::Url::parse(&url).map_err(|_| SFError::InvalidRequest)?;
+        url::Url::parse(&url).map_err(|_| {
+            SFError::InvalidRequest("Could not parse command url")
+        })?;
 
         #[allow(unused_mut)]
         let mut req = self
@@ -341,7 +343,9 @@ impl Session {
             account, session, ..
         } = &mut self.login_data
         else {
-            return Err(SFError::InvalidRequest);
+            return Err(SFError::InvalidRequest(
+                "Can not renow sso credentials for a non-sso account",
+            ));
         };
         let mut account = account.lock().await;
 

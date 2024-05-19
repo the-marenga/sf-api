@@ -9,11 +9,44 @@ use crate::{gamestate::items::*, misc::*, PlayerId};
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Information about the Hellevator event on the server. If it is active, you
+/// can get more detailed info via `active()`
 pub struct HellevatorEvent {
+    /// The time the helevator event was enabled at
     pub start: Option<DateTime<Local>>,
+    /// The time the helevator event will be disabled at
     pub end: Option<DateTime<Local>>,
+    /// The time at which you will no longer be able to collect things for the
+    /// hellevator
     pub collect_time_end: Option<DateTime<Local>>,
-    pub active: Option<Hellevator>,
+    /// Contains the hellevator. This can be some(x), even if the event is not
+    /// going, so you should use the `active()` functions to get this
+    pub(crate) active: Option<Hellevator>,
+}
+
+impl HellevatorEvent {
+    /// Checks if the event has started and not yet ended compared to the
+    /// current time
+    #[must_use]
+    pub fn is_event_ongoing(&self) -> bool {
+        let now = Local::now();
+        matches!((self.start, self.end), (Some(start), Some(end)) if end > now && start < now)
+    }
+
+    /// If the Hellevator event is active, this returns a reference to the
+    /// Information about it
+    #[must_use]
+    pub fn active(&self) -> Option<&Hellevator> {
+        self.active.as_ref().filter(|_| self.is_event_ongoing())
+    }
+
+    /// If the Hellevator event is active, this returns a mutable reference to
+    /// the Information about it
+    #[must_use]
+    pub fn active_mut(&mut self) -> Option<&mut Hellevator> {
+        let is_active = self.is_event_ongoing();
+        self.active.as_mut().filter(|_| is_active)
+    }
 }
 
 #[derive(Debug, Default, Clone)]
