@@ -301,11 +301,11 @@ impl Guild {
     ) -> Result<(), SFError> {
         self.own_treasure_upgrade.silver =
             data.csiget(0, "treasure upgr. silver", 0)?;
-        self.own_treasure_upgrade.mushroom =
+        self.own_treasure_upgrade.mushrooms =
             data.csiget(1, "treasure upgr. mush", 0)?;
         self.own_instructor_upgrade.silver =
             data.csiget(2, "instr upgr. silver", 0)?;
-        self.own_instructor_upgrade.mushroom =
+        self.own_instructor_upgrade.mushrooms =
             data.csiget(3, "instr upgr. mush", 0)?;
         Ok(())
     }

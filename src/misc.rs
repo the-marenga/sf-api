@@ -6,7 +6,7 @@ use std::{
 use aho_corasick::AhoCorasick;
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumArray, EnumMap};
-use log::error;
+use log::{error, warn};
 use num::FromPrimitive;
 use once_cell::sync::Lazy;
 
@@ -302,21 +302,6 @@ pub(crate) fn update_enum_map<
     }
 }
 
-pub(crate) fn update_enum_map_key<
-    C: Default + TryFrom<i64>,
-    B,
-    A: enum_map::Enum + enum_map::EnumArray<B>,
->(
-    map: &mut enum_map::EnumMap<A, B>,
-    vals: &[i64],
-    fun: fn(&mut B) -> &mut C,
-) {
-    for (map_val, val) in map.as_mut_slice().iter_mut().zip(vals) {
-        let map_val = fun(map_val);
-        *map_val = soft_into(*val, "attribute val", C::default());
-    }
-}
-
 /// This is a workaround for clippy index warnings for safe index ops. It
 /// also is more convenient in some cases to use these fundtions if you want
 /// to make sure something is &mut, or &
@@ -387,7 +372,11 @@ impl<T: Into<i64> + Copy + std::fmt::Debug, R: FromPrimitive> CFPGet<T, R>
         let raw = raw_cget(self, pos, name)?;
         let raw = fun(raw);
         let t: i64 = raw.into();
-        Ok(FromPrimitive::from_i64(t))
+        let res = FromPrimitive::from_i64(t);
+        if res.is_none() && t != 0 && t != -1 {
+            warn!("There might be a new {name} -> {t}");
+        }
+        Ok(res)
     }
 
     fn cfpuget(

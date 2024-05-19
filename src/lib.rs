@@ -14,6 +14,7 @@
     clippy::too_many_lines,
     clippy::field_reassign_with_default
 )]
+#![deny(unsafe_code)]
 
 use std::{borrow::Borrow, time::Duration};
 

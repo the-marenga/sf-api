@@ -11,7 +11,7 @@ pub mod tavern;
 pub mod underworld;
 pub mod unlockables;
 
-use std::{array::from_fn, collections::HashSet, i64, mem::MaybeUninit};
+use std::{collections::HashSet, i64};
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use enum_map::EnumMap;
@@ -86,8 +86,9 @@ pub struct GameState {
 const SHOP_N: usize = 6;
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The ites a shop sells
+/// A shop, that you can buy items from
 pub struct Shop {
+    /// The items this shop has for sale
     pub items: [Item; SHOP_N],
 }
 
@@ -766,10 +767,9 @@ impl GameState {
                     let bs =
                         self.blacksmith.get_or_insert_with(Default::default);
 
-                    bs.dismantle_left =
-                        soft_into(data[0], "dismantles left", 0);
+                    bs.dismantle_left = data.csiget(0, "dismantles left", 0)?;
                     bs.last_dismantled =
-                        server_time.convert_to_local(data[1], "bs time");
+                        data.cstget(1, "bs time", server_time)?;
                 }
                 "tavernspecial" => {
                     // Pretty sure this has been replaced
@@ -797,11 +797,13 @@ impl GameState {
                     }
                 }
                 "expeditionevent" => {
-                    let data = val.into_list("exp event")?;
+                    let data: Vec<i64> = val.into_list("exp event")?;
                     self.tavern.expeditions.start =
-                        server_time.convert_to_local(data[0], "a");
-                    let end = server_time.convert_to_local(data[1], "b");
-                    let end2 = server_time.convert_to_local(data[1], "b");
+                        data.cstget(0, "expedition start", server_time)?;
+                    let end = data.cstget(1, "expedition end", server_time)?;
+                    let end2 =
+                        data.cstget(1, "expedition end2", server_time)?;
+                    println!("{data:?}");
                     if end != end2 {
                         warn!("Weird expedition time");
                     }
@@ -819,22 +821,22 @@ impl GameState {
                     };
                     self.tavern.expeditions.available = data
                         .chunks_exact(8)
-                        .map(|data| AvailableExpedition {
-                            target: warning_parse(
-                                data[0],
-                                "expedition typ",
-                                FromPrimitive::from_i64,
-                            )
-                            .unwrap_or_default(),
-                            thirst_for_adventure_sec: soft_into(
-                                data[6], "exp alu", 600,
-                            ),
-                            location_1: FromPrimitive::from_i64(data[4])
-                                .unwrap_or_default(),
-                            location_2: FromPrimitive::from_i64(data[5])
-                                .unwrap_or_default(),
+                        .map(|data| {
+                            Ok(AvailableExpedition {
+                                target: data
+                                    .cfpget(0, "expedition typ", |a| a)?
+                                    .unwrap_or_default(),
+                                thirst_for_adventure_sec: data
+                                    .csiget(6, "exp alu", 600)?,
+                                location_1: data
+                                    .cfpget(4, "exp loc 1", |a| a)?
+                                    .unwrap_or_default(),
+                                location_2: data
+                                    .cfpget(5, "exp loc 2", |a| a)?
+                                    .unwrap_or_default(),
+                            })
                         })
-                        .collect();
+                        .collect::<Result<_, _>>()?;
                 }
                 "expeditionrewardresources" => {
                     // I would assume, that everything we get is just update
@@ -858,12 +860,9 @@ impl GameState {
                         .get_or_insert_with(Default::default);
 
                     exp.boss = ExpeditionBoss {
-                        id: warning_parse(
-                            -data[0],
-                            "expedition monster",
-                            FromPrimitive::from_i64,
-                        )
-                        .unwrap_or_default(),
+                        id: data
+                            .cfpget(0, "expedition monster", |a| -a)?
+                            .unwrap_or_default(),
                         items: soft_into(
                             data.get(1).copied().unwrap_or_default(),
                             "exp monster items",
@@ -879,7 +878,8 @@ impl GameState {
                         .active
                         .get_or_insert_with(Default::default);
 
-                    exp.halftime_for_boss_id = -data[0];
+                    exp.halftime_for_boss_id =
+                        -data.cget(0, "halftime for boss id")?;
                     exp.rewards = data
                         .skip(1, "halftime choice")?
                         .chunks_exact(2)
@@ -893,24 +893,21 @@ impl GameState {
                         .expeditions
                         .active
                         .get_or_insert_with(Default::default);
-                    exp.floor_stage = data[2];
+                    exp.floor_stage = data.cget(2, "floor stage")?;
 
-                    exp.target_thing = warning_parse(
-                        data[3],
-                        "expedition target",
-                        FromPrimitive::from_i64,
-                    )
-                    .unwrap_or_default();
-                    exp.target_current = soft_into(data[7], "exp current", 100);
-                    exp.target_amount = soft_into(data[8], "exp target", 100);
+                    exp.target_thing = data
+                        .cfpget(3, "expedition target", |a| a)?
+                        .unwrap_or_default();
+                    exp.target_current = data.csiget(7, "exp current", 100)?;
+                    exp.target_amount = data.csiget(8, "exp target", 100)?;
 
-                    exp.current_floor = soft_into(data[0], "clearing", 0);
-                    exp.heroism = soft_into(data[13], "heroism", 0);
+                    exp.current_floor = data.csiget(0, "clearing", 0)?;
+                    exp.heroism = data.csiget(13, "heroism", 0)?;
 
                     let _busy_since =
-                        server_time.convert_to_local(data[15], "exp start");
+                        data.cstget(15, "exp start", server_time)?;
                     exp.busy_until =
-                        server_time.convert_to_local(data[16], "exp busy");
+                        data.cstget(16, "exp busy", server_time)?;
 
                     for (x, item) in data
                         .skip(9, "exp items")?
@@ -960,7 +957,7 @@ impl GameState {
 
                     // I think the first value here is the amount of > 1 bell
                     // quests
-                    for d in data[1..].chunks_exact(4) {
+                    for d in data.skip(1, "daily tasks")?.chunks_exact(4) {
                         self.specials
                             .tasks
                             .daily
@@ -1033,7 +1030,7 @@ impl GameState {
                     let data = val.into_list("own pets")?;
                     self.pets
                         .get_or_insert_with(Default::default)
-                        .update(&data, server_time);
+                        .update(&data, server_time)?;
                 }
                 "petsdefensetype" => {
                     let pet_id = val.into("pet def typ")?;
@@ -1090,7 +1087,7 @@ impl GameState {
                     // elsewhere I think
                     other_player
                         .get_or_insert_with(Default::default)
-                        .wall_combat_lvl = soft_into(data[0], "wall_lvl", 0);
+                        .wall_combat_lvl = data.csiget(0, "wall_lvl", 0)?;
                 }
                 "petsrank" => {
                     self.pets.get_or_insert_with(Default::default).rank =
@@ -1143,7 +1140,7 @@ impl GameState {
                 "fightversion" => {
                     self.last_fight
                         .get_or_insert_with(Default::default)
-                        .fight_version = val.into("fight version")?
+                        .fight_version = val.into("fight version")?;
                 }
                 x if x.starts_with("fight") && x.len() <= 7 => {
                     self.get_fight(x).update_rounds(val.as_str())?;
@@ -1186,7 +1183,7 @@ impl GameState {
                     let data: Vec<i64> = val.into_list("other group")?;
                     other_guild
                         .get_or_insert_with(Default::default)
-                        .update(&data, server_time);
+                        .update(&data, server_time)?;
                 }
                 "dummies" => {
                     self.character.manequin = Some(Equipment::parse(
@@ -1296,67 +1293,76 @@ impl GameState {
             return Ok(());
         }
 
-        self.character.player_id = soft_into(data[1], "player id", 0);
+        self.character.player_id = data.csiget(1, "player id", 0)?;
         self.character.portrait =
-            Portrait::parse(&data[17..]).unwrap_or_default();
-        self.character.equipment = Equipment::parse(&data[48..], server_time)?;
+            Portrait::parse(data.skip(17, "TODO")?).unwrap_or_default();
+        self.character.equipment =
+            Equipment::parse(data.skip(48, "TODO")?, server_time)?;
 
-        self.character.armor = soft_into(data[447], "total armor", 0);
-        self.character.min_damage = soft_into(data[448], "min damage", 0);
-        self.character.max_damage = soft_into(data[449], "max damage", 0);
+        self.character.armor = data.csiget(447, "total armor", 0)?;
+        self.character.min_damage = data.csiget(448, "min damage", 0)?;
+        self.character.max_damage = data.csiget(449, "max damage", 0)?;
 
-        self.character.level = soft_into(data[7] & 0xFFFF, "level", 0);
+        self.character.level = data.csimget(7, "level", 0, |a| a & 0xFFFF)?;
         self.arena.fights_for_xp =
-            soft_into(data[7] >> 16, "arena xp fights", 0);
+            data.csimget(7, "arena xp fights", 0, |a| a >> 16)?;
 
-        self.character.experience = soft_into(data[8], "experience", 0);
-        self.character.next_level_xp = soft_into(data[9], "xp to next lvl", 0);
-        self.character.honor = soft_into(data[10], "honor", 0);
-        self.character.rank = soft_into(data[11], "rank", 0);
+        self.character.experience = data.csiget(8, "experience", 0)?;
+        self.character.next_level_xp = data.csiget(9, "xp to next lvl", 0)?;
+        self.character.honor = data.csiget(10, "honor", 0)?;
+        self.character.rank = data.csiget(11, "rank", 0)?;
         self.character.class =
             FromPrimitive::from_i64((data[29] & 0xFF) - 1).unwrap_or_default();
         self.character.race =
             FromPrimitive::from_i64(data[27] & 0xFF).unwrap_or_default();
 
-        self.tavern.update(data, server_time);
+        self.tavern.update(data, server_time)?;
 
-        update_enum_map(&mut self.character.attribute_basis, &data[30..]);
-        update_enum_map(&mut self.character.attribute_additions, &data[35..]);
+        update_enum_map(
+            &mut self.character.attribute_basis,
+            data.skip(30, "TODO")?,
+        );
+        update_enum_map(
+            &mut self.character.attribute_additions,
+            data.skip(35, "TODO")?,
+        );
         update_enum_map(
             &mut self.character.attribute_times_bought,
-            &data[40..],
+            data.skip(40, "TODO")?,
         );
 
         self.character.mount = FromPrimitive::from_i64(data[286] & 0xFF);
         self.character.mount_end =
-            server_time.convert_to_local(data[451], "mount end");
+            data.cstget(451, "mount end", server_time)?;
 
         for (idx, item) in self.character.inventory.bag.iter_mut().enumerate() {
-            *item = Item::parse(&data[(168 + idx * 12)..], server_time)?;
+            let item_start = data.skip(168 + idx * 12, "inventory item")?;
+            *item = Item::parse(item_start, server_time)?;
         }
 
         if self.character.level >= 25 {
             let fortress = self.fortress.get_or_insert_with(Default::default);
-            fortress.update(data, server_time);
+            fortress.update(data, server_time)?;
         }
 
-        self.character.active_potions =
-            ItemType::parse_active_potions(&data[493..], server_time);
-        self.specials.wheel.spins_today =
-            soft_into(data[579], "lucky turns", 0);
+        self.character.active_potions = ItemType::parse_active_potions(
+            data.skip(493, "TODO")?,
+            server_time,
+        );
+        self.specials.wheel.spins_today = data.csiget(579, "lucky turns", 0)?;
         self.specials.wheel.next_free_spin =
             warning_parse(data[580], "next lucky turn", |a| {
                 server_time.convert_to_local(a, "next lucky turn")
             });
 
         *self.shops.get_mut(ShopType::Weapon) =
-            Shop::parse(&data[288..], server_time)?;
+            Shop::parse(data.skip(288, "TODO")?, server_time)?;
         *self.shops.get_mut(ShopType::Magic) =
-            Shop::parse(&data[361..], server_time)?;
+            Shop::parse(data.skip(361, "TODO")?, server_time)?;
 
         self.character.mirror = Mirror::parse(data[28]);
         self.arena.next_free_fight =
-            server_time.convert_to_local(data[460], "next battle time");
+            data.cstget(460, "next battle time", server_time)?;
 
         // Toilet remains none as long as its level is 0
         if data[491] > 0 {
@@ -1367,50 +1373,48 @@ impl GameState {
         }
 
         for (idx, val) in self.arena.enemy_ids.iter_mut().enumerate() {
-            *val = soft_into(data[599 + idx], "enemy_id", 0)
+            *val = data.csiget(599 + idx, "enemy_id", 0)?
         }
 
-        if let Some(jg) =
-            server_time.convert_to_local(data[443], "guild join date")
-        {
+        if let Some(jg) = data.cstget(443, "guild join date", server_time)? {
             self.guild.get_or_insert_with(Default::default).joined = jg;
         }
 
         self.dungeons.next_free_fight =
-            server_time.convert_to_local(data[459], "dungeon timer");
+            data.cstget(459, "dungeon timer", server_time)?;
 
         self.pets
             .get_or_insert_with(Default::default)
             .next_free_exploration =
-            server_time.convert_to_local(data[660], "pet next free exp");
+            data.cstget(660, "pet next free exp", server_time)?;
 
         self.dungeons
             .portal
             .get_or_insert_with(Default::default)
-            .player_hp_bonus = soft_into(data[445] >> 24, "portal hp bonus", 0);
+            .player_hp_bonus =
+            data.csimget(445, "portal hp bonus", 0, |a| a >> 24)?;
 
         let guild = self.guild.get_or_insert_with(Default::default);
         // TODO: This might be better as & 0xFF?
         guild.portal.damage_bonus = ((data[445] >> 16) % 256) as u8;
-        guild.own_treasure_skill =
-            soft_into(data[623], "own treasure skill", 0);
+        guild.own_treasure_skill = data.csiget(623, "own treasure skill", 0)?;
         guild.own_instructor_skill =
-            soft_into(data[624], "own instruction skill", 0);
+            data.csiget(624, "own instruction skill", 0)?;
         guild.hydra.next_battle =
-            server_time.convert_to_local(data[627], "pet battle");
+            data.cstget(627, "pet battle", server_time)?;
         guild.hydra.remaining_fights =
-            soft_into(data[628], "remaining pet battles", 0);
+            data.csiget(628, "remaining pet battles", 0)?;
 
         self.character.druid_mask = FromPrimitive::from_i64(data[653]);
         self.character.bard_instrument = FromPrimitive::from_i64(data[701]);
         self.specials.calendar.collected =
             data.csimget(648, "calendat collected", 245, |a| a >> 16)?;
         self.specials.calendar.next_possible =
-            server_time.convert_to_local(data[649], "calendar next");
+            data.cstget(649, "calendar next", server_time)?;
         self.tavern.dice_game.next_free =
-            server_time.convert_to_local(data[650], "dice next");
+            data.cstget(650, "dice next", server_time)?;
         self.tavern.dice_game.remaining =
-            soft_into(data[651], "rem dice games", 0);
+            data.csiget(651, "rem dice games", 0)?;
 
         Ok(())
     }
@@ -1419,43 +1423,52 @@ impl GameState {
         &mut self,
         data: &[i64],
         server_time: ServerTime,
-    ) {
+    ) -> Result<(), SFError> {
         let d = &mut self.hellevator;
-        d.start = server_time.convert_to_local(data[0], "event start");
-        d.end = server_time.convert_to_local(data[1], "event end");
-        d.collect_time_end =
-            server_time.convert_to_local(data[3], "claim time end");
+        d.start = data.cstget(0, "event start", server_time)?;
+        d.end = data.cstget(1, "event end", server_time)?;
+        d.collect_time_end = data.cstget(3, "claim time end", server_time)?;
+        Ok(())
     }
 
-    pub(crate) fn update_resources(&mut self, res: &[i64]) {
-        self.character.mushrooms = soft_into(res[1], "mushrooms", 0);
-        self.character.silver = soft_into(res[2], "player silver", 0);
+    pub(crate) fn update_resources(
+        &mut self,
+        res: &[i64],
+    ) -> Result<(), SFError> {
+        self.character.mushrooms = res.csiget(1, "mushrooms", 0)?;
+        self.character.silver = res.csiget(2, "player silver", 0)?;
         self.tavern.quicksand_glasses =
-            soft_into(res[4], "quicksand glass count", 0);
+            res.csiget(4, "quicksand glass count", 0)?;
 
-        self.specials.wheel.lucky_coins = soft_into(res[3], "lucky coins", 0);
+        self.specials.wheel.lucky_coins = res.csiget(3, "lucky coins", 0)?;
         let bs = self.blacksmith.get_or_insert_with(Default::default);
-        bs.metal = soft_into(res[9], "bs metal", 0);
-        bs.arcane = soft_into(res[10], "bs arcane", 0);
+        bs.metal = res.csiget(9, "bs metal", 0)?;
+        bs.arcane = res.csiget(10, "bs arcane", 0)?;
         let fortress = self.fortress.get_or_insert_with(Default::default);
-        fortress.resources[FortressResourceType::Wood].current =
-            soft_into(res[5], "saved wood ", 0);
-        fortress.resources[FortressResourceType::Stone].current =
-            soft_into(res[7], "saved stone", 0);
+        fortress
+            .resources
+            .get_mut(FortressResourceType::Wood)
+            .current = res.csiget(5, "saved wood ", 0)?;
+        fortress
+            .resources
+            .get_mut(FortressResourceType::Stone)
+            .current = res.csiget(7, "saved stone", 0)?;
 
         let pets = self.pets.get_or_insert_with(Default::default);
         for (e_pos, element) in HabitatType::iter().enumerate() {
             pets.habitats.get_mut(element).fruits =
-                soft_into(res[12 + e_pos], "fruits", 0);
+                res.csiget(12 + e_pos, "fruits", 0)?;
         }
 
         self.underworld
             .get_or_insert_with(Default::default)
-            .souls_current = soft_into(res[11], "uu souls saved", 0);
+            .souls_current = res.csiget(11, "uu souls saved", 0)?;
+        Ok(())
     }
 
     /// Returns the time of the server. This is just an 8 byte copy behind the
     /// scenes, so feel free to NOT cache/optimize calling this in any way
+    #[must_use]
     pub fn server_time(&self) -> ServerTime {
         ServerTime(self.server_time_diff)
     }
@@ -1463,6 +1476,7 @@ impl GameState {
     /// Given a header value like "fight4", this would give you the
     /// corresponding fight[3]. In case that does not exist, it will be created
     /// w/ the default
+    #[must_use]
     fn get_fight(&mut self, header_name: &str) -> &mut SingleFight {
         let id = header_name
             .chars()
@@ -1475,7 +1489,7 @@ impl GameState {
             &mut self.last_fight.get_or_insert_with(Default::default).fights;
 
         if fights.len() < id {
-            fights.resize(id, Default::default())
+            fights.resize(id, SingleFight::default())
         }
         fights.get_mut(id - 1).unwrap()
     }
@@ -1515,6 +1529,7 @@ impl ServerTime {
     /// be). This uses the system time and calculates the offset to the
     /// servers time, so this is NOT the time at the last request, but the
     /// actual current time of the server.
+    #[must_use]
     pub fn current(&self) -> NaiveDateTime {
         Local::now().naive_local() + Duration::seconds(self.0)
     }
@@ -1527,8 +1542,8 @@ trait StringSetExt {
 
 impl StringSetExt for String {
     /// Replace the contents of a string with a string slice. This is basically
-    /// self = s.to_string(), but without the deallication of self + allocation
-    /// of s for that
+    /// `self = s.to_string()`, but without the deallication of self +
+    /// allocation of s for that
     fn set(&mut self, s: &str) {
         self.replace_range(.., s);
     }
@@ -1536,7 +1551,10 @@ impl StringSetExt for String {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The cost of something
 pub struct NormalCost {
+    /// The amount of silver something costs
     pub silver: u64,
-    pub mushroom: u16,
+    /// The amount of mushrooms something costs
+    pub mushrooms: u16,
 }

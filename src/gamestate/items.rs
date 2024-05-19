@@ -315,7 +315,7 @@ pub enum Enchantment {
     /// Increased crit damage
     SwordOfVengeance = 11,
     /// Finds more mushrooms
-    MariosBeard = 32,
+    MariosBeard = 31,
     /// Shortens travel time
     ManyFeetBoots = 41,
     /// Increased reaction score in combat
