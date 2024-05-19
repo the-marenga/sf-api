@@ -10,6 +10,7 @@ use base64::Engine;
 use chrono::NaiveDateTime;
 use log::{error, trace, warn};
 use reqwest::{header::*, Client};
+use url::Url;
 
 use crate::{
     command::Command,
@@ -23,7 +24,8 @@ pub(crate) const DEFAULT_CRYPTO_ID: &str = "0-00000000000000";
 pub(crate) const DEFAULT_SESSION_ID: &str = "00000000000000000000000000000000";
 const CRYPTO_IV: &str = "jXT#/vz]3]5X7Jl\\";
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+/// The session, that manages the server communication for a character
 pub struct Session {
     /// The information necessary to log in
     login_data: LoginData,
@@ -46,6 +48,7 @@ pub struct Session {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The pasword of a character, hashed in the way, that the server expects
 pub struct PWHash(String);
 
 impl PWHash {
@@ -55,17 +58,25 @@ impl PWHash {
     pub fn new(password: &str) -> Self {
         Self(sha1_hash(&(password.to_string() + HASH_CONST)))
     }
-
+    /// If you have access to the hash of the password directly, this method
+    /// lets you contruct a `PWHash` directly
+    #[must_use]
     pub fn from_hash(hash: String) -> Self {
         Self(hash)
     }
 
+    /// Gives you the hash of the password directly
     pub fn get(&self) -> &str {
         &self.0
     }
 }
 
 impl Session {
+    /// Constructs a new session for a normal (not SSO) account with the
+    /// credentials provided. To use this session, you should call `login()`
+    /// to actually find out, if the credentials work and to get the initial
+    /// login response
+    #[must_use]
     pub fn new(
         username: &str,
         password: &str,
@@ -74,38 +85,47 @@ impl Session {
         Self::new_hashed(username, PWHash::new(password), server)
     }
 
+    /// Does the same as `new()`, but takes a hashed password directly
+    #[must_use]
     pub fn new_hashed(
         username: &str,
         pw_hash: PWHash,
         server: ServerConnection,
     ) -> Self {
-        let mut res = Self {
-            login_data: LoginData::Basic {
-                username: username.to_string(),
-                pw_hash,
-            },
-
-            server_url: server.url,
-            client: server.client,
-            session_id: Default::default(),
-            crypto_id: Default::default(),
-            crypto_key: Default::default(),
-            command_count: Default::default(),
-            login_count: Default::default(),
-            options: server.options,
+        let ld = LoginData::Basic {
+            username: username.to_string(),
+            pw_hash,
         };
-        res.reset_session();
-        res
+        Self::new_full(ld, server.client, server.options, server.url)
+    }
+
+    fn new_full(
+        ld: LoginData,
+        client: Client,
+        options: ConnectionOptions,
+        url: Url,
+    ) -> Self {
+        Self {
+            login_data: ld,
+            server_url: url,
+            client,
+            session_id: DEFAULT_SESSION_ID.to_string(),
+            crypto_id: DEFAULT_CRYPTO_ID.to_string(),
+            crypto_key: DEFAULT_CRYPTO_KEY.to_string(),
+            command_count: Arc::new(AtomicU32::new(0)),
+            login_count: 1,
+            options,
+        }
     }
 
     /// Resets a session by setting all values related to the server connection
     /// back to the "not logged in" state. This is basically the equivalent of
-    /// clearing browserdata, to logout, instead of actually logging out
-    fn reset_session(&mut self) {
+    /// clearing browserdata, to logout
+    fn logout(&mut self) {
         self.crypto_key = DEFAULT_CRYPTO_KEY.to_string();
         self.crypto_id = DEFAULT_CRYPTO_ID.to_string();
         self.login_count = 1;
-        self.command_count = Default::default();
+        self.command_count = Arc::new(AtomicU32::new(0));
         self.session_id = DEFAULT_SESSION_ID.to_string();
     }
 
@@ -124,7 +144,7 @@ impl Session {
     /// Clears the current session and sends a login request to the server.
     /// Returns the parsed response from the server.
     pub async fn login(&mut self) -> Result<Response, SFError> {
-        self.reset_session();
+        self.logout();
         #[allow(deprecated)]
         let login_cmd = match self.login_data.clone() {
             LoginData::Basic { username, pw_hash } => Command::Login {
@@ -217,7 +237,7 @@ impl Session {
             "{}req.php?req={}{}&rnd={:.7}&c={}",
             self.server_url,
             &self.crypto_id,
-            encrypt_server_request(command_str, &self.crypto_key),
+            encrypt_server_request(command_str, &self.crypto_key)?,
             fastrand::f64(), // Pretty sure this is just cache busting
             self.command_count
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
@@ -240,14 +260,14 @@ impl Session {
             req = req.bearer_auth(&session.bearer_token);
         }
 
-        let res = req.send().await.map_err(|_| SFError::ConnectionError)?;
+        let resp = req.send().await.map_err(|_| SFError::ConnectionError)?;
 
-        if !res.status().is_success() {
+        if !resp.status().is_success() {
             return Err(SFError::ConnectionError);
         }
 
         let response_body =
-            res.text().await.map_err(|_| SFError::ConnectionError)?;
+            resp.text().await.map_err(|_| SFError::ConnectionError)?;
 
         match response_body {
             body if body.is_empty() => Err(SFError::EmptyResponse),
@@ -306,27 +326,18 @@ impl Session {
         account: std::sync::Arc<tokio::sync::Mutex<crate::sso::SFAccount>>,
         server_lookup: &crate::sso::ServerLookup,
     ) -> Result<Session, SFError> {
-        let server = server_lookup.get(character.server_id)?;
+        let url = server_lookup.get(character.server_id)?;
         let session = account.lock().await.session.clone();
         let client = account.lock().await.client.clone();
         let options = account.lock().await.options.clone();
 
-        Ok(Session {
-            login_data: LoginData::SSO {
-                username: character.name,
-                character_id: character.id,
-                account,
-                session,
-            },
-            server_url: server,
-            session_id: DEFAULT_SESSION_ID.to_string(),
-            crypto_id: DEFAULT_CRYPTO_ID.to_string(),
-            crypto_key: DEFAULT_CRYPTO_KEY.to_string(),
-            command_count: Arc::new(AtomicU32::new(1)),
-            login_count: 0,
-            client,
-            options,
-        })
+        let ld = LoginData::SSO {
+            username: character.name,
+            character_id: character.id,
+            account,
+            session,
+        };
+        Ok(Session::new_full(ld, client, options, url))
     }
 
     pub fn username(&self) -> &str {
@@ -478,8 +489,9 @@ impl<'de> serde::Deserialize<'de> for Response {
 }
 
 impl Response {
-    // Returns a reference to a hashmap, that contains mappings of response keys
-    // to values
+    /// Returns a reference to the hashmap, that contains mappings of response
+    /// keys to values
+    #[must_use]
     pub fn values(&self) -> &HashMap<&str, ResponseVal<'_>> {
         self.borrow_resp()
     }
@@ -488,15 +500,27 @@ impl Response {
     /// necessary for debugging, caching, or in case there is ever a new
     /// response format in a response, that is not yet supported. You can of
     /// course also use this to look at how horrible the S&F encoding is..
+    #[must_use]
     pub fn raw_response(&self) -> &str {
         self.borrow_body()
     }
 
+    /// Returns the time, at which the response was received
+    #[must_use]
     pub fn received_at(&self) -> NaiveDateTime {
         self.with_received_at(|a| *a)
     }
 
     /// Parses a response body from the server into a useable format
+    /// You might want to use this, if you are analyzing reponses from the
+    /// browsers network tab. If you are trying to store/read responses to/from
+    /// disk to cache them, or otherwise, you should use the sso feature to
+    /// serialize/deserialize them instead
+    ///
+    /// # Errors
+    /// - `ServerError`: If the server responsed with an error
+    /// - `ParsingError`: If the reponse does not follow the standard S&F server
+    ///   response schema
     pub fn parse(
         og_body: String,
         received_at: NaiveDateTime,
@@ -540,38 +564,33 @@ impl Response {
                     .trim_start_matches(|a: char| !a.is_alphabetic())
                     .trim_end_matches('|')
                     .split('&')
+                    .filter(|a| !a.is_empty())
                 {
-                    // a part might look like this: `key.subkey(2):88/99`
-                    let base_key_len = part
-                        .chars()
-                        .position(|a| [':', '(', '.'].contains(&a))
-                        .unwrap_or(part.len());
+                    let Some((full_key, value)) = part.split_once(':') else {
+                        warn!("weird k/v in resp: {part}");
+                        continue;
+                    };
 
-                    let key = part[..base_key_len].trim();
-
+                    let (key, sub_key) = match full_key.split_once('.') {
+                        Some(x) => {
+                            // full_key == key.subkey
+                            x
+                        }
+                        None => {
+                            if let Some((k, sk)) = full_key.split_once('(') {
+                                // full_key == key(4)
+                                (k, sk.trim_matches(')'))
+                            } else {
+                                // full_key == key
+                                (full_key, "")
+                            }
+                        }
+                    };
                     if key.is_empty() {
                         continue;
                     }
 
-                    let seperator_pos = part
-                        .chars()
-                        .position(|a| a == ':')
-                        .unwrap_or(part.len());
-
-                    let val_start = (seperator_pos + 1).min(part.len());
-                    let val = &part[val_start..];
-
-                    let sub_key = &part
-                        [(base_key_len).min(seperator_pos)..seperator_pos]
-                        .trim_start_matches('.');
-
-                    res.insert(
-                        key,
-                        ResponseVal {
-                            value: val,
-                            sub_key,
-                        },
-                    );
+                    res.insert(key, ResponseVal { value, sub_key });
                 }
                 res
             },
@@ -594,22 +613,28 @@ pub struct ResponseVal<'a> {
 
 impl<'a> ResponseVal<'a> {
     /// Converts the response value into the required type
+    ///
+    /// # Errors
+    /// If the reponse value can not be parsed into the output
+    /// value, a `ParsingError` will be returned
     pub fn into<T: FromStr>(self, name: &'static str) -> Result<T, SFError> {
-        use SFError::*;
         self.value
             .trim()
             .parse()
-            .map_err(|_| ParsingError(name, self.value.to_string()))
+            .map_err(|_| SFError::ParsingError(name, self.value.to_string()))
     }
 
     /// Converts the repsponse into a list, by splitting the raw value by '/'
     /// and converting each value into the required type. If any conversion
     /// fails, an error is returned
+    ///
+    /// # Errors
+    /// If any of the values in the string can not be parsed into the output
+    /// value, the `ParsingError` for that value will be returned
     pub fn into_list<T: FromStr>(
         self,
         name: &'static str,
     ) -> Result<Vec<T>, SFError> {
-        use SFError::*;
         let x = &self.value;
         if x.is_empty() {
             return Ok(Vec::new());
@@ -620,7 +645,7 @@ impl<'a> ResponseVal<'a> {
             .map(|c| {
                 c.trim()
                     .parse::<T>()
-                    .map_err(|_| ParsingError(name, format!("{c:?}")))
+                    .map_err(|_| SFError::ParsingError(name, format!("{c:?}")))
             })
             .collect()
     }
@@ -631,11 +656,13 @@ impl<'a> ResponseVal<'a> {
     /// decided to trim that off. More common, this is also just `s`, `r`, or a
     /// size hint like `(10)`. In some cases though, this information can be
     /// helpful for parsing. Thus, you can access it here
+    #[must_use]
     pub fn sub_key(&self) -> &str {
         self.sub_key
     }
 
     /// Returns the raw reference to the internal &str, that the server send
+    #[must_use]
     pub fn as_str(&self) -> &str {
         self.value
     }
@@ -677,6 +704,10 @@ enum LoginData {
 }
 
 #[derive(Debug, Clone)]
+/// Stores all information necessary to talk to the server. Noteably, if you
+/// clone this, instead of creating this multiple times for characters on a
+/// server, this will use the same `reqwest::Client`, which can have slight
+/// benefits to performance
 pub struct ServerConnection {
     url: url::Url,
     client: Client,
@@ -686,17 +717,26 @@ pub struct ServerConnection {
 impl ServerConnection {
     /// Creates a new server instance. This basically just makes sure the url
     /// is valid and otherwise tries to make it valid
+    #[must_use]
     pub fn new(server_url: &str) -> Option<ServerConnection> {
-        ServerConnection::new_with_options(server_url, Default::default())
+        ServerConnection::new_with_options(
+            server_url,
+            ConnectionOptions::default(),
+        )
     }
 
+    /// Creates a new server instance with the options provided. This basically
+    /// just makes sure the url is valid and otherwise tries to make it
+    /// valid
+    #[must_use]
     pub fn new_with_options(
         server_url: &str,
         options: ConnectionOptions,
     ) -> Option<ServerConnection> {
-        let url = match server_url.starts_with("http") {
-            true => server_url.parse().ok()?,
-            false => format!("https://{server_url}").parse().ok()?,
+        let url = if server_url.starts_with("http") {
+            server_url.parse().ok()?
+        } else {
+            format!("https://{server_url}").parse().ok()?
         };
 
         Some(ServerConnection {
@@ -707,9 +747,16 @@ impl ServerConnection {
     }
 }
 
-fn encrypt_server_request(to_encrypt: String, key: &str) -> String {
+fn encrypt_server_request(
+    to_encrypt: String,
+    key: &str,
+) -> Result<String, SFError> {
     let mut my_key = [0; 16];
-    my_key.copy_from_slice(&key.as_bytes()[..16]);
+    my_key.copy_from_slice(
+        key.as_bytes()
+            .get(..16)
+            .ok_or(SFError::InvalidRequest("Invalid crypto key"))?,
+    );
 
     let mut cipher = libaes::Cipher::new_128(&my_key);
     cipher.set_auto_padding(false);
@@ -722,7 +769,7 @@ fn encrypt_server_request(to_encrypt: String, key: &str) -> String {
     }
     let encrypted = cipher.cbc_encrypt(CRYPTO_IV.as_bytes(), &to_encrypt);
 
-    base64::engine::general_purpose::URL_SAFE.encode(encrypted)
+    Ok(base64::engine::general_purpose::URL_SAFE.encode(encrypted))
 }
 
 pub(crate) fn reqwest_client(
