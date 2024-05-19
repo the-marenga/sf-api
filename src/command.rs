@@ -33,7 +33,7 @@ pub enum Command {
         cmd_name: String,
         /// The values this command gets as arguments. These will be joines
         /// with '/'
-        values: Vec<String>,
+        arguments: Vec<String>,
     },
     /// Manually sends a login request to the server.
     /// **WARN:** The behaviour for a credentials mismatch, with the
@@ -720,9 +720,12 @@ impl Command {
     /// perform the request
     #[allow(deprecated, clippy::useless_format)]
     pub(crate) fn request_string(&self) -> Result<String, SFError> {
-        const APP_VERSION: &str = "1800000000000";
+        const APP_VERSION: &str = "2000000000000";
         Ok(match self {
-            Command::Custom { cmd_name, values } => {
+            Command::Custom {
+                cmd_name,
+                arguments: values,
+            } => {
                 format!("{cmd_name}:{}", values.join("/"))
             }
             Command::Login {

@@ -146,7 +146,7 @@ impl HallOfFamePlayer {
         let data: Vec<_> = val.split(',').collect();
         let rank = data.cfsuget(0, "hof player rank")?;
         let name = data.cget(1, "hof player name")?.to_string();
-        let guild = Some(data.cget(2, "hof pet guild")?.to_string())
+        let guild = Some(data.cget(2, "hof player guild")?.to_string())
             .filter(|a| !a.is_empty());
         let level = data.cfsuget(3, "hof player level")?;
         let honor = data.cfsuget(4, "hof player fame")?;

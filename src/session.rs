@@ -18,6 +18,11 @@ use crate::{
     misc::{sha1_hash, HASH_CONST},
 };
 
+pub(crate) const DEFAULT_CRYPTO_KEY: &str = "[_/$VV&*Qg&)r?~g";
+pub(crate) const DEFAULT_CRYPTO_ID: &str = "0-00000000000000";
+pub(crate) const DEFAULT_SESSION_ID: &str = "00000000000000000000000000000000";
+const CRYPTO_IV: &str = "jXT#/vz]3]5X7Jl\\";
+
 #[derive(Debug, Clone)]
 pub struct Session {
     /// The information necessary to log in
@@ -46,6 +51,7 @@ pub struct PWHash(String);
 impl PWHash {
     /// Hashes the password the way the server expects it. You can use this to
     /// store user passwords safely (not in cleartext)
+    #[must_use]
     pub fn new(password: &str) -> Self {
         Self(sha1_hash(&(password.to_string() + HASH_CONST)))
     }
@@ -96,11 +102,11 @@ impl Session {
     /// back to the "not logged in" state. This is basically the equivalent of
     /// clearing browserdata, to logout, instead of actually logging out
     fn reset_session(&mut self) {
-        self.crypto_key = "[_/$VV&*Qg&)r?~g".to_string();
-        self.crypto_id = "0-00000000000000".to_string();
+        self.crypto_key = DEFAULT_CRYPTO_KEY.to_string();
+        self.crypto_id = DEFAULT_CRYPTO_ID.to_string();
         self.login_count = 1;
         self.command_count = Default::default();
-        self.session_id = "00000000000000000000000000000000".to_string();
+        self.session_id = DEFAULT_SESSION_ID.to_string();
     }
 
     pub fn server_url(&self) -> &url::Url {
@@ -313,9 +319,9 @@ impl Session {
                 session,
             },
             server_url: server,
-            session_id: "00000000000000000000000000000000".to_string(),
-            crypto_id: "0-00000000000000".to_string(),
-            crypto_key: "[_/$VV&*Qg&)r?~g".to_string(),
+            session_id: DEFAULT_SESSION_ID.to_string(),
+            crypto_id: DEFAULT_CRYPTO_ID.to_string(),
+            crypto_key: DEFAULT_CRYPTO_KEY.to_string(),
             command_count: Arc::new(AtomicU32::new(1)),
             login_count: 0,
             client,
@@ -735,60 +741,103 @@ pub(crate) fn reqwest_client(
 }
 
 /// This function is designed for reverseengineering encrypted commands from the
-/// s&f web client. It expects a login resonse, which is the ~3KB string
+/// S&F web client. It expects a login resonse, which is the ~3KB string
 /// response you can see in the network tab of your browser, that starts with
 /// `serverversion` after a login. After that, you can take any url the client
 /// sends to the server and have it decoded into the actual string command, that
 /// was sent. Note that this function technically only needs the crypto key, not
-/// the full response, but it is way easier to just copy paste the full response
-// just way easier to copy paste
-pub fn decrypt_url(encrypted_url: &str, login_resp: &str) -> String {
-    let crypto_key = login_resp
-        .split('&')
-        .flat_map(|a| a.split_once(':'))
-        .find(|a| a.0 == "cryptokey")
-        .unwrap()
-        .1;
+/// the full response, but it is way easier to just copy paste the full
+/// response. The command returned here will be `Command::Custom`
+///
+/// # Errors
+///
+/// If either the url, or the response do not contain the necessary crypto
+/// values, an `InvalidRequest` error will be returned, that mentions the part,
+/// that is missing or malformed. The same goes for the necessary parts of the
+/// decrypted command
+pub fn decrypt_url(
+    encrypted_url: &str,
+    login_resp: Option<&str>,
+) -> Result<Command, SFError> {
+    let crypto_key = if let Some(login_resp) = login_resp {
+        login_resp
+            .split('&')
+            .filter_map(|a| a.split_once(':'))
+            .find(|a| a.0 == "cryptokey")
+            .ok_or(SFError::InvalidRequest("No crypto key in login resp"))?
+            .1
+    } else {
+        DEFAULT_CRYPTO_KEY
+    };
 
     let encrypted = encrypted_url
         .split_once("req=")
-        .unwrap()
+        .ok_or(SFError::InvalidRequest("url does not contain request"))?
         .1
         .rsplit_once("&rnd=")
-        .unwrap()
+        .ok_or(SFError::InvalidRequest("url does not contain rnd"))?
         .0;
 
-    let resp = &encrypted["0-00000000000000".len()..];
+    let resp = encrypted.get(DEFAULT_CRYPTO_ID.len()..).ok_or(
+        SFError::InvalidRequest("encrypted command does not contain crypto id"),
+    )?;
+    let full_resp = decrypt_server_request(resp, crypto_key)?;
 
-    decrypt_server_request(resp, crypto_key)
-        .split_once('|')
-        .unwrap()
-        .1
+    let (_session_id, command) = full_resp.split_once('|').ok_or(
+        SFError::InvalidRequest("decrypted command has no session id"),
+    )?;
+
+    let (cmd_name, args) = command
+        .split_once(':')
+        .ok_or(SFError::InvalidRequest("decrypted command has no name"))?;
+    let args: Vec<_> = args
         .trim_end_matches('|')
-        .to_string()
+        .split('/')
+        .map(std::string::ToString::to_string)
+        .collect();
+
+    Ok(Command::Custom {
+        cmd_name: cmd_name.to_string(),
+        arguments: args,
+    })
 }
 
-const CRYPTO_IV: &str = "jXT#/vz]3]5X7Jl\\";
-
-fn decrypt_server_request(to_decrypt: &str, key: &str) -> String {
+fn decrypt_server_request(
+    to_decrypt: &str,
+    key: &str,
+) -> Result<String, SFError> {
     let text = base64::engine::general_purpose::URL_SAFE
         .decode(to_decrypt)
-        .unwrap();
+        .map_err(|_| {
+            SFError::InvalidRequest("Value to decode is not base64")
+        })?;
 
     let mut my_key = [0; 16];
-    my_key.copy_from_slice(&key.as_bytes()[..16]);
+    my_key.copy_from_slice(
+        key.as_bytes()
+            .get(..16)
+            .ok_or(SFError::InvalidRequest("Key is not 16 bytes long"))?,
+    );
 
     let mut cipher = libaes::Cipher::new_128(&my_key);
     cipher.set_auto_padding(false);
     let decrypted = cipher.cbc_decrypt(CRYPTO_IV.as_bytes(), &text);
 
-    String::from_utf8(decrypted).unwrap()
+    String::from_utf8(decrypted)
+        .map_err(|_| SFError::InvalidRequest("Decrypted value is not UTF8"))
 }
 
 #[derive(Debug, Clone)]
+/// Options, that change the behaviour of the communication with the server
 pub struct ConnectionOptions {
+    /// A custom useragent to use, when sending requests to the server
     pub user_agent: Option<String>,
+    /// The server version, that this API was last tested on
     pub expected_server_version: u32,
+    /// If this is true, any request to the server will error, if the servers
+    /// version is greater, than `expected_server_version`. This can be useful,
+    /// if you want to make sure you never get surprised by unexpected changes
+    /// on the server
     pub error_on_unsupported_version: bool,
 }
 
