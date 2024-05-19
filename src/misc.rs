@@ -277,6 +277,7 @@ pub(crate) trait CSGet<T: FromStr> {
         pos: usize,
         name: &'static str,
     ) -> Result<Option<T>, SFError>;
+    fn cfsuget(&self, pos: usize, name: &'static str) -> Result<T, SFError>;
 }
 
 impl<T: FromStr> CSGet<T> for [&str] {
@@ -287,6 +288,14 @@ impl<T: FromStr> CSGet<T> for [&str] {
     ) -> Result<Option<T>, SFError> {
         let raw = raw_cget(self, pos, name)?;
         Ok(warning_from_str(raw, name))
+    }
+
+    fn cfsuget(&self, pos: usize, name: &'static str) -> Result<T, SFError> {
+        let raw = raw_cget(self, pos, name)?;
+        let Some(val) = warning_from_str(raw, name) else {
+            return Err(SFError::ParsingError(name, raw.to_string()));
+        };
+        Ok(val)
     }
 }
 

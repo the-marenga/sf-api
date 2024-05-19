@@ -71,9 +71,10 @@ pub struct GameState {
     pub idle_game: Option<IdleGame>,
     /// Contains the features this char is able to unlock right now
     pub pending_unlocks: Vec<Unlockable>,
-    /// Anything related to hall of fames and other players on the server. You
-    /// can find anything related to viewing other players here
+    /// Anything related to hall of fames
     pub hall_of_fames: HallOfFames,
+    /// Contains both other guilds & players, that you can look at via commands
+    pub lookup: Lookup,
     /// Anything you can find in the mail tab of the official client
     pub mail: Mail,
     /// The raw timestamp, that the server has send us
@@ -211,7 +212,7 @@ impl GameState {
                 }
                 "cryptoid not found" => return Err(ConnectionError),
                 "ownplayersave" => {
-                    self.update_player_save(&val.into_list("player save")?)?
+                    self.update_player_save(&val.into_list("player save")?)?;
                 }
                 "owngroupname" => self
                     .guild
@@ -242,14 +243,15 @@ impl GameState {
 
                     for (i, class) in CompanionClass::iter().enumerate() {
                         let comp_start = 3 + i * 148;
-                        companions.get_mut(class).level = data[comp_start];
+                        companions.get_mut(class).level =
+                            data.cget(comp_start, "comp level")?;
                         companions.get_mut(class).equipment = Equipment::parse(
-                            &data[(comp_start + 22)..],
+                            data.skip(comp_start + 22, "comp equip")?,
                             server_time,
                         )?;
                         update_enum_map(
                             &mut companions.get_mut(class).attributes,
-                            &data[(comp_start + 4)..],
+                            data.skip(comp_start + 4, "comp attrs")?,
                         );
                     }
                     // Why would they include this in the tower response???
@@ -270,7 +272,7 @@ impl GameState {
                         .update_group_save(
                             &val.into_list("guild save")?,
                             server_time,
-                        );
+                        )?;
                 }
                 "owngroupmember" => self
                     .guild
@@ -284,7 +286,9 @@ impl GameState {
                 "unitprice" => {
                     self.fortress
                         .get_or_insert_with(Default::default)
-                        .update_unit_prices(&val.into_list("fortress units")?);
+                        .update_unit_prices(
+                            &val.into_list("fortress units")?,
+                        )?;
                 }
                 "dicestatus" => {
                     let dices: Option<Vec<DiceType>> = val
@@ -297,15 +301,11 @@ impl GameState {
                 }
                 "dicereward" => {
                     let data: Vec<u32> = val.into_list("dice reward")?;
-                    let win_typ: DiceType = FromPrimitive::from_u32(
-                        data[0] - 1,
-                    )
-                    .ok_or_else(|| {
-                        SFError::ParsingError("dice reward", val.to_string())
-                    })?;
+                    let win_typ: DiceType =
+                        data.cfpuget(0, "dice reward", |a| a - 1)?;
                     self.tavern.dice_game.reward = Some(DiceReward {
                         win_typ,
-                        amount: data[1],
+                        amount: data.cget(1, "dice reward amount")?,
                     });
                 }
                 "chathistory" => {
@@ -321,31 +321,33 @@ impl GameState {
                         .get_or_insert_with(Default::default)
                         .update_unit_upgrade_info(
                             &val.into_list("fortress unit upgrade prices")?,
-                        );
+                        )?;
                 }
                 "unitlevel" => {
                     self.fortress
                         .get_or_insert_with(Default::default)
-                        .update_levels(&val.into_list("fortress unit levels")?);
+                        .update_levels(
+                            &val.into_list("fortress unit levels")?,
+                        )?;
                 }
                 "fortressprice" => {
                     self.fortress
                         .get_or_insert_with(Default::default)
                         .update_prices(
                             &val.into_list("fortress upgrade prices")?,
-                        );
+                        )?;
                 }
                 "witch" => {
                     self.witch
                         .get_or_insert_with(Default::default)
-                        .update(&val.into_list("witch")?, server_time);
+                        .update(&val.into_list("witch")?, server_time)?;
                 }
                 "underworldupgradeprice" => {
                     self.underworld
                         .get_or_insert_with(Default::default)
                         .update_underworld_unit_prices(
                             &val.into_list("underworld upgrade prices")?,
-                        );
+                        )?;
                 }
                 "unlockfeature" => {
                     self.pending_unlocks =
@@ -363,7 +365,7 @@ impl GameState {
                     self.dungeons
                         .portal
                         .get_or_insert_with(Default::default)
-                        .update(&val.into_list("portal progress")?);
+                        .update(&val.into_list("portal progress")?)?;
                 }
                 "tavernspecialend" => {
                     self.specials.events.ends = server_time
@@ -378,14 +380,16 @@ impl GameState {
                 "stoneperhournextlevel" => {
                     self.fortress
                         .get_or_insert_with(Default::default)
-                        .resources[FortressResourceType::Stone]
+                        .resources
+                        .get_mut(FortressResourceType::Stone)
                         .production
                         .per_hour_next_lvl = val.into("stone next lvl")?;
                 }
                 "woodperhournextlevel" => {
                     self.fortress
                         .get_or_insert_with(Default::default)
-                        .resources[FortressResourceType::Wood]
+                        .resources
+                        .get_mut(FortressResourceType::Wood)
                         .production
                         .per_hour_next_lvl = val.into("wood next lvl")?;
                 }
@@ -402,7 +406,7 @@ impl GameState {
                     );
                 }
                 "gttime" => {
-                    self.update_gttime(&val.into_list("gttime")?, server_time);
+                    self.update_gttime(&val.into_list("gttime")?, server_time)?;
                 }
                 "gtsave" => {
                     self.hellevator.active = Hellevator::parse(
@@ -411,11 +415,12 @@ impl GameState {
                     )?;
                 }
                 "maxrank" => {
-                    self.hall_of_fames.total_players =
+                    self.hall_of_fames.players_total =
                         val.into("player count")?;
                 }
                 "achievement" => {
-                    self.achievements.update(&val.into_list("achievements")?);
+                    self.achievements
+                        .update(&val.into_list("achievements")?)?;
                 }
                 "groupskillprice" => {
                     self.guild
@@ -438,7 +443,7 @@ impl GameState {
                     );
                 }
                 "resources" => {
-                    self.update_resources(&val.into_list("resources")?);
+                    self.update_resources(&val.into_list("resources")?)?;
                 }
                 "chattime" => {
                     // let _chat_time = server_time
@@ -535,12 +540,12 @@ impl GameState {
                 }
                 "othergroupattack" => {
                     other_guild.get_or_insert_with(Default::default).attacks =
-                        Some(val.to_string())
+                        Some(val.to_string());
                 }
                 "othergroupdefense" => {
                     other_guild
                         .get_or_insert_with(Default::default)
-                        .defends_against = Some(val.to_string())
+                        .defends_against = Some(val.to_string());
                 }
                 "inboxcapacity" => {
                     self.mail.inbox_capacity = val.into("inbox cap")?;
@@ -550,186 +555,66 @@ impl GameState {
                     // mail. Just a name and clicked play
                 }
                 "Ranklistplayer" => {
-                    self.hall_of_fames.player_hall_of_fame.clear();
+                    self.hall_of_fames.players.clear();
                     for player in val.as_str().trim_matches(';').split(';') {
-                        let data: Vec<_> = player.split(',').collect();
-                        if data.len() < 6 {
-                            warn!("Invalid hof player: {:?}", data);
-                            continue;
+                        match HallOfFamePlayer::parse(player) {
+                            Ok(x) => {
+                                self.hall_of_fames.players.push(x);
+                            }
+                            Err(err) => warn!("{err}"),
                         }
-                        let (Some(rank), Some(level), Some(fame), Some(class)) = (
-                            warning_from_str(data[0], "invalid hof rank"),
-                            warning_from_str(data[3], "invalid hof level"),
-                            warning_from_str(data[4], "invalid hof fame"),
-                            warning_from_str::<i64>(
-                                data[5],
-                                "invalid hof class",
-                            ),
-                        ) else {
-                            continue;
-                        };
-                        let Some(class) = FromPrimitive::from_i64(class - 1)
-                        else {
-                            warn!("Invalid hof class: {class} - {:?}", data);
-                            continue;
-                        };
-                        let raw_flag = data.get(6).copied().unwrap_or_default();
-                        let flag = Flag::parse(raw_flag);
-
-                        let guild =
-                            Some(data[2].to_string()).filter(|a| !a.is_empty());
-                        self.hall_of_fames.player_hall_of_fame.push(
-                            HallOfFameEntry {
-                                rank,
-                                name: data[1].to_string(),
-                                guild,
-                                level,
-                                fame,
-                                class,
-                                flag,
-                            },
-                        );
                     }
                 }
                 "ranklistgroup" => {
-                    self.hall_of_fames.guild_hall_of_fame.clear();
+                    self.hall_of_fames.guilds.clear();
                     for guild in val.as_str().trim_matches(';').split(';') {
-                        let data: Vec<_> = guild.split(',').collect();
-                        if data.len() != 6 {
-                            warn!("Invalid hof guild: {:?}", data);
-                            continue;
+                        match HallOfFameGuild::parse(guild) {
+                            Ok(x) => {
+                                self.hall_of_fames.guilds.push(x);
+                            }
+                            Err(err) => warn!("{err}"),
                         }
-                        let (
-                            Some(rank),
-                            Some(member),
-                            Some(honor),
-                            Some(attack_status),
-                        ) = (
-                            warning_from_str(data[0], "invalid hof rank"),
-                            warning_from_str(data[3], "invalid hof level"),
-                            warning_from_str(data[4], "invalid hof fame"),
-                            warning_from_str::<u8>(data[5], "invalid hof atk"),
-                        )
-                        else {
-                            continue;
-                        };
-                        self.hall_of_fames.guild_hall_of_fame.push(
-                            HallOfFameGuildEntry {
-                                rank,
-                                name: data[1].to_string(),
-                                leader: data[2].to_string(),
-                                member_count: member,
-                                honor,
-                                is_attacked: attack_status == 1,
-                            },
-                        );
                     }
                 }
                 "maxrankgroup" => {
-                    self.hall_of_fames.total_guilds =
+                    self.hall_of_fames.guilds_total =
                         Some(val.into("guild max")?);
                 }
                 "maxrankPets" => {
-                    self.hall_of_fames.total_pet_players =
+                    self.hall_of_fames.pets_total =
                         Some(val.into("pet rank max")?);
                 }
                 "RanklistPets" => {
-                    self.hall_of_fames.pets_hall_of_fame.clear();
+                    self.hall_of_fames.pets.clear();
                     for entry in val.as_str().trim_matches(';').split(';') {
-                        let data: Vec<_> = entry.split(',').collect();
-                        if data.len() != 6 {
-                            warn!("Invalid hof guild: {:?}", data);
-                            continue;
+                        match HallOfFamePets::parse(entry) {
+                            Ok(x) => {
+                                self.hall_of_fames.pets.push(x);
+                            }
+                            Err(err) => warn!("{err}"),
                         }
-                        let (
-                            Some(rank),
-                            Some(collected),
-                            Some(honor),
-                            Some(unknown),
-                        ) = (
-                            warning_from_str(data[0], "invalid hof rank"),
-                            warning_from_str(data[3], "invalid hof level"),
-                            warning_from_str(data[4], "invalid hof fame"),
-                            warning_from_str(data[5], "invalid hof atk"),
-                        )
-                        else {
-                            continue;
-                        };
-                        let raw_guild = Some(data[2].to_string());
-                        let guild = raw_guild.filter(|a| !a.is_empty());
-
-                        self.hall_of_fames.pets_hall_of_fame.push(
-                            HallOfFamePetsEntry {
-                                rank,
-                                name: data[1].to_string(),
-                                guild,
-                                collected,
-                                honor,
-                                unknown,
-                            },
-                        );
                     }
                 }
                 "ranklistfortress" | "Ranklistfortress" => {
-                    self.hall_of_fames.fortress_hall_of_fame.clear();
+                    self.hall_of_fames.fortresses.clear();
                     for guild in val.as_str().trim_matches(';').split(';') {
-                        let data: Vec<_> = guild.split(',').collect();
-                        if data.len() != 5 {
-                            warn!("Invalid hof fortress: {:?}", data);
-                            continue;
+                        match HallOfFameFortress::parse(guild) {
+                            Ok(x) => {
+                                self.hall_of_fames.fortresses.push(x);
+                            }
+                            Err(err) => warn!("{err}"),
                         }
-                        let (Some(rank), Some(upgrade), Some(honor)) = (
-                            warning_from_str(data[0], "invalid hof rank"),
-                            warning_from_str(data[3], "invalid hof level"),
-                            warning_from_str(data[4], "invalid hof fame"),
-                        ) else {
-                            continue;
-                        };
-                        let raw_guild = Some(data[2].to_string());
-                        let guild = raw_guild.filter(|a| !a.is_empty());
-                        self.hall_of_fames.fortress_hall_of_fame.push(
-                            HallOfFameFortressEntry {
-                                rank,
-                                name: data[1].to_string(),
-                                guild,
-                                upgrade,
-                                honor,
-                            },
-                        );
                     }
                 }
                 "ranklistunderworld" => {
-                    self.hall_of_fames.underworld_hall_of_fame.clear();
+                    self.hall_of_fames.underworlds.clear();
                     for entry in val.as_str().trim_matches(';').split(';') {
-                        let data: Vec<_> = entry.split(',').collect();
-                        if data.len() != 6 {
-                            warn!("Invalid hof underworld: {:?}", data);
-                            continue;
+                        match HallOfFameUnderworld::parse(entry) {
+                            Ok(x) => {
+                                self.hall_of_fames.underworlds.push(x);
+                            }
+                            Err(err) => warn!("{err}"),
                         }
-                        let (
-                            Some(rank),
-                            Some(upgrade),
-                            Some(honor),
-                            Some(unknown),
-                        ) = (
-                            warning_from_str(data[0], "invalid hof rank"),
-                            warning_from_str(data[3], "invalid hof level"),
-                            warning_from_str(data[4], "invalid hof fame"),
-                            warning_from_str(data[5], "invalid hof atk"),
-                        )
-                        else {
-                            continue;
-                        };
-                        self.hall_of_fames.underworld_hall_of_fame.push(
-                            HallOfFameUnderworldEntry {
-                                rank,
-                                name: data[1].to_string(),
-                                guild: data[2].to_string(),
-                                upgrade,
-                                honor,
-                                unknown,
-                            },
-                        );
                     }
                 }
                 "gamblegoldvalue" => {
@@ -743,8 +628,8 @@ impl GameState {
                     );
                 }
                 "maxrankFortress" => {
-                    self.hall_of_fames.total_fortresses =
-                        Some(val.into("fortress max")?)
+                    self.hall_of_fames.fortresses_total =
+                        Some(val.into("fortress max")?);
                 }
                 "underworldprice" => self
                     .underworld
@@ -759,7 +644,7 @@ impl GameState {
                     if val.as_str().chars().any(|a| a != 'A') {
                         warn!(
                             "Found a legendaries value, that is not just AAA.."
-                        )
+                        );
                     }
                 }
                 "smith" => {
@@ -803,7 +688,6 @@ impl GameState {
                     let end = data.cstget(1, "expedition end", server_time)?;
                     let end2 =
                         data.cstget(1, "expedition end2", server_time)?;
-                    println!("{data:?}");
                     if end != end2 {
                         warn!("Weird expedition time");
                     }
@@ -1095,7 +979,7 @@ impl GameState {
                 }
 
                 "maxrankUnderworld" => {
-                    self.hall_of_fames.total_underworld_players =
+                    self.hall_of_fames.underworlds_total =
                         Some(val.into("mrank under")?);
                 }
                 "otherplayerfortressrank" => {
@@ -1212,10 +1096,10 @@ impl GameState {
         }
 
         if let Some(og) = other_guild {
-            self.hall_of_fames.other_guilds.insert(og.name.clone(), og);
+            self.lookup.guilds.insert(og.name.clone(), og);
         }
         if let Some(other_player) = other_player {
-            self.hall_of_fames.insert_lookup(other_player);
+            self.lookup.insert_lookup(other_player);
         }
         if let Some(t) = &self.dungeons.portal {
             if t.current == 0 {

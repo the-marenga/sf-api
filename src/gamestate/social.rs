@@ -37,79 +37,85 @@ pub struct Mail {
 /// This mainly revolves around the Hall of Fame
 pub struct HallOfFames {
     /// The amount of accounts on the server
-    pub total_players: u32,
+    pub players_total: u32,
     /// A list of hall of fame players fetched during the last command
-    pub player_hall_of_fame: Vec<HallOfFameEntry>,
+    pub players: Vec<HallOfFamePlayer>,
 
     /// The amount of guilds on this server. Will only be set after querying
     /// the guild HoF, or looking at your own guild
-    pub total_guilds: Option<u32>,
+    pub guilds_total: Option<u32>,
     /// A list of hall of fame guilds fetched during the last command
-    pub guild_hall_of_fame: Vec<HallOfFameGuildEntry>,
+    pub guilds: Vec<HallOfFameGuild>,
 
     /// The amount of fortresses on this server. Will only be set after
     /// querying the fortress HOF
-    pub total_fortresses: Option<u32>,
+    pub fortresses_total: Option<u32>,
     /// A list of hall of fame fortresses fetched during the last command
-    pub fortress_hall_of_fame: Vec<HallOfFameFortressEntry>,
+    pub fortresses: Vec<HallOfFameFortress>,
 
     /// The amount of players with pets on this server. Will only be set after
     /// querying the pet HOF
-    pub total_pet_players: Option<u32>,
+    pub pets_total: Option<u32>,
     /// A list of hall of fame pet players fetched during the last command
-    pub pets_hall_of_fame: Vec<HallOfFamePetsEntry>,
+    pub pets: Vec<HallOfFamePets>,
 
-    /// The amount of players with pets on this server. Will only be set after
-    /// querying the pet HOF
-    pub total_underworld_players: Option<u32>,
+    /// The amount of players with underworlds on this server. Will only be set
+    /// after querying the pet HOF
+    pub underworlds_total: Option<u32>,
     /// A list of hall of fame pet players fetched during the last command
-    pub underworld_hall_of_fame: Vec<HallOfFameUnderworldEntry>,
-
-    /// This can be accessed by using the `lookup_pid()`/`lookup_name()`
-    /// methods on `OtherPlayers`
-    other_players: HashMap<PlayerId, OtherPlayer>,
-    name_lookup: HashMap<String, PlayerId>,
-
-    /// Guild that the character has looked at
-    pub other_guilds: HashMap<String, OtherGuild>,
+    pub underworlds: Vec<HallOfFameUnderworld>,
 }
 
-impl HallOfFames {
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Contains the results of `ViewGuild` & `ViewPlayer` commands. You can access
+/// the player info via functions and the guild data directly
+pub struct Lookup {
+    /// This can be accessed by using the `lookup_pid()`/`lookup_name()`
+    /// methods on `Lookup`
+    players: HashMap<PlayerId, OtherPlayer>,
+    name_to_id: HashMap<String, PlayerId>,
+
+    /// Guild that the character has looked at
+    pub guilds: HashMap<String, OtherGuild>,
+}
+
+impl Lookup {
     pub(crate) fn insert_lookup(&mut self, other: OtherPlayer) {
-        self.name_lookup.insert(other.name.clone(), other.player_id);
-        self.other_players.insert(other.player_id, other);
+        self.name_to_id.insert(other.name.clone(), other.player_id);
+        self.players.insert(other.player_id, other);
     }
 
     /// Checks to see if we have queried a player with that player id
     #[must_use]
     pub fn lookup_pid(&self, pid: PlayerId) -> Option<&OtherPlayer> {
-        self.other_players.get(&pid)
+        self.players.get(&pid)
     }
 
     /// Checks to see if we have queried a player with the given name
     #[must_use]
     pub fn lookup_name(&self, name: &str) -> Option<&OtherPlayer> {
-        let other_pos = self.name_lookup.get(name)?;
-        self.other_players.get(other_pos)
+        let other_pos = self.name_to_id.get(name)?;
+        self.players.get(other_pos)
     }
 
     /// Removes the information about another player based on their id
     #[allow(clippy::must_use_unit)]
     pub fn remove_pid(&mut self, pid: PlayerId) -> Option<OtherPlayer> {
-        self.other_players.remove(&pid)
+        self.players.remove(&pid)
     }
 
     /// Removes the information about another player based on their name
     #[allow(clippy::must_use_unit)]
     pub fn remove_name(&mut self, name: &str) -> Option<OtherPlayer> {
-        let other_pos = self.name_lookup.remove(name)?;
-        self.other_players.remove(&other_pos)
+        let other_pos = self.name_to_id.remove(name)?;
+        self.players.remove(&other_pos)
     }
 
     /// Clears out all players, that have previously been queried
     pub fn reset_lookups(&mut self) {
-        self.other_players = HashMap::default();
-        self.name_lookup = HashMap::default();
+        self.players = HashMap::default();
+        self.name_to_id = HashMap::default();
     }
 }
 
@@ -117,7 +123,7 @@ impl HallOfFames {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Basic information about one character on the server. To get more
 /// information, you need to query this player via the `ViewPlayer` command
-pub struct HallOfFameEntry {
+pub struct HallOfFamePlayer {
     /// The rank of this player
     pub rank: u32,
     /// The name of this player. Used to query more information
@@ -128,18 +134,51 @@ pub struct HallOfFameEntry {
     /// The level of this player
     pub level: u32,
     /// The amount of fame this player has
-    pub fame: u32,
+    pub honor: u32,
     /// The class of this player
     pub class: Class,
     /// The Flag of this player, if they have set any
     pub flag: Option<Flag>,
 }
 
+impl HallOfFamePlayer {
+    pub(crate) fn parse(val: &str) -> Result<Self, SFError> {
+        let data: Vec<_> = val.split(',').collect();
+        let rank = data.cfsuget(0, "hof player rank")?;
+        let name = data.cget(1, "hof player name")?.to_string();
+        let guild = Some(data.cget(2, "hof pet guild")?.to_string())
+            .filter(|a| !a.is_empty());
+        let level = data.cfsuget(3, "hof player level")?;
+        let honor = data.cfsuget(4, "hof player fame")?;
+        let class: i64 = data.cfsuget(5, "hof player class")?;
+        let Some(class) = FromPrimitive::from_i64(class - 1) else {
+            warn!("Invalid hof class: {class} - {:?}", data);
+            return Err(SFError::ParsingError(
+                "hof player class",
+                class.to_string(),
+            ));
+        };
+
+        let raw_flag = data.get(6).copied().unwrap_or_default();
+        let flag = Flag::parse(raw_flag);
+
+        Ok(HallOfFamePlayer {
+            rank,
+            name,
+            guild,
+            level,
+            honor,
+            class,
+            flag,
+        })
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Basic information about one guild on the server. To get more information,
 /// you need to query this player via the `ViewGuild` command
-pub struct HallOfFameGuildEntry {
+pub struct HallOfFameGuild {
     /// The name of the guild
     pub name: String,
     /// The rank of the guild
@@ -154,10 +193,95 @@ pub struct HallOfFameGuildEntry {
     pub is_attacked: bool,
 }
 
+impl HallOfFameGuild {
+    pub(crate) fn parse(val: &str) -> Result<Self, SFError> {
+        let data: Vec<_> = val.split(',').collect();
+        let rank = data.cfsuget(0, "hof guild rank")?;
+        let name = data.cget(1, "hof guild name")?.to_string();
+        let leader = data.cget(2, "hof guild leader")?.to_string();
+        let member = data.cfsuget(3, "hof guild  member")?;
+        let honor = data.cfsuget(4, "hof guild fame")?;
+        let attack_status: u8 = data.cfsuget(5, "hof guild  atk")?;
+
+        Ok(HallOfFameGuild {
+            rank,
+            name,
+            leader,
+            member_count: member,
+            honor,
+            is_attacked: attack_status == 1u8,
+        })
+    }
+}
+
+impl HallOfFamePets {
+    pub(crate) fn parse(val: &str) -> Result<Self, SFError> {
+        let data: Vec<_> = val.split(',').collect();
+        let rank = data.cfsuget(0, "hof pet rank")?;
+        let name = data.cget(1, "hof pet player")?.to_string();
+        let guild = Some(data.cget(2, "hof pet guild")?.to_string())
+            .filter(|a| !a.is_empty());
+        let collected = data.cfsuget(3, "hof pets collected")?;
+        let honor = data.cfsuget(4, "hof pets fame")?;
+        let unknown = data.cfsuget(5, "hof pets uk")?;
+
+        Ok(HallOfFamePets {
+            name,
+            rank,
+            guild,
+            collected,
+            honor,
+            unknown,
+        })
+    }
+}
+
+impl HallOfFameFortress {
+    pub(crate) fn parse(val: &str) -> Result<Self, SFError> {
+        let data: Vec<_> = val.split(',').collect();
+        let rank = data.cfsuget(0, "hof ft rank")?;
+        let name = data.cget(1, "hof ft player")?.to_string();
+        let guild = Some(data.cget(2, "hof ft guild")?.to_string())
+            .filter(|a| !a.is_empty());
+        let upgrade = data.cfsuget(3, "hof ft collected")?;
+        let honor = data.cfsuget(4, "hof ft fame")?;
+
+        Ok(HallOfFameFortress {
+            name,
+            rank,
+            guild,
+            upgrade,
+            honor,
+        })
+    }
+}
+
+impl HallOfFameUnderworld {
+    pub(crate) fn parse(val: &str) -> Result<Self, SFError> {
+        let data: Vec<_> = val.split(',').collect();
+        let rank = data.cfsuget(0, "hof ft rank")?;
+        let name = data.cget(1, "hof ft player")?.to_string();
+        let guild = Some(data.cget(2, "hof ft guild")?.to_string())
+            .filter(|a| !a.is_empty());
+        let upgrade = data.cfsuget(3, "hof ft collected")?;
+        let honor = data.cfsuget(4, "hof ft fame")?;
+        let unknown = data.cfsuget(5, "hof pets uk")?;
+
+        Ok(HallOfFameUnderworld {
+            rank,
+            name,
+            guild,
+            upgrade,
+            honor,
+            unknown,
+        })
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Basic information about one guild on the server
-pub struct HallOfFameFortressEntry {
+pub struct HallOfFameFortress {
     /// The name of the person, that owns this fort
     pub name: String,
     /// The rank of this fortress in the fortress Hall of Fame
@@ -174,7 +298,7 @@ pub struct HallOfFameFortressEntry {
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Basic information about one players pet collection on the server
-pub struct HallOfFamePetsEntry {
+pub struct HallOfFamePets {
     /// The name of the player, that has these pets
     pub name: String,
     /// The rank of this players pet collection
@@ -193,12 +317,21 @@ pub struct HallOfFamePetsEntry {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct HallOfFameUnderworldEntry {
+/// Basic information about one players underworld on the server
+pub struct HallOfFameUnderworld {
+    /// The rank this underworld has
     pub rank: u32,
+    /// The name of the player, that owns this underworld
     pub name: String,
-    pub guild: String,
+    /// If the player, that owns this underworld is in a guild, this will
+    /// contain the guild name
+    pub guild: Option<String>,
+    /// The amount of upgrades this underworld has
     pub upgrade: u32,
+    /// The amount of honor this underworld has
     pub honor: u32,
+    /// For guilds the value at this position is the attacked status, but no
+    /// idea, what it means here
     pub unknown: i64,
 }
 
@@ -208,7 +341,7 @@ pub struct HallOfFameUnderworldEntry {
 /// command
 pub struct OtherPlayer {
     /// The id of this player. This is mainly just useful to lookup this player
-    /// in `OtherPlayers`, if you do not know the name
+    /// in `Lookup`, if you do not know the name
     pub player_id: PlayerId,
     /// The name of the player
     pub name: String,
