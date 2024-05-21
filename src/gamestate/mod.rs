@@ -868,7 +868,7 @@ impl GameState {
                     let data: Vec<i64> = val.into_list("eti")?;
                     self.specials.tasks.event.theme = data
                         .cfpget(2, "event task theme", |a| a)?
-                        .unwrap_or(EventTasksTheme::Unknown);
+                        .unwrap_or(EventTaskTheme::Unknown);
                     self.specials.tasks.event.start =
                         data.cstget(0, "event t start", server_time)?;
                     self.specials.tasks.event.end =
@@ -897,19 +897,22 @@ impl GameState {
                     self.mail.open_msg = Some(from_sf_string(val.as_str()));
                 }
                 "combatloglist" => {
+                    self.mail.combat_log.clear();
                     for entry in val.as_str().split(';') {
                         let parts = entry.split(',').collect::<Vec<_>>();
+                        if parts.iter().all(|a| a.is_empty()) {
+                            continue;
+                        }
                         match CombatLogEntry::parse(&parts, server_time) {
                             Ok(cle) => {
                                 self.mail.combat_log.push(cle);
                             }
-                            Err(e) if parts.iter().all(|a| !a.is_empty()) => {
+                            Err(e) => {
                                 warn!(
                                     "Unable to parse combat log entry: \
                                      {parts:?} - {e}"
                                 );
                             }
-                            _ => (),
                         }
                     }
                 }

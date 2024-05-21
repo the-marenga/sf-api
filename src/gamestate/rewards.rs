@@ -251,7 +251,7 @@ pub struct DailyTasks {
 /// Information about the tasks, that are based on some event theme
 pub struct EventTasks {
     /// The "theme" the event task has. This is mainly irrelevant
-    pub theme: EventTasksTheme,
+    pub theme: EventTaskTheme,
     /// The time at which the event tasks have been set
     pub start: Option<DateTime<Local>>,
     /// The time at which the event tasks will reset
@@ -326,7 +326,8 @@ pub struct Wheel {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 /// The theme the event tasks have
-pub enum EventTasksTheme {
+pub enum EventTaskTheme {
+    Gambler = 2,
     ShoppingSpree = 4,
     TimeSkipper = 5,
     RuffianReset = 6,

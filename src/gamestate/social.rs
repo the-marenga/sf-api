@@ -572,7 +572,7 @@ impl CombatLogEntry {
         data: &[&str],
         server_time: ServerTime,
     ) -> Result<CombatLogEntry, SFError> {
-        let msg_id = data.cfsuget(0, "msg_id")?;
+        let msg_id = data.cfsuget(0, "combat msg_id")?;
         let battle_t: i64 = data.cfsuget(3, "battle t")?;
         let mt = FromPrimitive::from_i64(battle_t).ok_or_else(|| {
             SFError::ParsingError("combat mt", battle_t.to_string())

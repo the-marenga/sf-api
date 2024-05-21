@@ -68,14 +68,12 @@ impl Hellevator {
     ) -> Result<Option<Hellevator>, SFError> {
         Ok(Some(Hellevator {
             key_cards: data.csiget(0, "h key cards", 0)?,
-            next_card_generated: server_time
-                .convert_to_local(data[1], "next card"),
-            next_reset: server_time.convert_to_local(data[2], "next reset"),
+            next_card_generated: data.cstget(1, "next card", server_time)?,
+            next_reset: data.cstget(2, "next reset", server_time)?,
             current_floor: data.csiget(3, "h current floor", 0)?,
             points: data.csiget(4, "h points", 0)?,
-            start_contrib_date: server_time
-                .convert_to_local(data[5], "start contrib"),
-            has_final_reward: data[6] == 1,
+            start_contrib_date: data.cstget(5, "start contrib", server_time)?,
+            has_final_reward: data.cget(6, "helevator final")? == 1,
             points_today: data.csiget(10, "h points today", 0)?,
         }))
     }
@@ -111,17 +109,21 @@ impl Witch {
         } else {
             // I would like to offer the raw values here, but the -1 just
             // makes this annoying. A Option<(u32, u32)> is also weird
-            if data[1] == -1 || data[2] < 1 {
+            let current: i32 = data.ciget(1, "witch current")?;
+            let target: i32 = data.ciget(2, "witch target")?;
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+            if current < 0 || target <= 0 {
                 self.progress = 100;
             } else {
-                let current = data[1] as f64;
-                let target = data[2] as f64;
+                let current = f64::from(current);
+                let target = f64::from(target);
                 self.progress = ((current / target) * 100.0) as u32;
             }
         }
 
-        for i in 0..data[7] as usize {
-            let iid = data[9 + 3 * i] - 1;
+        let e_count: usize = data.ciget(7, "enchant count")?;
+        for i in 0..e_count {
+            let iid = data.cget(9 + 3 * i, "iid")? - 1;
             let key = match iid {
                 0 => continue,
                 10 => Enchantment::SwordOfVengeance,
@@ -258,7 +260,7 @@ impl Pets {
         self.total_collected = data.csiget(103, "total pets", 0)?;
         self.opponent.id = data[231].try_into().unwrap_or_default();
         self.opponent.next_free_battle =
-            server_time.convert_to_local(data[232], "next free pet fight");
+            data.cstget(232, "next free pet fight", server_time)?;
         self.rank = data.csiget(233, "pet rank", 0)?;
         self.honor = data.csiget(234, "pet honor", 0)?;
 
@@ -330,25 +332,23 @@ pub enum HabitatType {
 
 impl HabitatType {
     pub(crate) fn from_pet_id(id: i64) -> Option<Self> {
-        use HabitatType::*;
         Some(match id {
-            1..=20 => Shadow,
-            21..=40 => Light,
-            41..=60 => Earth,
-            61..=80 => Fire,
-            81..=100 => Water,
+            1..=20 => HabitatType::Shadow,
+            21..=40 => HabitatType::Light,
+            41..=60 => HabitatType::Earth,
+            61..=80 => HabitatType::Fire,
+            81..=100 => HabitatType::Water,
             _ => return None,
         })
     }
 
     pub(crate) fn from_typ_id(id: i64) -> Option<Self> {
-        use HabitatType::*;
         Some(match id {
-            1 => Shadow,
-            2 => Light,
-            3 => Earth,
-            4 => Fire,
-            5 => Water,
+            1 => HabitatType::Shadow,
+            2 => HabitatType::Light,
+            3 => HabitatType::Earth,
+            4 => HabitatType::Fire,
+            5 => HabitatType::Water,
             _ => return None,
         })
     }
@@ -397,12 +397,13 @@ pub enum Mirror {
 
 impl Mirror {
     pub(crate) fn parse(i: i64) -> Mirror {
-        if i & (1 << 8) != 0 {
-            return Mirror::Full;
-        }
         /// Bitmask to cover bits 20 to 32, which is where each bit set is one
         /// mirror piece found
         const MIRROR_PIECES_MASK: i64 = 0xFFF8_0000;
+
+        if i & (1 << 8) != 0 {
+            return Mirror::Full;
+        }
         Mirror::Pieces {
             amount: (i & MIRROR_PIECES_MASK)
                 .count_ones()
@@ -634,10 +635,10 @@ fn parse_scrapbook_item(index: i64) -> Option<EquipmentIdent> {
         } as u8;
 
         let model_id = match () {
-            _ if is_epic => relative_pos + 49,
-            _ if typ == Talisman => relative_pos,
-            _ if relative_pos % 5 != 0 => relative_pos / 5 + 1,
-            _ => relative_pos / 5,
+            () if is_epic => relative_pos + 49,
+            () if typ == Talisman => relative_pos,
+            () if relative_pos % 5 != 0 => relative_pos / 5 + 1,
+            () => relative_pos / 5,
         } as u16;
 
         return Some(EquipmentIdent {

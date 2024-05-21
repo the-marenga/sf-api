@@ -38,6 +38,7 @@ pub mod sso;
 /// whereever found
 pub type PlayerId = u32;
 
+#[derive(Debug)]
 pub struct SimpleSession {
     session: Session,
     gamestate: Option<GameState>,

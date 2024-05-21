@@ -57,12 +57,13 @@ pub struct SSOCharacter {
     pub(super) server_id: i32,
 }
 impl SFAccount {
+    /// Returns the username of this S&F account
     pub fn username(&self) -> &str {
         &self.username
     }
 
-    /// Initializes a SFAccount by logging the user in using the supplied clear
-    /// text credentials
+    /// Initializes a `SFAccount` by logging the user in using the supplied
+    /// clear text credentials
     pub async fn login(
         username: String,
         password: String,
@@ -213,6 +214,7 @@ impl SFAccount {
 /// Send a request to the SSO server. The endoint will be "json/*". We try
 /// to check if the response is bad in any way, but S&F responses never obey
 /// to HTML status codes, or their own system, so good luck
+#[allow(clippy::items_after_statements)]
 async fn send_api_request(
     client: &Client,
     bearer_token: &str,
@@ -263,6 +265,7 @@ async fn send_api_request(
         data: Option<Value>,
         message: Option<Value>,
     }
+
     let resp: APIResponse = serde_json::from_str(&text)
         .map_err(|_| SFError::ParsingError("API response", text))?;
 
@@ -289,6 +292,7 @@ impl ServerLookup {
     }
 
     /// Fetches the current mapping of server ids to server urls.
+    #[allow(clippy::items_after_statements)]
     async fn fetch_with_client(
         client: &Client,
     ) -> Result<ServerLookup, SFError> {
@@ -335,14 +339,14 @@ impl ServerLookup {
                             .ok()
                     }) {
                         if Local::now().naive_utc() > mdt {
-                            server_url = merged_url
+                            server_url = merged_url;
                         }
                     } else {
-                        server_url = merged_url
+                        server_url = merged_url;
                     }
                 }
 
-                Some((s.id, format!("https://{}", server_url).parse().ok()?))
+                Some((s.id, format!("https://{server_url}").parse().ok()?))
             })
             .collect();
         if servers.is_empty() {
@@ -475,14 +479,15 @@ impl SSOAuth {
     }
 
     /// Instantiates a new attempt to login through a SSO provider. A user then
-    /// has to interact with the auth_url this returns to validate the
+    /// has to interact with the `auth_url` this returns to validate the
     /// login. Afterwards you can login and transform this into a normal
-    /// SFAccount
+    /// `SFAccount`
     pub async fn new(provider: SSOProvider) -> Result<Self, SFError> {
-        Self::new_with_options(provider, Default::default()).await
+        Self::new_with_options(provider, ConnectionOptions::default()).await
     }
 
     /// The same as `new()`, but with optional connection options
+    #[allow(clippy::indexing_slicing)]
     pub async fn new_with_options(
         provider: SSOProvider,
         options: ConnectionOptions,
