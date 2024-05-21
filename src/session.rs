@@ -66,6 +66,7 @@ impl PWHash {
     }
 
     /// Gives you the hash of the password directly
+    #[must_use]
     pub fn get(&self) -> &str {
         &self.0
     }
@@ -129,6 +130,9 @@ impl Session {
         self.session_id = DEFAULT_SESSION_ID.to_string();
     }
 
+    /// Returns a reference to the server url, that this session is sending
+    /// requests to
+    #[must_use]
     pub fn server_url(&self) -> &url::Url {
         &self.server_url
     }
@@ -137,12 +141,18 @@ impl Session {
     /// server to establish a session id. You should not need to check this, as
     /// `login()` should return error on unsuccessfull logins, but if you want
     /// to make sure, you can make sure here
+    #[must_use]
     pub fn has_session_id(&self) -> bool {
         self.session_id.chars().any(|a| a != '0')
     }
 
-    /// Clears the current session and sends a login request to the server.
-    /// Returns the parsed response from the server.
+    /// Logges in the session by sending a login response to the server and
+    /// updating the internal cryptography values. If the session is currently
+    /// logged in, this also clears the existing state beforehand.
+    ///
+    /// # Errors
+    /// Look at `send_command()` to get a full overview of all the
+    /// possible errors
     pub async fn login(&mut self) -> Result<Response, SFError> {
         self.logout();
         #[allow(deprecated)]
@@ -169,6 +179,10 @@ impl Session {
 
     /// Registers a new character on the server. If everything works, the logged
     /// in character session and its login response will be returned
+    ///
+    /// # Errors
+    /// Look at `send_command()` to get a full overview of all the
+    /// possible errors
     pub async fn register(
         username: &str,
         password: &str,
@@ -211,13 +225,18 @@ impl Session {
         Ok((s, resp))
     }
 
-    /// The internal version `send_command`. It allows you to send requests
-    /// with only a normal ref, because this version does not update the
-    /// cryptography settings of this session, if the server responds with them.
-    /// If you do not expect the server to send you new crypto settings, because
-    /// you only do predictable simple requests (no login, etc), or you
-    /// want to update them yourself, because that is easier to handle for you,
-    /// you can use this function to increase your commands/account/sec speed
+    /// The internal version `send_command()`. It allows you to send
+    /// requests with only a normal ref, because this version does not
+    /// update the cryptography settings of this session, if the server
+    /// responds with them. If you do not expect the server to send you new
+    /// crypto settings, because you only do predictable simple requests (no
+    /// login, etc), or you want to update them yourself, because that is
+    /// easier to handle for you, you can use this function to increase your
+    /// commands/account/sec speed
+    ///
+    /// # Errors
+    /// Look at `send_command()` to get a full overview of all the
+    /// possible errors
     pub async fn send_command_raw<T: Borrow<Command>>(
         &self,
         command: T,
@@ -292,6 +311,18 @@ impl Session {
     /// response and returns the response. When this returns an error, the
     /// Session might be in an invalid state, so you should login again just to
     /// be safe
+    ///
+    /// # Errors
+    /// - `UnsupportedVersion`: If `error_on_unsupported_version` is set and the
+    ///   server is running an unsupported version
+    /// - `EmptyResponse`: If the servers response was empty
+    /// - `InvalidRequest`: If your response was invalid to send in some way
+    /// - `ConnectionError`: If the command could not be send, or the response
+    ///   could not successfully be received
+    /// - `ParsingError`: If the response from the server was unexpected in some
+    ///   way
+    /// - `ServerError`: If the server itself responded with an ingame error
+    ///   like "you do not have enough silver to do that"
     pub async fn send_command<T: Borrow<Command>>(
         &mut self,
         command: T,
@@ -301,6 +332,8 @@ impl Session {
         Ok(res)
     }
 
+    /// Manually updates the cryptography setting of this session with the
+    /// response provided
     pub fn update(&mut self, res: &Response) {
         let data = res.values();
         if let Some(lc) = data.get("login count") {
@@ -340,6 +373,8 @@ impl Session {
         Ok(Session::new_full(ld, client, options, url))
     }
 
+    #[must_use]
+    /// The username of the character, that this session is responsible for
     pub fn username(&self) -> &str {
         match &self.login_data {
             LoginData::Basic { username, .. } => username,
@@ -355,6 +390,13 @@ impl Session {
     /// Retrieves new sso credentials from its sf account. If the account
     /// already has new creds stored, these are read, otherwise the account will
     /// be logged in again
+    ///
+    /// # Errors
+    /// - `InvalidRequest`: If you call this function with anything other, than
+    ///   an
+    /// SSO-Session
+    /// - Other errors, depending on if the session is able to renew the
+    ///   credentials
     pub async fn renew_sso_creds(&mut self) -> Result<(), SFError> {
         let LoginData::SSO {
             account, session, ..
@@ -399,9 +441,10 @@ pub struct Response {
 
 impl Clone for Response {
     // This is not a good clone..
+    #[allow(clippy::expect_used)]
     fn clone(&self) -> Self {
         Self::parse(self.raw_response().to_string(), self.received_at())
-            .unwrap()
+            .expect("Invalid response cloned")
     }
 }
 

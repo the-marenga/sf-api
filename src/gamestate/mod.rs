@@ -148,16 +148,19 @@ impl GameState {
 
     /// Updates the players information with the new data received from the
     /// server. Any error that is encounters terminates the update process
+    ///
+    /// # Errors
+    /// Mainly returns `ParsingError` if the response does not exactly follow
+    /// the expected length, type and layout
     pub fn update(&mut self, response: Response) -> Result<(), SFError> {
-        use SFError::*;
-
         let new_vals = response.values();
         // Because the conversion of all other timestamps relies on the servers
         // timestamp, this has to be set first
         if let Some(ts) = new_vals.get("timestamp").copied() {
             let ts = ts.into("server time stamp")?;
-            let server_time = DateTime::from_timestamp(ts, 0)
-                .ok_or(ParsingError("server time stamp", ts.to_string()))?;
+            let server_time = DateTime::from_timestamp(ts, 0).ok_or(
+                SFError::ParsingError("server time stamp", ts.to_string()),
+            )?;
             self.server_time_diff = (server_time.naive_utc()
                 - response.received_at())
             .num_seconds();
@@ -210,7 +213,7 @@ impl GameState {
                     self.tavern.skip_allowed =
                         val.into::<i32>("skip allow")? != 0;
                 }
-                "cryptoid not found" => return Err(ConnectionError),
+                "cryptoid not found" => return Err(SFError::ConnectionError),
                 "ownplayersave" => {
                     self.update_player_save(&val.into_list("player save")?)?;
                 }
@@ -351,7 +354,7 @@ impl GameState {
                 }
                 "unlockfeature" => {
                     self.pending_unlocks =
-                        Unlockable::parse(&val.into_list("unlock")?);
+                        Unlockable::parse(&val.into_list("unlock")?)?;
                 }
                 "dungeonprogresslight" => self.dungeons.update_progress(
                     &val.into_list("dungeon progress light")?,
@@ -897,7 +900,7 @@ impl GameState {
                 "maxupgradelevel" => {
                     self.fortress
                         .get_or_insert_with(Default::default)
-                        .building_max_lvl = val.into("max upgrade lvl")?
+                        .building_max_lvl = val.into("max upgrade lvl")?;
                 }
                 "singleportalenemylevel" => {
                     self.dungeons
@@ -923,7 +926,10 @@ impl GameState {
                         .opponent
                         .habitat =
                         Some(HabitatType::from_typ_id(pet_id).ok_or(
-                            ParsingError("pet def typ", format!("{pet_id}")),
+                            SFError::ParsingError(
+                                "pet def typ",
+                                format!("{pet_id}"),
+                            ),
                         )?);
                 }
                 "otherplayer" => {
@@ -1060,7 +1066,7 @@ impl GameState {
                         .split_once('§')
                         .unwrap_or(("", val.as_str()));
 
-                    guild.emblem.set(emblem);
+                    guild.emblem.update(emblem);
                     guild.description = from_sf_string(desc);
                 }
                 "othergroup" => {
@@ -1196,26 +1202,27 @@ impl GameState {
         self.character.honor = data.csiget(10, "honor", 0)?;
         self.character.rank = data.csiget(11, "rank", 0)?;
         self.character.class =
-            FromPrimitive::from_i64((data[29] & 0xFF) - 1).unwrap_or_default();
+            data.cfpuget(29, "character class", |a| (a & 0xFF) - 1)?;
         self.character.race =
-            FromPrimitive::from_i64(data[27] & 0xFF).unwrap_or_default();
+            data.cfpuget(27, "character race", |a| a & 0xFF)?;
 
         self.tavern.update(data, server_time)?;
 
         update_enum_map(
             &mut self.character.attribute_basis,
-            data.skip(30, "TODO")?,
+            data.skip(30, "char attr basis")?,
         );
         update_enum_map(
             &mut self.character.attribute_additions,
-            data.skip(35, "TODO")?,
+            data.skip(35, "char attr adds")?,
         );
         update_enum_map(
             &mut self.character.attribute_times_bought,
-            data.skip(40, "TODO")?,
+            data.skip(40, "char attr tb")?,
         );
 
-        self.character.mount = FromPrimitive::from_i64(data[286] & 0xFF);
+        self.character.mount =
+            data.cfpget(286, "character mount", |a| a & 0xFF)?;
         self.character.mount_end =
             data.cstget(451, "mount end", server_time)?;
 
@@ -1235,29 +1242,28 @@ impl GameState {
         );
         self.specials.wheel.spins_today = data.csiget(579, "lucky turns", 0)?;
         self.specials.wheel.next_free_spin =
-            warning_parse(data[580], "next lucky turn", |a| {
-                server_time.convert_to_local(a, "next lucky turn")
-            });
+            data.cstget(580, "next lucky turn", server_time)?;
 
         *self.shops.get_mut(ShopType::Weapon) =
             Shop::parse(data.skip(288, "TODO")?, server_time)?;
         *self.shops.get_mut(ShopType::Magic) =
             Shop::parse(data.skip(361, "TODO")?, server_time)?;
 
-        self.character.mirror = Mirror::parse(data[28]);
+        self.character.mirror = Mirror::parse(data.cget(28, "mirror start")?);
         self.arena.next_free_fight =
             data.cstget(460, "next battle time", server_time)?;
 
         // Toilet remains none as long as its level is 0
-        if data[491] > 0 {
+        let toilet_lvl = data.cget(491, "toilet lvl")?;
+        if toilet_lvl > 0 {
             self.tavern
                 .toilet
                 .get_or_insert_with(Default::default)
-                .update(data);
+                .update(data)?;
         }
 
         for (idx, val) in self.arena.enemy_ids.iter_mut().enumerate() {
-            *val = data.csiget(599 + idx, "enemy_id", 0)?
+            *val = data.csiget(599 + idx, "enemy_id", 0)?;
         }
 
         if let Some(jg) = data.cstget(443, "guild join date", server_time)? {
@@ -1280,7 +1286,8 @@ impl GameState {
 
         let guild = self.guild.get_or_insert_with(Default::default);
         // TODO: This might be better as & 0xFF?
-        guild.portal.damage_bonus = ((data[445] >> 16) % 256) as u8;
+        guild.portal.damage_bonus =
+            data.cimget(445, "portal dmg bonus", |a| (a >> 16) % 256)?;
         guild.own_treasure_skill = data.csiget(623, "own treasure skill", 0)?;
         guild.own_instructor_skill =
             data.csiget(624, "own instruction skill", 0)?;
@@ -1289,8 +1296,9 @@ impl GameState {
         guild.hydra.remaining_fights =
             data.csiget(628, "remaining pet battles", 0)?;
 
-        self.character.druid_mask = FromPrimitive::from_i64(data[653]);
-        self.character.bard_instrument = FromPrimitive::from_i64(data[701]);
+        self.character.druid_mask = data.cfpget(653, "druid mask", |a| a)?;
+        self.character.bard_instrument =
+            data.cfpget(701, "bard instrument", |a| a)?;
         self.specials.calendar.collected =
             data.csimget(648, "calendat collected", 245, |a| a >> 16)?;
         self.specials.calendar.next_possible =
@@ -1362,19 +1370,18 @@ impl GameState {
     /// w/ the default
     #[must_use]
     fn get_fight(&mut self, header_name: &str) -> &mut SingleFight {
-        let id = header_name
-            .chars()
-            .position(|a| a.is_ascii_digit())
-            .map(|a| &header_name[a..])
-            .and_then(|a| a.parse::<usize>().ok())
-            .unwrap_or(1);
+        let number_str =
+            header_name.trim_start_matches(|a: char| !a.is_ascii_digit());
+        let id: usize = number_str.parse().unwrap_or(1);
+        let id = id.max(1);
 
         let fights =
             &mut self.last_fight.get_or_insert_with(Default::default).fights;
 
         if fights.len() < id {
-            fights.resize(id, SingleFight::default())
+            fights.resize(id, SingleFight::default());
         }
+        #[allow(clippy::unwrap_used)]
         fights.get_mut(id - 1).unwrap()
     }
 }

@@ -56,27 +56,27 @@ impl Error for SFError {
 impl Display for SFError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SFError::InvalidRequest(msg) => {
-                f.write_str("Tried to send an invalid request: {msg}")
-            }
+            SFError::InvalidRequest(msg) => f.write_fmt(format_args!(
+                "Tried to send an invalid request: {msg}"
+            )),
             SFError::EmptyResponse => {
                 f.write_str("Received an empty response from the server")
             }
             SFError::ConnectionError => {
                 f.write_str("Could not communicate with the server")
             }
-            SFError::ParsingError(name, value) => f.write_str(&format!(
+            SFError::ParsingError(name, value) => f.write_fmt(format_args!(
                 "Error parsing the server response because {name} had an \
                  unexpected value of: {value}"
             )),
             SFError::ServerError(e) => {
-                f.write_str(&format!("Server responded with error: {e}"))
+                f.write_fmt(format_args!("Server responded with error: {e}"))
             }
-            SFError::UnsupportedVersion(v) => {
-                f.write_str(&format!("The server version {v} is not supported"))
-            }
+            SFError::UnsupportedVersion(v) => f.write_fmt(format_args!(
+                "The server version {v} is not supported"
+            )),
             SFError::TooShortResponse { name, pos, array } => {
-                f.write_str(&format!(
+                f.write_fmt(format_args!(
                     "Tried to access the response for {name} at [{pos}] , but \
                      the response is too short. The response is: {array}"
                 ))

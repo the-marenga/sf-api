@@ -61,19 +61,19 @@ impl InventoryType {
     /// `InventoryType` is a subset of `ItemPosition`. This is a convenient
     /// function to convert between them
     #[must_use]
-    pub fn item_position(&self) -> ItemPosition {
+    pub fn item_position(&self) -> ItemPlace {
         match self {
-            InventoryType::Equipment => ItemPosition::Equipment,
-            InventoryType::MainInventory => ItemPosition::MainInventory,
-            InventoryType::ExtendedInventory => ItemPosition::FortressChest,
+            InventoryType::Equipment => ItemPlace::Equipment,
+            InventoryType::MainInventory => ItemPlace::MainInventory,
+            InventoryType::ExtendedInventory => ItemPlace::FortressChest,
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// All positions, that items can be dragged to excluding companions
-pub enum ItemPosition {
+/// All places, that items can be dragged to excluding companions
+pub enum ItemPlace {
     /// The stuff a player can wear
     Equipment = 1,
     /// All items in the main 5 inventory slots

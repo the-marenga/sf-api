@@ -10,7 +10,7 @@ use crate::{
         character::*,
         dungeons::{LightDungeon, ShadowDungeon},
         fortress::*,
-        guild::GuildSkill,
+        guild::{Emblem, GuildSkill},
         idle::IdleBuildingType,
         items::*,
         social::Relationship,
@@ -21,6 +21,7 @@ use crate::{
     PlayerId,
 };
 
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A command, that can be send to the sf server
@@ -268,18 +269,26 @@ pub enum Command {
     },
     /// Moves an item from one inventory position to another
     InventoryMove {
+        /// The inventory you move the item from
         inventory_from: InventoryType,
+        /// The position of the item you want to move
         inventory_from_pos: usize,
+        /// The inventory you move the item to
         inventory_to: InventoryType,
+        /// The inventory you move the item from
         inventory_to_pos: usize,
     },
     /// Allows moving items from any position to any other position items can
     /// be at. You should make sure, that the move makes sense (do not move
     /// items from shop to shop)
     ItemMove {
-        from: ItemPosition,
+        /// The place of thing you move the item from
+        from: ItemPlace,
+        /// The position of the item you want to move
         from_pos: usize,
-        to: ItemPosition,
+        /// The place of thing you move the item to
+        to: ItemPlace,
+        /// The position of the item you want to move
         to_pos: usize,
     },
     /// Opens the message at the specified index [0-100]
@@ -289,90 +298,132 @@ pub enum Command {
     },
     /// Deletes a single message, if you provide the index. -1 = all
     MessageDelete {
+        /// The position of the message to delete in the inbox vec. If this is
+        /// -1, it seletes all
         pos: i32,
     },
     /// Pulls up your scrapbook to reveal more info, than normal
     ViewScrapbook,
-    /// Views a specific pet. This fetches its stats
+    /// Views a specific pet. This fetches its stats and places it into the
+    /// specified pet in the habitat
     ViewPet {
-        pet_index: u16,
+        /// The id of the pet, that you want to view
+        pet_id: u16,
     },
-    /// Unlocks a feature
+    /// Unlocks a feature. The these unlockables can be found in
+    /// `pending_unlocks` on `GameState`
     UnlockFeature {
+        /// The thing to unlock
         unlockable: Unlockable,
     },
     /// Starts a fight against the enemy in the players portal
     FightPortal,
-    /// Enters a specific dungeon
+    /// Enters a specific dungeon. This works for all dungeons, except the
+    /// Tower, which you must enter via the `FightTower` command
     FightLightDungeon {
-        name: LightDungeon,
+        /// The dungeon you want to fight in (except the tower)
+        dungeon: LightDungeon,
+        /// If this is true, you will spend a mushroom, if the timer has not
+        /// run out. Note, that this is currently ignored by the server for
+        /// some reason
         use_mushroom: bool,
     },
     /// Enters a specific shadow dungeon
     FightShadowDungeon {
-        name: ShadowDungeon,
+        /// The dungeon you want to fight in
+        dungeon: ShadowDungeon,
+        /// If this is true, you will spend a mushroom, if the timer has not
+        /// run out. Note, that this is currently ignored by the server for
+        /// some reason
         use_mushroom: bool,
     },
     /// Attacks the requested level of the tower
     FightTower {
+        /// The current level you are on the tower
         current_level: u8,
+        /// If this is true, you will spend a mushroom, if the timer has not
+        /// run out. Note, that this is currently ignored by the server for
+        /// some reason
         use_mush: bool,
     },
     /// Fights the player opponent with your pet
     FightPetOpponent {
+        /// The habitat opponent you want to attack the opponent in
         habitat: HabitatType,
+        /// The id of the player you want to fight
         opponent_id: PlayerId,
     },
+    /// Fights the pet in the specified habitat dungeon
     FightPetDungeon {
+        /// If this is true, you will spend a mushroom, if the timer has not
+        /// run out. Note, that this is currently ignored by the server for
+        /// some reason
         use_mush: bool,
-        /// The
+        /// The habitat, that you want to fight in
         habitat: HabitatType,
         /// This is `explored + 1` of the given habitat. Note that 20 explored
-        /// is the max, so providing 21 here will err
+        /// is the max, so providing 21 here will return an err
         enemy_pos: u32,
-        /// This pet_id the id of the pet you want to send into battle.
-        /// The pet has to be from the same habitat, as the
+        /// This `pet_id` is the id of the pet you want to send into battle.
+        /// The pet has to be from the same habitat, as the dungeon you are
+        /// trying
         player_pet_id: u32,
     },
     /// Sets the guild info. Note the info about length limit from
-    /// SetDescription
+    /// `SetDescription` for the description
     GuildSetInfo {
+        /// The description you want to set
         description: String,
-        emblem_code: String,
+        /// The emblem you want to set
+        emblem: Emblem,
     },
     /// Gambles the desired amount of silver. Picking the right thing is not
-    /// actually required. That just masks the determined result
+    /// actually required. That just masks the determined result. The result
+    /// will be in `gamble_result` on `Tavern`
     GambleSilver {
+        /// The amount of silver to gamble
         amount: u64,
     },
     /// Gambles the desired amount of mushrooms. Picking the right thing is not
-    /// actually required. That just masks the determined result
+    /// actually required. That just masks the determined result. The result
+    /// will be in `gamble_result` on `Tavern`
     GambleMushrooms {
+        /// The amount of mushrooms to gamble
         amount: u64,
     },
     /// Sends a message to another player
     SendMessage {
+        /// The name of the player to send a mesage to
         to: String,
+        /// The message to send
         msg: String,
     },
+    /// The description may only be 240 chars long, when it reaches the
+    /// server. The problem is, that special chars like '/' have to get
+    /// escaped into two chars "$s" before getting send to the server.
+    /// That means this string can be 120-240 chars long depending on the
+    /// amount of escaped chars. We 'could' trunctate the response, but
+    /// that could get weird with character boundries in UTF8 and split the
+    /// escapes themself, so just make sure you provide a valid value here
+    /// to begin with and be prepared for a server error
     SetDescription {
-        /// The description may only be 240 chars long, when it reaches the
-        /// server. The problem is, that special chars like '/' have to get
-        /// escaped into two chars "$s" before getting send to the server.
-        /// That means this string can be 120-240 chars long depending on the
-        /// amount of escaped chars. We 'could' trunctate the response, but
-        /// that could get weird with character boundries in UTF8 and split the
-        /// escapes themself, so just make sure you provide a valid value here
-        /// to begin with and be prepared for a server error
+        /// The description to set
         description: String,
     },
+    /// Drop the item from the specified position into the witches cauldron
     WitchDropCauldron {
+        /// The inventory you want to move an item from
         inventory_t: InventoryType,
+        /// The position of the item to move
         position: usize,
     },
+    /// Uses the blacksmith with the specified action on the specified item
     Blacksmith {
+        /// The inventory the item you want to act upon is in
         inventory_t: InventoryType,
+        /// The position of the item in the inventory
         position: u8,
+        /// The action you want to use on the item
         action: BlacksmithAction,
     },
     GuildSendChat {
@@ -563,9 +614,9 @@ pub enum Command {
     },
     /// Swaps the runes of two items
     SwapRunes {
-        from: ItemPosition,
+        from: ItemPlace,
         from_pos: usize,
-        to: ItemPosition,
+        to: ItemPlace,
         to_pos: usize,
     },
     /// Changes the look of the item to the selected `raw_model_id` for 10
@@ -573,7 +624,7 @@ pub enum Command {
     /// `model_id  + (class as usize) * 1000` if I remember correctly. Pretty
     /// sure nobody  will ever uses this though, as it is only for looks.
     ChangeItemLook {
-        inv: ItemPosition,
+        inv: ItemPlace,
         pos: usize,
         raw_model_id: u16,
     },
@@ -893,7 +944,7 @@ impl Command {
                 }
             ),
             Command::ViewScrapbook => format!("PlayerPollScrapbook:"),
-            Command::ViewPet { pet_index } => {
+            Command::ViewPet { pet_id: pet_index } => {
                 format!("PetsGetStats:{pet_index}")
             }
             Command::BuyShop {
@@ -955,7 +1006,10 @@ impl Command {
                 "UnlockFeature:{}/{}",
                 unlockable.main_ident, unlockable.sub_ident
             ),
-            Command::FightLightDungeon { name, use_mushroom } => {
+            Command::FightLightDungeon {
+                dungeon: name,
+                use_mushroom,
+            } => {
                 if *name == LightDungeon::Tower {
                     return Err(SFError::InvalidRequest(
                         "The tower must be fought with the FightTower command",
@@ -969,9 +1023,10 @@ impl Command {
             }
             Command::GuildSetInfo {
                 description,
-                emblem_code,
+                emblem,
             } => format!(
-                "GroupSetDescription:{emblem_code}§{}",
+                "GroupSetDescription:{}§{}",
+                emblem.server_encode(),
                 to_sf_string(description)
             ),
             Command::SetDescription { description } => {
@@ -1204,7 +1259,10 @@ impl Command {
             Command::ExpeditionStart { pos } => {
                 format!("ExpeditionStart:{}", pos + 1)
             }
-            Command::FightShadowDungeon { name, use_mushroom } => {
+            Command::FightShadowDungeon {
+                dungeon: name,
+                use_mushroom,
+            } => {
                 if *name == ShadowDungeon::Twister {
                     format!(
                         "PlayerDungeonBattle:{}/{}",

@@ -186,6 +186,7 @@ pub struct Habitat {
     /// Has this habitat already fought an opponent today. If so, they can not
     /// do this until the next day
     pub battled_opponent: bool,
+    /// All the different pets you can collect in this habitat
     pub pets: [Pet; PETS_PER_HABITAT],
 }
 
@@ -379,10 +380,14 @@ impl PetStats {
 
 #[derive(Debug, Clone, Copy, strum::EnumCount, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The current state of the mirror
 pub enum Mirror {
+    /// The player is still collecting the mirror pieces
     Pieces {
+        /// The amount of pieces the character has found
         amount: u8,
     },
+    /// The player has found all mirror pieces and thus has a working mirror
     #[default]
     Full,
 }
@@ -394,9 +399,12 @@ impl Mirror {
         }
         /// Bitmask to cover bits 20 to 32, which is where each bit set is one
         /// mirror piece found
-        const MIRROR_PIECES_MASK: i64 = 0xFFF80000;
+        const MIRROR_PIECES_MASK: i64 = 0xFFF8_0000;
         Mirror::Pieces {
-            amount: (i & MIRROR_PIECES_MASK).count_ones() as u8,
+            amount: (i & MIRROR_PIECES_MASK)
+                .count_ones()
+                .try_into()
+                .unwrap_or(0),
         }
     }
 }
@@ -411,12 +419,14 @@ pub struct Unlockable {
 }
 
 impl Unlockable {
-    pub(crate) fn parse(data: &[i64]) -> Vec<Unlockable> {
+    pub(crate) fn parse(data: &[i64]) -> Result<Vec<Unlockable>, SFError> {
         data.chunks_exact(2)
-            .filter(|chunk| chunk[0] != 0)
-            .map(|chunk| Unlockable {
-                main_ident: chunk[0],
-                sub_ident: chunk[1],
+            .filter(|chunk| chunk.first().copied().unwrap_or_default() != 0)
+            .map(|chunk| {
+                Ok(Unlockable {
+                    main_ident: chunk.cget(0, "unlockable ident")?,
+                    sub_ident: chunk.cget(0, "unlockable sub ident")?,
+                })
             })
             .collect()
     }
@@ -424,6 +434,7 @@ impl Unlockable {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The current progress towards all achievements
 pub struct Achievements(pub Vec<Achievement>);
 
 impl Achievements {

@@ -8,12 +8,7 @@ use num_traits::FromPrimitive;
 use strum::IntoEnumIterator;
 
 use super::{
-    character::{Mount, Portrait},
-    fortress::FortressBuildingType,
-    guild::GuildRank,
-    items::{Equipment, ItemType},
-    unlockables::Mirror,
-    AttributeType, Class, Flag, Potion, Race, SFError, ServerTime,
+    character::{Mount, Portrait}, fortress::FortressBuildingType, guild::GuildRank, items::{Equipment, ItemType}, unlockables::Mirror, AttributeType, Class, Emblem, Flag, Potion, Race, SFError, ServerTime
 };
 use crate::{misc::*, PlayerId};
 
@@ -653,7 +648,7 @@ pub struct OtherGuild {
     pub rank: u16,
     pub attack_cost: u32,
     pub description: String,
-    pub emblem: String,
+    pub emblem: Emblem,
     pub honor: u32,
     pub finished_raids: u16,
     // should just be members.len(), right?
