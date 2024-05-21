@@ -426,12 +426,15 @@ pub enum Command {
         /// The action you want to use on the item
         action: BlacksmithAction,
     },
+    /// Sends the specified message in the guild chat
     GuildSendChat {
+        /// The message to send
         message: String,
     },
     /// Enchants the currently worn item, associated with this enchantment,
     /// with the enchantment
     WitchEnchant {
+        /// The enchantment to apply
         enchantment: Enchantment,
     },
     SpinWheelOfFortune {
@@ -453,7 +456,7 @@ pub enum Command {
     FortressGather {
         resource: FortressResourceType,
     },
-    FortressBuildStart {
+    FortressBuild {
         f_type: FortressBuildingType,
     },
     FortressBuildCancel {
@@ -464,18 +467,18 @@ pub enum Command {
         mushrooms: u32,
     },
     /// Builds new units of the selected type
-    FortressBuildUnitStart {
+    FortressBuildUnit {
         unit: FortressUnitType,
         count: u32,
     },
     /// Starts the search for gems
-    FortressGemStoneStart,
+    FortressGemStoneSearch,
     /// Cancles the search for gems
-    FortressGemStoneCancel,
+    FortressGemStoneSearchCancel,
     /// Finishes the gem stone search using the appropriate amount of
     /// mushrooms. The price is one mushroom per 600 sec / 10 minutes of time
     /// remaining
-    FortressGemStoneFinish {
+    FortressGemStoneSearchFinish {
         mushrooms: u32,
     },
     /// Attacks the current fortress attack target with the provided amount of
@@ -555,11 +558,11 @@ pub enum Command {
     RefreshShop {
         shop: ShopType,
     },
-    /// Fetches the HoF page for guilds
+    /// Fetches the Hall of Fame page for guilds
     HallOfFameGroupPage {
         page: u32,
     },
-    /// Crawls the HoF page for the underworld
+    /// Crawls the Hall of Fame page for the underworld
     HallOfFameUnderworldPage {
         page: u32,
     },
@@ -1081,7 +1084,7 @@ impl Command {
                 position + 1,
                 *equipment_slot as usize
             ),
-            Command::FortressBuildStart { f_type } => {
+            Command::FortressBuild { f_type } => {
                 format!("FortressBuildStart:{}/0", *f_type as usize + 1)
             }
             Command::FortressBuildCancel { f_type } => {
@@ -1091,16 +1094,16 @@ impl Command {
                 "FortressBuildFinish:{}/{mushrooms}",
                 *f_type as usize + 1
             ),
-            Command::FortressBuildUnitStart { unit, count } => {
+            Command::FortressBuildUnit { unit, count } => {
                 format!("FortressBuildUnitStart:{}/{count}", *unit as usize + 1)
             }
-            Command::FortressGemStoneStart => {
+            Command::FortressGemStoneSearch => {
                 format!("FortressGemstoneStart:",)
             }
-            Command::FortressGemStoneCancel => {
+            Command::FortressGemStoneSearchCancel => {
                 format!("FortressGemStoneStop:0")
             }
-            Command::FortressGemStoneFinish { mushrooms } => {
+            Command::FortressGemStoneSearchFinish { mushrooms } => {
                 format!("FortressGemstoneFinished:{mushrooms}",)
             }
             Command::FortressAttack { soldiers } => {

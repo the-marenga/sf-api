@@ -11,7 +11,7 @@ pub mod tavern;
 pub mod underworld;
 pub mod unlockables;
 
-use std::{collections::HashSet, i64};
+use std::{borrow::Borrow, collections::HashSet, i64};
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use enum_map::EnumMap;
@@ -134,6 +134,14 @@ impl Shop {
 }
 
 impl GameState {
+    /// Constructs a new `GameState` from the provided response. The reponse has
+    /// to be the login response from a `Session`.
+    ///
+    /// # Errors
+    /// If the reponse contains any errors, or does not contain enough
+    /// information about the player to build a full `GameState`, this will
+    /// return a `ParsingError`, or `TooShortResponse` depending on the
+    /// exact error
     pub fn new(response: Response) -> Result<Self, SFError> {
         let mut res = Self::default();
         res.update(response)?;
@@ -152,7 +160,11 @@ impl GameState {
     /// # Errors
     /// Mainly returns `ParsingError` if the response does not exactly follow
     /// the expected length, type and layout
-    pub fn update(&mut self, response: Response) -> Result<(), SFError> {
+    pub fn update<R: Borrow<Response>>(
+        &mut self,
+        response: R,
+    ) -> Result<(), SFError> {
+        let response = response.borrow();
         let new_vals = response.values();
         // Because the conversion of all other timestamps relies on the servers
         // timestamp, this has to be set first
@@ -855,7 +867,7 @@ impl GameState {
                 "eventtaskinfo" => {
                     let data: Vec<i64> = val.into_list("eti")?;
                     self.specials.tasks.event.theme = data
-                        .cfpget(2, "event task typ", |a| a)?
+                        .cfpget(2, "event task theme", |a| a)?
                         .unwrap_or(EventTasksTheme::Unknown);
                     self.specials.tasks.event.start =
                         data.cstget(0, "event t start", server_time)?;
@@ -875,8 +887,9 @@ impl GameState {
                     self.mail.inbox.clear();
                     for msg in data.split(';').filter(|a| !a.trim().is_empty())
                     {
-                        if let Some(msg) = InboxEntry::parse(msg, server_time) {
-                            self.mail.inbox.push(msg);
+                        match InboxEntry::parse(msg, server_time) {
+                            Ok(msg) => self.mail.inbox.push(msg),
+                            Err(e) => warn!("Invalid msg: {msg} {e}"),
                         };
                     }
                 }
@@ -886,14 +899,17 @@ impl GameState {
                 "combatloglist" => {
                     for entry in val.as_str().split(';') {
                         let parts = entry.split(',').collect::<Vec<_>>();
-                        if let Some(cle) =
-                            CombatLogEntry::parse(&parts, server_time)
-                        {
-                            self.mail.combat_log.push(cle);
-                        } else if parts.iter().all(|a| !a.is_empty()) {
-                            warn!(
-                                "Unable to parse combat log entry: {parts:?}"
-                            );
+                        match CombatLogEntry::parse(&parts, server_time) {
+                            Ok(cle) => {
+                                self.mail.combat_log.push(cle);
+                            }
+                            Err(e) if parts.iter().all(|a| !a.is_empty()) => {
+                                warn!(
+                                    "Unable to parse combat log entry: \
+                                     {parts:?} - {e}"
+                                );
+                            }
+                            _ => (),
                         }
                     }
                 }
@@ -968,7 +984,7 @@ impl GameState {
                 "otherplayerpetbonus" => {
                     other_player
                         .get_or_insert_with(Default::default)
-                        .update_pet_bonus(&val.into_list("o pet bonus")?);
+                        .update_pet_bonus(&val.into_list("o pet bonus")?)?;
                 }
                 "otherplayerunitlevel" => {
                     let data: Vec<i64> =
@@ -992,9 +1008,9 @@ impl GameState {
                     other_player
                         .get_or_insert_with(Default::default)
                         .fortress_rank =
-                        match val.into::<i64>("other friend fortress rank")? {
+                        match val.into::<i64>("other player fortress rank")? {
                             ..=-1 => None,
-                            x => Some(x as u32),
+                            x => Some(x.try_into().unwrap_or(1)),
                         };
                 }
                 "iadungeontime" => {

@@ -1,12 +1,11 @@
 #![warn(
-    clippy::pedantic,
     missing_debug_implementations,
-    missing_docs,
     clippy::indexing_slicing,
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::print_stdout,
     clippy::print_stderr,
+    clippy::pedantic,
     clippy::missing_panics_doc
 )]
 #![allow(
@@ -15,6 +14,8 @@
     clippy::field_reassign_with_default
 )]
 #![deny(unsafe_code)]
+// clippy::pedantic,
+//     missing_docs,
 
 use std::{borrow::Borrow, time::Duration};
 

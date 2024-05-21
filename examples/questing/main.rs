@@ -1,10 +1,9 @@
+#![allow(unused)]
 use std::time::Duration;
 
 use chrono::{DateTime, Local};
 use sf_api::{
-    command::{Command, ExpeditionSetting, TimeSkip},
-    gamestate::tavern::{AvailableTasks, CurrentAction, ExpeditionStage},
-    SimpleSession,
+    command::Command, gamestate::tavern::CurrentAction, SimpleSession,
 };
 use sha1::digest::Update;
 use tokio::time::sleep;

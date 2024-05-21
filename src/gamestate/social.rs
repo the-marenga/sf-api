@@ -8,7 +8,12 @@ use num_traits::FromPrimitive;
 use strum::IntoEnumIterator;
 
 use super::{
-    character::{Mount, Portrait}, fortress::FortressBuildingType, guild::GuildRank, items::{Equipment, ItemType}, unlockables::Mirror, AttributeType, Class, Emblem, Flag, Potion, Race, SFError, ServerTime
+    character::{Mount, Portrait},
+    fortress::FortressBuildingType,
+    guild::GuildRank,
+    items::{Equipment, ItemType},
+    unlockables::Mirror,
+    AttributeType, Class, Emblem, Flag, Potion, Race, SFError, ServerTime,
 };
 use crate::{misc::*, PlayerId};
 
@@ -37,7 +42,7 @@ pub struct HallOfFames {
     pub players: Vec<HallOfFamePlayer>,
 
     /// The amount of guilds on this server. Will only be set after querying
-    /// the guild HoF, or looking at your own guild
+    /// the guild Hall of Fame, or looking at your own guild
     pub guilds_total: Option<u32>,
     /// A list of hall of fame guilds fetched during the last command
     pub guilds: Vec<HallOfFameGuild>,
@@ -419,16 +424,19 @@ pub enum Relationship {
 }
 
 impl OtherPlayer {
-    pub(crate) fn update_pet_bonus(&mut self, data: &[u32]) {
+    pub(crate) fn update_pet_bonus(
+        &mut self,
+        data: &[u32],
+    ) -> Result<(), SFError> {
         let atr = &mut self.pet_attribute_bonus_perc;
-        use crate::command::AttributeType::*;
         // The order of these makes no sense. It is neither pet,
         // nor attribute order
-        atr[Constitution] = data[1];
-        atr[Dexterity] = data[2];
-        atr[Intelligence] = data[3];
-        atr[Luck] = data[4];
-        atr[Strength] = data[5];
+        *atr.get_mut(AttributeType::Constitution) = data.cget(1, "pet con")?;
+        *atr.get_mut(AttributeType::Dexterity) = data.cget(2, "pet dex")?;
+        *atr.get_mut(AttributeType::Intelligence) = data.cget(3, "pet int")?;
+        *atr.get_mut(AttributeType::Luck) = data.cget(3, "pet luck")?;
+        *atr.get_mut(AttributeType::Strength) = data.cget(5, "pet str")?;
+        Ok(())
     }
 
     pub(crate) fn parse(
@@ -489,12 +497,8 @@ impl OtherPlayer {
                     0,
                     |a| a & 0xFF,
                 )?,
-                fortress_has_mages: data[230] >> 16 > 0,
-                fortress_archers: soft_into(
-                    data[231] & 0xFF,
-                    "other f archer",
-                    0,
-                ),
+                fortress_has_mages: data.cget(230, "fortress mages")? >> 16 > 0,
+                fortress_archers: data.csiget(231, "other f archer", 0)?,
                 wood_in_cutter: data.csiget(239, "other wood cutter", 0)?,
                 stone_in_quary: data.csiget(240, "other stone q", 0)?,
                 max_wood_in_cutter: data.csiget(241, "other max wood c", 0)?,
@@ -567,20 +571,23 @@ impl CombatLogEntry {
     pub(crate) fn parse(
         data: &[&str],
         server_time: ServerTime,
-    ) -> Option<CombatLogEntry> {
-        if data.len() != 6 {
-            return None;
-        }
-        let msg_id = data[0].parse::<i64>().ok()?;
-        let battle_t = data[3].parse().ok()?;
-        let mt = FromPrimitive::from_i64(battle_t)?;
-        let time_stamp = data[4].parse().ok()?;
-        let time = server_time.convert_to_local(time_stamp, "combat time")?;
+    ) -> Result<CombatLogEntry, SFError> {
+        let msg_id = data.cfsuget(0, "msg_id")?;
+        let battle_t: i64 = data.cfsuget(3, "battle t")?;
+        let mt = FromPrimitive::from_i64(battle_t).ok_or_else(|| {
+            SFError::ParsingError("combat mt", battle_t.to_string())
+        })?;
+        let time_stamp: i64 = data.cfsuget(4, "combat log time")?;
+        let time = server_time
+            .convert_to_local(time_stamp, "combat time")
+            .ok_or_else(|| {
+                SFError::ParsingError("combat time", time_stamp.to_string())
+            })?;
 
-        Some(CombatLogEntry {
+        Ok(CombatLogEntry {
             msg_id,
-            player_name: data[1].to_string(),
-            won: data[2] == "1",
+            player_name: data.cget(1, "clog player")?.to_string(),
+            won: data.cget(2, "clog won")? == "1",
             battle_type: mt,
             time,
         })
@@ -602,37 +609,44 @@ impl InboxEntry {
     pub(crate) fn parse(
         msg: &str,
         server_time: ServerTime,
-    ) -> Option<InboxEntry> {
+    ) -> Result<InboxEntry, SFError> {
         let parts = msg.splitn(4, ',').collect::<Vec<_>>();
-        if parts.len() != 4 {
-            warn!("Bad inbox entry len: {msg:?}");
-            return None;
-        }
-        let Some((title, date)) = parts[3].rsplit_once(',') else {
-            warn!("invalid title/date in msg: {msg}");
-            return None;
+        let Some((title, date)) =
+            parts.cget(3, "msg title/date")?.rsplit_once(',')
+        else {
+            return Err(SFError::ParsingError(
+                "title/msg comma",
+                msg.to_string(),
+            ));
         };
 
         let msg_typ = match title {
             "3" => MessageType::GuildKicked,
             "5" => MessageType::GuildInvite,
             x if x.chars().all(|a| a.is_ascii_digit()) => {
-                warn!("Unknown message typ: {title}");
-                return None;
+                return Err(SFError::ParsingError(
+                    "msg typ",
+                    title.to_string(),
+                ));
             }
             _ => MessageType::Normal,
         };
 
-        Some(InboxEntry {
+        let Some(date) = date
+            .parse()
+            .ok()
+            .and_then(|a| server_time.convert_to_local(a, "msg_date"))
+        else {
+            return Err(SFError::ParsingError("msg date", date.to_string()));
+        };
+
+        Ok(InboxEntry {
             msg_typ,
-            date: server_time.convert_to_local(
-                warning_from_str(date, "msg date")?,
-                "msg date",
-            )?,
-            from: parts[1].to_string(),
-            msg_id: warning_from_str(parts[0], "msg_id")?,
+            date,
+            from: parts.cget(1, "inbox from")?.to_string(),
+            msg_id: parts.cfsuget(0, "msg_id")?,
             title: from_sf_string(title.trim_end_matches('\t')),
-            read: parts[2] == "1",
+            read: parts.cget(2, "inbox read")? == "1",
         })
     }
 }
@@ -683,22 +697,17 @@ impl OtherGuild {
         for (i, member) in &mut self.members.iter_mut().enumerate() {
             member.level =
                 data.csiget(64 + i, "other guild member level", 0)?;
-            member.last_active = server_time
-                .convert_to_local(data[114 + i], "other guild member active");
-            member.treasure_lvl = soft_into(
-                data[214 + i],
-                "other guild member treasure levels",
-                0,
-            );
-            member.instructor_lvl = soft_into(
-                data[264 + i],
+            member.last_active =
+                data.cstget(114 + i, "other guild member active", server_time)?;
+            member.treasure_lvl =
+                data.csiget(214 + i, "other guild member treasure levels", 0)?;
+            member.instructor_lvl = data.csiget(
+                264 + i,
                 "other guild member instructor levels",
                 0,
-            );
-            member.rank =
-                warning_parse(data[314 + i], "other guild member ranks", |q| {
-                    FromPrimitive::from_i64(q)
-                })
+            )?;
+            member.rank = data
+                .cfpget(314 + i, "other guild member ranks", |q| q)?
                 .unwrap_or_default();
             member.pet_lvl =
                 data.csiget(390 + i, "other guild pet levels", 0)?;

@@ -1,7 +1,6 @@
 use chrono::{DateTime, Local};
 use enum_map::Enum;
 use log::error;
-use num_traits::FromPrimitive;
 use strum::EnumIter;
 
 use super::*;
@@ -68,16 +67,16 @@ impl Hellevator {
         server_time: ServerTime,
     ) -> Result<Option<Hellevator>, SFError> {
         Ok(Some(Hellevator {
-            key_cards: soft_into(data[0], "h key cards", 0),
+            key_cards: data.csiget(0, "h key cards", 0)?,
             next_card_generated: server_time
                 .convert_to_local(data[1], "next card"),
             next_reset: server_time.convert_to_local(data[2], "next reset"),
-            current_floor: soft_into(data[3], "h current floor", 0),
-            points: soft_into(data[4], "h points", 0),
+            current_floor: data.csiget(3, "h current floor", 0)?,
+            points: data.csiget(4, "h points", 0)?,
             start_contrib_date: server_time
                 .convert_to_local(data[5], "start contrib"),
             has_final_reward: data[6] == 1,
-            points_today: soft_into(data[10], "h points today", 0),
+            points_today: data.csiget(10, "h points today", 0)?,
         }))
     }
 }
@@ -256,33 +255,36 @@ impl Pets {
                 1 == data.cget(223 + element_idx, "element ff")?;
         }
 
-        self.total_collected = soft_into(data[103], "total pets", 0);
+        self.total_collected = data.csiget(103, "total pets", 0)?;
         self.opponent.id = data[231].try_into().unwrap_or_default();
         self.opponent.next_free_battle =
             server_time.convert_to_local(data[232], "next free pet fight");
-        self.rank = soft_into(data[233], "pet rank", 0);
-        self.honor = soft_into(data[234], "pet honor", 0);
+        self.rank = data.csiget(233, "pet rank", 0)?;
+        self.honor = data.csiget(234, "pet honor", 0)?;
 
-        self.opponent.pet_count = soft_into(data[235], "pet enemy count", 0);
+        self.opponent.pet_count = data.csiget(235, "pet enemy count", 0)?;
         self.opponent.level_total =
-            soft_into(data[236], "pet enemy lvl total", 0);
+            data.csiget(236, "pet enemy lvl total", 0)?;
         self.opponent.reroll_date =
-            server_time.convert_to_local(data[237], "pet enemy reroll date");
+            data.cstget(237, "pet enemy reroll date", server_time)?;
 
         update_enum_map(&mut self.atr_bonus, data.skip(250, "pet atr boni")?);
         Ok(())
     }
 
     pub(crate) fn update_pet_stat(&mut self, data: &[i64]) {
-        if let Some(ps) = PetStats::parse(data) {
-            let idx = ps.id;
-            if let Some(pet) =
-                self.habitats.get_mut(ps.element).pets.get_mut(idx % 20)
-            {
-                pet.stats = Some(ps);
+        match PetStats::parse(data) {
+            Ok(ps) => {
+                let idx = ps.id;
+                if let Some(pet) =
+                    self.habitats.get_mut(ps.element).pets.get_mut(idx % 20)
+                {
+                    pet.stats = Some(ps);
+                }
             }
-        } else {
-            error!("Could not parse pet stats");
+            Err(e) => {
+                error!("Could not parse pet stats: {e}");
+            }
         }
     }
 }
@@ -353,28 +355,29 @@ impl HabitatType {
 }
 
 impl PetStats {
-    pub(crate) fn parse(data: &[i64]) -> Option<Self> {
+    pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
+        let pet_id: u32 = data.csiget(0, "pet index", 0)?;
         let mut s = Self {
-            id: soft_into(data[0], "pet index", 0),
-            level: soft_into(data[1], "pet lvl", 0),
-            armor: soft_into(data[2], "pet armor", 0),
-            class: warning_parse(
-                data[3],
-                "pet class",
-                FromPrimitive::from_i64,
-            )?,
-            min_damage: soft_into(data[14], "min damage", 0),
-            max_damage: soft_into(data[15], "max damage", 0),
+            id: pet_id as usize,
+            level: data.csiget(1, "pet lvl", 0)?,
+            armor: data.csiget(2, "pet armor", 0)?,
+            class: data.cfpuget(3, "pet class", |a| a)?,
+            min_damage: data.csiget(14, "min damage", 0)?,
+            max_damage: data.csiget(15, "max damage", 0)?,
 
-            element: match data[16] {
-                0 => HabitatType::from_pet_id(data[0])?,
-                x => HabitatType::from_typ_id(x)?,
+            element: match data.cget(16, "pet element")? {
+                0 => HabitatType::from_pet_id(i64::from(pet_id)).ok_or_else(
+                    || SFError::ParsingError("det pet typ", pet_id.to_string()),
+                )?,
+                x => HabitatType::from_typ_id(x).ok_or_else(|| {
+                    SFError::ParsingError("det pet typ", x.to_string())
+                })?,
             },
             ..Default::default()
         };
-        update_enum_map(&mut s.attributes, &data[4..]);
-        update_enum_map(&mut s.bonus_attributes, &data[9..]);
-        Some(s)
+        update_enum_map(&mut s.attributes, data.skip(4, "pet attrs")?);
+        update_enum_map(&mut s.bonus_attributes, data.skip(9, "pet bonus")?);
+        Ok(s)
     }
 }
 

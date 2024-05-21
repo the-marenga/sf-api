@@ -8,7 +8,7 @@ use strum::EnumIter;
 
 use super::{
     character::Class, items::*, tavern::Location, unlockables::HabitatType,
-    CCGet, CFPGet, CGet,
+    ArrSkip, CCGet, CFPGet, CGet,
 };
 use crate::{command::AttributeType, error::SFError};
 
@@ -417,10 +417,15 @@ impl EventTaskTyp {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Something to do to get a point reward
 pub struct EventTask {
+    /// The thing you are tasked with doing or getting for this task
     pub typ: EventTaskTyp,
+    /// The amount of times, or the amount of `typ` you have currently
     pub current: u64,
+    /// The amount current has to be at to complete this task
     pub target: u64,
+    /// The amount of points you get for completing this task
     pub point_reward: u32,
 }
 
@@ -438,15 +443,21 @@ impl EventTask {
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Something you can unlock for completing tasks
 pub struct RewardChest {
+    /// Whether or not this chest has been unlocked
     pub opened: bool,
+    /// The things you will get for opening this chest
     pub reward: [Option<Reward>; 2],
 }
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The reward for opening a chest
 pub struct Reward {
+    /// The type of the thing you are getting
     pub typ: RewardTyp,
+    /// The amount of `typ` you get
     pub amount: u64,
 }
 
@@ -471,11 +482,11 @@ impl RewardChest {
         };
 
         for (i, reward) in indices.iter().copied().zip(&mut reward) {
-            *reward = Some(Reward::parse(&data[i..])?);
+            *reward = Some(Reward::parse(data.skip(i, "dice reward")?)?);
         }
 
         Ok(RewardChest {
-            opened: data[0] == 1,
+            opened: data.cget(0, "rchest opened")? == 1,
             reward,
         })
     }
@@ -484,6 +495,8 @@ impl RewardChest {
 #[non_exhaustive]
 #[derive(Debug, Clone, FromPrimitive, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// The resource you get as a reward
 pub enum RewardTyp {
     ExtraBeer = 2,
     Mushroom = 3,

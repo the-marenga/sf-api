@@ -94,21 +94,30 @@ pub(crate) fn to_sf_string(val: &str) -> String {
 }
 
 /// Calling `.replace()` a bunch of times is bad, as that generates a bunch of
-/// strings. regex!() -> replace_all()  would be better, as that uses cow<>
+/// strings. regex!() -> `replace_all()`  would be better, as that uses cow<>
 /// irrc, but we can replace pattern with a linear search an one string, using
 /// this extra crate. We call this function a bunch, so optimizing this is
 /// probably worth it
+#[allow(clippy::expect_used)]
 fn pattern_replace<const FROM: bool>(str: &str) -> String {
     static A: Lazy<(AhoCorasick, &'static [&'static str; 11])> =
         Lazy::new(|| {
             let l = sf_str_lookups();
-            (aho_corasick::AhoCorasick::new(l.0).unwrap(), l.1)
+            (
+                aho_corasick::AhoCorasick::new(l.0)
+                    .expect("const pattern a wrong"),
+                l.1,
+            )
         });
 
     static B: Lazy<(AhoCorasick, &'static [&'static str; 11])> =
         Lazy::new(|| {
             let l = sf_str_lookups();
-            (aho_corasick::AhoCorasick::new(l.1).unwrap(), l.0)
+            (
+                aho_corasick::AhoCorasick::new(l.1)
+                    .expect("const pattern b wrong"),
+                l.0,
+            )
         });
 
     let (from, to) = if FROM { A.clone() } else { B.clone() };
@@ -194,12 +203,6 @@ pub(crate) trait CCGet<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> {
         pos: usize,
         name: &'static str,
     ) -> Result<Option<I>, SFError>;
-    fn cwimget(
-        &self,
-        pos: usize,
-        name: &'static str,
-        fun: fn(T) -> T,
-    ) -> Result<Option<I>, SFError>;
     fn ciget(&self, pos: usize, name: &'static str) -> Result<I, SFError>;
     fn cimget(
         &self,
@@ -257,17 +260,6 @@ impl<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> CCGet<T, I> for [T] {
         let raw = fun(raw);
         raw.try_into()
             .map_err(|_| SFError::ParsingError(name, raw.to_string()))
-    }
-
-    fn cwimget(
-        &self,
-        pos: usize,
-        name: &'static str,
-        fun: fn(T) -> T,
-    ) -> Result<Option<I>, SFError> {
-        let raw = raw_cget(self, pos, name)?;
-        let raw = fun(raw);
-        Ok(warning_try_into(raw, name))
     }
 }
 
