@@ -222,8 +222,8 @@ impl GameState {
                         .used = val.into::<i32>("toilet full status")? != 0;
                 }
                 "skipallow" => {
-                    self.tavern.skip_allowed =
-                        val.into::<i32>("skip allow")? != 0;
+                    let raw_skip = val.into::<i32>("skip allow")?;
+                    self.tavern.mushroom_skip_allowed = raw_skip != 0;
                 }
                 "cryptoid not found" => return Err(SFError::ConnectionError),
                 "ownplayersave" => {

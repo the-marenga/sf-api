@@ -22,8 +22,8 @@ pub struct Tavern {
     /// How many seconds the character still has left to do adventures
     #[doc(alias = "alu")]
     pub thirst_for_adventure_sec: u32,
-    /// Whether or not skipping is allowed
-    pub skip_allowed: bool,
+    /// Whether or not skipping with mushrooms is allowed
+    pub mushroom_skip_allowed: bool,
     /// The amount of beers we already drank today
     pub beer_drunk: u8,
     /// The amount of quicksand glasses we have and can use to skip quests

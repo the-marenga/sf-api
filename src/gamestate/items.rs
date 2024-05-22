@@ -26,6 +26,19 @@ pub struct Inventory {
 }
 
 impl Inventory {
+    pub fn free_slot(&self) -> Option<(InventoryType, usize)> {
+        if let Some(bag_pos) = self.bag.iter().position(Option::is_none) {
+            return Some((InventoryType::MainInventory, bag_pos));
+        } else if let Some(e_bag_pos) = self
+            .fortress_chest
+            .as_ref()
+            .and_then(|a| a.iter().position(Option::is_none))
+        {
+            return Some((InventoryType::ExtendedInventory, e_bag_pos));
+        }
+        None
+    }
+
     pub(crate) fn update_fortress_chest(
         &mut self,
         data: &[i64],
@@ -92,6 +105,16 @@ pub enum ItemPlace {
 pub struct Equipment(pub EnumMap<EquipmentSlot, Option<Item>>);
 
 impl Equipment {
+    #[must_use]
+    /// Checks if the character has an item with the enchantment equiped
+    pub fn has_enchantment(&self, enchantment: Enchantment) -> bool {
+        let item = self.0.get(enchantment.equipment_slot());
+        if let Some(item) = item {
+            return item.enchantment == Some(enchantment);
+        }
+        false
+    }
+
     /// Expects the input `data` to have items directly at data[0]
     pub(crate) fn parse(
         data: &[i64],
@@ -333,6 +356,20 @@ pub enum Enchantment {
 }
 
 impl Enchantment {
+    pub fn equipment_slot(&self) -> EquipmentSlot {
+        match self {
+            Enchantment::SwordOfVengeance => EquipmentSlot::Weapon,
+            Enchantment::MariosBeard => EquipmentSlot::BreastPlate,
+            Enchantment::ManyFeetBoots => EquipmentSlot::FootWear,
+            Enchantment::ShadowOfTheCowboy => EquipmentSlot::Gloves,
+            Enchantment::AdventurersArchaeologicalAura => EquipmentSlot::Hat,
+            Enchantment::ThirstyWanderer => EquipmentSlot::Belt,
+            Enchantment::UnholyAcquisitiveness => EquipmentSlot::Amulet,
+            Enchantment::TheGraveRobbersPrayer => EquipmentSlot::Ring,
+            Enchantment::RobberBaronRitual => EquipmentSlot::Talisman,
+        }
+    }
+
     pub(crate) fn enchant_id(self) -> u32 {
         ((self as u32) / 10) * 10
     }

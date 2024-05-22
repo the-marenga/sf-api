@@ -136,14 +136,14 @@ pub enum Command {
         skip: Option<TimeSkip>,
     },
     /// Goes working for the specified amount of hours (1-10)
-    WorkStart {
+    StartWork {
         /// The amount of hours you want to work
         hours: u8,
     },
     /// Cancels the current guard job
-    WorkCancel,
+    CancelWork,
     /// Collects the pay from the guard job
-    WorkFinish,
+    FinishWork,
     /// Checks if the given name is still available to register
     CheckNameAvailable {
         /// The name to check
@@ -861,9 +861,9 @@ impl Command {
                     skip.map(|a| a as u8).unwrap_or(0)
                 )
             }
-            Command::WorkStart { hours } => format!("PlayerWorkStart:{hours}"),
-            Command::WorkCancel => format!("PlayerWorkStop:"),
-            Command::WorkFinish => format!("PlayerWorkFinished:"),
+            Command::StartWork { hours } => format!("PlayerWorkStart:{hours}"),
+            Command::CancelWork => format!("PlayerWorkStop:"),
+            Command::FinishWork => format!("PlayerWorkFinished:"),
             Command::CheckNameAvailable { name } => {
                 format!("AccountCheck:{name}")
             }

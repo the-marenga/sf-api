@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{borrow::Borrow, time::Duration};
 
 use chrono::{DateTime, Local};
 use sf_api::{
@@ -76,8 +76,9 @@ pub async fn main() {
             if target.thirst_for_adventure_sec
                 > gs.tavern.thirst_for_adventure_sec
             {
+                // Buying beer is an option, but not for this example
+                // Look at questing for that
                 println!("We do not have enough thirst for adventure left");
-                println!("Buying beer is an option, but not for this example");
                 break;
             }
 
@@ -118,8 +119,7 @@ pub async fn main() {
                 continue;
             }
             ExpeditionStage::Waiting(until) => {
-                let remaining =
-                    (until - Local::now()).to_std().unwrap_or_default();
+                let remaining = time_remaining(until);
                 if remaining.as_secs() > 60 && gs.tavern.quicksand_glasses > 0 {
                     println!("Skipping the {}s wait", remaining.as_secs());
                     Command::ExpeditionSkipWait {
@@ -130,7 +130,7 @@ pub async fn main() {
                         "Waiting {}s until next expedition step",
                         remaining.as_secs(),
                     );
-                    sleep_until(&until).await;
+                    sleep(remaining).await;
                     Command::UpdatePlayer
                 }
             }
@@ -141,11 +141,8 @@ pub async fn main() {
     }
 }
 
-pub async fn sleep_until(time: &DateTime<Local>) {
-    let duration = *time - Local::now();
-    // We wait a bit longer, because there is always bit of time difference
-    // between us and the server
-    sleep(duration.to_std().unwrap_or_default() + Duration::from_secs(1)).await;
+pub fn time_remaining<T: Borrow<DateTime<Local>>>(time: T) -> Duration {
+    (*time.borrow() - Local::now()).to_std().unwrap_or_default()
 }
 
 pub async fn login_with_env() -> SimpleSession {
