@@ -121,7 +121,7 @@ pub async fn main() {
                     println!(
                         "Waiting {remaining:?} until the quest is finished"
                     );
-                    sleep(remaining);
+                    sleep(remaining).await;
                     session
                         .send_command(Command::FinishQuest { skip })
                         .await
