@@ -58,19 +58,37 @@ pub struct SSOCharacter {
 }
 impl SFAccount {
     /// Returns the username of this S&F account
+    #[must_use]
     pub fn username(&self) -> &str {
         &self.username
     }
 
     /// Initializes a `SFAccount` by logging the user in using the supplied
     /// clear text credentials
+    ///
+    /// # Errors
+    /// May return basically every possible `SFError` variant, because we are
+    /// both sending a command and parsing the result
+    // TODO: Document what wring pw returns
     pub async fn login(
         username: String,
         password: String,
     ) -> Result<SFAccount, SFError> {
-        Self::login_with_options(username, password, Default::default()).await
+        Self::login_with_options(
+            username,
+            password,
+            ConnectionOptions::default(),
+        )
+        .await
     }
 
+    /// Initializes a `SFAccount` by logging the user in using the supplied
+    /// clear text credentials and the provided options to use for the
+    /// communication with the server
+    ///
+    /// # Errors
+    /// May return basically every possible `SFError` variant, because we are
+    /// both sending a command and parsing the result
     pub async fn login_with_options(
         username: String,
         password: String,
@@ -80,15 +98,30 @@ impl SFAccount {
         Self::login_hashed_with_options(username, pw_hash, options).await
     }
 
-    /// Initializes a SFAccount by logging the user in using the hashed password
+    /// Initializes a `SFAccount` by logging the user in using the hashed
+    /// password
+    ///
+    /// # Errors
+    /// May return basically every possible `SFError` variant, because we are
+    /// both sending a command and parsing the result
     pub async fn login_hashed(
         username: String,
         pw_hash: PWHash,
     ) -> Result<SFAccount, SFError> {
-        Self::login_hashed_with_options(username, pw_hash, Default::default())
-            .await
+        Self::login_hashed_with_options(
+            username,
+            pw_hash,
+            ConnectionOptions::default(),
+        )
+        .await
     }
 
+    /// Initializes a `SFAccount` by logging the user in using the hashed
+    /// password and the provided options to use for  communication
+    ///
+    /// # Errors
+    /// May return basically every possible `SFError` variant, because we are
+    /// both sending a command and parsing the result
     pub async fn login_hashed_with_options(
         username: String,
         pw_hash: PWHash,
@@ -98,8 +131,8 @@ impl SFAccount {
             username,
             auth: SSOAuthData::SF { pw_hash },
             session: AccountSession {
-                uuid: Default::default(),
-                bearer_token: Default::default(),
+                uuid: String::new(),
+                bearer_token: String::new(),
             },
             client: reqwest_client(&options).ok_or(SFError::ConnectionError)?,
             options,
@@ -109,21 +142,21 @@ impl SFAccount {
         Ok(tmp_self)
     }
 
-    /// Refreshes the session by logging in again with the stored credentials.
-    /// This can be used when the server removed our session either for being
-    /// connected too long, or the server was restarted/cache cleared and forgot
-    /// us
+    /// Refreshes the SSO session by logging in again with the stored
+    /// credentials. This can be used when the server removed our session
+    /// either for being connected too long, or the server was
+    /// restarted/cache cleared and forgot us
+    ///
+    /// # Errors
+    /// `InvalidRequest` if you call this with anything else then a SSO/SF
+    /// account character. Even Google/Steam accounts will not work.
     pub async fn refresh_login(&mut self) -> Result<(), SFError> {
-        let pw_hash = match &self.auth {
-            SSOAuthData::SF { pw_hash } => pw_hash,
-            _ => {
-                // I do not think there is a way to reauth without going through
-                // the SSO process again for these
-                return Err(SFError::InvalidRequest(
-                    "Refreshing the SSO-login is only supported for \
-                     SSO-Accounts",
-                ));
-            }
+        let SSOAuthData::SF { pw_hash } = &self.auth else {
+            // I do not think there is a way to reauth without going through
+            // the SSO process again for these
+            return Err(SFError::InvalidRequest(
+                "Refreshing the SSO-login is only supported for SSO-Accounts",
+            ));
         };
 
         let mut form_data = HashMap::new();
@@ -146,6 +179,7 @@ impl SFAccount {
             )
             .await?;
 
+        #[allow(clippy::indexing_slicing)]
         let (Some(bearer_token), Some(uuid)) = (
             val_to_string(&res["token"]["access_token"]),
             val_to_string(&res["account"]["uuid"]),
@@ -166,6 +200,12 @@ impl SFAccount {
     /// the accounts session, which they are only allowed to do, if they own it
     /// (in an Arc<Mutex<_>>) and there should be no need to keep the account
     /// around anyways
+    ///
+    /// # Errors
+    /// May return `ParsingError` if the server changed it's API, or
+    /// `ConnectionError`, if the server could not be reached. The characters
+    /// in the Vec may be `InvalidRequest`, iff the server the server the
+    /// character would be on could not be determined
     pub async fn characters(
         self,
     ) -> Result<Vec<Result<Session, SFError>>, SFError> {
@@ -178,6 +218,7 @@ impl SFAccount {
             .send_api_request("json/client/characters", APIRequest::Get)
             .await?;
 
+        #[allow(clippy::indexing_slicing)]
         let characters: Vec<SSOCharacter> =
             serde_json::from_value(res["characters"].take()).map_err(|_| {
                 SFError::ParsingError("missing json value ", String::new())
@@ -190,7 +231,7 @@ impl SFAccount {
             chars.push(
                 Session::from_sso_char(char, account.clone(), &server_lookup)
                     .await,
-            )
+            );
         }
 
         Ok(chars)
@@ -287,6 +328,11 @@ async fn send_api_request(
 pub struct ServerLookup(HashMap<i32, Url>);
 
 impl ServerLookup {
+    /// Fetches the current mapping of numeric server ids to their urls.
+    ///
+    /// # Errors
+    /// Returns `ConnectionError`, if the server could not be reached, ro
+    /// `ParsingError`, if the list could not be parsed
     pub async fn fetch() -> Result<ServerLookup, SFError> {
         Self::fetch_with_client(&reqwest::Client::new()).await
     }
@@ -357,6 +403,9 @@ impl ServerLookup {
     }
 
     /// Gets the mapping of a server id to a url
+    ///
+    /// # Errors
+    /// Reutns `InvalidRequest` if there was no server with this id
     pub fn get(&self, server_id: i32) -> Result<Url, SFError> {
         self.0
             .get(&server_id)
@@ -364,6 +413,9 @@ impl ServerLookup {
             .ok_or(SFError::InvalidRequest("There is no server with this id"))
     }
 
+    /// Returns a set of all the servers, that are currently active, so no
+    /// merged, or not  yet available servers
+    #[must_use]
     pub fn all(&self) -> HashSet<Url> {
         self.0.iter().map(|a| a.1.clone()).collect()
     }
@@ -376,7 +428,7 @@ pub enum AuthResponse {
 }
 
 fn val_to_string(val: &Value) -> Option<String> {
-    val.as_str().map(|a| a.to_string())
+    val.as_str().map(std::string::ToString::to_string)
 }
 
 #[derive(Debug)]
@@ -395,7 +447,7 @@ pub enum SSOProvider {
 }
 
 impl SSOProvider {
-    fn endpoint_ident(&self) -> &'static str {
+    fn endpoint_ident(self) -> &'static str {
         match self {
             SSOProvider::Google => "googleauth",
             SSOProvider::Steam => "steamauth",
@@ -413,14 +465,20 @@ impl SSOAuth {
     }
 
     /// Returns the SSO auth url, that the user has to login through
+    #[must_use]
     pub fn auth_url(&self) -> &Url {
         &self.auth_url
     }
 
     /// Tries to login. If the user has successfully authenticated via the
-    /// auth_url, this will return the normal SFAccount. Otherwise, this will
-    /// return the existing Auth for you to reattempt the login after a
+    /// `auth_url`, this will return the normal `SFAccount`. Otherwise, this
+    /// will return the existing Auth for you to reattempt the login after a
     /// few seconds
+    ///
+    /// # Errors
+    /// May return `ConnectionError`, or `ParsingError` depending on what part
+    /// of the communication failed
+    #[allow(clippy::indexing_slicing)]
     pub async fn try_login(self) -> Result<AuthResponse, SFError> {
         let endpoint = format!(
             "/json/sso/{}/check/{}",
@@ -482,11 +540,19 @@ impl SSOAuth {
     /// has to interact with the `auth_url` this returns to validate the
     /// login. Afterwards you can login and transform this into a normal
     /// `SFAccount`
+    ///
+    /// # Errors
+    /// May return `ConnectionError`, or `ParsingError` depending on what part
+    /// of the communication failed
     pub async fn new(provider: SSOProvider) -> Result<Self, SFError> {
         Self::new_with_options(provider, ConnectionOptions::default()).await
     }
 
     /// The same as `new()`, but with optional connection options
+    ///
+    /// # Errors
+    /// May return `ConnectionError`, or `ParsingError` depending on what part
+    /// of the communication failed
     #[allow(clippy::indexing_slicing)]
     pub async fn new_with_options(
         provider: SSOProvider,

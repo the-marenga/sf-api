@@ -50,7 +50,11 @@ impl SimpleSession {
             .await;
     }
 
-    pub async fn login_normal(
+    /// Creates a new `SimpleSession`, by logging in a normal S&F character
+    ///
+    /// # Errors
+    /// Have a look at `send_command` for a full list of possible errors
+    pub async fn login(
         username: &str,
         password: &str,
         server_url: &str,
@@ -68,6 +72,11 @@ impl SimpleSession {
     }
 
     #[cfg(feature = "sso")]
+    ///  Creates new `SimpleSession`s, by logging in the S&S SSO account and
+    /// returning all the characters associated with the account
+    ///
+    /// # Errors
+    /// Have a look at `send_command` for a full list of possible errors
     pub async fn login_sf_account(
         username: &str,
         password: &str,
@@ -88,14 +97,39 @@ impl SimpleSession {
             .collect())
     }
 
+    /// Returns a reference to the game state, if this `SimpleSession` is
+    /// currently logged in
+    #[must_use]
     pub fn game_state(&self) -> Option<&GameState> {
         self.gamestate.as_ref()
     }
 
+    /// Returns a mutable reference to the game state, if this `SimpleSession`
+    /// is currently logged in
+    #[must_use]
     pub fn game_state_mut(&mut self) -> Option<&mut GameState> {
         self.gamestate.as_mut()
     }
 
+    /// Sends the command and updates the gamestate with the response from the
+    /// server. A mutable reference to the gamestate will be returned. If an
+    /// error is encountered, the gamestate is cleared and the error will be
+    /// returned. If you send a command after that, this function will try to
+    /// login this session again, before sending the provided command
+    ///
+    /// # Errors
+    /// - `EmptyResponse`: If the servers response was empty
+    /// - `InvalidRequest`: If your response was invalid to send in some way
+    /// - `ConnectionError`: If the command could not be send, or the response
+    ///   could not successfully be received
+    /// - `ParsingError`: If the response from the server was unexpected in some
+    ///   way
+    /// - `TooShortResponse` Similar to `ParsingError`, but specific to a
+    ///   response being too short, which would normaly trigger a out of bound
+    ///   panic
+    /// - `ServerError`: If the server itself responded with an ingame error
+    ///   like "you do not have enough silver to do that"
+    #[allow(clippy::unwrap_used, clippy::missing_panics_doc)]
     pub async fn send_command<T: Borrow<Command>>(
         &mut self,
         cmd: T,
@@ -122,8 +156,6 @@ impl SimpleSession {
             }
         }
 
-        #[allow(clippy::unwrap_used)]
-        let gs = self.gamestate.as_mut().unwrap();
-        Ok(gs)
+        Ok(self.gamestate.as_mut().unwrap())
     }
 }

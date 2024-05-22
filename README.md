@@ -10,7 +10,7 @@ The most basic example on how to use this would be:
 
 ```Rust
     // First thing we have to do is login
-    let mut session = sf_api::SimpleSession::login_normal(
+    let mut session = sf_api::SimpleSession::login(
         "username",
         "password",
         "f1.sfgame.net"

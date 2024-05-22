@@ -152,7 +152,7 @@ pub async fn login_with_env() -> SimpleSession {
     let username = std::env::var("USERNAME").unwrap();
     let password = std::env::var("PASSWORD").unwrap();
     let server = std::env::var("SERVER").unwrap();
-    sf_api::SimpleSession::login_normal(&username, &password, &server)
+    sf_api::SimpleSession::login(&username, &password, &server)
         .await
         .unwrap()
 }

@@ -163,7 +163,9 @@ const PETS_PER_HABITAT: usize = 20;
 pub struct Pets {
     /// The total amount of pets collected in all habitats
     pub total_collected: u16,
+    /// The rank this pet collection achieved in the hall of fame
     pub rank: u32,
+    /// The honor this pet collection has gained
     pub honor: u32,
     pub max_pet_level: u16,
     /// Information about the pvp opponent you can attack with your pets
@@ -258,7 +260,7 @@ impl Pets {
         }
 
         self.total_collected = data.csiget(103, "total pets", 0)?;
-        self.opponent.id = data[231].try_into().unwrap_or_default();
+        self.opponent.id = data.csiget(231, "pet opponent id", 0)?;
         self.opponent.next_free_battle =
             data.cstget(232, "next free pet fight", server_time)?;
         self.rank = data.csiget(233, "pet rank", 0)?;
