@@ -1,5 +1,3 @@
-use std::default;
-
 use chrono::{DateTime, Local};
 use enum_map::Enum;
 use log::error;
@@ -76,16 +74,61 @@ pub struct Hellevator {
     pub current_floor: u32,
     pub points: u32,
     pub has_final_reward: bool,
-    pub points_today: u32,
+
+    pub guild_points_today: u32,
+    pub guild_rank: u32,
+    pub guild_rank_max: u32,
+    pub guild_raid_floors: Vec<HellevatorRaidFloor>,
+
+    pub guild_raid_signup_start: DateTime<Local>,
+    pub guild_raid_start: DateTime<Local>,
+    pub monster_rewards: Vec<HellevatorMonsterReward>,
+    pub own_points_today: u32,
     pub next_card_generated: Option<DateTime<Local>>,
     pub next_reset: Option<DateTime<Local>>,
     pub start_contrib_date: Option<DateTime<Local>>,
+    pub(crate) brackets: Vec<u32>,
 }
 
-#[derive(Debug, Clone, Copy, Default, FromPrimitive)]
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct HellevatorMonsterReward {
+    pub typ: HellevatorMonsterRewardTyp,
+    pub amount: u64,
+}
+
+#[derive(Debug, Clone, Default, Copy, PartialEq, Eq, Hash, FromPrimitive)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum HellevatorMonsterRewardTyp {
+    Points = 1,
+    Tickets = 2,
+    Mushrooms = 3,
+    Silver = 4,
+    LuckyCoin = 5,
+    Wood = 6,
+    Stone = 7,
+    #[default]
+    Unkown = 99,
+}
+
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct HellevatorRaidFloor {
+    pub today: i64,
+    pub yesterday: i64,
+
+    pub point_reward: u32,
+    pub silver_reward: u64,
+
+    pub today_assigned: Option<String>,
+    pub yesterday_assigned: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Copy, PartialEq, Eq, Hash, FromPrimitive)]
 #[non_exhaustive]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HellevatorTreat {
+    Peppermint = 2,
     GingerBreadHearts = 8,
     FortuneCookie = 9,
     ChocolateGoldCoins = 13,
@@ -94,20 +137,38 @@ pub enum HellevatorTreat {
 }
 
 impl Hellevator {
-    pub(crate) fn parse(
+    /// Converts the rank of a guild in the Hellevator into the reward bracket,
+    /// that they would be in (1 to 25). If the rank would gain no rewards, none
+    /// is returned here
+    #[must_use]
+    pub fn rank_to_rewards_rank(&self, rank: u32) -> Option<u32> {
+        let mut rank_limit = 0;
+        let mut bracket = 0;
+        for bracket_len in &self.brackets {
+            bracket += 1;
+            rank_limit += *bracket_len;
+            if rank <= rank_limit {
+                return Some(bracket);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn update(
+        &mut self,
         data: &[i64],
         server_time: ServerTime,
-    ) -> Result<Option<Hellevator>, SFError> {
-        Ok(Some(Hellevator {
-            key_cards: data.csiget(0, "h key cards", 0)?,
-            next_card_generated: data.cstget(1, "next card", server_time)?,
-            next_reset: data.cstget(2, "h next reset", server_time)?,
-            current_floor: data.csiget(3, "h current floor", 0)?,
-            points: data.csiget(4, "h points", 0)?,
-            start_contrib_date: data.cstget(5, "start contrib", server_time)?,
-            has_final_reward: data.cget(6, "helevator final")? == 1,
-            points_today: data.csiget(10, "h points today", 0)?,
-        }))
+    ) -> Result<(), SFError> {
+        self.key_cards = data.csiget(0, "h key cards", 0)?;
+        self.next_card_generated = data.cstget(1, "next card", server_time)?;
+        self.next_reset = data.cstget(2, "h next reset", server_time)?;
+        self.current_floor = data.csiget(3, "h current floor", 0)?;
+        self.points = data.csiget(4, "h points", 0)?;
+        self.start_contrib_date =
+            data.cstget(5, "start contrib", server_time)?;
+        self.has_final_reward = data.cget(6, "helevator final")? == 1;
+        self.own_points_today = data.csiget(10, "h points today", 0)?;
+        Ok(())
     }
 }
 

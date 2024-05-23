@@ -37,8 +37,6 @@ pub async fn main() {
             }
             HellevatorStatus::Active(h) => h,
         };
-
-
     }
 }
 

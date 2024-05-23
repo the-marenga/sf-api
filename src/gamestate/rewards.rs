@@ -416,7 +416,7 @@ impl EventTaskTyp {
             90 => EventTaskTyp::ClaimSoulsFromExtractor,
             91 => EventTaskTyp::FillMushroomsInAdventuromatic,
             92 => EventTaskTyp::WinFightsAgainst(Class::Necromancer),
-            x => EventTaskTyp::Unknown,
+            _ => EventTaskTyp::Unknown,
         }
     }
 }

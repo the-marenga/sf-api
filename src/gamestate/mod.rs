@@ -420,10 +420,10 @@ impl GameState {
                     self.update_gttime(&val.into_list("gttime")?, server_time)?;
                 }
                 "gtsave" => {
-                    self.hellevator.active = Hellevator::parse(
-                        &val.into_list("gtsave")?,
-                        server_time,
-                    )?;
+                    self.hellevator
+                        .active
+                        .get_or_insert_with(Default::default)
+                        .update(&val.into_list("gtsave")?, server_time)?;
                 }
                 "maxrank" => {
                     self.hall_of_fames.players_total =
@@ -1100,6 +1100,183 @@ impl GameState {
                 "reward" => {
                     // This is the task reward, which you should already know
                     // from collecting
+                }
+                "gtdailypoints" => {
+                    self.hellevator
+                        .active
+                        .get_or_insert_with(Default::default)
+                        .guild_points_today = val.into("gtdaily").unwrap_or(0);
+                }
+                "gtchest" => {
+                    // 2500/0/5000/1/7500/2/10000/0/12500/1/15000/2/17500/0/
+                    // 20000/1/22500/2/25000/0/27500/1/30000/2/32500/0/35000/1/
+                    // 37500/2/40000/0/42500/1/45000/2/47500/0/50000/1/57500/2/
+                    // 65000/0/72500/1/80000/2/87500/0/95000/1/102500/2/110000/
+                    // 0/117500/1/125000/2/137500/0/150000/1/162500/2/175000/0/
+                    // 187500/1/200000/2/212500/0/225000/1/237500/2/250000/0/
+                    // 272500/1/295000/2/317500/0/340000/1/362500/2/385000/0/
+                    // 407500/1/430000/2/452500/0/475000/1
+                }
+                "gtraidparticipants" => {
+                    let all: Vec<_> = val.as_str().split('/').collect();
+                    let hellevator = self
+                        .hellevator
+                        .active
+                        .get_or_insert_with(Default::default);
+
+                    for floor in &mut hellevator.guild_raid_floors {
+                        floor.today_assigned = None;
+                    }
+
+                    #[allow(clippy::indexing_slicing)]
+                    for part in all.chunks_exact(2) {
+                        // The name of the guild member
+                        let name = part[0];
+                        // should be the dungeon they signed up for today
+                        let val: usize = part
+                            .cget(1, "hell raid part")
+                            .ok()
+                            .and_then(|a| a.parse().ok())
+                            .unwrap_or(0);
+                        if val > 0 {
+                            if val > hellevator.guild_raid_floors.len() {
+                                hellevator
+                                    .guild_raid_floors
+                                    .resize_with(val, Default::default);
+                            }
+                            if let Some(floor) =
+                                hellevator.guild_raid_floors.get_mut(val - 1)
+                            {
+                                floor.today_assigned = Some(name.to_string());
+                            }
+                        }
+                    }
+                }
+                "gtraidparticipantsyesterday" => {
+                    let all: Vec<_> = val.as_str().split('/').collect();
+
+                    let hellevator = self
+                        .hellevator
+                        .active
+                        .get_or_insert_with(Default::default);
+
+                    for floor in &mut hellevator.guild_raid_floors {
+                        floor.yesterday_assigned = None;
+                    }
+
+                    #[allow(clippy::indexing_slicing)]
+                    for part in all.chunks_exact(2) {
+                        // The name of the guild member
+                        let name = part[0];
+                        // should be the dungeon they signed up for today
+                        let val: usize = part
+                            .cget(1, "hell raid part yd")
+                            .ok()
+                            .and_then(|a| a.parse().ok())
+                            .unwrap_or(0);
+                        if val > 0 {
+                            if val > hellevator.guild_raid_floors.len() {
+                                hellevator
+                                    .guild_raid_floors
+                                    .resize_with(val, Default::default);
+                            }
+                            if let Some(floor) =
+                                hellevator.guild_raid_floors.get_mut(val - 1)
+                            {
+                                floor.yesterday_assigned =
+                                    Some(name.to_string());
+                            }
+                        }
+                    }
+                }
+                "gtrank" => {
+                    self.hellevator
+                        .active
+                        .get_or_insert_with(Default::default)
+                        .guild_rank = val.into("gt rank").unwrap_or(0);
+                }
+                "gtrankingmax" => {
+                    self.hellevator
+                        .active
+                        .get_or_insert_with(Default::default)
+                        .guild_rank_max = val.into("gt rank max").unwrap_or(0);
+                }
+                "gtbracketlist" => {
+                    self.hellevator
+                        .active
+                        .get_or_insert_with(Default::default)
+                        .brackets =
+                        val.into_list("gtbracketlist").unwrap_or_default();
+                }
+                "gtraidfights" => {
+                    let data: Vec<i64> =
+                        val.into_list("gt raids").unwrap_or_default();
+
+                    let hellevator = self
+                        .hellevator
+                        .active
+                        .get_or_insert_with(Default::default);
+
+                    hellevator.guild_raid_signup_start = data
+                        .cstget(0, "h raid signup start", server_time)?
+                        .unwrap_or_default();
+
+                    hellevator.guild_raid_start = data
+                        .cstget(1, "h raid next attack", server_time)?
+                        .unwrap_or_default();
+
+                    let start = data.skip(2, "hellevator_fights")?;
+
+                    let floor_count = start.len() / 5;
+
+                    if floor_count > hellevator.guild_raid_floors.len() {
+                        hellevator
+                            .guild_raid_floors
+                            .resize_with(floor_count, Default::default);
+                    }
+                    #[allow(clippy::indexing_slicing)]
+                    for (data, floor) in start
+                        .chunks_exact(5)
+                        .zip(&mut hellevator.guild_raid_floors)
+                    {
+                        // FIXME: What are these?
+                        floor.today = data[1];
+                        floor.yesterday = data[2];
+                        floor.point_reward =
+                            data.csiget(3, "floor t-reward", 0).unwrap_or(0);
+                        floor.silver_reward =
+                            data.csiget(4, "floor c-reward", 0).unwrap_or(0);
+                    }
+                }
+                "gtmonsterreward" => {
+                    let data: Vec<i64> =
+                        val.into_list("gt m reward").unwrap_or_default();
+
+                    let hellevator = self
+                        .hellevator
+                        .active
+                        .get_or_insert_with(Default::default);
+                    hellevator.monster_rewards.clear();
+
+                    for chunk in data.chunks_exact(3) {
+                        let raw_typ = chunk.cget(0, "gt monster reward typ")?;
+                        if raw_typ <= 0 {
+                            continue;
+                        }
+                        let one = chunk
+                            .csiget(1, "gt monster reward typ", 0)
+                            .unwrap_or(0);
+                        if one != 0 {
+                            warn!("hellevator monster t: {one}");
+                        }
+                        let typ = FromPrimitive::from_i64(raw_typ)
+                            .unwrap_or_default();
+                        let amount: u64 =
+                            chunk.csiget(2, "gt monster reward amount", 0)?;
+                        hellevator
+                            .monster_rewards
+                            .push(HellevatorMonsterReward { typ, amount });
+                    }
                 }
                 x if x.contains("dungeonenemies") => {
                     // I `think` we do not need this

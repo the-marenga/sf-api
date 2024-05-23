@@ -661,10 +661,10 @@ impl<'a> ResponseVal<'a> {
     /// If the reponse value can not be parsed into the output
     /// value, a `ParsingError` will be returned
     pub fn into<T: FromStr>(self, name: &'static str) -> Result<T, SFError> {
-        self.value
-            .trim()
-            .parse()
-            .map_err(|_| SFError::ParsingError(name, self.value.to_string()))
+        self.value.trim().parse().map_err(|_| {
+            error!("Could not convert {name} into target type: {self}");
+            SFError::ParsingError(name, self.value.to_string())
+        })
     }
 
     /// Converts the repsponse into a list, by splitting the raw value by '/'
@@ -686,9 +686,10 @@ impl<'a> ResponseVal<'a> {
         x.trim_matches(|a| ['/', ' ', '\n'].contains(&a))
             .split('/')
             .map(|c| {
-                c.trim()
-                    .parse::<T>()
-                    .map_err(|_| SFError::ParsingError(name, format!("{c:?}")))
+                c.trim().parse::<T>().map_err(|_| {
+                    error!("Could not convert {name} into list: {self}");
+                    SFError::ParsingError(name, format!("{c:?}"))
+                })
             })
             .collect()
     }
@@ -939,7 +940,7 @@ impl Default for ConnectionOptions {
                  (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
                     .to_string(),
             ),
-            expected_server_version: 2003,
+            expected_server_version: 2004,
             error_on_unsupported_version: false,
         }
     }

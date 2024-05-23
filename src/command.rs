@@ -670,10 +670,29 @@ pub enum Command {
     HellevatorBuy {
         position: usize,
         typ: HellevatorTreat,
-        mushroom_price: u32,
-        two: i32,
+        price: u32,
+        currency: HellevatorCurrency,
     },
     HellevatorRefreshShop,
+    // HellevatorJoinRaid
+    // GroupTournamentRaidParticipant:1/1/
+
+    // HellevatorClaimDaily
+    // GroupTournamentClaimDaily
+
+    // HellevatorPreviewRewards
+    // GroupTournamentPreview
+
+    // HallOfFameHellevatorPage
+    // GroupTournamentRankingAllGroups:{position}/{name}/{pre}/{post}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// This is the "Questing instead of expeditions" value in the settings
+pub enum HellevatorCurrency {
+    KeyCard = 1,
+    Mushroom,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -1324,11 +1343,11 @@ impl Command {
             Command::HellevatorBuy {
                 position,
                 typ,
-                mushroom_price: price,
-                two,
+                price,
+                currency,
             } => format!(
-                "GroupTournamentMerchantBuy:{position}/{}/{price}/{two}",
-                *typ as u32
+                "GroupTournamentMerchantBuy:{position}/{}/{price}/{}",
+                *typ as u32, *currency as u32
             ),
             Command::HellevatorRefreshShop => {
                 format!("GroupTournamentMerchantReroll:")
