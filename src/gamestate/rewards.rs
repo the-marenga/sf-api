@@ -369,12 +369,18 @@ pub enum EventTaskTyp {
     GainXpFromAdventuromatic,
     ClaimSoulsFromExtractor,
     FillMushroomsInAdventuromatic,
+    PlayGameOfDice,
+    SpinWheelOfFortune,
+    Upgrade(AttributeType),
+    GetLuckyCoinsFromFlyingTube,
     Unknown,
 }
 
 impl EventTaskTyp {
     pub(crate) fn parse(num: i64) -> EventTaskTyp {
         match num {
+            4 => EventTaskTyp::SpinWheelOfFortune,
+            11 => EventTaskTyp::PlayGameOfDice,
             12 => EventTaskTyp::LureHeroesIntoUnderworld,
             48 => EventTaskTyp::WinFightsAgainst(Class::Warrior),
             49 => EventTaskTyp::WinFightsAgainst(Class::Mage),
@@ -386,6 +392,8 @@ impl EventTaskTyp {
             55 => EventTaskTyp::WinFightsAgainst(Class::Berserker),
             56 => EventTaskTyp::WinFightsAgainst(Class::DemonHunter),
             57 => EventTaskTyp::WinFightsBareHands,
+            59 => EventTaskTyp::GetLuckyCoinsFromFlyingTube,
+            60 => EventTaskTyp::Upgrade(AttributeType::Luck),
             65 => EventTaskTyp::SpendGoldInShop,
             66 => EventTaskTyp::SpendGoldOnUpgrades,
             67 => EventTaskTyp::RequestNewGoods,
@@ -408,10 +416,7 @@ impl EventTaskTyp {
             90 => EventTaskTyp::ClaimSoulsFromExtractor,
             91 => EventTaskTyp::FillMushroomsInAdventuromatic,
             92 => EventTaskTyp::WinFightsAgainst(Class::Necromancer),
-            x => {
-                warn!("Unknown event task typ: {x}");
-                EventTaskTyp::Unknown
-            }
+            x => EventTaskTyp::Unknown,
         }
     }
 }
@@ -433,8 +438,13 @@ pub struct EventTask {
 impl EventTask {
     pub(crate) fn parse(data: &[i64]) -> Result<EventTask, SFError> {
         let raw_typ = data.cget(0, "event task typ")?;
+        let typ = EventTaskTyp::parse(raw_typ);
+
+        if typ == EventTaskTyp::Unknown {
+            warn!("{data:?}");
+        }
         Ok(EventTask {
-            typ: EventTaskTyp::parse(raw_typ),
+            typ,
             current: data.csiget(1, "current eti", 0)?,
             target: data.csiget(2, "target eti", u64::MAX)?,
             point_reward: data.csiget(3, "reward eti", 0)?,

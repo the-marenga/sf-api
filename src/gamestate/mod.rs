@@ -202,10 +202,6 @@ impl GameState {
                 | "skipvideo" | "webshopid" | "cidstring" | "mountexpired" => {
                     // Stuff that looks irrellevant
                 }
-                "gtchest" | "gtrank" | "gtbonus" | "gtbracketlist"
-                | "gtrankingmax" => {
-                    // Some hellevator stuff. TODO: Look at these next event
-                }
                 "ownplayername" => {
                     self.character.name.set(val.as_str());
                 }

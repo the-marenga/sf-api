@@ -15,7 +15,7 @@ use crate::{
         items::*,
         social::Relationship,
         underworld::*,
-        unlockables::{HabitatType, Unlockable},
+        unlockables::{HabitatType, HellevatorTreat, Unlockable},
     },
     misc::{sha1_hash, to_sf_string, HASH_CONST},
     PlayerId,
@@ -662,11 +662,18 @@ pub enum Command {
         /// The value you want to set
         value: ExpeditionSetting,
     },
-    HellevatorOpen,
+    HellevatorEnter,
     HellevatorViewGuildRanking,
-    HellevatorEnter {
+    HellevatorFight {
         use_mushroom: bool,
     },
+    HellevatorBuy {
+        position: usize,
+        typ: HellevatorTreat,
+        mushroom_price: u32,
+        two: i32,
+    },
+    HellevatorRefreshShop,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -1307,12 +1314,24 @@ impl Command {
                 };
                 format!("UserSettingsUpdate:5/{value}")
             }
-            Command::HellevatorOpen => format!("GroupTournamentJoin:"),
+            Command::HellevatorEnter => format!("GroupTournamentJoin:"),
             Command::HellevatorViewGuildRanking => {
                 format!("GroupTournamentRankingOwnGroup")
             }
-            Command::HellevatorEnter { use_mushroom } => {
+            Command::HellevatorFight { use_mushroom } => {
                 format!("GroupTournamentBattle:{}", u8::from(*use_mushroom))
+            }
+            Command::HellevatorBuy {
+                position,
+                typ,
+                mushroom_price: price,
+                two,
+            } => format!(
+                "GroupTournamentMerchantBuy:{position}/{}/{price}/{two}",
+                *typ as u32
+            ),
+            Command::HellevatorRefreshShop => {
+                format!("GroupTournamentMerchantReroll:")
             }
         })
     }

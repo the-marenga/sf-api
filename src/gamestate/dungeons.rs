@@ -5,8 +5,7 @@ use num_derive::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
 use super::{
-    items::Equipment, AttributeType, CCGet, EnumMapGet, SFError,
-    ServerTime,
+    items::Equipment, AttributeType, CCGet, EnumMapGet, SFError, ServerTime,
 };
 use crate::misc::soft_into;
 

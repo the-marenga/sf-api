@@ -1,6 +1,9 @@
+use std::default;
+
 use chrono::{DateTime, Local};
 use enum_map::Enum;
 use log::error;
+use num_derive::FromPrimitive;
 use strum::EnumIter;
 
 use super::*;
@@ -23,6 +26,17 @@ pub struct HellevatorEvent {
     pub(crate) active: Option<Hellevator>,
 }
 
+#[derive(Debug)]
+pub enum HellevatorStatus<'a> {
+    /// The event is ongoing, but you have to send a `HellevatorEnter` command
+    /// to start using it
+    NotEntered,
+    /// The event is currently not available
+    NotAvailable,
+    /// A reference to the
+    Active(&'a Hellevator),
+}
+
 impl HellevatorEvent {
     /// Checks if the event has started and not yet ended compared to the
     /// current time
@@ -35,17 +49,24 @@ impl HellevatorEvent {
     /// If the Hellevator event is active, this returns a reference to the
     /// Information about it
     #[must_use]
-    pub fn active(&self) -> Option<&Hellevator> {
-        self.active.as_ref().filter(|_| self.is_event_ongoing())
+    pub fn status(&self) -> HellevatorStatus {
+        if !self.is_event_ongoing() {
+            return HellevatorStatus::NotAvailable;
+        }
+        match self.active.as_ref() {
+            Some(h) if h.current_floor == 0 => HellevatorStatus::NotEntered,
+            Some(h) => HellevatorStatus::Active(h),
+            None => HellevatorStatus::NotAvailable,
+        }
     }
 
-    /// If the Hellevator event is active, this returns a mutable reference to
-    /// the Information about it
-    #[must_use]
-    pub fn active_mut(&mut self) -> Option<&mut Hellevator> {
-        let is_active = self.is_event_ongoing();
-        self.active.as_mut().filter(|_| is_active)
-    }
+    // /// If the Hellevator event is active, this returns a mutable reference
+    // to /// the Information about it
+    // #[must_use]
+    // pub fn active_mut(&mut self) -> Option<&mut Hellevator> {
+    //     let is_active = self.is_event_ongoing();
+    //     self.active.as_mut().filter(|_| is_active)
+    // }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -61,6 +82,17 @@ pub struct Hellevator {
     pub start_contrib_date: Option<DateTime<Local>>,
 }
 
+#[derive(Debug, Clone, Copy, Default, FromPrimitive)]
+#[non_exhaustive]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum HellevatorTreat {
+    GingerBreadHearts = 8,
+    FortuneCookie = 9,
+    ChocolateGoldCoins = 13,
+    #[default]
+    Unknown = 230,
+}
+
 impl Hellevator {
     pub(crate) fn parse(
         data: &[i64],
@@ -69,7 +101,7 @@ impl Hellevator {
         Ok(Some(Hellevator {
             key_cards: data.csiget(0, "h key cards", 0)?,
             next_card_generated: data.cstget(1, "next card", server_time)?,
-            next_reset: data.cstget(2, "next reset", server_time)?,
+            next_reset: data.cstget(2, "h next reset", server_time)?,
             current_floor: data.csiget(3, "h current floor", 0)?,
             points: data.csiget(4, "h points", 0)?,
             start_contrib_date: data.cstget(5, "start contrib", server_time)?,
