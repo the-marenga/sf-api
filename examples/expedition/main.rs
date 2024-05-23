@@ -131,7 +131,7 @@ pub async fn main() {
                         remaining.as_secs(),
                     );
                     sleep(remaining).await;
-                    Command::UpdatePlayer
+                    Command::Update
                 }
             }
             ExpeditionStage::Unknown => panic!("unknown expedition stage"),

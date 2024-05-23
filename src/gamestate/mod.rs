@@ -380,7 +380,7 @@ impl GameState {
                     self.dungeons
                         .portal
                         .get_or_insert_with(Default::default)
-                        .update(&val.into_list("portal progress")?)?;
+                        .update(&val.into_list("portal progress")?, server_time)?;
                 }
                 "tavernspecialend" => {
                     self.specials.events.ends = server_time
@@ -925,7 +925,8 @@ impl GameState {
                     self.dungeons
                         .portal
                         .get_or_insert_with(Default::default)
-                        .enemy_level = val.into("portal lvl")?;
+                        .enemy_level =
+                        val.into("portal lvl").unwrap_or(u32::MAX);
                 }
                 "ownpetsstats" => {
                     self.pets
@@ -1127,7 +1128,7 @@ impl GameState {
             self.lookup.insert_lookup(other_player);
         }
         if let Some(t) = &self.dungeons.portal {
-            if t.current == 0 {
+            if t.finished == 0 {
                 self.dungeons.portal = None;
             }
         }
@@ -1415,8 +1416,8 @@ pub struct ServerTime(i64);
 impl ServerTime {
     /// Converts the raw timestamp from the server to the local time.
     #[must_use]
-    pub fn convert_to_local(
-        &self,
+    pub(crate) fn convert_to_local(
+        self,
         timestamp: i64,
         name: &str,
     ) -> Option<DateTime<Local>> {
@@ -1442,6 +1443,18 @@ impl ServerTime {
     #[must_use]
     pub fn current(&self) -> NaiveDateTime {
         Local::now().naive_local() + Duration::seconds(self.0)
+    }
+
+    #[must_use]
+    pub fn next_midnight(&self) -> std::time::Duration {
+        let current = self.current();
+        let tomorrow = current.date() + Duration::days(1);
+        let tomorrow = NaiveDateTime::from(tomorrow);
+        let sec_until_midnight =
+            (tomorrow - current).to_std().unwrap_or_default().as_secs();
+        // Time stuff is weird so make sure this never skips a day + actual
+        // amount
+        std::time::Duration::from_secs(sec_until_midnight % (60 * 60 * 24))
     }
 }
 

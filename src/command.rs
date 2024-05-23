@@ -8,7 +8,7 @@ use crate::{
     error::SFError,
     gamestate::{
         character::*,
-        dungeons::{LightDungeon, ShadowDungeon},
+        dungeons::{Dungeon, LightDungeon, ShadowDungeon},
         fortress::*,
         guild::{Emblem, GuildSkill},
         idle::IdleBuildingType,
@@ -81,9 +81,10 @@ pub enum Command {
         /// The class of the new character
         class: Class,
     },
-    /// Updates the current state of the user. Also notifies the guild, that
-    /// the player is logged in. Should therefore be send regularely
-    UpdatePlayer,
+    /// Updates the current state of the entire gamestate. Also notifies the
+    /// guild, that the player is logged in. Should therefore be send
+    /// regularely
+    Update,
     /// Queries 51 Hall of Fame entries starting from the top. Starts at 0
     ///
     /// **NOTE:** The server might return less then 51, if there is a "broken"
@@ -320,18 +321,11 @@ pub enum Command {
     FightPortal,
     /// Enters a specific dungeon. This works for all dungeons, except the
     /// Tower, which you must enter via the `FightTower` command
-    FightLightDungeon {
-        /// The dungeon you want to fight in (except the tower)
-        dungeon: LightDungeon,
-        /// If this is true, you will spend a mushroom, if the timer has not
-        /// run out. Note, that this is currently ignored by the server for
-        /// some reason
-        use_mushroom: bool,
-    },
-    /// Enters a specific shadow dungeon
-    FightShadowDungeon {
-        /// The dungeon you want to fight in
-        dungeon: ShadowDungeon,
+    FightDungeon {
+        /// The dungeon you want to fight in (except the tower). If you only
+        /// have a `LightDungeon`, or `ShadowDungeon`, you need to call
+        /// `into()` to turn them into a generic dungeon
+        dungeon: Dungeon,
         /// If this is true, you will spend a mushroom, if the timer has not
         /// run out. Note, that this is currently ignored by the server for
         /// some reason
@@ -816,7 +810,7 @@ impl Command {
                     *class as usize + 1
                 )
             }
-            Command::UpdatePlayer => "Poll:".to_string(),
+            Command::Update => "Poll:".to_string(),
             Command::HallOfFamePage { page } => {
                 let per_page = 51;
                 let pos = 26 + (per_page * page);
@@ -1009,21 +1003,6 @@ impl Command {
                 "UnlockFeature:{}/{}",
                 unlockable.main_ident, unlockable.sub_ident
             ),
-            Command::FightLightDungeon {
-                dungeon: name,
-                use_mushroom,
-            } => {
-                if *name == LightDungeon::Tower {
-                    return Err(SFError::InvalidRequest(
-                        "The tower must be fought with the FightTower command",
-                    ));
-                }
-                format!(
-                    "PlayerDungeonBattle:{}/{}",
-                    *name as usize + 1,
-                    u8::from(*use_mushroom)
-                )
-            }
             Command::GuildSetInfo {
                 description,
                 emblem,
@@ -1262,24 +1241,39 @@ impl Command {
             Command::ExpeditionStart { pos } => {
                 format!("ExpeditionStart:{}", pos + 1)
             }
-            Command::FightShadowDungeon {
-                dungeon: name,
+            Command::FightDungeon {
+                dungeon,
                 use_mushroom,
-            } => {
-                if *name == ShadowDungeon::Twister {
+            } => match dungeon {
+                Dungeon::Light(name) => {
+                    if *name == LightDungeon::Tower {
+                        return Err(SFError::InvalidRequest(
+                            "The tower must be fought with the FightTower \
+                             command",
+                        ));
+                    }
                     format!(
                         "PlayerDungeonBattle:{}/{}",
-                        LightDungeon::Tower as u32 + 1,
-                        u8::from(*use_mushroom)
-                    )
-                } else {
-                    format!(
-                        "PlayerShadowBattle:{}/{}",
-                        *name as u32 + 1,
+                        *name as usize + 1,
                         u8::from(*use_mushroom)
                     )
                 }
-            }
+                Dungeon::Shadow(name) => {
+                    if *name == ShadowDungeon::Twister {
+                        format!(
+                            "PlayerDungeonBattle:{}/{}",
+                            LightDungeon::Tower as u32 + 1,
+                            u8::from(*use_mushroom)
+                        )
+                    } else {
+                        format!(
+                            "PlayerShadowBattle:{}/{}",
+                            *name as u32 + 1,
+                            u8::from(*use_mushroom)
+                        )
+                    }
+                }
+            },
             Command::FightPetOpponent {
                 opponent_id,
                 habitat: element,

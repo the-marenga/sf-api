@@ -45,7 +45,7 @@ If you use a single sign-on S&F Account, you can use it like this:
     for session in sessions {
         // You can use the sessions, that the account returns like
         // a normal (logged out) session now
-        let gs = session.send_command(Command::UpdatePlayer).await.unwrap();
+        let gs = session.send_command(Command::Update).await.unwrap();
         // ...
     }
 
@@ -68,7 +68,7 @@ cargo add sf-api
 Here are a few things you should note before getting your account banned:
 
 1. Never send commands to the server in an infinite loop without a delay
-2. You should send an `UpdatePlayer` command every once in a while.
+2. You should send an `Update` command every once in a while.
 3. Make sure you have access to the commands you are trying to send.
 4. Always check if the thing you expected happened after sending a command.
 5. You can assume, that every index in a command starts at 0

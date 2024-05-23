@@ -356,6 +356,7 @@ pub enum Enchantment {
 }
 
 impl Enchantment {
+    #[must_use]
     pub fn equipment_slot(&self) -> EquipmentSlot {
         match self {
             Enchantment::SwordOfVengeance => EquipmentSlot::Weapon,

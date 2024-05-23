@@ -5,7 +5,8 @@ use num_derive::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
 use super::{
-    items::Equipment, AttributeType, CCGet, CGet, EnumMapGet, SFError,
+    items::Equipment, AttributeType, CCGet, EnumMapGet, SFError,
+    ServerTime,
 };
 use crate::misc::soft_into;
 
@@ -13,12 +14,15 @@ use crate::misc::soft_into;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The personal demon portal
 pub struct Portal {
-    /// The current position in the portal. Starts with 1.
-    /// (current - 1) / 10 => act
-    pub current: u16,
-    /// Supposed to be the level of the enemy, I think. Every time I check,
-    /// this was wrong by a bit. No idea why
-    pub enemy_level: u16,
+    /// The amount of enemies you have fought in the portal already
+    pub finished: u16,
+    /// If this is true, you can fight the portal via the `FightPortal`
+    /// command. You will have to wait until the next day (on the server) and
+    /// send an `Update` to make sure this is set correctly
+    pub can_fight: bool,
+    /// The level of the enemy in the portal. For some reason this is always
+    /// wrong by a few levels?
+    pub enemy_level: u32,
     /// The amount of health the enemy has left
     pub enemy_hp_percentage: u8,
     /// Percentage boost to the players hp
@@ -26,16 +30,18 @@ pub struct Portal {
 }
 
 impl Portal {
-    pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
-        self.current = match data.cget(2, "portal unlocked")? {
-            0 => 0,
-            _ => soft_into(
-                data.cget(0, "portal progress")? + 1,
-                "portal progress",
-                0,
-            ),
-        };
-        self.enemy_hp_percentage = data.csiget(1, "portal hitpoint", 0)?;
+    pub(crate) fn update(
+        &mut self,
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<(), SFError> {
+        self.finished = data.csiget(0, "portal fights", 10_000)?;
+        self.enemy_hp_percentage = data.csiget(1, "portal hp", 0)?;
+
+        let current_day = chrono::Datelike::ordinal(&server_time.current());
+        let last_portal_day: u32 = data.csiget(2, "portal day", 0)?;
+        self.can_fight = last_portal_day != current_day;
+
         Ok(())
     }
 }
@@ -48,10 +54,10 @@ pub struct Dungeons {
     /// The next time you can fight in the dungeons for free
     pub next_free_fight: Option<DateTime<Local>>,
     /// All the light dungeons. Noteably tower information is also in here
-    pub light_dungeons: EnumMap<LightDungeon, DungeonProgress>,
+    pub light: EnumMap<LightDungeon, DungeonProgress>,
     /// All the shadow dungeons. Noteably twister & cont. loop of idols is also
     /// in here
-    pub shadow_dungeons: EnumMap<ShadowDungeon, DungeonProgress>,
+    pub shadow: EnumMap<ShadowDungeon, DungeonProgress>,
     pub portal: Option<Portal>,
     /// The companions unlocked from unlocking the tower. Note that the tower
     /// info itself is just handled as a normal light dungeon
@@ -86,8 +92,27 @@ pub enum DungeonType {
     Shadow,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// The category of a dungeon. This is only used internally, so there is no
+/// real point for you to use this
+pub enum Dungeon {
+    Light(LightDungeon),
+    Shadow(ShadowDungeon),
+}
+
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, EnumCount, EnumIter, Enum, FromPrimitive,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    EnumCount,
+    EnumIter,
+    Enum,
+    FromPrimitive,
+    Hash,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
@@ -126,8 +151,23 @@ pub enum LightDungeon {
     PlayaGamesHQ = 29,
 }
 
+impl From<LightDungeon> for Dungeon {
+    fn from(val: LightDungeon) -> Self {
+        Dungeon::Light(val)
+    }
+}
+
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, EnumCount, EnumIter, Enum, FromPrimitive,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    EnumCount,
+    EnumIter,
+    Enum,
+    FromPrimitive,
+    Hash,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
@@ -166,6 +206,12 @@ pub enum ShadowDungeon {
     PlayaGamesHQ = 29,
 }
 
+impl From<ShadowDungeon> for Dungeon {
+    fn from(val: ShadowDungeon) -> Self {
+        Dungeon::Shadow(val)
+    }
+}
+
 macro_rules! update_progress {
     ($data:expr, $dungeons:expr) => {
         for (dungeon_id, progress) in $data.iter().copied().enumerate() {
@@ -182,7 +228,7 @@ macro_rules! update_progress {
                 -1 => DungeonProgress::Locked,
                 x => {
                     let stage = soft_into(x, "dungeon progress", 0);
-                    if stage == 10 {
+                    if stage == 10 || stage == 100 && dungeon_id == 14 {
                         DungeonProgress::Finished
                     } else {
                         DungeonProgress::Open {
@@ -232,15 +278,28 @@ impl Dungeons {
         dungeon_type: DungeonType,
     ) {
         match dungeon_type {
-            DungeonType::Light => update_progress!(data, self.light_dungeons),
-            DungeonType::Shadow => update_progress!(data, self.shadow_dungeons),
+            DungeonType::Light => update_progress!(data, self.light),
+            DungeonType::Shadow => {
+                update_progress!(data, self.shadow);
+                for (dungeon, limit) in [
+                    (ShadowDungeon::ContinuousLoopofIdols, 21),
+                    (ShadowDungeon::Twister, 1000),
+                ] {
+                    let d = self.shadow.get_mut(dungeon);
+                    if let DungeonProgress::Open { finished, .. } = d {
+                        if *finished >= limit {
+                            *d = DungeonProgress::Finished;
+                        }
+                    }
+                }
+            }
         };
     }
 
     pub(crate) fn update_levels(&mut self, data: &[u16], typ: DungeonType) {
         match typ {
-            DungeonType::Light => update_levels!(self.light_dungeons, data),
-            DungeonType::Shadow => update_levels!(self.shadow_dungeons, data),
+            DungeonType::Light => update_levels!(self.light, data),
+            DungeonType::Shadow => update_levels!(self.shadow, data),
         };
     }
 }
