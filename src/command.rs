@@ -662,6 +662,11 @@ pub enum Command {
         /// The value you want to set
         value: ExpeditionSetting,
     },
+    HellevatorOpen,
+    HellevatorViewGuildRanking,
+    HellevatorEnter {
+        use_mushroom: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -1301,6 +1306,13 @@ impl Command {
                     ExpeditionSetting::PreferQuests => 'b',
                 };
                 format!("UserSettingsUpdate:5/{value}")
+            }
+            Command::HellevatorOpen => format!("GroupTournamentJoin:"),
+            Command::HellevatorViewGuildRanking => {
+                format!("GroupTournamentRankingOwnGroup")
+            }
+            Command::HellevatorEnter { use_mushroom } => {
+                format!("GroupTournamentBattle:{}", u8::from(*use_mushroom))
             }
         })
     }
