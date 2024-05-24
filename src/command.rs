@@ -15,7 +15,7 @@ use crate::{
         items::*,
         social::Relationship,
         underworld::*,
-        unlockables::{HabitatType, HellevatorTreat, Unlockable},
+        unlockables::{HabitatType, HellevatorTreatType, Unlockable},
     },
     misc::{sha1_hash, to_sf_string, HASH_CONST},
     PlayerId,
@@ -669,7 +669,7 @@ pub enum Command {
     },
     HellevatorBuy {
         position: usize,
-        typ: HellevatorTreat,
+        typ: HellevatorTreatType,
         price: u32,
         currency: HellevatorCurrency,
     },

@@ -83,10 +83,20 @@ pub struct Hellevator {
     pub guild_raid_signup_start: DateTime<Local>,
     pub guild_raid_start: DateTime<Local>,
     pub monster_rewards: Vec<HellevatorMonsterReward>,
-    pub own_points_today: u32,
+    // pub own_points_today: u32,
+    // pub own_best_floor: u32,
+    pub shop_items: [HellevatorShopTreat; 3],
+
+    pub current_treat: Option<HellevatorShopTreat>,
+
     pub next_card_generated: Option<DateTime<Local>>,
     pub next_reset: Option<DateTime<Local>>,
     pub start_contrib_date: Option<DateTime<Local>>,
+
+    pub rewards_yesterday: Option<HellevatorDailyReward>,
+    pub rewards_today: Option<HellevatorDailyReward>,
+    pub rewards_tomorrow: Option<HellevatorDailyReward>,
+
     pub(crate) brackets: Vec<u32>,
 }
 
@@ -127,13 +137,66 @@ pub struct HellevatorRaidFloor {
 #[derive(Debug, Clone, Default, Copy, PartialEq, Eq, Hash, FromPrimitive)]
 #[non_exhaustive]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum HellevatorTreat {
-    Peppermint = 2,
-    GingerBreadHearts = 8,
+pub enum HellevatorTreatType {
+    ChocolateChilliPepper = 1,
+    PeppermintChocolate = 2,
+    Electroshock = 3,
+    ChillIceCream = 4,
+    CracklingChewingGum = 5,
+    PeppermintChewingGum = 6,
+    BeerBiscuit = 7,
+    GingerBreadHeart = 8,
     FortuneCookie = 9,
-    ChocolateGoldCoins = 13,
+    CannedSpinach = 10,
+    StoneBiscuit = 11,
+    OrganicGranolaBar = 12,
+    ChocolateGoldCoin = 13,
     #[default]
     Unknown = 230,
+}
+
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct HellevatorShopTreat {
+    pub is_special: bool,
+    pub typ: HellevatorTreatType,
+    pub price: u32,
+    pub duration: u32,
+    pub effect_strength: u32,
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct HellevatorDailyReward {
+    gold_chests: u16,
+    silver: u64,
+
+    fortress_chests: u16,
+    wood: u64,
+    stone: u64,
+
+    blacksmith_chests: u16,
+    arcane: u64,
+    metal: u64,
+}
+
+impl HellevatorDailyReward {
+    pub(crate) fn parse(data: &[i64]) -> Option<HellevatorDailyReward> {
+        if data.len() != 10 {
+            return None;
+        }
+
+        Some(HellevatorDailyReward {
+            gold_chests: data.csiget(2, "gold chests", 0).unwrap_or(0),
+            silver: data.csiget(5, "silver reward", 0).unwrap_or(0),
+            fortress_chests: data.csiget(3, "ft chests", 0).unwrap_or(0),
+            wood: data.csiget(6, "wood reward", 0).unwrap_or(0),
+            stone: data.csiget(7, "stone reward", 0).unwrap_or(0),
+            blacksmith_chests: data.csiget(4, "bs chests", 0).unwrap_or(0),
+            arcane: data.csiget(8, "arcane reward", 0).unwrap_or(0),
+            metal: data.csiget(9, "metal reward", 0).unwrap_or(0),
+        })
+    }
 }
 
 impl Hellevator {
@@ -167,7 +230,43 @@ impl Hellevator {
         self.start_contrib_date =
             data.cstget(5, "start contrib", server_time)?;
         self.has_final_reward = data.cget(6, "helevator final")? == 1;
-        self.own_points_today = data.csiget(10, "h points today", 0)?;
+        // self.own_best_floor = data.csiget(7, "helevator best rank", 0)?;
+        // self.own_points_today = data.csiget(10, "h points today", 0)?;
+
+        for (pos, shop_item) in self.shop_items.iter_mut().enumerate() {
+            let start = data.skip(8 + pos, "shop item start")?;
+            shop_item.typ = start
+                .cfpget(0, "hellevator shop treat", |a| a)?
+                .unwrap_or_default();
+            shop_item.is_special =
+                start.cget(3, "hellevator shop special")? != 1;
+            shop_item.price =
+                start.csiget(6, "hellevator shop price", u32::MAX)?;
+            shop_item.duration =
+                start.csiget(9, "hellevator shop duration", 0)?;
+            shop_item.effect_strength =
+                start.csiget(12, "hellevator effect str", 0)?;
+        }
+
+        let c_typ = data.cget(23, "current ctyp")?;
+        self.current_treat = if c_typ > 0 {
+            Some(HellevatorShopTreat {
+                typ: FromPrimitive::from_i64(c_typ).unwrap_or_default(),
+                is_special: data.cget(24, "current item special")? != 1,
+                price: 0,
+                duration: data.csiget(25, "current item remaining", 0)?,
+                effect_strength: data.csiget(26, "current item effect", 0)?,
+            })
+        } else {
+            None
+        };
+
+        println!("{:?}", &data[23..]);
+        // current item
+        // 2, 1, 2, 50,   0, 1, 0, 0, 0]
+        // 2, 1, 1, 50,   1, 1, 0, 0, 0]
+        // 0, 1, 0, 0,    3, 1, 0, 0, 0]
+
         Ok(())
     }
 }

@@ -1278,6 +1278,30 @@ impl GameState {
                             .push(HellevatorMonsterReward { typ, amount });
                     }
                 }
+                "gtdailyreward" => {
+                    self.hellevator
+                        .active
+                        .get_or_insert_with(Default::default)
+                        .rewards_today = HellevatorDailyReward::parse(
+                        &val.into_list("hdrtd").unwrap_or_default(),
+                    );
+                }
+                "gtdailyrewardnext" => {
+                    self.hellevator
+                        .active
+                        .get_or_insert_with(Default::default)
+                        .rewards_tomorrow = HellevatorDailyReward::parse(
+                        &val.into_list("hdrnd").unwrap_or_default(),
+                    );
+                }
+                "gtdailyrewardyesterday" => {
+                    self.hellevator
+                        .active
+                        .get_or_insert_with(Default::default)
+                        .rewards_yesterday = HellevatorDailyReward::parse(
+                        &val.into_list("hdryd").unwrap_or_default(),
+                    );
+                }
                 x if x.contains("dungeonenemies") => {
                     // I `think` we do not need this
                 }
