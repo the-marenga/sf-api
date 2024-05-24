@@ -83,8 +83,8 @@ pub struct Hellevator {
     pub guild_raid_signup_start: DateTime<Local>,
     pub guild_raid_start: DateTime<Local>,
     pub monster_rewards: Vec<HellevatorMonsterReward>,
-    // pub own_points_today: u32,
-    // pub own_best_floor: u32,
+
+    pub own_best_floor: u32,
     pub shop_items: [HellevatorShopTreat; 3],
 
     pub current_treat: Option<HellevatorShopTreat>,
@@ -96,6 +96,9 @@ pub struct Hellevator {
     pub rewards_yesterday: Option<HellevatorDailyReward>,
     pub rewards_today: Option<HellevatorDailyReward>,
     pub rewards_tomorrow: Option<HellevatorDailyReward>,
+
+    pub earned_today: u32,
+    pub earned_yesterday: u32,
 
     pub(crate) brackets: Vec<u32>,
 }
@@ -230,16 +233,16 @@ impl Hellevator {
         self.start_contrib_date =
             data.cstget(5, "start contrib", server_time)?;
         self.has_final_reward = data.cget(6, "helevator final")? == 1;
-        // self.own_best_floor = data.csiget(7, "helevator best rank", 0)?;
-        // self.own_points_today = data.csiget(10, "h points today", 0)?;
+        self.own_best_floor = data.csiget(7, "helevator best rank", 0)?;
 
         for (pos, shop_item) in self.shop_items.iter_mut().enumerate() {
             let start = data.skip(8 + pos, "shop item start")?;
             shop_item.typ = start
                 .cfpget(0, "hellevator shop treat", |a| a)?
                 .unwrap_or_default();
+            // FIXME: This is wrong
             shop_item.is_special =
-                start.cget(3, "hellevator shop special")? != 1;
+                start.cget(3, "hellevator shop special")? > 0;
             shop_item.price =
                 start.csiget(6, "hellevator shop price", u32::MAX)?;
             shop_item.duration =
@@ -252,7 +255,7 @@ impl Hellevator {
         self.current_treat = if c_typ > 0 {
             Some(HellevatorShopTreat {
                 typ: FromPrimitive::from_i64(c_typ).unwrap_or_default(),
-                is_special: data.cget(24, "current item special")? != 1,
+                is_special: data.cget(24, "current item special")? > 0,
                 price: 0,
                 duration: data.csiget(25, "current item remaining", 0)?,
                 effect_strength: data.csiget(26, "current item effect", 0)?,
@@ -261,12 +264,11 @@ impl Hellevator {
             None
         };
 
-        println!("{:?}", &data[23..]);
-        // current item
-        // 2, 1, 2, 50,   0, 1, 0, 0, 0]
-        // 2, 1, 1, 50,   1, 1, 0, 0, 0]
-        // 0, 1, 0, 0,    3, 1, 0, 0, 0]
-
+        self.earned_today = data.csiget(27, "points earned today", 0)?;
+        self.earned_yesterday = data.csiget(29, "points earned yd", 0)?;
+        // 28 => probably a "has acknowledged rank fall" msg
+        // 30 => fallen to rank
+        // 31 => ???
         Ok(())
     }
 }
