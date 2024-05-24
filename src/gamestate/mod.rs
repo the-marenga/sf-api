@@ -1196,10 +1196,8 @@ impl GameState {
                         .guild_rank = val.into("gt rank").unwrap_or(0);
                 }
                 "gtrankingmax" => {
-                    self.hellevator
-                        .active
-                        .get_or_insert_with(Default::default)
-                        .guild_rank_max = val.into("gt rank max").unwrap_or(0);
+                    self.hall_of_fames.hellevator_total =
+                        val.into("gt rank max").ok();
                 }
                 "gtbracketlist" => {
                     self.hellevator
@@ -1301,6 +1299,42 @@ impl GameState {
                         .rewards_yesterday = HellevatorDailyReward::parse(
                         &val.into_list("hdryd").unwrap_or_default(),
                     );
+                }
+                "gtranking" => {
+                    self.hall_of_fames.hellevator = val
+                        .as_str()
+                        .split(';')
+                        .filter(|a| !a.is_empty())
+                        .map(|chunk| chunk.split(',').collect())
+                        .flat_map(|chunk: Vec<_>| -> Result<_, SFError> {
+                            Ok(HallOfFameHellevator {
+                                rank: chunk.cfsuget(0, "hh rank")?,
+                                name: chunk.cget(1, "hh name")?.to_string(),
+                                tokens: chunk.cfsuget(2, "hh tokens")?,
+                            })
+                        })
+                        .collect();
+                }
+                "gtpreviewreward" => {
+                    // TODO: these are the previews of the rewards per rank
+                    // 1:17/0/1/16/0/1/8/1/64200/9/1/96300/4/1/3201877800/,2:18/
+                    // 0/1/16/0/1/8/1/64200/9/1/96300/4/1/3201877800/,3:19/0/1/
+                    // 16/0/1/8/1/64200/9/1/96300/4/1/3201877800/,4:16/0/1/8/1/
+                    // 61632/9/1/92448/4/1/3041783910/,5:16/0/1/8/1/59064/9/1/
+                    // 88596/4/1/2881690020/,6:16/0/1/8/1/56496/9/1/84744/4/1/
+                    // 2721596130/,7:16/0/1/8/1/53928/9/1/80892/4/1/2561502240/,
+                    // 8:16/0/1/8/1/51360/9/1/77040/4/1/2401408350/,9:16/0/1/8/
+                    // 1/48792/9/1/73188/4/1/2241314460/,10:16/0/1/8/1/46224/9/
+                    // 1/69336/4/1/2241314460/,11:16/0/1/8/1/43656/9/1/65484/4/
+                    // 1/2081220570/,12:16/0/1/8/1/41088/9/1/61632/4/1/
+                    // 2081220570/,13:16/0/1/8/1/38520/9/1/57780/4/1/1921126680/
+                    // ,14:16/0/1/8/1/35952/9/1/53928/4/1/1921126680/,15:16/0/1/
+                    // 8/1/33384/9/1/50076/4/1/1761032790/,16:16/0/1/8/1/30816/
+                    // 9/1/46224/4/1/1761032790/,17:8/1/28248/9/1/42372/4/1/
+                    // 1600938900/,18:8/1/25680/9/1/38520/4/1/1600938900/,19:4/
+                    // 1/1440845010/,20:4/1/1280751120/,21:4/1/1120657230/,22:4/
+                    // 1/960563340/,23:4/1/800469450/,24:4/1/640375560/,25:4/1/
+                    // 480281670/,
                 }
                 x if x.contains("dungeonenemies") => {
                     // I `think` we do not need this

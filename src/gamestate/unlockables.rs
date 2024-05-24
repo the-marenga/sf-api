@@ -77,7 +77,6 @@ pub struct Hellevator {
 
     pub guild_points_today: u32,
     pub guild_rank: u32,
-    pub guild_rank_max: u32,
     pub guild_raid_floors: Vec<HellevatorRaidFloor>,
 
     pub guild_raid_signup_start: DateTime<Local>,
@@ -265,8 +264,8 @@ impl Hellevator {
         };
 
         self.earned_today = data.csiget(27, "points earned today", 0)?;
-        self.earned_yesterday = data.csiget(29, "points earned yd", 0)?;
         // 28 => probably a "has acknowledged rank fall" msg
+        self.earned_yesterday = data.csiget(29, "points earned yd", 0)?;
         // 30 => fallen to rank
         // 31 => ???
         Ok(())

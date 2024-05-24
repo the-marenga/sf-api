@@ -59,11 +59,23 @@ pub struct HallOfFames {
     /// A list of hall of fame pet players fetched during the last command
     pub pets: Vec<HallOfFamePets>,
 
+
+    pub hellevator_total: Option<u32>,
+    pub hellevator: Vec<HallOfFameHellevator>,
+
     /// The amount of players with underworlds on this server. Will only be set
     /// after querying the pet HOF
     pub underworlds_total: Option<u32>,
     /// A list of hall of fame pet players fetched during the last command
     pub underworlds: Vec<HallOfFameUnderworld>,
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct HallOfFameHellevator {
+    pub rank: usize,
+    pub name: String,
+    pub tokens: u64,
 }
 
 #[derive(Debug, Clone, Default)]

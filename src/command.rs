@@ -671,28 +671,18 @@ pub enum Command {
         position: usize,
         typ: HellevatorTreatType,
         price: u32,
-        currency: HellevatorCurrency,
+        use_mushroom: bool,
     },
     HellevatorRefreshShop,
-    // HellevatorJoinRaid
-    // GroupTournamentRaidParticipant:1/1/
-
-    // HellevatorClaimDaily
-    // GroupTournamentClaimDaily
-
-    // HellevatorPreviewRewards
-    // GroupTournamentPreview
-
-    // HallOfFameHellevatorPage
-    // GroupTournamentRankingAllGroups:{position}/{name}/{pre}/{post}
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// This is the "Questing instead of expeditions" value in the settings
-pub enum HellevatorCurrency {
-    KeyCard = 1,
-    Mushroom,
+    HellevatorJoinHellAttack {
+        use_mushroom: bool,
+        plain: usize,
+    },
+    HellevatorClaimDaily,
+    HellevatorPreviewRewards,
+    HallOfFameHellevatorPage {
+        page: usize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -1344,13 +1334,33 @@ impl Command {
                 position,
                 typ,
                 price,
-                currency,
+                use_mushroom,
             } => format!(
                 "GroupTournamentMerchantBuy:{position}/{}/{price}/{}",
-                *typ as u32, *currency as u32
+                *typ as u32,
+                if *use_mushroom { 2 } else { 1 }
             ),
             Command::HellevatorRefreshShop => {
                 format!("GroupTournamentMerchantReroll:")
+            }
+            Command::HallOfFameHellevatorPage { page } => {
+                let per_page = 51;
+                let pos = 26 + (per_page * page);
+                format!("GroupTournamentRankingAllGroups:{pos}//25/25")
+            }
+            Command::HellevatorJoinHellAttack {
+                use_mushroom,
+                plain: pos,
+            } => format!(
+                "GroupTournamentRaidParticipant:{}/{}",
+                u8::from(*use_mushroom),
+                *pos + 1
+            ),
+            Command::HellevatorClaimDaily => {
+                format!("GroupTournamentClaimDaily:")
+            }
+            Command::HellevatorPreviewRewards => {
+                format!("GroupTournamentPreview:")
             }
         })
     }
