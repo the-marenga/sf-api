@@ -1125,7 +1125,7 @@ impl GameState {
                         .get_or_insert_with(Default::default);
 
                     for floor in &mut hellevator.guild_raid_floors {
-                        floor.today_assigned = None;
+                        floor.today_assigned.clear();
                     }
 
                     #[allow(clippy::indexing_slicing)]
@@ -1147,7 +1147,7 @@ impl GameState {
                             if let Some(floor) =
                                 hellevator.guild_raid_floors.get_mut(val - 1)
                             {
-                                floor.today_assigned = Some(name.to_string());
+                                floor.today_assigned.push(name.to_string());
                             }
                         }
                     }
@@ -1161,7 +1161,7 @@ impl GameState {
                         .get_or_insert_with(Default::default);
 
                     for floor in &mut hellevator.guild_raid_floors {
-                        floor.yesterday_assigned = None;
+                        floor.yesterday_assigned.clear();
                     }
 
                     #[allow(clippy::indexing_slicing)]
@@ -1183,8 +1183,7 @@ impl GameState {
                             if let Some(floor) =
                                 hellevator.guild_raid_floors.get_mut(val - 1)
                             {
-                                floor.yesterday_assigned =
-                                    Some(name.to_string());
+                                floor.yesterday_assigned.push(name.to_string());
                             }
                         }
                     }
@@ -1288,17 +1287,17 @@ impl GameState {
                     self.hellevator
                         .active
                         .get_or_insert_with(Default::default)
-                        .rewards_tomorrow = HellevatorDailyReward::parse(
+                        .rewards_nest = HellevatorDailyReward::parse(
                         &val.into_list("hdrnd").unwrap_or_default(),
                     );
                 }
                 "gtdailyrewardyesterday" => {
-                    self.hellevator
-                        .active
-                        .get_or_insert_with(Default::default)
-                        .rewards_yesterday = HellevatorDailyReward::parse(
-                        &val.into_list("hdryd").unwrap_or_default(),
-                    );
+                    // self.hellevator
+                    //     .active
+                    //     .get_or_insert_with(Default::default)
+                    //     .rewards_yesterday = HellevatorDailyReward::parse(
+                    //     &val.into_list("hdryd").unwrap_or_default(),
+                    // );
                 }
                 "gtranking" => {
                     self.hall_of_fames.hellevator = val
@@ -1336,6 +1335,7 @@ impl GameState {
                     // 1/960563340/,23:4/1/800469450/,24:4/1/640375560/,25:4/1/
                     // 480281670/,
                 }
+                "gtmonster" => {}
                 x if x.contains("dungeonenemies") => {
                     // I `think` we do not need this
                 }

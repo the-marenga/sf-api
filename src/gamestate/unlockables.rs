@@ -92,9 +92,9 @@ pub struct Hellevator {
     pub next_reset: Option<DateTime<Local>>,
     pub start_contrib_date: Option<DateTime<Local>>,
 
-    pub rewards_yesterday: Option<HellevatorDailyReward>,
+    // pub rewards_yesterday: Option<HellevatorDailyReward>,
     pub rewards_today: Option<HellevatorDailyReward>,
-    pub rewards_tomorrow: Option<HellevatorDailyReward>,
+    pub rewards_nest: Option<HellevatorDailyReward>,
 
     pub earned_today: u32,
     pub earned_yesterday: u32,
@@ -126,14 +126,14 @@ pub enum HellevatorMonsterRewardTyp {
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorRaidFloor {
-    pub today: i64,
-    pub yesterday: i64,
+    pub(crate) today: i64,
+    pub(crate) yesterday: i64,
 
     pub point_reward: u32,
     pub silver_reward: u64,
 
-    pub today_assigned: Option<String>,
-    pub yesterday_assigned: Option<String>,
+    pub today_assigned: Vec<String>,
+    pub yesterday_assigned: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default, Copy, PartialEq, Eq, Hash, FromPrimitive)]

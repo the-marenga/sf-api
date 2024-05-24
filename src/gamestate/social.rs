@@ -59,7 +59,6 @@ pub struct HallOfFames {
     /// A list of hall of fame pet players fetched during the last command
     pub pets: Vec<HallOfFamePets>,
 
-
     pub hellevator_total: Option<u32>,
     pub hellevator: Vec<HallOfFameHellevator>,
 
