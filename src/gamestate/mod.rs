@@ -1335,7 +1335,25 @@ impl GameState {
                     // 1/960563340/,23:4/1/800469450/,24:4/1/640375560/,25:4/1/
                     // 480281670/,
                 }
-                "gtmonster" => {}
+                "gtmonster" => {
+                    self.hellevator
+                        .active
+                        .get_or_insert_with(Default::default)
+                        .current_monster = HellevatorMonster::parse(
+                        &val.into_list("h monster").unwrap_or_default(),
+                    )
+                    .ok();
+                }
+                "gtbonus" => {
+                    self.hellevator
+                        .active
+                        .get_or_insert_with(Default::default)
+                        .daily_treat_bonus = val
+                        .into_list("gt bonus")
+                        .and_then(|a| HellevatorTreatBonus::parse(&a))
+                        .ok();
+                }
+                // This is the extra bonus effect all treats get that day
                 x if x.contains("dungeonenemies") => {
                     // I `think` we do not need this
                 }

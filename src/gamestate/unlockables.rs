@@ -31,6 +31,8 @@ pub enum HellevatorStatus<'a> {
     NotEntered,
     /// The event is currently not available
     NotAvailable,
+    /// The event has ended, but you can still claim the final reward
+    RewardClaimable,
     /// A reference to the
     Active(&'a Hellevator),
 }
@@ -45,16 +47,22 @@ impl HellevatorEvent {
     }
 
     /// If the Hellevator event is active, this returns a reference to the
-    /// Information about it
+    /// Information about it. Note that you still need to check the level >= 10
+    /// requirement yourself
     #[must_use]
     pub fn status(&self) -> HellevatorStatus {
-        if !self.is_event_ongoing() {
-            return HellevatorStatus::NotAvailable;
-        }
         match self.active.as_ref() {
+            None => HellevatorStatus::NotAvailable,
+            Some(h) if !self.is_event_ongoing() => {
+                if let Some(cend) = self.collect_time_end {
+                    if !h.has_final_reward && Local::now() < cend {
+                        return HellevatorStatus::RewardClaimable;
+                    }
+                }
+                HellevatorStatus::NotAvailable
+            }
             Some(h) if h.current_floor == 0 => HellevatorStatus::NotEntered,
             Some(h) => HellevatorStatus::Active(h),
-            None => HellevatorStatus::NotAvailable,
         }
     }
 
@@ -92,14 +100,72 @@ pub struct Hellevator {
     pub next_reset: Option<DateTime<Local>>,
     pub start_contrib_date: Option<DateTime<Local>>,
 
-    // pub rewards_yesterday: Option<HellevatorDailyReward>,
     pub rewards_today: Option<HellevatorDailyReward>,
     pub rewards_nest: Option<HellevatorDailyReward>,
+
+    pub daily_treat_bonus: Option<HellevatorTreatBonus>,
+
+    pub current_monster: Option<HellevatorMonster>,
 
     pub earned_today: u32,
     pub earned_yesterday: u32,
 
     pub(crate) brackets: Vec<u32>,
+}
+
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct HellevatorTreatBonus {
+    pub typ: HellevatorTreatBonusType,
+    pub amount: u32,
+}
+
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct HellevatorMonster {
+    pub id: i64,
+    pub level: u32,
+    pub typ: HellevatorMonsterElement,
+}
+
+#[derive(Debug, Clone, Default, Copy, PartialEq, Eq, Hash, FromPrimitive)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum HellevatorMonsterElement {
+    Fire = 1,
+    Cold = 2,
+    Lightning = 3,
+    #[default]
+    Unknown = 240,
+}
+
+
+impl HellevatorMonster {
+    pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
+        Ok(HellevatorMonster {
+            id: data.cget(0, "h monster id")?,
+            level: data.csiget(1, "h monster level", 0)?,
+            typ: data.cfpget(2, "h monster typ", |a| a)?.unwrap_or_default(),
+        })
+    }
+}
+
+impl HellevatorTreatBonus {
+    pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
+        Ok(HellevatorTreatBonus {
+            typ: data
+                .cfpget(0, "hellevator treat bonus", |a| a)?
+                .unwrap_or_default(),
+            amount: data.csiget(1, "hellevator treat bonus a", 0)?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Default, Copy, PartialEq, Eq, Hash, FromPrimitive)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum HellevatorTreatBonusType {
+    ExtraDamage = 14,
+    #[default]
+    Unknown = 240,
 }
 
 #[derive(Debug, Default, Clone)]

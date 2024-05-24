@@ -23,7 +23,19 @@ pub async fn main() {
         sleep(Duration::from_secs(2)).await;
         let gs = session.game_state().unwrap();
 
+        if gs.character.level < 10 {
+            println!("Character level too low");
+            break;
+        }
+
         let hellevator = match gs.hellevator.status() {
+            HellevatorStatus::RewardClaimable => {
+                session
+                    .send_command(Command::HellevatorClaimFinal)
+                    .await
+                    .unwrap();
+                continue;
+            }
             HellevatorStatus::NotEntered => {
                 session
                     .send_command(Command::HellevatorEnter)

@@ -679,6 +679,7 @@ pub enum Command {
         plain: usize,
     },
     HellevatorClaimDaily,
+    HellevatorClaimFinal,
     HellevatorPreviewRewards,
     HallOfFameHellevatorPage {
         page: usize,
@@ -1362,6 +1363,7 @@ impl Command {
             Command::HellevatorPreviewRewards => {
                 format!("GroupTournamentPreview:")
             }
+            Command::HellevatorClaimFinal => format!("GroupTournamentClaim:"),
         })
     }
 }
