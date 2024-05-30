@@ -328,6 +328,7 @@ pub struct Wheel {
 /// The theme the event tasks have
 pub enum EventTaskTheme {
     Gambler = 2,
+    RankClimber = 3,
     ShoppingSpree = 4,
     TimeSkipper = 5,
     RuffianReset = 6,
@@ -374,6 +375,9 @@ pub enum EventTaskTyp {
     Upgrade(AttributeType),
     GetLuckyCoinsFromFlyingTube,
     Unknown,
+    GainHonorInArena,
+    GainHonorExpeditions,
+    GainHonorFortress,
 }
 
 impl EventTaskTyp {
@@ -394,6 +398,9 @@ impl EventTaskTyp {
             57 => EventTaskTyp::WinFightsBareHands,
             59 => EventTaskTyp::GetLuckyCoinsFromFlyingTube,
             60 => EventTaskTyp::Upgrade(AttributeType::Luck),
+            61 => EventTaskTyp::GainHonorInArena,
+            63 => EventTaskTyp::GainHonorFortress,
+            64 => EventTaskTyp::GainHonorExpeditions,
             65 => EventTaskTyp::SpendGoldInShop,
             66 => EventTaskTyp::SpendGoldOnUpgrades,
             67 => EventTaskTyp::RequestNewGoods,
@@ -441,7 +448,7 @@ impl EventTask {
         let typ = EventTaskTyp::parse(raw_typ);
 
         if typ == EventTaskTyp::Unknown {
-            warn!("{data:?}");
+            warn!("Unknown event task: {data:?} {raw_typ}");
         }
         Ok(EventTask {
             typ,

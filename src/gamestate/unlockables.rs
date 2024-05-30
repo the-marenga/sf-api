@@ -138,7 +138,6 @@ pub enum HellevatorMonsterElement {
     Unknown = 240,
 }
 
-
 impl HellevatorMonster {
     pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
         Ok(HellevatorMonster {
