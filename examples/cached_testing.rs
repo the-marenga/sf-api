@@ -37,7 +37,7 @@ pub async fn main() {
         ),
     };
 
-    std::fs::create_dir("cache").unwrap();
+    _ = std::fs::create_dir("cache");
     let cache_name = format!("cache/{username}.login");
 
     let login_data = match (USE_CACHE, std::fs::read_to_string(&cache_name)) {
