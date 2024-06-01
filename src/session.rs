@@ -24,7 +24,7 @@ pub(crate) const DEFAULT_CRYPTO_ID: &str = "0-00000000000000";
 pub(crate) const DEFAULT_SESSION_ID: &str = "00000000000000000000000000000000";
 const CRYPTO_IV: &str = "jXT#/vz]3]5X7Jl\\";
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// The session, that manages the server communication for a character
 pub struct Session {
     /// The information necessary to log in
