@@ -1,32 +1,40 @@
 #![allow(deprecated)]
+use enum_map::Enum;
+use log::warn;
 use num_derive::FromPrimitive;
+use strum::{EnumIter, IntoEnumIterator};
 
 use crate::{
+    error::SFError,
     gamestate::{
         character::*,
-        dungeons::{LightDungeon, ShadowDungeons},
+        dungeons::{Dungeon, LightDungeon, ShadowDungeon},
         fortress::*,
-        guild::GuildSkill,
+        guild::{Emblem, GuildSkill},
         idle::IdleBuildingType,
         items::*,
         social::Relationship,
         underworld::*,
-        unlockables::Unlockable,
+        unlockables::{HabitatType, HellevatorTreatType, Unlockable},
     },
     misc::{sha1_hash, to_sf_string, HASH_CONST},
     PlayerId,
 };
 
-// A command, that can be send to the sf server
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A command, that can be send to the sf server
 pub enum Command {
     /// If there is a command you somehow know/reverse engineered, or need to
     /// extend the functionality of one of the existing commands, this is the
     /// command for you
     Custom {
+        /// The thing in the command, that comes before the ':'
         cmd_name: String,
-        values: Vec<String>,
+        /// The values this command gets as arguments. These will be joines
+        /// with '/'
+        arguments: Vec<String>,
     },
     /// Manually sends a login request to the server.
     /// **WARN:** The behaviour for a credentials mismatch, with the
@@ -34,8 +42,13 @@ pub enum Command {
     /// for a safer abstraction
     #[deprecated = "Use the login method instead"]
     Login {
+        /// The username of the player you are trying to login
         username: String,
+        /// The sha1 hashed password of the player
         pw_hash: String,
+        /// Honestly, I am not 100% sure what this is anymore, but it is
+        /// related to the maount of times you have logged in. Might be useful
+        /// for logging in again after error
         login_count: u32,
     },
     #[cfg(feature = "sso")]
@@ -45,21 +58,33 @@ pub enum Command {
     /// a safer abstraction
     #[deprecated = "Use a login method instead"]
     SSOLogin {
+        /// The Identifies the s&f account, that has this character
         uuid: String,
+        /// Identifies the specific character an account has
         character_id: String,
+        /// The thing to authenticate with
         bearer_token: String,
     },
+    /// Registers a new normal character in the server. I am not sure about the
+    /// portrait, so currently this sets the same default portrait for every
+    /// char
     #[deprecated = "Use the register method instead"]
     Register {
+        /// The username of the new account
         username: String,
+        /// The password of the new account
         password: String,
+        /// The gender of the new character
         gender: Gender,
+        /// The race of the new character
         race: Race,
+        /// The class of the new character
         class: Class,
     },
-    /// Updates the current state of the user. Also notifies the guild, that
-    /// the player is logged in. Should therefore be send regularely
-    UpdatePlayer,
+    /// Updates the current state of the entire gamestate. Also notifies the
+    /// guild, that the player is logged in. Should therefore be send
+    /// regularely
+    Update,
     /// Queries 51 Hall of Fame entries starting from the top. Starts at 0
     ///
     /// **NOTE:** The server might return less then 51, if there is a "broken"
@@ -72,100 +97,132 @@ pub enum Command {
     // be insightful in the future to use the sequential id lookup in the
     // playerlookat to see, if they can be viewed from there
     HallOfFamePage {
+        /// The page of the Hall of Fame you want to query.
+        ///
+        /// 0 => rank(0..=50), 1 => rank(51..=101), ...
         page: usize,
     },
     /// Queries 51 Hall of Fame entries for the fortress starting from the top.
     /// Starts at 0
     HallOfFameFortressPage {
+        /// The page of the Hall of Fame you want to query.
+        ///
+        /// 0 => rank(0..=50), 1 => rank(51..=101), ...
         page: usize,
     },
-    /// Looks at a specific player. Ident is either their name, or player_id.
+    /// Looks at a specific player. Ident is either their name, or `player_id`.
     /// The information about the player can then be found by using the
-    /// lookup_* methods on Otherplayers
+    /// lookup_* methods on `HallOfFames`
     ViewPlayer {
+        /// Either the name, or the `playerid.to_string()`
         ident: String,
     },
     /// Buys a beer in the tavern
     BuyBeer,
     /// Starts one of the 3 tavern quests. **0,1,2**
     StartQuest {
+        /// The position of the quest in the quest array
         quest_pos: usize,
+        /// Has the player acknowledget, that their inventory is full and this
+        /// may lead to the loss of an item?
         overwrite_inv: bool,
     },
     /// Cancels the currently running quest
     CancelQuest,
     /// Finishes the current quest, which starts the battle. This can be used
-    /// with a QuestSkip to skip the remaining time
+    /// with a `QuestSkip` to skip the remaining time
     FinishQuest {
-        skip: Option<QuestSkip>,
+        /// If this is `Some()`, it will use the selected skip to skip the
+        /// remaining quest wait
+        skip: Option<TimeSkip>,
     },
     /// Goes working for the specified amount of hours (1-10)
-    WorkStart {
+    StartWork {
+        /// The amount of hours you want to work
         hours: u8,
     },
     /// Cancels the current guard job
-    WorkCancel,
+    CancelWork,
     /// Collects the pay from the guard job
-    WorkFinish,
+    FinishWork,
     /// Checks if the given name is still available to register
     CheckNameAvailable {
+        /// The name to check
         name: String,
     },
     /// Buys a mount, if the player has enough silver/mushrooms
     BuyMount {
+        /// The mount you want to buy
         mount: Mount,
     },
-    /// Increases the given attribute to the requested number. Should be
-    /// current + 1
+    /// Increases the given base attribute to the requested number. Should be
+    /// `current + 1`
     IncreaseAttribute {
+        /// The atrribute you want to increase
         attribute: AttributeType,
+        /// The value you increase it to. This should be `current + 1`
         increase_to: u32,
     },
     /// Removes the currently active potion 0,1,2
     RemovePotion {
+        /// The position of the posion you want to remove
         pos: usize,
     },
     /// Queries the currently available enemies in the arena
     CheckArena,
     /// Fights the selected enemy. This should be used for both arena fights
-    /// and normal fights. Not that this actually needs the name, not just the
+    /// and normal fights. Note that this actually needs the name, not just the
     /// id
     Fight {
+        /// The name of the player you want to fight
         name: String,
+        /// If the arena timer has not elapsed yet, this will spend a mushroom
+        /// and fight regardless. Currently the server ignores this and fights
+        /// always, but the client sends the correctly set command, so you
+        /// should too
         use_mushroom: bool,
     },
     /// Collects the current reward from the calendar
     CollectCalendar,
-    /// Queries information about another guild
+    /// Queries information about another guild. The information can bet found
+    /// in `hall_of_fames.other_guilds`
     ViewGuild {
+        /// Either the id, or name of the guild you want to look at
         guild_ident: String,
     },
     /// Founds a new guild
     GuildFound {
+        /// The name of the new guild you want to found
         name: String,
     },
     /// Invites a player with the given name into the players guild
     GuildInvitePlayer {
+        /// The name of the player you want to invite
         name: String,
     },
     /// Kicks a player with the given name from the players guild
     GuildKickPlayer {
+        /// The name of the guild member you want to kick
         name: String,
     },
     /// Promote a player from the guild into the leader role
     GuildSetLeader {
+        /// The name of the guild member you want to set as the guild leader
         name: String,
     },
     /// Toggles a member between officer and normal member
     GuildToggleOfficer {
+        /// The name of the player you want to toggle the officer status for
         name: String,
     },
     /// Loads a mushroom into the catapult
     GuildLoadMushrooms,
     /// Increases one of the guild skills by 1. Needs to know the current, not
-    /// the new  value for some reason
+    /// the new value for some reason
     GuildIncreaseSkill {
+        /// The skill you want to increase
         skill: GuildSkill,
+        /// The current value of the guild skill
         current: u16,
     },
     /// Joins the current ongoing attack
@@ -174,6 +231,7 @@ pub enum Command {
     GuildJoinDefense,
     /// Starts an attack in another guild
     GuildAttack {
+        /// The name of the guild you want to attack
         guild: String,
     },
     /// Starts the next possible raid
@@ -186,121 +244,192 @@ pub enum Command {
     ToiletOpen,
     /// Drops an item from one of the inventories into the toilet
     ToiletDrop {
+        /// The inventory you want to take the item from
         inventory: InventoryType,
+        /// The position of the item in the inventory. Starts at 0
         pos: usize,
     },
-    PlayerPortalBattle,
     /// Buys an item from the shop and puts it in the inventoy slot specified
     BuyShop {
+        /// The shop you want to buy from
         shop_type: ShopType,
+        /// the position of the item you want to buy from the shop
         shop_pos: usize,
+        /// The inventory you want to put the new item into
         inventory: InventoryType,
+        /// The position in the chosen inventory you
         inventory_pos: usize,
     },
-    /// Buys an item from the shop and puts it in the inventoy slot specified
+    /// Sells an item from the players inventory. To make this more convenient,
+    /// this picks a shop&item position to sell to for you
     SellShop {
+        /// The inventory you want to sell an item from
         inventory: InventoryType,
+        /// The position of the item you want to sell
         inventory_pos: usize,
-        shop_type: ShopType,
-        shop_pos: usize,
     },
     /// Moves an item from one inventory position to another
     InventoryMove {
+        /// The inventory you move the item from
         inventory_from: InventoryType,
+        /// The position of the item you want to move
         inventory_from_pos: usize,
+        /// The inventory you move the item to
         inventory_to: InventoryType,
+        /// The inventory you move the item from
         inventory_to_pos: usize,
     },
     /// Allows moving items from any position to any other position items can
     /// be at. You should make sure, that the move makes sense (do not move
     /// items from shop to shop)
     ItemMove {
-        from: ItemPosition,
+        /// The place of thing you move the item from
+        from: ItemPlace,
+        /// The position of the item you want to move
         from_pos: usize,
-        to: ItemPosition,
+        /// The place of thing you move the item to
+        to: ItemPlace,
+        /// The position of the item you want to move
         to_pos: usize,
     },
     /// Opens the message at the specified index [0-100]
     MessageOpen {
-        index: i32,
+        /// The index of the message in the inbox vec
+        pos: i32,
     },
     /// Deletes a single message, if you provide the index. -1 = all
     MessageDelete {
-        index: i32,
+        /// The position of the message to delete in the inbox vec. If this is
+        /// -1, it seletes all
+        pos: i32,
     },
     /// Pulls up your scrapbook to reveal more info, than normal
     ViewScrapbook,
-    /// Views a specific pet. This fetches its stats
+    /// Views a specific pet. This fetches its stats and places it into the
+    /// specified pet in the habitat
     ViewPet {
-        pet_index: u16,
+        /// The id of the pet, that you want to view
+        pet_id: u16,
     },
-    /// Unlocks a feature
+    /// Unlocks a feature. The these unlockables can be found in
+    /// `pending_unlocks` on `GameState`
     UnlockFeature {
+        /// The thing to unlock
         unlockable: Unlockable,
     },
-    /// Enters a specific dungeon
-    FightLightDungeon {
-        name: LightDungeon,
-        use_mushroom: bool,
-    },
-    /// Enters a specific shadow dungeon
-    FightShadowDungeon {
-        name: ShadowDungeons,
+    /// Starts a fight against the enemy in the players portal
+    FightPortal,
+    /// Enters a specific dungeon. This works for all dungeons, except the
+    /// Tower, which you must enter via the `FightTower` command
+    FightDungeon {
+        /// The dungeon you want to fight in (except the tower). If you only
+        /// have a `LightDungeon`, or `ShadowDungeon`, you need to call
+        /// `into()` to turn them into a generic dungeon
+        dungeon: Dungeon,
+        /// If this is true, you will spend a mushroom, if the timer has not
+        /// run out. Note, that this is currently ignored by the server for
+        /// some reason
         use_mushroom: bool,
     },
     /// Attacks the requested level of the tower
     FightTower {
+        /// The current level you are on the tower
         current_level: u8,
+        /// If this is true, you will spend a mushroom, if the timer has not
+        /// run out. Note, that this is currently ignored by the server for
+        /// some reason
         use_mush: bool,
     },
+    /// Fights the player opponent with your pet
+    FightPetOpponent {
+        /// The habitat opponent you want to attack the opponent in
+        habitat: HabitatType,
+        /// The id of the player you want to fight
+        opponent_id: PlayerId,
+    },
+    /// Fights the pet in the specified habitat dungeon
+    FightPetDungeon {
+        /// If this is true, you will spend a mushroom, if the timer has not
+        /// run out. Note, that this is currently ignored by the server for
+        /// some reason
+        use_mush: bool,
+        /// The habitat, that you want to fight in
+        habitat: HabitatType,
+        /// This is `explored + 1` of the given habitat. Note that 20 explored
+        /// is the max, so providing 21 here will return an err
+        enemy_pos: u32,
+        /// This `pet_id` is the id of the pet you want to send into battle.
+        /// The pet has to be from the same habitat, as the dungeon you are
+        /// trying
+        player_pet_id: u32,
+    },
     /// Sets the guild info. Note the info about length limit from
-    /// SetDescription
+    /// `SetDescription` for the description
     GuildSetInfo {
+        /// The description you want to set
         description: String,
-        emblem_code: String,
+        /// The emblem you want to set
+        emblem: Emblem,
     },
     /// Gambles the desired amount of silver. Picking the right thing is not
-    /// actually required. That just masks the determined result
+    /// actually required. That just masks the determined result. The result
+    /// will be in `gamble_result` on `Tavern`
     GambleSilver {
+        /// The amount of silver to gamble
         amount: u64,
     },
     /// Gambles the desired amount of mushrooms. Picking the right thing is not
-    /// actually required. That just masks the determined result
+    /// actually required. That just masks the determined result. The result
+    /// will be in `gamble_result` on `Tavern`
     GambleMushrooms {
+        /// The amount of mushrooms to gamble
         amount: u64,
     },
     /// Sends a message to another player
     SendMessage {
+        /// The name of the player to send a mesage to
         to: String,
+        /// The message to send
         msg: String,
     },
+    /// The description may only be 240 chars long, when it reaches the
+    /// server. The problem is, that special chars like '/' have to get
+    /// escaped into two chars "$s" before getting send to the server.
+    /// That means this string can be 120-240 chars long depending on the
+    /// amount of escaped chars. We 'could' trunctate the response, but
+    /// that could get weird with character boundries in UTF8 and split the
+    /// escapes themself, so just make sure you provide a valid value here
+    /// to begin with and be prepared for a server error
     SetDescription {
-        /// The description may only be 240 chars long, when it reaches the
-        /// server. The problem is, that special chars like '/' have to get
-        /// escaped into two chars "$s" before getting send to the server.
-        /// That means this string can be 120-240 chars long depending on the
-        /// amount of escaped chars. We 'could' trunctate the response, but
-        /// that could get weird with character boundries in UTF8 and split the
-        /// escapes themself, so just make sure you provide a valid value here
-        /// to begin with and be prepared for a server error
+        /// The description to set
         description: String,
     },
+    /// Drop the item from the specified position into the witches cauldron
     WitchDropCauldron {
+        /// The inventory you want to move an item from
         inventory_t: InventoryType,
+        /// The position of the item to move
         position: usize,
     },
+    /// Uses the blacksmith with the specified action on the specified item
     Blacksmith {
+        /// The inventory the item you want to act upon is in
         inventory_t: InventoryType,
+        /// The position of the item in the inventory
         position: u8,
+        /// The action you want to use on the item
         action: BlacksmithAction,
     },
+    /// Sends the specified message in the guild chat
     GuildSendChat {
+        /// The message to send
         message: String,
     },
-    /// Enchants an item, if you have the scroll unlocked. Note that providing
-    /// shield here is undefined
+    /// Enchants the currently worn item, associated with this enchantment,
+    /// with the enchantment
     WitchEnchant {
-        position: EquipmentSlot,
+        /// The enchantment to apply
+        enchantment: Enchantment,
     },
     SpinWheelOfFortune {
         fortune_payment: FortunePayment,
@@ -321,7 +450,7 @@ pub enum Command {
     FortressGather {
         resource: FortressResourceType,
     },
-    FortressBuildStart {
+    FortressBuild {
         f_type: FortressBuildingType,
     },
     FortressBuildCancel {
@@ -332,18 +461,18 @@ pub enum Command {
         mushrooms: u32,
     },
     /// Builds new units of the selected type
-    FortressBuildUnitStart {
+    FortressBuildUnit {
         unit: FortressUnitType,
         count: u32,
     },
     /// Starts the search for gems
-    FortressGemStoneStart,
+    FortressGemStoneSearch,
     /// Cancles the search for gems
-    FortressGemStoneCancel,
+    FortressGemStoneSearchCancel,
     /// Finishes the gem stone search using the appropriate amount of
     /// mushrooms. The price is one mushroom per 600 sec / 10 minutes of time
     /// remaining
-    FortressGemStoneFinish {
+    FortressGemStoneSearchFinish {
         mushrooms: u32,
     },
     /// Attacks the current fortress attack target with the provided amount of
@@ -394,7 +523,7 @@ pub enum Command {
     /// Rolls the dice. The first round should be all rerolls, after that,
     /// either reroll again, or take some of the dice on the table
     RollDice {
-        payment: RollDiceType,
+        payment: RollDicePrice,
         dices: [DiceType; 5],
     },
     /// Feeds one of your pets
@@ -423,11 +552,11 @@ pub enum Command {
     RefreshShop {
         shop: ShopType,
     },
-    /// Fetches the HoF page for guilds
+    /// Fetches the Hall of Fame page for guilds
     HallOfFameGroupPage {
         page: u32,
     },
-    /// Crawls the HoF page for the underworld
+    /// Crawls the Hall of Fame page for the underworld
     HallOfFameUnderworldPage {
         page: u32,
     },
@@ -436,7 +565,7 @@ pub enum Command {
     },
     /// Switch equipment with the manequin, if it is unlocked
     SwapManequin,
-    /// Updates your flag in the HoF
+    /// Updates your flag in the Hall of Fame
     UpdateFlag {
         flag: Option<Flag>,
     },
@@ -451,6 +580,7 @@ pub enum Command {
     /// Change your password. Note that I have not tested this and this might
     /// invalidate your session
     ChangePassword {
+        username: String,
         old: String,
         new: String,
     },
@@ -481,38 +611,97 @@ pub enum Command {
     },
     /// Swaps the runes of two items
     SwapRunes {
-        from: ItemPosition,
+        from: ItemPlace,
         from_pos: usize,
-        to: ItemPosition,
+        to: ItemPlace,
         to_pos: usize,
     },
-    /// Changes the look of the item to the selected raw_model_id for 10
+    /// Changes the look of the item to the selected `raw_model_id` for 10
     /// mushrooms. Note that this is NOT the normal model id. it is the
-    /// model_id  + (class as usize) * 1000 if I remember correctly. Pretty
+    /// `model_id  + (class as usize) * 1000` if I remember correctly. Pretty
     /// sure nobody  will ever uses this though, as it is only for looks.
     ChangeItemLook {
-        inv: ItemPosition,
+        inv: ItemPlace,
         pos: usize,
         raw_model_id: u16,
     },
-    /// Continues the expedition on one of the three streets, [0,1,2]
-    ExpeditionChooseStreet {
+    /// Continues the expedition by picking one of the <=3 encounters \[0,1,2\]
+    ExpeditionPickEncounter {
+        /// The position of the encounter you want to pick
         pos: usize,
     },
     /// Continues the expedition, if you are currently in a situation, where
     /// there is only one option. This can be starting a fighting, or starting
-    /// the wait after a fight (collecting the non item reward)
+    /// the wait after a fight (collecting the non item reward). Behind the
+    /// scenes this is just ExpeditionPickReward(0)
     ExpeditionContinue,
     /// If there are multiple items to choose from after fighting a boss, you
-    /// can choose which one to take here. [0,1,2]
-    ExpeditionPickItem {
+    /// can choose which one to take here. \[0,1,2\]
+    ExpeditionPickReward {
+        /// The array position/index of the reward you want to take
         pos: usize,
     },
-    /// Starts one of the two expeditions [0,1]
+    /// Starts one of the two expeditions \[0,1\]
     ExpeditionStart {
+        /// The index of the expedition to start
         pos: usize,
+    },
+    /// Skips the waiting period of the current expedition. Note that mushroom
+    /// may not always be possible
+    ExpeditionSkipWait {
+        /// The "currency" you want to skip the expedition
+        typ: TimeSkip,
+    },
+    /// This sets the "Questing instead of expeditions" value in the settings.
+    /// This will decide if you can go on expeditions, or do quests, when
+    /// expeditions are available. Going on the "wrong" one will return an
+    /// error. Similarly this setting can only be changed, when no Thirst for
+    /// Adventure has been used today, so make sure to check if that is full
+    /// and `beer_drunk == 0`
+    SetQuestsInsteadOfExpeditions {
+        /// The value you want to set
+        value: ExpeditionSetting,
+    },
+    HellevatorEnter,
+    HellevatorViewGuildRanking,
+    HellevatorFight {
+        use_mushroom: bool,
+    },
+    HellevatorBuy {
+        position: usize,
+        typ: HellevatorTreatType,
+        price: u32,
+        use_mushroom: bool,
+    },
+    HellevatorRefreshShop,
+    HellevatorJoinHellAttack {
+        use_mushroom: bool,
+        plain: usize,
+    },
+    HellevatorClaimDaily,
+    HellevatorClaimFinal,
+    HellevatorPreviewRewards,
+    HallOfFameHellevatorPage {
+        page: usize,
     },
 }
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// This is the "Questing instead of expeditions" value in the settings
+pub enum ExpeditionSetting {
+    /// When expeditions are available, this setting will enable expeditions to
+    /// be started. This will disable questing, until either this setting is
+    /// disabled, or expeditions have ended. Trying to start a quest with this
+    /// setting set will return an error
+    PreferExpeditions,
+    /// When expeditions are available, they will be ignored, until either this
+    /// setting is disabled, or expeditions have ended. Starting an
+    /// expedition with this setting set will error
+    #[default]
+    PreferQuests,
+}
+
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BlacksmithAction {
@@ -534,7 +723,8 @@ pub enum FortunePayment {
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum RollDiceType {
+/// The price you have to pay to roll the dice
+pub enum RollDicePrice {
     Free = 0,
     Mushrooms,
     Hourglass,
@@ -542,7 +732,12 @@ pub enum RollDiceType {
 
 #[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// The type of dice you want to play with.
 pub enum DiceType {
+    /// This means you want to discard whatever dice was previously at this
+    /// position. This is also the type you want to fill the array with, if you
+    /// start a game
     ReRoll,
     Silver,
     Stone,
@@ -554,12 +749,16 @@ pub enum DiceType {
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DiceReward {
+    /// The resource you have won
     pub win_typ: DiceType,
+    /// The amounts of the resource you have won
     pub amount: u32,
 }
 
-#[derive(Debug, Copy, Clone, strum::EnumCount, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Enum, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// A type of attribute
 pub enum AttributeType {
     Strength = 1,
     Dexterity = 2,
@@ -568,8 +767,10 @@ pub enum AttributeType {
     Luck = 5,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Enum, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// A type of shop. This is a subset of `ItemPosition`
 pub enum ShopType {
     Weapon = 3,
     Magic = 4,
@@ -577,7 +778,9 @@ pub enum ShopType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum QuestSkip {
+#[allow(missing_docs)]
+/// The "curency" you want to use to skip a quest
+pub enum TimeSkip {
     Mushroom = 1,
     Glass = 2,
 }
@@ -586,14 +789,16 @@ impl Command {
     /// Returns the unencrypted string, that has to be send to the server to to
     /// perform the request
     #[allow(deprecated, clippy::useless_format)]
-    pub(crate) fn request_string(&self) -> String {
-        const APP_VERSION: &str = "1800000000000";
-        use Command::*;
-        match self {
-            Custom { cmd_name, values } => {
+    pub(crate) fn request_string(&self) -> Result<String, SFError> {
+        const APP_VERSION: &str = "2000000000000";
+        Ok(match self {
+            Command::Custom {
+                cmd_name,
+                arguments: values,
+            } => {
                 format!("{cmd_name}:{}", values.join("/"))
             }
-            Login {
+            Command::Login {
                 username,
                 pw_hash,
                 login_count,
@@ -605,13 +810,13 @@ impl Command {
                 )
             }
             #[cfg(feature = "sso")]
-            SSOLogin {
+            Command::SSOLogin {
                 uuid, character_id, ..
             } => format!(
                 "SFAccountCharLogin:{uuid}/{character_id}/unity3d_webglplayer/\
                  /{APP_VERSION}"
             ),
-            Register {
+            Command::Register {
                 username,
                 password,
                 gender,
@@ -627,123 +832,141 @@ impl Command {
                     *class as usize + 1
                 )
             }
-            UpdatePlayer => "Poll:".to_string(),
-            HallOfFamePage { page } => {
+            Command::Update => "Poll:".to_string(),
+            Command::HallOfFamePage { page } => {
                 let per_page = 51;
                 let pos = 26 + (per_page * page);
                 format!("PlayerGetHallOfFame:{pos}//25/25")
             }
-            HallOfFameFortressPage { page } => {
+            Command::HallOfFameFortressPage { page } => {
                 let per_page = 51;
                 let pos = 26 + (per_page * page);
                 format!("FortressGetHallOfFame:{pos}//25/25")
             }
-            HallOfFameGroupPage { page } => {
+            Command::HallOfFameGroupPage { page } => {
                 let per_page = 51;
                 let pos = 26 + (per_page * page);
                 format!("GroupGetHallOfFame:{pos}//25/25")
             }
-            HallOfFameUnderworldPage { page } => {
+            Command::HallOfFameUnderworldPage { page } => {
                 let per_page = 51;
                 let pos = 26 + (per_page * page);
                 format!("UnderworldGetHallOfFame:{pos}//25/25")
             }
-            HallOfFamePetsPage { page } => {
+            Command::HallOfFamePetsPage { page } => {
                 let per_page = 51;
                 let pos = 26 + (per_page * page);
                 format!("PetsGetHallOfFame:{pos}//25/25")
             }
-            ViewPlayer { ident } => format!("PlayerLookAt:{ident}"),
-            BuyBeer => format!("PlayerBeerBuy:"),
-            StartQuest {
+            Command::ViewPlayer { ident } => format!("PlayerLookAt:{ident}"),
+            Command::BuyBeer => format!("PlayerBeerBuy:"),
+            Command::StartQuest {
                 quest_pos,
                 overwrite_inv,
             } => {
                 format!(
                     "PlayerAdventureStart:{}/{}",
                     quest_pos + 1,
-                    *overwrite_inv as u8
+                    u8::from(*overwrite_inv)
                 )
             }
-            CancelQuest => format!("PlayerAdventureStop:"),
-            FinishQuest { skip } => {
+            Command::CancelQuest => format!("PlayerAdventureStop:"),
+            Command::FinishQuest { skip } => {
                 format!(
                     "PlayerAdventureFinished:{}",
                     skip.map(|a| a as u8).unwrap_or(0)
                 )
             }
-            WorkStart { hours } => format!("PlayerWorkStart:{hours}"),
-            WorkCancel => format!("PlayerWorkStop:"),
-            WorkFinish => format!("PlayerWorkFinished:"),
-            CheckNameAvailable { name } => format!("AccountCheck:{name}"),
-            BuyMount { mount } => format!("PlayerMountBuy:{}", *mount as usize),
-            IncreaseAttribute {
+            Command::StartWork { hours } => format!("PlayerWorkStart:{hours}"),
+            Command::CancelWork => format!("PlayerWorkStop:"),
+            Command::FinishWork => format!("PlayerWorkFinished:"),
+            Command::CheckNameAvailable { name } => {
+                format!("AccountCheck:{name}")
+            }
+            Command::BuyMount { mount } => {
+                format!("PlayerMountBuy:{}", *mount as usize)
+            }
+            Command::IncreaseAttribute {
                 attribute,
                 increase_to,
             } => format!(
                 "PlayerAttributIncrease:{}/{increase_to}",
                 *attribute as u8
             ),
-            RemovePotion { pos } => format!("PlayerPotionKill:{}", pos + 1),
-            CheckArena => format!("PlayerArenaEnemy:"),
-            Fight { name, use_mushroom } => {
-                format!("PlayerArenaFight:{name}/{}", *use_mushroom as u8)
+            Command::RemovePotion { pos } => {
+                format!("PlayerPotionKill:{}", pos + 1)
             }
-            CollectCalendar => format!("PlayerOpenCalender:"),
-            UpgradeSkill {
+            Command::CheckArena => format!("PlayerArenaEnemy:"),
+            Command::Fight { name, use_mushroom } => {
+                format!("PlayerArenaFight:{name}/{}", u8::from(*use_mushroom))
+            }
+            Command::CollectCalendar => format!("PlayerOpenCalender:"),
+            Command::UpgradeSkill {
                 attribute,
                 next_attribute,
             } => format!(
                 "PlayerAttributIncrease:{}/{next_attribute}",
                 *attribute as i64
             ),
-            RefreshShop { shop } => {
+            Command::RefreshShop { shop } => {
                 format!("PlayerNewWares:{}", *shop as usize - 2)
             }
-            ViewGuild { guild_ident } => {
+            Command::ViewGuild { guild_ident } => {
                 format!("GroupLookAt:{guild_ident}")
             }
-            GuildFound { name } => format!("GroupFound:{name}"),
-            GuildInvitePlayer { name } => format!("GroupInviteMember:{name}"),
-            GuildKickPlayer { name } => format!("GroupRemoveMember:{name}"),
-            GuildSetLeader { name } => format!("GroupSetLeader:{name}"),
-            GuildToggleOfficer { name } => format!("GroupSetOfficer:{name}"),
-            GuildLoadMushrooms => {
+            Command::GuildFound { name } => format!("GroupFound:{name}"),
+            Command::GuildInvitePlayer { name } => {
+                format!("GroupInviteMember:{name}")
+            }
+            Command::GuildKickPlayer { name } => {
+                format!("GroupRemoveMember:{name}")
+            }
+            Command::GuildSetLeader { name } => {
+                format!("GroupSetLeader:{name}")
+            }
+            Command::GuildToggleOfficer { name } => {
+                format!("GroupSetOfficer:{name}")
+            }
+            Command::GuildLoadMushrooms => {
                 format!("GroupIncreaseBuilding:0")
             }
-            GuildIncreaseSkill { skill, current } => {
+            Command::GuildIncreaseSkill { skill, current } => {
                 format!("GroupSkillIncrease:{}/{current}", *skill as usize)
             }
-            GuildJoinAttack => format!("GroupReadyAttack:"),
-            GuildJoinDefense => format!("GroupReadyDefense:"),
-            GuildAttack { guild } => format!("GroupAttackDeclare:{guild}"),
-            GuildRaid => format!("GroupRaidDeclare:"),
-            ToiletFlush => format!("PlayerToilettFlush:"),
-            ToiletOpen => format!("PlayerToilettOpenWithKey:"),
-            FightTower {
+            Command::GuildJoinAttack => format!("GroupReadyAttack:"),
+            Command::GuildJoinDefense => format!("GroupReadyDefense:"),
+            Command::GuildAttack { guild } => {
+                format!("GroupAttackDeclare:{guild}")
+            }
+            Command::GuildRaid => format!("GroupRaidDeclare:"),
+            Command::ToiletFlush => format!("PlayerToilettFlush:"),
+            Command::ToiletOpen => format!("PlayerToilettOpenWithKey:"),
+            Command::FightTower {
                 current_level: progress,
                 use_mush,
             } => {
-                format!("PlayerTowerBattle:{progress}/{}", *use_mush as u8)
+                format!("PlayerTowerBattle:{progress}/{}", u8::from(*use_mush))
             }
-            ToiletDrop { inventory, pos } => {
+            Command::ToiletDrop { inventory, pos } => {
                 format!("PlayerToilettLoad:{}/{}", *inventory as usize, pos + 1)
             }
-            GuildPortalBattle => format!("GroupPortalBattle:"),
-            PlayerPortalBattle => format!("PlayerPortalBattle:"),
-            MessageOpen { index } => {
+            Command::GuildPortalBattle => format!("GroupPortalBattle:"),
+            Command::FightPortal => format!("PlayerPortalBattle:"),
+            Command::MessageOpen { pos: index } => {
                 format!("PlayerMessageView:{}", *index + 1)
             }
-            MessageDelete { index } => format!(
+            Command::MessageDelete { pos: index } => format!(
                 "PlayerMessageDelete:{}",
                 match index {
                     -1 => -1,
                     x => *x + 1,
                 }
             ),
-            ViewScrapbook => format!("PlayerPollScrapbook:"),
-            ViewPet { pet_index } => format!("PetsGetStats:{pet_index}"),
-            BuyShop {
+            Command::ViewScrapbook => format!("PlayerPollScrapbook:"),
+            Command::ViewPet { pet_id: pet_index } => {
+                format!("PetsGetStats:{pet_index}")
+            }
+            Command::BuyShop {
                 shop_type,
                 shop_pos,
                 inventory,
@@ -755,19 +978,26 @@ impl Command {
                 *inventory as usize,
                 *inventory_pos + 1
             ),
-            SellShop {
+            Command::SellShop {
                 inventory,
                 inventory_pos,
-                shop_type,
-                shop_pos,
-            } => format!(
-                "PlayerItemMove:{}/{}/{}/{}",
-                *inventory as usize,
-                *inventory_pos + 1,
-                *shop_type as usize,
-                *shop_pos + 1,
-            ),
-            InventoryMove {
+            } => {
+                let mut rng = fastrand::Rng::new();
+                let shop = if rng.bool() {
+                    ShopType::Magic
+                } else {
+                    ShopType::Weapon
+                };
+                let shop_pos = rng.u32(0..6);
+                format!(
+                    "PlayerItemMove:{}/{}/{}/{}",
+                    *inventory as usize,
+                    *inventory_pos + 1,
+                    shop as usize,
+                    shop_pos + 1,
+                )
+            }
+            Command::InventoryMove {
                 inventory_from,
                 inventory_from_pos,
                 inventory_to,
@@ -779,7 +1009,7 @@ impl Command {
                 *inventory_to as usize,
                 *inventory_to_pos + 1
             ),
-            ItemMove {
+            Command::ItemMove {
                 from,
                 from_pos,
                 to,
@@ -791,34 +1021,34 @@ impl Command {
                 *to as usize,
                 *to_pos + 1
             ),
-            UnlockFeature { unlockable } => format!(
+            Command::UnlockFeature { unlockable } => format!(
                 "UnlockFeature:{}/{}",
                 unlockable.main_ident, unlockable.sub_ident
             ),
-            FightLightDungeon { name, use_mushroom } => format!(
-                "PlayerDungeonBattle:{}/{}",
-                *name as usize + 1,
-                if *use_mushroom { 1 } else { 2 }
-            ),
-            GuildSetInfo {
+            Command::GuildSetInfo {
                 description,
-                emblem_code,
+                emblem,
             } => format!(
-                "GroupSetDescription:{emblem_code}§{}",
+                "GroupSetDescription:{}§{}",
+                emblem.server_encode(),
                 to_sf_string(description)
             ),
-            SetDescription { description } => {
+            Command::SetDescription { description } => {
                 format!("PlayerSetDescription:{}", &to_sf_string(description))
             }
-            GuildSendChat { message } => {
+            Command::GuildSendChat { message } => {
                 format!("GroupChat:{}", &to_sf_string(message))
             }
-            GambleSilver { amount } => format!("PlayerGambleGold:{amount}"),
-            GambleMushrooms { amount } => format!("PlayerGambleCoins:{amount}"),
-            SendMessage { to, msg } => {
+            Command::GambleSilver { amount } => {
+                format!("PlayerGambleGold:{amount}")
+            }
+            Command::GambleMushrooms { amount } => {
+                format!("PlayerGambleCoins:{amount}")
+            }
+            Command::SendMessage { to, msg } => {
                 format!("PlayerMessageSend:{to}/{}", to_sf_string(msg))
             }
-            WitchDropCauldron {
+            Command::WitchDropCauldron {
                 inventory_t,
                 position,
             } => format!(
@@ -826,7 +1056,7 @@ impl Command {
                 *inventory_t as usize,
                 position + 1
             ),
-            Blacksmith {
+            Command::Blacksmith {
                 inventory_t,
                 position,
                 action,
@@ -836,16 +1066,16 @@ impl Command {
                 position + 1,
                 *action as usize
             ),
-            WitchEnchant { position } => {
-                format!("PlayerWitchEnchantItem:{}/1", position.witch_id())
+            Command::WitchEnchant { enchantment } => {
+                format!("PlayerWitchEnchantItem:{}/1", enchantment.enchant_id())
             }
-            SpinWheelOfFortune { fortune_payment } => {
+            Command::SpinWheelOfFortune { fortune_payment } => {
                 format!("WheelOfFortune:{}", *fortune_payment as usize)
             }
-            FortressGather { resource } => {
+            Command::FortressGather { resource } => {
                 format!("FortressGather:{}", *resource as usize + 1)
             }
-            EquipCompanion {
+            Command::EquipCompanion {
                 inventory,
                 position,
                 equipment_slot,
@@ -855,32 +1085,38 @@ impl Command {
                 position + 1,
                 *equipment_slot as usize
             ),
-            FortressBuildStart { f_type } => {
+            Command::FortressBuild { f_type } => {
                 format!("FortressBuildStart:{}/0", *f_type as usize + 1)
             }
-            FortressBuildCancel { f_type } => {
+            Command::FortressBuildCancel { f_type } => {
                 format!("FortressBuildStop:{}", *f_type as usize + 1)
             }
-            FortressBuildFinish { f_type, mushrooms } => format!(
+            Command::FortressBuildFinish { f_type, mushrooms } => format!(
                 "FortressBuildFinish:{}/{mushrooms}",
                 *f_type as usize + 1
             ),
-            FortressBuildUnitStart { unit, count } => {
+            Command::FortressBuildUnit { unit, count } => {
                 format!("FortressBuildUnitStart:{}/{count}", *unit as usize + 1)
             }
-            FortressGemStoneStart => format!("FortressGemstoneStart:",),
-            FortressGemStoneCancel => format!("FortressGemStoneStop:0"),
-            FortressGemStoneFinish { mushrooms } => {
+            Command::FortressGemStoneSearch => {
+                format!("FortressGemstoneStart:",)
+            }
+            Command::FortressGemStoneSearchCancel => {
+                format!("FortressGemStoneStop:0")
+            }
+            Command::FortressGemStoneSearchFinish { mushrooms } => {
                 format!("FortressGemstoneFinished:{mushrooms}",)
             }
-            FortressAttack { soldiers } => format!("FortressAttack:{soldiers}"),
-            FortressNewEnemy { use_mushroom: pay } => {
-                format!("FortressEnemy:{}", *pay as usize)
+            Command::FortressAttack { soldiers } => {
+                format!("FortressAttack:{soldiers}")
             }
-            FortressSetCAEnemy { msg_id } => {
+            Command::FortressNewEnemy { use_mushroom: pay } => {
+                format!("FortressEnemy:{}", usize::from(*pay))
+            }
+            Command::FortressSetCAEnemy { msg_id } => {
                 format!("FortressEnemy:0/{}", *msg_id)
             }
-            Whisper {
+            Command::Whisper {
                 player_name: player,
                 message,
             } => format!(
@@ -888,105 +1124,110 @@ impl Command {
                 player,
                 to_sf_string(message)
             ),
-            UnderworldCollect {
+            Command::UnderworldCollect {
                 resource: resource_t,
             } => {
                 format!("UnderworldGather:{}", *resource_t as usize + 1)
             }
-            UnderworldUnitUpgrade { unit: unit_t } => {
+            Command::UnderworldUnitUpgrade { unit: unit_t } => {
                 format!("UnderworldUpgradeUnit:{}", *unit_t as usize + 1)
             }
-            UnderworldUpgradeStart {
+            Command::UnderworldUpgradeStart {
                 building,
                 mushrooms,
             } => format!(
                 "UnderworldBuildStart:{}/{mushrooms}",
                 *building as usize + 1
             ),
-            UnderworldUpgradeCancel { building } => {
+            Command::UnderworldUpgradeCancel { building } => {
                 format!("UnderworldBuildStop:{}", *building as usize + 1)
             }
-            UnderworldUpgradeComplete {
+            Command::UnderworldUpgradeComplete {
                 building,
                 mushrooms,
             } => format!(
                 "UnderworldBuildFinished:{}/{mushrooms}",
                 *building as usize + 1
             ),
-            UnderworldAttack { player_id } => {
+            Command::UnderworldAttack { player_id } => {
                 format!("UnderworldAttack:{player_id}")
             }
-            RollDice { payment, dices } => {
-                let mut dices =
-                    dices.iter().fold("".to_string(), |mut a, b| {
-                        if !a.is_empty() {
-                            a.push('/')
-                        }
-                        a.push((*b as u8 + b'0') as char);
-                        a
-                    });
+            Command::RollDice { payment, dices } => {
+                let mut dices = dices.iter().fold(String::new(), |mut a, b| {
+                    if !a.is_empty() {
+                        a.push('/');
+                    }
+                    a.push((*b as u8 + b'0') as char);
+                    a
+                });
 
                 if dices.is_empty() {
-                    dices = "0/0/0/0/0".to_string()
+                    // FIXME: This is dead code, right?
+                    dices = "0/0/0/0/0".to_string();
                 }
                 format!("RollDice:{}/{}", *payment as usize, dices)
             }
-            PetFeed { pet_id, fruit_idx } => {
+            Command::PetFeed { pet_id, fruit_idx } => {
                 format!("PlayerPetFeed:{pet_id}/{fruit_idx}")
             }
-            GuildPetBattle { use_mushroom } => {
-                format!("GroupPetBattle:{}", *use_mushroom as usize)
+            Command::GuildPetBattle { use_mushroom } => {
+                format!("GroupPetBattle:{}", usize::from(*use_mushroom))
             }
-            IdleUpgrade { typ: kind, amount } => {
+            Command::IdleUpgrade { typ: kind, amount } => {
                 format!("IdleIncrease:{}/{}", *kind as usize, amount)
             }
-            IdleSacrifice => format!("IdlePrestige:0"),
-            SwapManequin => format!("PlayerDummySwap:301/1"),
-            UpdateFlag { flag } => format!(
+            Command::IdleSacrifice => format!("IdlePrestige:0"),
+            Command::SwapManequin => format!("PlayerDummySwap:301/1"),
+            Command::UpdateFlag { flag } => format!(
                 "PlayerSetFlag:{}",
-                flag.map(|a| a.code()).unwrap_or_default()
+                flag.map(Flag::code).unwrap_or_default()
             ),
-            BlockGuildInvites { block_invites } => {
-                format!("PlayerSetNoGroupInvite:{}", *block_invites as u8)
+            Command::BlockGuildInvites { block_invites } => {
+                format!("PlayerSetNoGroupInvite:{}", u8::from(*block_invites))
             }
-            ShowTips { show_tips } => format!(
-                "PlayerTutorialStatus:{}",
-                if *show_tips { 0 } else { 268435455 }
-            ),
-            ChangePassword { old, new } => {
-                let old = sha1_hash(&format!("{}{}", old, HASH_CONST));
-                let new = sha1_hash(&format!("{}{}", new, HASH_CONST));
-                format!("AccountPasswordChange:Lexi Belle/{old}/106/{new}/")
+            Command::ShowTips { show_tips } => {
+                #[allow(clippy::unreadable_literal)]
+                {
+                    format!(
+                        "PlayerTutorialStatus:{}",
+                        if *show_tips { 0 } else { 0xFFFFFFF }
+                    )
+                }
             }
-            ChangeMailAddress {
+            Command::ChangePassword { username, old, new } => {
+                let old = sha1_hash(&format!("{old}{HASH_CONST}"));
+                let new = sha1_hash(&format!("{new}{HASH_CONST}"));
+                format!("AccountPasswordChange:{username}/{old}/106/{new}/")
+            }
+            Command::ChangeMailAddress {
                 old_mail,
                 new_mail,
                 password,
                 username,
             } => {
-                let pass = sha1_hash(&format!("{}{}", password, HASH_CONST));
+                let pass = sha1_hash(&format!("{password}{HASH_CONST}"));
                 format!(
                     "AccountMailChange:{old_mail}/{new_mail}/{username}/\
                      {pass}/106"
                 )
             }
-            SetLanguage { language } => {
+            Command::SetLanguage { language } => {
                 format!("AccountSetLanguage:{language}")
             }
-            SetPlayerRelation {
+            Command::SetPlayerRelation {
                 player_id,
                 relation,
             } => format!("PlayerFriendSet:{player_id}/{}", *relation as i32),
-            SetPortraitFrame { portrait_id } => {
+            Command::SetPortraitFrame { portrait_id } => {
                 format!("PlayerSetActiveFrame:{portrait_id}")
             }
-            CollectDailyQuestReward { pos } => {
+            Command::CollectDailyQuestReward { pos } => {
                 format!("DailyTaskClaim:1/{}", pos + 1)
             }
-            CollectEventTaskReward { pos } => {
+            Command::CollectEventTaskReward { pos } => {
                 format!("DailyTaskClaim:2/{}", pos + 1)
             }
-            SwapRunes {
+            Command::SwapRunes {
                 from,
                 from_pos,
                 to,
@@ -1000,7 +1241,7 @@ impl Command {
                     *to_pos + 1
                 )
             }
-            ChangeItemLook {
+            Command::ChangeItemLook {
                 inv,
                 pos,
                 raw_model_id: model_id,
@@ -1012,25 +1253,125 @@ impl Command {
                     model_id
                 )
             }
-            ExpeditionChooseStreet { pos } => {
+            Command::ExpeditionPickEncounter { pos } => {
                 format!("ExpeditionProceed:{}", pos + 1)
             }
-            ExpeditionContinue => format!("ExpeditionProceed:1"),
-            ExpeditionPickItem { pos } => {
+            Command::ExpeditionContinue => format!("ExpeditionProceed:1"),
+            Command::ExpeditionPickReward { pos } => {
                 format!("ExpeditionProceed:{}", pos + 1)
             }
-            ExpeditionStart { pos } => format!("ExpeditionStart:{}", pos + 1),
-            FightShadowDungeon { name, use_mushroom } => format!(
-                "PlayerShadowBattle:{}/{}",
-                *name as u32 + 1,
-                *use_mushroom as u8
+            Command::ExpeditionStart { pos } => {
+                format!("ExpeditionStart:{}", pos + 1)
+            }
+            Command::FightDungeon {
+                dungeon,
+                use_mushroom,
+            } => match dungeon {
+                Dungeon::Light(name) => {
+                    if *name == LightDungeon::Tower {
+                        return Err(SFError::InvalidRequest(
+                            "The tower must be fought with the FightTower \
+                             command",
+                        ));
+                    }
+                    format!(
+                        "PlayerDungeonBattle:{}/{}",
+                        *name as usize + 1,
+                        u8::from(*use_mushroom)
+                    )
+                }
+                Dungeon::Shadow(name) => {
+                    if *name == ShadowDungeon::Twister {
+                        format!(
+                            "PlayerDungeonBattle:{}/{}",
+                            LightDungeon::Tower as u32 + 1,
+                            u8::from(*use_mushroom)
+                        )
+                    } else {
+                        format!(
+                            "PlayerShadowBattle:{}/{}",
+                            *name as u32 + 1,
+                            u8::from(*use_mushroom)
+                        )
+                    }
+                }
+            },
+            Command::FightPetOpponent {
+                opponent_id,
+                habitat: element,
+            } => {
+                format!("PetsPvPFight:0/{opponent_id}/{}", *element as u32 + 1)
+            }
+            Command::FightPetDungeon {
+                use_mush,
+                habitat: element,
+                enemy_pos,
+                player_pet_id,
+            } => {
+                format!(
+                    "PetsDungeonFight:{}/{}/{enemy_pos}/{player_pet_id}",
+                    u8::from(*use_mush),
+                    *element as u8 + 1,
+                )
+            }
+            Command::ExpeditionSkipWait { typ } => {
+                format!("ExpeditionTimeSkip:{}", *typ as u8)
+            }
+            Command::SetQuestsInsteadOfExpeditions { value } => {
+                let value = match value {
+                    ExpeditionSetting::PreferExpeditions => 'a',
+                    ExpeditionSetting::PreferQuests => 'b',
+                };
+                format!("UserSettingsUpdate:5/{value}")
+            }
+            Command::HellevatorEnter => format!("GroupTournamentJoin:"),
+            Command::HellevatorViewGuildRanking => {
+                format!("GroupTournamentRankingOwnGroup")
+            }
+            Command::HellevatorFight { use_mushroom } => {
+                format!("GroupTournamentBattle:{}", u8::from(*use_mushroom))
+            }
+            Command::HellevatorBuy {
+                position,
+                typ,
+                price,
+                use_mushroom,
+            } => format!(
+                "GroupTournamentMerchantBuy:{position}/{}/{price}/{}",
+                *typ as u32,
+                if *use_mushroom { 2 } else { 1 }
             ),
-        }
+            Command::HellevatorRefreshShop => {
+                format!("GroupTournamentMerchantReroll:")
+            }
+            Command::HallOfFameHellevatorPage { page } => {
+                let per_page = 51;
+                let pos = 26 + (per_page * page);
+                format!("GroupTournamentRankingAllGroups:{pos}//25/25")
+            }
+            Command::HellevatorJoinHellAttack {
+                use_mushroom,
+                plain: pos,
+            } => format!(
+                "GroupTournamentRaidParticipant:{}/{}",
+                u8::from(*use_mushroom),
+                *pos + 1
+            ),
+            Command::HellevatorClaimDaily => {
+                format!("GroupTournamentClaimDaily:")
+            }
+            Command::HellevatorPreviewRewards => {
+                format!("GroupTournamentPreview:")
+            }
+            Command::HellevatorClaimFinal => format!("GroupTournamentClaim:"),
+        })
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// The flag of a country, that will be visible in the Hall of Fame
 pub enum Flag {
     Australia,
     Austria,
@@ -1074,7 +1415,7 @@ pub enum Flag {
     Vietnam,
 }
 impl Flag {
-    pub(crate) fn code(&self) -> &'static str {
+    pub(crate) fn code(self) -> &'static str {
         match self {
             Flag::Australia => "au",
             Flag::Austria => "at",
@@ -1117,5 +1458,21 @@ impl Flag {
             Flag::UnitedStates => "us",
             Flag::Vietnam => "vn",
         }
+    }
+
+    pub(crate) fn parse(val: &str) -> Option<Self> {
+        if val.is_empty() {
+            return None;
+        };
+
+        // This is not fast, but I am not willing to copy & invert the match
+        // from above
+        for v in Flag::iter() {
+            if v.code() == val {
+                return Some(v);
+            }
+        }
+        warn!("Invalid flag value: {val}");
+        None
     }
 }

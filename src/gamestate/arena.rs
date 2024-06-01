@@ -6,6 +6,7 @@ use crate::PlayerId;
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The arena, that a player can fight other players in
 pub struct Arena {
     /// The enemies currently available in the arena. You have to fetch the
     /// full player info before fighting them, as you need their name
@@ -19,6 +20,8 @@ pub struct Arena {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A complete fight, which can be between mutltiple fighters for guild/tower
+/// fights
 pub struct Fight {
     /// The name of the attacking player for pet battles, or the name of the
     /// attacking guild in guild battles
@@ -61,21 +64,22 @@ impl Fight {
         data: &[i64],
         server_time: ServerTime,
     ) -> Result<(), SFError> {
-        self.has_player_won = data[0] != 0;
-        self.silver_change = data[2];
+        self.has_player_won = data.cget(0, "has_player_won")? != 0;
+        self.silver_change = data.cget(2, "fight silver change")?;
 
         if data.len() < 20 {
             // Skip underworld
             return Ok(());
         }
-        self.xp_change = soft_into(data[3], "fight xp", 0);
-        self.mushroom_change = soft_into(data[4], "fight mushrooms", 0);
-        self.honor_change = data[5];
 
-        self.rank_pre_fight = soft_into(data[7], "fight rank pre", 0);
-        self.rank_post_fight = soft_into(data[8], "fight rank post", 0);
+        self.xp_change = data.csiget(3, "fight xp", 0)?;
+        self.mushroom_change = data.csiget(4, "fight mushrooms", 0)?;
+        self.honor_change = data.cget(5, "fight honor")?;
 
-        self.item_won = Item::parse(&data[9..], server_time);
+        self.rank_pre_fight = data.csiget(7, "fight rank pre", 0)?;
+        self.rank_post_fight = data.csiget(8, "fight rank post", 0)?;
+        let item = data.skip(9, "fight item")?;
+        self.item_won = Item::parse(item, server_time)?;
         Ok(())
     }
 
@@ -101,6 +105,8 @@ impl Fight {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// This is a single fight between two fighters, which ends when one of them is
+/// at <= 0 health
 pub struct SingleFight {
     /// The ID of the player, that won.
     pub winner_id: PlayerId,
@@ -111,18 +117,26 @@ pub struct SingleFight {
     pub fighter_b: Option<Fighter>,
     /// The action this fight involved. Note that this will likely be changed
     /// in the future, as is it hard to interpret
-    pub rounds: Vec<FightRound>,
+    pub actions: Vec<FightAction>,
 }
 
 impl SingleFight {
     pub(crate) fn update_fighters(&mut self, data: &str) {
         let data = data.split('/').collect::<Vec<_>>();
-        self.fighter_a = Fighter::parse(&data[..47]);
-        self.fighter_b = Fighter::parse(&data[47..]);
+        if data.len() < 60 {
+            self.fighter_a = None;
+            self.fighter_b = None;
+            warn!("Fighter response too short");
+            return;
+        }
+        // FIXME: IIRC this should probably be split(data.len() / 2) instead
+        let (fighter_a, fighter_b) = data.split_at(47);
+        self.fighter_a = Fighter::parse(fighter_a);
+        self.fighter_b = Fighter::parse(fighter_b);
     }
 
     pub(crate) fn update_rounds(&mut self, data: &str) -> Result<(), SFError> {
-        self.rounds.clear();
+        self.actions.clear();
         let mut iter = data.split(',');
         while let (Some(player_id), Some(damage_typ), Some(new_life)) =
             (iter.next(), iter.next(), iter.next())
@@ -130,12 +144,12 @@ impl SingleFight {
             let action =
                 warning_from_str(damage_typ, "fight action").unwrap_or(0);
 
-            self.rounds.push(FightRound {
-                attacking_id: player_id.parse().map_err(|_| {
+            self.actions.push(FightAction {
+                acting_id: player_id.parse().map_err(|_| {
                     SFError::ParsingError("action pid", player_id.to_string())
                 })?,
-                action: BattleAction::parse(action),
-                defender_new_life: new_life.parse().map_err(|_| {
+                action: FightActionType::parse(action),
+                other_new_life: new_life.parse().map_err(|_| {
                     SFError::ParsingError(
                         "action new life",
                         player_id.to_string(),
@@ -150,53 +164,56 @@ impl SingleFight {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// A participant in a fight. Can be anything, that shows up in the battle
+/// screen from the player to a fortress Wall
 pub struct Fighter {
+    /// The type of the fighter
     pub typ: FighterTyp,
     /// The raw id of the fighter. This is <= 0 for monsters & companions and
     /// equivalent to the player id for players (>0)
     pub id: i64,
-    /// The name of the player, if fighting a player
+    /// The name of the fighter, if it is a player
     pub name: Option<String>,
+    /// The level of the fighter
     pub level: u32,
+    /// The amount of hp this fighter has at the start of a battle
     pub life: u32,
-    pub attributes: Attributes,
+    /// The total attributes this fighter has
+    pub attributes: EnumMap<AttributeType, u32>,
+    /// The class of the fighter
     pub class: Class,
 }
 
 impl Fighter {
+    // TODO: Make this return Result?
     pub(crate) fn parse(data: &[&str]) -> Option<Fighter> {
-        if data.len() < 28 {
-            warn!("Too short fighter response");
-            return None;
-        }
-
-        let fighter_typ: i64 = warning_from_str(data[5], "fighter typ")?;
-        use FighterTyp::*;
+        let fighter_typ: i64 = data.cfsget(5, "fighter typ").ok()??;
 
         let mut fighter_type = match fighter_typ {
-            -391 => Companion(CompanionClass::Warrior),
-            -392 => Companion(CompanionClass::Mage),
-            -393 => Companion(CompanionClass::Scout),
-            1.. => Player,
+            -391 => FighterTyp::Companion(CompanionClass::Warrior),
+            -392 => FighterTyp::Companion(CompanionClass::Mage),
+            -393 => FighterTyp::Companion(CompanionClass::Scout),
+            1.. => FighterTyp::Player,
             x => {
                 let monster_id = soft_into(-x, "monster_id", 0);
-                Monster(monster_id)
+                FighterTyp::Monster(monster_id)
             }
         };
 
-        let mut attributes = Attributes::default();
-
+        let mut attributes = EnumMap::default();
         let raw_atrs =
-            parse_vec(&data[10..15], "fighter attributes", |a| a.parse().ok())
-                .ok()?;
-        attributes.update(&raw_atrs);
+            parse_vec(data.get(10..15)?, "fighter attributes", |a| {
+                a.parse().ok()
+            })
+            .ok()?;
+        update_enum_map(&mut attributes, &raw_atrs);
 
-        let class: i32 = warning_from_str(data[27], "fighter class")?;
+        let class: i32 = data.cfsget(27, "fighter class").ok().flatten()?;
         let class: Class = FromPrimitive::from_i32(class - 1)?;
 
-        let id = warning_from_str(data[5], "fighter id").unwrap_or_default();
+        let id = data.cfsget(5, "fighter id").ok()?.unwrap_or_default();
 
-        let name = match data[6].parse::<i64>() {
+        let name = match data.cget(6, "fighter name").ok()?.parse::<i64>() {
             Ok(-770..=-740) => {
                 // This range might be too large
                 fighter_type = FighterTyp::FortressWall;
@@ -208,27 +225,26 @@ impl Fighter {
             }
             Ok(..=-1) => None,
             Ok(0) => {
+                let id = data.cget(15, "fighter uwm").ok()?;
                 // No idea if this correct
-                if ["-910", "-935", "-933", "-924"].contains(&data[15]) {
+                if ["-910", "-935", "-933", "-924"].contains(&id) {
                     fighter_type = FighterTyp::UnderworldMinion;
                 }
                 None
             }
-            Ok(_)
-                if data[5] == data[6] && fighter_type == FighterTyp::Player =>
-            {
+            Ok(pid) if pid == id && fighter_type == FighterTyp::Player => {
                 fighter_type = FighterTyp::Pet;
                 None
             }
-            _ => Some(data[6].to_string()),
+            _ => Some(data.cget(6, "fighter name").ok()?.to_string()),
         };
 
         Some(Fighter {
             typ: fighter_type,
             id,
             name,
-            level: warning_from_str(data[7], "fighter lvl")?,
-            life: warning_from_str(data[8], "fighter life")?,
+            level: data.cfsget(7, "fighter lvl").ok()??,
+            life: data.cfsget(8, "fighter life").ok()??,
             attributes,
             class,
         })
@@ -237,58 +253,82 @@ impl Fighter {
 
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct FightRound {
-    /// The id of the player, that is active this round
-    pub attacking_id: i64,
-    /// The new current life of the person, that was hit. Note that this may be
-    /// 0 for actions, like spawning minions, that dont have atarget and thus
-    /// no target health
-    pub defender_new_life: i64,
-    /// The action, that the attacking side does
-    pub action: BattleAction,
+/// One round (action) in a fight. This is mostly just one attack
+pub struct FightAction {
+    /// The id of the fighter, that does the action
+    pub acting_id: i64,
+    /// The new current life of the fighter, that was hit. Note that this may
+    /// be 0 for actions, like spawning minions, that dont have a target
+    /// and thus no target health.
+    pub other_new_life: i64,
+    /// The action, that the active side does
+    pub action: FightActionType,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum BattleAction {
+/// An action in a fight. In the official client this determines the animation,
+/// that gets played
+pub enum FightActionType {
+    /// A simple attack with the normal weapon
     Attack,
+    /// One shot from a loaded mushroom catapult in a guild battle
     MushroomCatapult,
+    /// The last action was blocked
     Blocked,
+    /// The last action was evaded
     Evaded,
+    /// The summoned minion attacks
     MinionAttack,
+    /// The summoned minion blocked the last attack
     MinionAttackBlocked,
+    /// The summoned minion evaded the last attack
     MinionAttackEvaded,
+    /// The summoned minion was crit
     MinionCrit,
     /// Plays the harp, or summons a friendly minion
     SummonSpecial,
+    /// I have not checked all possible battle types, so whatever action I have
+    /// missed will be parsed as this
     Unknown,
 }
-impl BattleAction {
-    pub(crate) fn parse(val: u32) -> BattleAction {
+
+impl FightActionType {
+    pub(crate) fn parse(val: u32) -> FightActionType {
+        // FIXME: Is this missing crit?
         match val {
-            0 | 1 => BattleAction::Attack,
-            2 => BattleAction::MushroomCatapult,
-            3 => BattleAction::Blocked,
-            4 => BattleAction::Evaded,
-            5 => BattleAction::MinionAttack,
-            6 => BattleAction::MinionAttackBlocked,
-            7 => BattleAction::MinionAttackEvaded,
-            25 => BattleAction::MinionCrit,
-            200..=250 => BattleAction::SummonSpecial,
-            _ => BattleAction::Unknown,
+            0 | 1 => FightActionType::Attack,
+            2 => FightActionType::MushroomCatapult,
+            3 => FightActionType::Blocked,
+            4 => FightActionType::Evaded,
+            5 => FightActionType::MinionAttack,
+            6 => FightActionType::MinionAttackBlocked,
+            7 => FightActionType::MinionAttackEvaded,
+            25 => FightActionType::MinionCrit,
+            200..=250 => FightActionType::SummonSpecial,
+            _ => FightActionType::Unknown,
         }
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The type of the participant in a fight
 pub enum FighterTyp {
     #[default]
+    /// Not just the own player, but any player on the server
     Player,
+    /// A generic monster, or dungeon boss with its `monster_id`
     Monster(u16),
+    /// One of the players companions
     Companion(CompanionClass),
+    /// A pillager in a fortress attack
     FortressPillager,
+    /// The wall in a fortress attack
     FortressWall,
+    /// A minion in an underworld lure battle
     UnderworldMinion,
+    /// A pet
     Pet,
 }

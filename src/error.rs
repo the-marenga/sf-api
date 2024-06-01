@@ -1,11 +1,15 @@
 use std::{error::Error, fmt::Display};
 
 #[derive(Debug)]
+#[non_exhaustive]
+#[allow(clippy::module_name_repetitions)]
+/// An error, that occured during the communication (sending/receiving/parsing)
+/// of requests to the S&F server
 pub enum SFError {
     /// Whatever you were trying to send was not possible to send. This is
     /// either our issue when you were doing something normal, or you were
     /// sending invalid stuff, like a ssologin on a normal logged in character
-    InvalidRequest,
+    InvalidRequest(&'static str),
     /// The server replied with an empty response. This could have a range of
     /// reasons. Could be a bad request, not logged in, or something else
     EmptyResponse,
@@ -21,8 +25,18 @@ pub enum SFError {
     /// with it. Most likely that you were not allowed to do your action (spend
     /// money you dont have, etc.)
     ServerError(String),
-    /// The server version is newer, than the
+    /// The server version is newer, than the limit set in the server
+    /// communication
     UnsupportedVersion(u32),
+    /// The server responded with a response, that was too short
+    TooShortResponse {
+        /// The name of the item, that was accessed
+        name: &'static str,
+        /// The position at which the array access failed
+        pos: usize,
+        /// The full array in debug print
+        array: String,
+    },
 }
 
 impl Error for SFError {
@@ -42,24 +56,30 @@ impl Error for SFError {
 impl Display for SFError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SFError::InvalidRequest => {
-                f.write_str("Tried to send an invalid request")
-            }
+            SFError::InvalidRequest(msg) => f.write_fmt(format_args!(
+                "Tried to send an invalid request: {msg}"
+            )),
             SFError::EmptyResponse => {
                 f.write_str("Received an empty response from the server")
             }
             SFError::ConnectionError => {
                 f.write_str("Could not communicate with the server")
             }
-            SFError::ParsingError(name, value) => f.write_str(&format!(
+            SFError::ParsingError(name, value) => f.write_fmt(format_args!(
                 "Error parsing the server response because {name} had an \
                  unexpected value of: {value}"
             )),
             SFError::ServerError(e) => {
-                f.write_str(&format!("Server responded with error: {e}"))
+                f.write_fmt(format_args!("Server responded with error: {e}"))
             }
-            SFError::UnsupportedVersion(v) => {
-                f.write_str(&format!("The server version {v} is not supported"))
+            SFError::UnsupportedVersion(v) => f.write_fmt(format_args!(
+                "The server version {v} is not supported"
+            )),
+            SFError::TooShortResponse { name, pos, array } => {
+                f.write_fmt(format_args!(
+                    "Tried to access the response for {name} at [{pos}] , but \
+                     the response is too short. The response is: {array}"
+                ))
             }
         }
     }
