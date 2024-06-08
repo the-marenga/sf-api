@@ -5,7 +5,8 @@
     clippy::expect_used,
     clippy::print_stdout,
     clippy::print_stderr,
-    clippy::pedantic
+    clippy::pedantic,
+    // missing_docs
 )]
 #![allow(
     clippy::wildcard_imports,
