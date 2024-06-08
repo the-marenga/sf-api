@@ -181,6 +181,7 @@ impl GameState {
         let server_time = self.server_time();
 
         self.last_fight = None;
+        self.mail.open_claimable = None;
 
         let mut other_player: Option<OtherPlayer> = None;
         let mut other_guild: Option<OtherGuild> = None;
@@ -1352,6 +1353,72 @@ impl GameState {
                         .into_list("gt bonus")
                         .and_then(|a| HellevatorTreatBonus::parse(&a))
                         .ok();
+                }
+                "pendingrewards" => {
+                    let vals: Vec<_> = val.as_str().split('/').collect();
+                    self.mail.claimables = vals
+                        .chunks_exact(6)
+                        .flat_map(|chunk| -> Result<ClaimableMail, SFError> {
+                            let start = chunk.cfsuget(4, "p reward start")?;
+                            let end = chunk.cfsuget(5, "p reward end")?;
+
+                            let status = match chunk.cget(1, "p read")? {
+                                "0" => ClaimableStatus::Unread,
+                                "1" => ClaimableStatus::Read,
+                                "2" => ClaimableStatus::Claimed,
+                                x => {
+                                    warn!("Unknown claimable status: {x}");
+                                    ClaimableStatus::Claimed
+                                }
+                            };
+
+                            Ok(ClaimableMail {
+                                typ: FromPrimitive::from_i64(
+                                    chunk.cfsuget(2, "claimable typ")?,
+                                )
+                                .unwrap_or_default(),
+                                msg_id: chunk.cfsuget(0, "msg_id")?,
+                                status,
+                                name: chunk.cget(3, "reward code")?.to_string(),
+                                received: server_time
+                                    .convert_to_local(start, "p start"),
+                                claimable_until: server_time
+                                    .convert_to_local(end, "p end"),
+                            })
+                        })
+                        .collect();
+                }
+                "pendingrewardressources" => {
+                    let vals: Vec<i64> =
+                        val.into_list("pendingrewardressources")?;
+
+                    self.mail
+                        .open_claimable
+                        .get_or_insert_with(Default::default)
+                        .resources = vals
+                        .chunks_exact(2)
+                        .flat_map(
+                            |chunk| -> Result<ClaimableResource, SFError> {
+                                Ok(ClaimableResource {
+                                    typ: ClaimableResourceType::parse(
+                                        chunk.cget(0, "c typ")?,
+                                    ),
+                                    amount: chunk.cget(1, "c amount")?,
+                                })
+                            },
+                        )
+                        .collect();
+                }
+                "pendingreward" => {
+                    let vals: Vec<i64> = val.into_list("pending item")?;
+                    self.mail
+                        .open_claimable
+                        .get_or_insert_with(Default::default)
+                        .items = vals
+                        .chunks_exact(12)
+                        .flat_map(|a| Item::parse(a, server_time))
+                        .flatten()
+                        .collect();
                 }
                 // This is the extra bonus effect all treats get that day
                 x if x.contains("dungeonenemies") => {

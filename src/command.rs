@@ -8,7 +8,7 @@ use crate::{
     error::SFError,
     gamestate::{
         character::*,
-        dungeons::{Dungeon, LightDungeon, ShadowDungeon},
+        dungeons::{CompanionClass, Dungeon, LightDungeon, ShadowDungeon},
         fortress::*,
         guild::{Emblem, GuildSkill},
         idle::IdleBuildingType,
@@ -245,7 +245,7 @@ pub enum Command {
     /// Drops an item from one of the inventories into the toilet
     ToiletDrop {
         /// The inventory you want to take the item from
-        inventory: InventoryType,
+        inventory: PlayerItemPlace,
         /// The position of the item in the inventory. Starts at 0
         pos: usize,
     },
@@ -256,7 +256,7 @@ pub enum Command {
         /// the position of the item you want to buy from the shop
         shop_pos: usize,
         /// The inventory you want to put the new item into
-        inventory: InventoryType,
+        inventory: PlayerItemPlace,
         /// The position in the chosen inventory you
         inventory_pos: usize,
     },
@@ -264,18 +264,18 @@ pub enum Command {
     /// this picks a shop&item position to sell to for you
     SellShop {
         /// The inventory you want to sell an item from
-        inventory: InventoryType,
+        inventory: PlayerItemPlace,
         /// The position of the item you want to sell
         inventory_pos: usize,
     },
     /// Moves an item from one inventory position to another
     InventoryMove {
         /// The inventory you move the item from
-        inventory_from: InventoryType,
+        inventory_from: PlayerItemPlace,
         /// The position of the item you want to move
         inventory_from_pos: usize,
         /// The inventory you move the item to
-        inventory_to: InventoryType,
+        inventory_to: PlayerItemPlace,
         /// The inventory you move the item from
         inventory_to_pos: usize,
     },
@@ -407,14 +407,14 @@ pub enum Command {
     /// Drop the item from the specified position into the witches cauldron
     WitchDropCauldron {
         /// The inventory you want to move an item from
-        inventory_t: InventoryType,
+        inventory_t: PlayerItemPlace,
         /// The position of the item to move
         position: usize,
     },
     /// Uses the blacksmith with the specified action on the specified item
     Blacksmith {
         /// The inventory the item you want to act upon is in
-        inventory_t: InventoryType,
+        inventory_t: PlayerItemPlace,
         /// The position of the item in the inventory
         position: u8,
         /// The action you want to use on the item
@@ -431,29 +431,47 @@ pub enum Command {
         /// The enchantment to apply
         enchantment: Enchantment,
     },
+    /// Spins the wheel. All information about when you can spin, or what you
+    /// won are in `game_state.specials.wheel`
     SpinWheelOfFortune {
-        fortune_payment: FortunePayment,
+        /// The resource you want to spend to spin the wheel
+        payment: FortunePayment,
     },
-    /// Collects the reward for collecting points. One of [0,1,2]
+    /// Collects the reward for event points
     CollectEventTaskReward {
+        /// One of [0,1,2], depending on which reward has been unlocked
         pos: usize,
     },
-    /// Collects the reward for collecting points. One of [0,1,2]
+    /// Collects the reward for collecting points.
     CollectDailyQuestReward {
+        /// One of [0,1,2], depending on which chest you want to collect
         pos: usize,
     },
+    /// Moves an item from a normal inventory, onto one of the companions
     EquipCompanion {
-        inventory: InventoryType,
-        position: u8,
-        equipment_slot: EquipmentSlot,
+        /// The inventory of your character you take the item from
+        from_inventory: InventoryType,
+        /// The position in the inventory, that you
+        from_pos: u8,
+        /// The companion you want to equip
+        to_companion: CompanionClass,
+        /// The slot of the companion you want to equip
+        to_slot: EquipmentSlot,
     },
+    /// Collects a specific resource from the fortress
     FortressGather {
+        /// The type of resource you want to collect
         resource: FortressResourceType,
     },
+    /// Builds, or upgrades a building in the fortress
     FortressBuild {
+        /// The building you want to upgrade, or build
         f_type: FortressBuildingType,
     },
+    /// Cancels the current build/upgrade, of the specified building in the
+    /// fortress
     FortressBuildCancel {
+        /// The building you want to cancel the upgrade, or build of
         f_type: FortressBuildingType,
     },
     FortressBuildFinish {
@@ -684,6 +702,12 @@ pub enum Command {
     HallOfFameHellevatorPage {
         page: usize,
     },
+    ClaimablePreview {
+        msg_id: i64,
+    },
+    ClaimableClaim {
+        msg_id: i64,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -770,7 +794,7 @@ pub enum AttributeType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Enum, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// A type of shop. This is a subset of `ItemPosition`
+/// A type of shop. This is a subset of `ItemPlace`
 pub enum ShopType {
     Weapon = 3,
     Magic = 4,
@@ -1069,21 +1093,25 @@ impl Command {
             Command::WitchEnchant { enchantment } => {
                 format!("PlayerWitchEnchantItem:{}/1", enchantment.enchant_id())
             }
-            Command::SpinWheelOfFortune { fortune_payment } => {
+            Command::SpinWheelOfFortune {
+                payment: fortune_payment,
+            } => {
                 format!("WheelOfFortune:{}", *fortune_payment as usize)
             }
             Command::FortressGather { resource } => {
                 format!("FortressGather:{}", *resource as usize + 1)
             }
             Command::EquipCompanion {
-                inventory,
-                position,
-                equipment_slot,
+                from_inventory,
+                from_pos,
+                to_slot,
+                to_companion,
             } => format!(
-                "PlayerItemMove:{}/{}/1/{}",
-                *inventory as usize,
-                position + 1,
-                *equipment_slot as usize
+                "PlayerItemMove:{}/{}/{}/{}",
+                *from_inventory as usize,
+                *from_pos,
+                *to_companion as u8 + 101,
+                *to_slot as usize
             ),
             Command::FortressBuild { f_type } => {
                 format!("FortressBuildStart:{}/0", *f_type as usize + 1)
@@ -1364,6 +1392,12 @@ impl Command {
                 format!("GroupTournamentPreview:")
             }
             Command::HellevatorClaimFinal => format!("GroupTournamentClaim:"),
+            Command::ClaimablePreview { msg_id } => {
+                format!("PendingRewardView:{msg_id}")
+            }
+            Command::ClaimableClaim { msg_id } => {
+                format!("PendingRewardClaim:{msg_id}")
+            }
         })
     }
 }

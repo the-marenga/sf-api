@@ -26,15 +26,15 @@ pub struct Inventory {
 }
 
 impl Inventory {
-    pub fn free_slot(&self) -> Option<(InventoryType, usize)> {
+    pub fn free_slot(&self) -> Option<(PlayerItemPlace, usize)> {
         if let Some(bag_pos) = self.bag.iter().position(Option::is_none) {
-            return Some((InventoryType::MainInventory, bag_pos));
+            return Some((PlayerItemPlace::MainInventory, bag_pos));
         } else if let Some(e_bag_pos) = self
             .fortress_chest
             .as_ref()
             .and_then(|a| a.iter().position(Option::is_none))
         {
-            return Some((InventoryType::ExtendedInventory, e_bag_pos));
+            return Some((PlayerItemPlace::ExtendedInventory, e_bag_pos));
         }
         None
     }
@@ -63,20 +63,41 @@ impl Inventory {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// All the parts of `ItemPosition`, that are owned by the player
-pub enum InventoryType {
+/// All the parts of `ItemPlace`, that are owned by the player
+pub enum PlayerItemPlace {
     Equipment = 1,
     MainInventory = 2,
     ExtendedInventory = 5,
 }
 
-impl InventoryType {
-    /// `InventoryType` is a subset of `ItemPosition`. This is a convenient
+impl PlayerItemPlace {
+    /// `InventoryType` is a subset of `ItemPlace`. This is a convenient
     /// function to convert between them
     #[must_use]
     pub fn item_position(&self) -> ItemPlace {
         match self {
-            InventoryType::Equipment => ItemPlace::Equipment,
+            PlayerItemPlace::Equipment => ItemPlace::Equipment,
+            PlayerItemPlace::MainInventory => ItemPlace::MainInventory,
+            PlayerItemPlace::ExtendedInventory => ItemPlace::FortressChest,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+/// All the parts of `ItemPlace`, that are owned by the player
+pub enum InventoryType {
+    MainInventory = 2,
+    ExtendedInventory = 5,
+}
+
+impl InventoryType {
+    /// `InventoryType` is a subset of `ItemPlace`. This is a convenient
+    /// function to convert between them
+    #[must_use]
+    pub fn item_position(&self) -> ItemPlace {
+        match self {
             InventoryType::MainInventory => ItemPlace::MainInventory,
             InventoryType::ExtendedInventory => ItemPlace::FortressChest,
         }

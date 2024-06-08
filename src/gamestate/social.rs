@@ -13,7 +13,8 @@ use super::{
     guild::GuildRank,
     items::{Equipment, ItemType},
     unlockables::Mirror,
-    AttributeType, Class, Emblem, Flag, Potion, Race, SFError, ServerTime,
+    AttributeType, Class, Emblem, Flag, HabitatType, Item, Potion, Race,
+    SFError, ServerTime,
 };
 use crate::{misc::*, PlayerId};
 
@@ -24,11 +25,16 @@ pub struct Mail {
     pub combat_log: Vec<CombatLogEntry>,
     /// The amount of messages the  inbo xcan store
     pub inbox_capacity: u16,
-    /// A meessages and notifications
+    /// Messages and notifications
     pub inbox: Vec<InboxEntry>,
+    /// Items and resources from item codes/twitch drops, that you can claim
+    pub claimables: Vec<ClaimableMail>,
     /// If you open a message (via command), this here will contain the openeed
     /// message
     pub open_msg: Option<String>,
+    /// A preview of a claimable. You can get this via
+    /// `Command::ClaimablePreview`
+    pub open_claimable: Option<ClaimablePreview>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -735,4 +741,120 @@ pub struct RelationEntry {
     pub guild: String,
     pub level: u16,
     pub relation: Relationship,
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ClaimableMail {
+    pub msg_id: i64,
+    pub typ: ClaimableMailType,
+    pub status: ClaimableStatus,
+    pub name: String,
+    pub received: Option<DateTime<Local>>,
+    pub claimable_until: Option<DateTime<Local>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ClaimableStatus {
+    Unread,
+    Read,
+    Claimed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default, FromPrimitive)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ClaimableMailType {
+    Coupon = 10,
+    SupermanDelivery = 11,
+    TwitchDrop = 12,
+    #[default]
+    GenericDelivery,
+}
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ClaimablePreview {
+    pub items: Vec<Item>,
+    pub resources: Vec<ClaimableResource>,
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ClaimableResource {
+    pub typ: ClaimableResourceType,
+    pub amount: i64,
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ClaimableResourceType {
+    HellevatorPoints,
+    HellevatorCards,
+    Mushrooms,
+    Silver,
+    LuckyCoins,
+    Wood,
+    Stone,
+    Arcane,
+    Metal,
+    Souls,
+    Fruit(HabitatType),
+    LegendaryGem,
+    GoldFidget,
+    SilverFidget,
+    BronzeFidget,
+    Gem,
+    FruitBasket,
+    XP,
+    Egg,
+    QuicksandGlass,
+    Honor,
+    Beer,
+    Frame,
+    Mount(Mount),
+    Unknown,
+}
+
+impl ClaimableResourceType {
+    #[must_use]
+    pub(crate) fn parse(val: i64) -> ClaimableResourceType {
+        match val {
+            1 => ClaimableResourceType::HellevatorPoints,
+            2 => ClaimableResourceType::HellevatorCards,
+            3 => ClaimableResourceType::Mushrooms,
+            4 => ClaimableResourceType::Silver,
+            5 => ClaimableResourceType::LuckyCoins,
+            6 => ClaimableResourceType::Wood,
+            7 => ClaimableResourceType::Stone,
+            8 => ClaimableResourceType::Arcane,
+            9 => ClaimableResourceType::Metal,
+            10 => ClaimableResourceType::Souls,
+            11 => ClaimableResourceType::Fruit(HabitatType::Shadow),
+            12 => ClaimableResourceType::Fruit(HabitatType::Light),
+            13 => ClaimableResourceType::Fruit(HabitatType::Earth),
+            14 => ClaimableResourceType::Fruit(HabitatType::Fire),
+            15 => ClaimableResourceType::Fruit(HabitatType::Water),
+            16 => ClaimableResourceType::LegendaryGem,
+            17 => ClaimableResourceType::GoldFidget,
+            18 => ClaimableResourceType::SilverFidget,
+            19 => ClaimableResourceType::BronzeFidget,
+            20..=22 => ClaimableResourceType::Gem,
+            23 => ClaimableResourceType::FruitBasket,
+            24 => ClaimableResourceType::XP,
+            25 => ClaimableResourceType::Egg,
+            26 => ClaimableResourceType::QuicksandGlass,
+            27 => ClaimableResourceType::Honor,
+            28 => ClaimableResourceType::Beer,
+            29 => ClaimableResourceType::Frame,
+            30 => ClaimableResourceType::Mount(Mount::Cow),
+            31 => ClaimableResourceType::Mount(Mount::Horse),
+            32 => ClaimableResourceType::Mount(Mount::Tiger),
+            33 => ClaimableResourceType::Mount(Mount::Dragon),
+            x => {
+                warn!("Unknown claimable resource type: {x}");
+                ClaimableResourceType::Unknown
+            }
+        }
+    }
 }
