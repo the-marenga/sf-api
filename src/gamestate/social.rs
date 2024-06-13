@@ -99,6 +99,10 @@ pub struct Lookup {
 
 impl Lookup {
     pub(crate) fn insert_lookup(&mut self, other: OtherPlayer) {
+        if other.name.is_empty() || other.player_id == 0 {
+            warn!("Skipping invalid player insert");
+            return;
+        }
         self.name_to_id.insert(other.name.clone(), other.player_id);
         self.players.insert(other.player_id, other);
     }
@@ -506,8 +510,9 @@ impl OtherPlayer {
 
         if op.level >= 25 {
             let mut fortress = OtherFortress {
-                fortress_wood: data.ciget(228, "other s wood")?,
-                fortress_stone: data.ciget(229, "other f stone")?,
+                // TODO: These can be 0... why?
+                fortress_wood: data.csiget(228, "other s wood", 0)?,
+                fortress_stone: data.csiget(229, "other f stone", 0)?,
                 fortress_soldiers: data.csimget(
                     230,
                     "other f soldiers",
