@@ -1455,7 +1455,7 @@ impl Flag {
             Flag::Austria => "at",
             Flag::Belgium => "be",
             Flag::Brazil => "br",
-            Flag::Bulgaria => "bu",
+            Flag::Bulgaria => "bg",
             Flag::Canada => "ca",
             Flag::Chile => "cl",
             Flag::China => "cn",
