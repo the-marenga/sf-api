@@ -257,7 +257,7 @@ impl Item {
                     warn!("Invalid attribute typ: {atr_typ}, {typ:?}");
                     continue;
                 };
-                let atr_val = data.cget(i + 7, "item atr typ")?;
+                let atr_val = data.cget(i + 7, "item atr val")?;
                 let Ok(atr_val): Result<u32, _> = atr_val.try_into() else {
                     warn!("Invalid attribute value: {atr_val}, {typ:?}");
                     continue;

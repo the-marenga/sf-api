@@ -950,13 +950,17 @@ impl GameState {
                         )?);
                 }
                 "otherplayer" => {
-                    let Ok(mut op) = OtherPlayer::parse(
+                    let mut op = match OtherPlayer::parse(
                         &val.into_list("other player")?,
                         server_time,
-                    ) else {
-                        // Should we err here?
-                        other_player = None;
-                        continue;
+                    ) {
+                        Ok(op) => op,
+                        Err(e) => {
+                            warn!("{e}");
+                            // Should we err here?
+                            other_player = None;
+                            continue;
+                        }
                     };
 
                     // TODO: This sucks! Change parse -> update
