@@ -29,7 +29,7 @@ pub struct Mail {
     pub inbox: Vec<InboxEntry>,
     /// Items and resources from item codes/twitch drops, that you can claim
     pub claimables: Vec<ClaimableMail>,
-    /// If you open a message (via command), this here will contain the openeed
+    /// If you open a message (via command), this here will contain the opened
     /// message
     pub open_msg: Option<String>,
     /// A preview of a claimable. You can get this via
@@ -515,7 +515,12 @@ impl OtherPlayer {
                     |a| a & 0xFF,
                 )?,
                 fortress_has_mages: data.cget(230, "fortress mages")? >> 16 > 0,
-                fortress_archers: data.csiget(231, "other f archer", 0)?,
+                fortress_archers: data.csimget(
+                    231,
+                    "other f archer",
+                    0,
+                    |a| a & 0xFF,
+                )?,
                 wood_in_cutter: data.csiget(239, "other wood cutter", 0)?,
                 stone_in_quary: data.csiget(240, "other stone q", 0)?,
                 max_wood_in_cutter: data.csiget(241, "other max wood c", 0)?,
