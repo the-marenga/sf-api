@@ -81,6 +81,15 @@ pub enum Command {
         /// The class of the new character
         class: Class,
     },
+    /// Deletes a new normal character on the server. This only works for
+    /// characters regiistered via `Register`
+    #[deprecated = "Use the register method instead"]
+    Delete {
+        /// The username of the account to delete
+        username: String,
+        /// The password of the account to delete
+        pw_hash: String,
+    },
     /// Updates the current state of the entire gamestate. Also notifies the
     /// guild, that the player is logged in. Should therefore be send
     /// regularely
@@ -854,6 +863,14 @@ impl Command {
                     *gender as usize + 1,
                     *race as usize,
                     *class as usize + 1
+                )
+            }
+            Command::Delete { username, pw_hash } => {
+                let password = sha1_hash(&format!("{pw_hash}0"));
+
+                format!(
+                    "AccountDelete:{username}/{password}/0/{username}@playa.\
+                     sso",
                 )
             }
             Command::Update => "Poll:".to_string(),

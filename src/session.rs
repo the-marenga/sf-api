@@ -225,6 +225,28 @@ impl Session {
         Ok((s, resp))
     }
 
+    /// Deletes a character on the server. This only works for characters
+    /// registered via `register()`
+    ///
+    /// # Errors
+    /// Look at `send_command()` to get a full overview of all the
+    /// possible errors
+    pub async fn delete(
+        username: &str,
+        password: &str,
+        server: ServerConnection,
+    ) -> Result<(), SFError> {
+        let mut s = Self::new(username, password, server);
+        #[allow(deprecated)]
+        let _ = s
+            .send_command(&Command::Delete {
+                username: username.to_string(),
+                pw_hash: PWHash::new(password).get().to_string(),
+            })
+            .await?;
+        Ok(())
+    }
+
     /// The internal version `send_command()`. It allows you to send
     /// requests with only a normal ref, because this version does not
     /// update the cryptography settings of this session, if the server
@@ -612,7 +634,9 @@ impl Response {
                     .filter(|a| !a.is_empty())
                 {
                     let Some((full_key, value)) = part.split_once(':') else {
-                        warn!("weird k/v in resp: {part}");
+                        if part != "success" && part != "Success" {
+                            warn!("weird k/v in resp: {part}");
+                        }
                         continue;
                     };
 
