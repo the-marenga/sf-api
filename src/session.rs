@@ -578,6 +578,8 @@ impl Response {
         let body = og_body
             .trim_end_matches('|')
             .trim_start_matches(|a: char| !a.is_alphabetic());
+        trace!("Received raw response: {body}");
+
         if !body.contains(':')
             && !body.starts_with("success")
             && !body.starts_with("Success")
