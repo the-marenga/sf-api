@@ -814,7 +814,7 @@ impl Command {
     /// perform the request
     #[allow(deprecated, clippy::useless_format)]
     pub(crate) fn request_string(&self) -> Result<String, SFError> {
-        const APP_VERSION: &str = "2000000000000";
+        const APP_VERSION: &str = "2100000000000";
         Ok(match self {
             Command::Custom {
                 cmd_name,
