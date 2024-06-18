@@ -647,7 +647,7 @@ impl ItemType {
                     return unknown_item("potion type");
                 };
                 let Some(size) = PotionSize::parse(sub_ident) else {
-                    return unknown_item("potion type");
+                    return unknown_item("potion size");
                 };
                 ItemType::Potion(Potion {
                     typ,
@@ -756,13 +756,10 @@ pub enum PotionSize {
 
 impl PotionSize {
     pub(crate) fn parse(id: i64) -> Option<Self> {
-        if id == 16 {
-            return Some(PotionSize::Large);
-        }
-        Some(match id / 6 {
-            0 => PotionSize::Small,
-            1 => PotionSize::Medium,
-            2 => PotionSize::Large,
+        Some(match id {
+            1..=5 => PotionSize::Small,
+            6..=10 => PotionSize::Medium,
+            11..=16 => PotionSize::Large,
             _ => return None,
         })
     }
