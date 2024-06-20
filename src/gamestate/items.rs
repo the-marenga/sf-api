@@ -39,6 +39,15 @@ impl Inventory {
         None
     }
 
+    pub fn count_free_slots(&self) -> usize {
+        let bag_free_slots = self.bag.iter().filter(|slot| slot.is_none()).count();
+        let fortress_chest_free_slots = self
+            .fortress_chest
+            .as_ref()
+            .map_or(0, |chest| chest.iter().filter(|slot| slot.is_none()).count());
+        bag_free_slots + fortress_chest_free_slots
+    }
+
     pub(crate) fn update_fortress_chest(
         &mut self,
         data: &[i64],
