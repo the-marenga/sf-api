@@ -579,7 +579,7 @@ pub struct PetStats {
     pub element: HabitatType,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Enum, EnumIter)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Enum, EnumIter, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HabitatType {
     #[default]
