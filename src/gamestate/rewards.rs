@@ -8,7 +8,7 @@ use strum::EnumIter;
 
 use super::{
     character::Class, items::*, tavern::Location, unlockables::HabitatType,
-    ArrSkip, CCGet, CFPGet, CGet,
+    ArrSkip, CCGet, CGet, Mount,
 };
 use crate::{command::AttributeType, error::SFError};
 
@@ -241,7 +241,7 @@ pub struct Tasks {
 /// Information about the tasks, that reset every day
 pub struct DailyTasks {
     /// The tasks you have to do
-    pub tasks: Vec<DailyTask>,
+    pub tasks: Vec<Task>,
     /// The rewards available for completing tasks.
     pub rewards: [RewardChest; 3],
 }
@@ -257,7 +257,7 @@ pub struct EventTasks {
     /// The time at which the event tasks will reset
     pub end: Option<DateTime<Local>>,
     /// The actual tasks you have to complete
-    pub tasks: Vec<EventTask>,
+    pub tasks: Vec<Task>,
     /// The rewards available for completing tasks.
     pub rewards: [RewardChest; 3],
 }
@@ -292,20 +292,13 @@ macro_rules! impl_tasks {
 impl_tasks!(DailyTasks);
 impl_tasks!(EventTasks);
 
-macro_rules! impl_task {
-    ($t:ty) => {
-        impl $t {
-            /// The amount of tasks you have collected
-            #[must_use]
-            pub fn is_completed(&self) -> bool {
-                self.current >= self.target
-            }
-        }
-    };
+impl Task {
+    /// The amount of tasks you have collected
+    #[must_use]
+    pub fn is_completed(&self) -> bool {
+        self.current >= self.target
+    }
 }
-
-impl_task!(EventTask);
-impl_task!(DailyTask);
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -327,6 +320,7 @@ pub struct Wheel {
 #[allow(missing_docs)]
 /// The theme the event tasks have
 pub enum EventTaskTheme {
+    // 1 is not set
     Gambler = 2,
     RankClimber = 3,
     ShoppingSpree = 4,
@@ -335,7 +329,11 @@ pub enum EventTaskTheme {
     PartTimeNudist = 7,
     Scrimper = 8,
     Scholar = 9,
+    Maximizer = 10,
     UnderworldFigure = 11,
+    EggHunt = 12,
+    SummerCollectifun = 13,
+    Walpurgis = 14,
     #[default]
     Unknown = 245,
 }
@@ -345,85 +343,168 @@ pub enum EventTaskTheme {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 /// The type of task you have to do
-pub enum EventTaskTyp {
-    LureHeroesIntoUnderworld,
-    WinFightsAgainst(Class),
-    WinFightsBareHands,
-    SpendGoldInShop,
-    SpendGoldOnUpgrades,
-    RequestNewGoods,
+pub enum TaskType {
+    AddSocketToItem,
+    BlacksmithDismantle,
     BuyHourGlasses,
-    SkipQuest,
-    SkipGameOfDiceWait,
-    WinFights,
-    WinFightsBackToBack,
-    WinFightsNoChestplate,
-    WinFightsNoGear,
-    WinFightsNoEpicsLegendaries,
+    BuyOfferFromArenaManager,
+    ClaimSoulsFromExtractor,
+    ColectGoldFromPit,
+    ConsumeThirstForAdventure,
+    ConsumeThirstFromUnderworld,
+    DefeatGambler,
+    DrinkBeer,
     EarnMoneyCityGuard,
     EarnMoneyFromHoFFights,
     EarnMoneySellingItems,
-    ColectGoldFromPit,
-    GainXpFromQuests,
-    GainXpFromAcademy,
-    GainXpFromArenaFights,
-    GainXpFromAdventuromatic,
-    ClaimSoulsFromExtractor,
+    EnterDemonPortal,
+    FeedPets,
+
+    FightGuildHydra,
+    FightGuildPortal,
+    FightInDungeons,
+    FightInPetHabitat,
+    FightMonsterInLegendaryDungeon,
+    FightOtherPets,
+
     FillMushroomsInAdventuromatic,
-    PlayGameOfDice,
-    SpinWheelOfFortune,
-    Upgrade(AttributeType),
-    GetLuckyCoinsFromFlyingTube,
-    Unknown,
-    GainHonorInArena,
+    FindGemInFortress,
+    GainArcaneFromDismantle,
+    GainEpic,
     GainHonorExpeditions,
     GainHonorFortress,
+    GainHonorInArena,
+    GainHonorInHoF,
+    GainLegendaryFromLegendaryDungeon,
+    GainMetalFromDismantle,
+    GainSilver,
+    GainSilverFromFightsInHoF,
+    GainXP,
+    GainXpFromAcademy,
+    GainXpFromAdventuromatic,
+    GainXpFromArenaFights,
+    GainXpFromQuests,
+    GetLuckyCoinsFromFlyingTube,
+    GuildReadyFight,
+    LureHeroesIntoUnderworld,
+    PlayGameOfDice,
+    RequestNewGoods,
+    SacrificeRunes,
+    SkipGameOfDiceWait,
+    SkipQuest,
+    SpendGoldInShop,
+    SpendGoldOnUpgrades,
+    SpinWheelOfFortune,
+    ThrowEpicInToilet,
+    ThrowItemInCauldron,
+    ThrowItemInToilet,
+    TravelTo(Location),
+
+    Upgrade(AttributeType),
+    UpgradeAnyAttribute,
+    UpgradeArenaManager,
+    UpgradeItemAttributes,
+
+    WinFightsPlayerPet,
+    WinFightsAgainst(Class),
+    WinFightsBackToBack,
+    WinFightsBareHands,
+    WinFightsInArena,
+    WinFightsInHoF,
+    WinFightsNoChestplate,
+    WinFightsNoEpicsLegendaries,
+    WinFightsNoGear,
+
+    Unknown,
 }
 
-impl EventTaskTyp {
-    pub(crate) fn parse(num: i64) -> EventTaskTyp {
+impl TaskType {
+    pub(crate) fn parse(num: i64) -> TaskType {
         match num {
-            4 => EventTaskTyp::SpinWheelOfFortune,
-            11 => EventTaskTyp::PlayGameOfDice,
-            12 => EventTaskTyp::LureHeroesIntoUnderworld,
-            48 => EventTaskTyp::WinFightsAgainst(Class::Warrior),
-            49 => EventTaskTyp::WinFightsAgainst(Class::Mage),
-            50 => EventTaskTyp::WinFightsAgainst(Class::Scout),
-            51 => EventTaskTyp::WinFightsAgainst(Class::Assassin),
-            52 => EventTaskTyp::WinFightsAgainst(Class::Druid),
-            53 => EventTaskTyp::WinFightsAgainst(Class::Bard),
-            54 => EventTaskTyp::WinFightsAgainst(Class::BattleMage),
-            55 => EventTaskTyp::WinFightsAgainst(Class::Berserker),
-            56 => EventTaskTyp::WinFightsAgainst(Class::DemonHunter),
-            57 => EventTaskTyp::WinFightsBareHands,
-            59 => EventTaskTyp::GetLuckyCoinsFromFlyingTube,
-            60 => EventTaskTyp::Upgrade(AttributeType::Luck),
-            61 => EventTaskTyp::GainHonorInArena,
-            63 => EventTaskTyp::GainHonorFortress,
-            64 => EventTaskTyp::GainHonorExpeditions,
-            65 => EventTaskTyp::SpendGoldInShop,
-            66 => EventTaskTyp::SpendGoldOnUpgrades,
-            67 => EventTaskTyp::RequestNewGoods,
-            68 => EventTaskTyp::BuyHourGlasses,
-            69 => EventTaskTyp::SkipQuest,
-            70 => EventTaskTyp::SkipGameOfDiceWait,
-            71 => EventTaskTyp::WinFights,
-            72 => EventTaskTyp::WinFightsBackToBack,
-            75 => EventTaskTyp::WinFightsNoChestplate,
-            76 => EventTaskTyp::WinFightsNoGear,
-            77 => EventTaskTyp::WinFightsNoEpicsLegendaries,
-            78 => EventTaskTyp::EarnMoneyCityGuard,
-            79 => EventTaskTyp::EarnMoneyFromHoFFights,
-            80 => EventTaskTyp::EarnMoneySellingItems,
-            81 => EventTaskTyp::ColectGoldFromPit,
-            82 => EventTaskTyp::GainXpFromQuests,
-            83 => EventTaskTyp::GainXpFromAcademy,
-            84 => EventTaskTyp::GainXpFromArenaFights,
-            85 => EventTaskTyp::GainXpFromAdventuromatic,
-            90 => EventTaskTyp::ClaimSoulsFromExtractor,
-            91 => EventTaskTyp::FillMushroomsInAdventuromatic,
-            92 => EventTaskTyp::WinFightsAgainst(Class::Necromancer),
-            _ => EventTaskTyp::Unknown,
+            ..=0 | 73 | 100.. => TaskType::Unknown,
+            1 => TaskType::DrinkBeer,
+            2 => TaskType::ConsumeThirstForAdventure,
+            3 => TaskType::WinFightsInArena,
+            4 => TaskType::SpinWheelOfFortune,
+            5 => TaskType::FightGuildHydra,
+            6 => TaskType::FightGuildPortal,
+            7 => TaskType::FeedPets,
+            8 => TaskType::FightOtherPets,
+            9 => TaskType::BlacksmithDismantle,
+            10 => TaskType::ThrowItemInToilet,
+            11 => TaskType::PlayGameOfDice,
+            12 => TaskType::LureHeroesIntoUnderworld,
+            13 => TaskType::EnterDemonPortal,
+            14 => TaskType::DefeatGambler,
+            15 => TaskType::Upgrade(AttributeType::Strength),
+            16 => TaskType::Upgrade(AttributeType::Dexterity),
+            17 => TaskType::Upgrade(AttributeType::Intelligence),
+            18 => TaskType::ConsumeThirstFromUnderworld,
+            19 => TaskType::GuildReadyFight,
+            20 => TaskType::FindGemInFortress,
+            21 => TaskType::ThrowItemInCauldron,
+            22 => TaskType::FightInPetHabitat,
+            23 => TaskType::UpgradeArenaManager,
+            24 => TaskType::SacrificeRunes,
+            25..=45 => {
+                let Some(location) = FromPrimitive::from_i64(num - 24) else {
+                    return TaskType::Unknown;
+                };
+                TaskType::TravelTo(location)
+            }
+            46 => TaskType::ThrowEpicInToilet,
+            47 => TaskType::BuyOfferFromArenaManager,
+            48 => TaskType::WinFightsAgainst(Class::Warrior),
+            49 => TaskType::WinFightsAgainst(Class::Mage),
+            50 => TaskType::WinFightsAgainst(Class::Scout),
+            51 => TaskType::WinFightsAgainst(Class::Assassin),
+            52 => TaskType::WinFightsAgainst(Class::Druid),
+            53 => TaskType::WinFightsAgainst(Class::Bard),
+            54 => TaskType::WinFightsAgainst(Class::BattleMage),
+            55 => TaskType::WinFightsAgainst(Class::Berserker),
+            56 => TaskType::WinFightsAgainst(Class::DemonHunter),
+            57 => TaskType::WinFightsBareHands,
+            58 => TaskType::WinFightsPlayerPet,
+            59 => TaskType::GetLuckyCoinsFromFlyingTube,
+            60 => TaskType::Upgrade(AttributeType::Luck),
+            61 => TaskType::GainHonorInArena,
+            62 => TaskType::GainHonorInHoF,
+            63 => TaskType::GainHonorFortress,
+            64 => TaskType::GainHonorExpeditions,
+            65 => TaskType::SpendGoldInShop,
+            66 => TaskType::SpendGoldOnUpgrades,
+            67 => TaskType::RequestNewGoods,
+            68 => TaskType::BuyHourGlasses,
+            69 => TaskType::SkipQuest,
+            70 => TaskType::SkipGameOfDiceWait,
+            71 => TaskType::WinFightsInHoF,
+            72 => TaskType::WinFightsBackToBack,
+            74 => TaskType::GainSilverFromFightsInHoF,
+            75 => TaskType::WinFightsNoChestplate,
+            76 => TaskType::WinFightsNoGear,
+            77 => TaskType::WinFightsNoEpicsLegendaries,
+            78 => TaskType::EarnMoneyCityGuard,
+            79 => TaskType::EarnMoneyFromHoFFights,
+            80 => TaskType::EarnMoneySellingItems,
+            81 => TaskType::ColectGoldFromPit,
+            82 => TaskType::GainXpFromQuests,
+            83 => TaskType::GainXpFromAcademy,
+            84 => TaskType::GainXpFromArenaFights,
+            85 => TaskType::GainXpFromAdventuromatic,
+            86 => TaskType::GainArcaneFromDismantle,
+            87 => TaskType::GainMetalFromDismantle,
+            88 => TaskType::UpgradeItemAttributes,
+            89 => TaskType::AddSocketToItem,
+            90 => TaskType::ClaimSoulsFromExtractor,
+            91 => TaskType::FillMushroomsInAdventuromatic,
+            92 => TaskType::WinFightsAgainst(Class::Necromancer),
+            93 => TaskType::GainLegendaryFromLegendaryDungeon,
+            94 => TaskType::FightMonsterInLegendaryDungeon,
+            95 => TaskType::FightInDungeons,
+            96 => TaskType::UpgradeAnyAttribute,
+            97 => TaskType::GainSilver,
+            98 => TaskType::GainXP,
+            99 => TaskType::GainEpic,
         }
     }
 }
@@ -431,9 +512,9 @@ impl EventTaskTyp {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Something to do to get a point reward
-pub struct EventTask {
+pub struct Task {
     /// The thing you are tasked with doing or getting for this task
-    pub typ: EventTaskTyp,
+    pub typ: TaskType,
     /// The amount of times, or the amount of `typ` you have currently
     pub current: u64,
     /// The amount current has to be at to complete this task
@@ -442,19 +523,19 @@ pub struct EventTask {
     pub point_reward: u32,
 }
 
-impl EventTask {
-    pub(crate) fn parse(data: &[i64]) -> Result<EventTask, SFError> {
-        let raw_typ = data.cget(0, "event task typ")?;
-        let typ = EventTaskTyp::parse(raw_typ);
+impl Task {
+    pub(crate) fn parse(data: &[i64]) -> Result<Task, SFError> {
+        let raw_typ = data.cget(0, "task typ")?;
+        let typ = TaskType::parse(raw_typ);
 
-        if typ == EventTaskTyp::Unknown {
-            warn!("Unknown event task: {data:?} {raw_typ}");
+        if typ == TaskType::Unknown {
+            warn!("Unknown  task: {data:?} {raw_typ}");
         }
-        Ok(EventTask {
+        Ok(Task {
             typ,
-            current: data.csiget(1, "current eti", 0)?,
-            target: data.csiget(2, "target eti", u64::MAX)?,
-            point_reward: data.csiget(3, "reward eti", 0)?,
+            current: data.csiget(1, "current ti", 0)?,
+            target: data.csiget(2, "target ti", u64::MAX)?,
+            point_reward: data.csiget(3, "reward ti", 0)?,
         })
     }
 }
@@ -466,7 +547,7 @@ pub struct RewardChest {
     /// Whether or not this chest has been unlocked
     pub opened: bool,
     /// The things you will get for opening this chest
-    pub reward: [Option<Reward>; 2],
+    pub rewards: Vec<Reward>,
 }
 
 #[derive(Debug, Clone)]
@@ -474,17 +555,88 @@ pub struct RewardChest {
 /// The reward for opening a chest
 pub struct Reward {
     /// The type of the thing you are getting
-    pub typ: RewardTyp,
+    pub typ: RewardType,
     /// The amount of `typ` you get
     pub amount: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum RewardType {
+    HellevatorPoints,
+    HellevatorCards,
+    Mushrooms,
+    Silver,
+    LuckyCoins,
+    Wood,
+    Stone,
+    Arcane,
+    Metal,
+    Souls,
+    Fruit(HabitatType),
+    LegendaryGem,
+    GoldFidget,
+    SilverFidget,
+    BronzeFidget,
+    Gem,
+    FruitBasket,
+    XP,
+    Egg,
+    QuicksandGlass,
+    Honor,
+    Beer,
+    Frame,
+    Mount(Mount),
+    Unknown,
+}
+
+impl RewardType {
+    #[must_use]
+    pub(crate) fn parse(val: i64) -> RewardType {
+        match val {
+            1 => RewardType::HellevatorPoints,
+            2 => RewardType::HellevatorCards,
+            3 => RewardType::Mushrooms,
+            4 => RewardType::Silver,
+            5 => RewardType::LuckyCoins,
+            6 => RewardType::Wood,
+            7 => RewardType::Stone,
+            8 => RewardType::Arcane,
+            9 => RewardType::Metal,
+            10 => RewardType::Souls,
+            11 => RewardType::Fruit(HabitatType::Shadow),
+            12 => RewardType::Fruit(HabitatType::Light),
+            13 => RewardType::Fruit(HabitatType::Earth),
+            14 => RewardType::Fruit(HabitatType::Fire),
+            15 => RewardType::Fruit(HabitatType::Water),
+            16 => RewardType::LegendaryGem,
+            17 => RewardType::GoldFidget,
+            18 => RewardType::SilverFidget,
+            19 => RewardType::BronzeFidget,
+            20..=22 => RewardType::Gem,
+            23 => RewardType::FruitBasket,
+            24 => RewardType::XP,
+            25 => RewardType::Egg,
+            26 => RewardType::QuicksandGlass,
+            27 => RewardType::Honor,
+            28 => RewardType::Beer,
+            29 => RewardType::Frame,
+            30 => RewardType::Mount(Mount::Cow),
+            31 => RewardType::Mount(Mount::Horse),
+            32 => RewardType::Mount(Mount::Tiger),
+            33 => RewardType::Mount(Mount::Dragon),
+            x => {
+                warn!("Unknown reward type: {x}");
+                RewardType::Unknown
+            }
+        }
+    }
 }
 
 impl Reward {
     pub(crate) fn parse(data: &[i64]) -> Result<Reward, SFError> {
         Ok(Reward {
-            typ: data
-                .cfpget(0, "reward typ", |a| a)?
-                .unwrap_or(RewardTyp::Unknown),
+            typ: RewardType::parse(data.cget(0, "reward typ")?),
             amount: data.csiget(1, "reward amount", 0)?,
         })
     }
@@ -492,40 +644,16 @@ impl Reward {
 
 impl RewardChest {
     pub(crate) fn parse(data: &[i64]) -> Result<RewardChest, SFError> {
-        let mut reward: [Option<Reward>; 2] = Default::default();
-
-        let indices: &[usize] = match data.len() {
-            5 => &[3],
-            _ => &[3, 5],
-        };
-
-        for (i, reward) in indices.iter().copied().zip(&mut reward) {
-            *reward = Some(Reward::parse(data.skip(i, "dice reward")?)?);
+        let opened = data.cget(0, "rchest opened")? != 0;
+        // 1 => Chest position (obvious from position)
+        let reward_count: usize = data.ciget(2, "reward chest count")?;
+        let mut rewards = Vec::new();
+        for pos in 0..reward_count {
+            let data = data.skip(3 + pos * 2, "rchest rewards")?;
+            rewards.push(Reward::parse(data)?);
         }
-
-        Ok(RewardChest {
-            opened: data.cget(0, "rchest opened")? == 1,
-            reward,
-        })
+        Ok(RewardChest { opened, rewards })
     }
-}
-
-#[non_exhaustive]
-#[derive(Debug, Clone, FromPrimitive, Copy)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
-/// The resource you get as a reward
-pub enum RewardTyp {
-    ExtraBeer = 2,
-    Mushroom = 3,
-    Silver = 4,
-    LuckyCoins = 5,
-    Stone = 9,
-    Souls = 10,
-    Experience = 24,
-    Hourglass = 26,
-    Beer = 28,
-    Unknown = 999,
 }
 
 #[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash, EnumIter)]
@@ -552,120 +680,20 @@ pub enum Event {
     HollidaySale,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Something you have to do to get bells
-pub struct DailyTask {
-    /// The thing you have to do to get points
-    pub typ: DailyTaskType,
-    /// The amount of `typ` you have currently alredy done
-    pub current: u64,
-    /// The amount of `typ` you have to do to get the points
-    pub target: u64,
-    /// The amount of points/bells you get
-    pub point_reward: u32,
-}
-
-impl DailyTask {
-    pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
-        Ok(DailyTask {
-            typ: DailyTaskType::parse(data.cget(0, "daily task type")?),
-            current: data.csiget(1, "daily current", 0)?,
-            target: data.csiget(2, "daily target", 999)?,
-            point_reward: data.csiget(3, "daily bells", 0)?,
-        })
-    }
-}
-
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
-/// The type of quest you have to complete to get the points of a daily task
-pub enum DailyTaskType {
-    DrinkBeer,
-    FindGemInFortress,
-    ConsumeThirstForAdventure,
-    FightGuildHydra,
-    FightGuildPortal,
-    SpinWheelOfFortune,
-    FeedPets,
-    FightOtherPets,
-    BlacksmithDismantle,
-    ThrowItemInToilet,
-    PlayDice,
-    LureHeoesInUnderworld,
-    EnterDemonPortal,
-    GuildReadyFight,
-    SacrificeRunes,
-    TravelTo(Location),
-    WinFights(Option<Class>),
-    DefeatOtherPet,
-    ThrowItemInCauldron,
-    WinFightsWithBareHands,
-    DefeatGambler,
-    Upgrade(AttributeType),
-    ConsumeThirstFromUnderworld,
-    UpgradeArenaManager,
-    ThrowEpicInToilet,
-    BuyOfferFromArenaManager,
-    FightInPetHabitat,
-    WinFightsWithoutEpics,
-    Unknown,
-}
-
-impl DailyTaskType {
-    pub(crate) fn parse(val: i64) -> DailyTaskType {
-        match val {
-            1 => DailyTaskType::DrinkBeer,
-            2 => DailyTaskType::ConsumeThirstForAdventure,
-            3 => DailyTaskType::WinFights(None),
-            4 => DailyTaskType::SpinWheelOfFortune,
-            5 => DailyTaskType::FightGuildHydra,
-            6 => DailyTaskType::FightGuildPortal,
-            7 => DailyTaskType::FeedPets,
-            8 => DailyTaskType::FightOtherPets,
-            9 => DailyTaskType::BlacksmithDismantle,
-            10 => DailyTaskType::ThrowItemInToilet,
-            11 => DailyTaskType::PlayDice,
-            12 => DailyTaskType::LureHeoesInUnderworld,
-            13 => DailyTaskType::EnterDemonPortal,
-            14 => DailyTaskType::DefeatGambler,
-            15 => DailyTaskType::Upgrade(AttributeType::Strength),
-            16 => DailyTaskType::Upgrade(AttributeType::Dexterity),
-            17 => DailyTaskType::Upgrade(AttributeType::Intelligence),
-            18 => DailyTaskType::ConsumeThirstFromUnderworld,
-            19 => DailyTaskType::GuildReadyFight,
-            20 => DailyTaskType::FindGemInFortress,
-            21 => DailyTaskType::ThrowItemInCauldron,
-            22 => DailyTaskType::FightInPetHabitat,
-            23 => DailyTaskType::UpgradeArenaManager,
-            24 => DailyTaskType::SacrificeRunes,
-            25..=45 => {
-                let Some(location) = FromPrimitive::from_i64(val - 24) else {
-                    return DailyTaskType::Unknown;
-                };
-                DailyTaskType::TravelTo(location)
-            }
-            46 => DailyTaskType::ThrowEpicInToilet,
-            47 => DailyTaskType::BuyOfferFromArenaManager,
-            48 => DailyTaskType::WinFights(Some(Class::Warrior)),
-            49 => DailyTaskType::WinFights(Some(Class::Mage)),
-            50 => DailyTaskType::WinFights(Some(Class::Scout)),
-            51 => DailyTaskType::WinFights(Some(Class::Assassin)),
-            52 => DailyTaskType::WinFights(Some(Class::Druid)),
-            53 => DailyTaskType::WinFights(Some(Class::Bard)),
-            54 => DailyTaskType::WinFights(Some(Class::BattleMage)),
-            55 => DailyTaskType::WinFights(Some(Class::Berserker)),
-            56 => DailyTaskType::WinFights(Some(Class::DemonHunter)),
-            57 => DailyTaskType::WinFightsWithBareHands,
-            58 => DailyTaskType::DefeatOtherPet,
-            77 => DailyTaskType::WinFightsWithoutEpics,
-            92 => DailyTaskType::WinFights(Some(Class::Necromancer)),
-            x => {
-                warn!("Unknown daily quest: {x}");
-                DailyTaskType::Unknown
-            }
+pub(crate) fn parse_rewards(vals: &[i64]) -> [RewardChest; 3] {
+    let mut start = 0;
+    core::array::from_fn(|_| -> Result<RewardChest, SFError> {
+        let vals = vals.skip(start, "multi reward chest")?;
+        let chest = RewardChest::parse(vals)?;
+        let consumed = 3 + chest.rewards.len() * 2;
+        start += consumed;
+        Ok(chest)
+    })
+    .map(|res| match res {
+        Ok(res) => res,
+        Err(err) => {
+            warn!("Bad task rewards: {err}");
+            RewardChest::default()
         }
-    }
+    })
 }
