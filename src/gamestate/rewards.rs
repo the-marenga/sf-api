@@ -241,7 +241,7 @@ pub struct Tasks {
 /// Information about the tasks, that reset every day
 pub struct DailyTasks {
     /// The tasks you have to do
-    pub tasks: Vec<DailyTask>,
+    pub tasks: Vec<Task>,
     /// The rewards available for completing tasks.
     pub rewards: [RewardChest; 3],
 }
@@ -257,7 +257,7 @@ pub struct EventTasks {
     /// The time at which the event tasks will reset
     pub end: Option<DateTime<Local>>,
     /// The actual tasks you have to complete
-    pub tasks: Vec<EventTask>,
+    pub tasks: Vec<Task>,
     /// The rewards available for completing tasks.
     pub rewards: [RewardChest; 3],
 }
@@ -292,20 +292,13 @@ macro_rules! impl_tasks {
 impl_tasks!(DailyTasks);
 impl_tasks!(EventTasks);
 
-macro_rules! impl_task {
-    ($t:ty) => {
-        impl $t {
-            /// The amount of tasks you have collected
-            #[must_use]
-            pub fn is_completed(&self) -> bool {
-                self.current >= self.target
-            }
-        }
-    };
+impl Task {
+    /// The amount of tasks you have collected
+    #[must_use]
+    pub fn is_completed(&self) -> bool {
+        self.current >= self.target
+    }
 }
-
-impl_task!(EventTask);
-impl_task!(DailyTask);
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -519,7 +512,7 @@ impl TaskType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Something to do to get a point reward
-pub struct EventTask {
+pub struct Task {
     /// The thing you are tasked with doing or getting for this task
     pub typ: TaskType,
     /// The amount of times, or the amount of `typ` you have currently
@@ -530,19 +523,19 @@ pub struct EventTask {
     pub point_reward: u32,
 }
 
-impl EventTask {
-    pub(crate) fn parse(data: &[i64]) -> Result<EventTask, SFError> {
-        let raw_typ = data.cget(0, "event task typ")?;
+impl Task {
+    pub(crate) fn parse(data: &[i64]) -> Result<Task, SFError> {
+        let raw_typ = data.cget(0, "task typ")?;
         let typ = TaskType::parse(raw_typ);
 
         if typ == TaskType::Unknown {
-            warn!("Unknown event task: {data:?} {raw_typ}");
+            warn!("Unknown  task: {data:?} {raw_typ}");
         }
-        Ok(EventTask {
+        Ok(Task {
             typ,
-            current: data.csiget(1, "current eti", 0)?,
-            target: data.csiget(2, "target eti", u64::MAX)?,
-            point_reward: data.csiget(3, "reward eti", 0)?,
+            current: data.csiget(1, "current ti", 0)?,
+            target: data.csiget(2, "target ti", u64::MAX)?,
+            point_reward: data.csiget(3, "reward ti", 0)?,
         })
     }
 }
@@ -685,31 +678,6 @@ pub enum Event {
     LuckyDay,
     CrazyMushroomHarvest,
     HollidaySale,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Something you have to do to get bells
-pub struct DailyTask {
-    /// The thing you have to do to get points
-    pub typ: TaskType,
-    /// The amount of `typ` you have currently alredy done
-    pub current: u64,
-    /// The amount of `typ` you have to do to get the points
-    pub target: u64,
-    /// The amount of points/bells you get
-    pub point_reward: u32,
-}
-
-impl DailyTask {
-    pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
-        Ok(DailyTask {
-            typ: TaskType::parse(data.cget(0, "daily task type")?),
-            current: data.csiget(1, "daily current", 0)?,
-            target: data.csiget(2, "daily target", 999)?,
-            point_reward: data.csiget(3, "daily bells", 0)?,
-        })
-    }
 }
 
 pub(crate) fn parse_rewards(vals: &[i64]) -> [RewardChest; 3] {

@@ -830,7 +830,7 @@ impl GameState {
                     let data: Vec<i64> = val.into_list("etl")?;
                     self.specials.tasks.event.tasks.clear();
                     for c in data.chunks_exact(4) {
-                        let task = EventTask::parse(c)?;
+                        let task = Task::parse(c)?;
                         self.specials.tasks.event.tasks.push(task);
                     }
                 }
@@ -847,11 +847,7 @@ impl GameState {
                     // I think the first value here is the amount of > 1 bell
                     // quests
                     for d in data.skip(1, "daily tasks")?.chunks_exact(4) {
-                        self.specials
-                            .tasks
-                            .daily
-                            .tasks
-                            .push(DailyTask::parse(d)?);
+                        self.specials.tasks.daily.tasks.push(Task::parse(d)?);
                     }
                 }
                 "eventtaskinfo" => {
