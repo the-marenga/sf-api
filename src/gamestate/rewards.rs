@@ -327,6 +327,7 @@ pub struct Wheel {
 #[allow(missing_docs)]
 /// The theme the event tasks have
 pub enum EventTaskTheme {
+    // 1 is not set
     Gambler = 2,
     RankClimber = 3,
     ShoppingSpree = 4,
@@ -335,7 +336,11 @@ pub enum EventTaskTheme {
     PartTimeNudist = 7,
     Scrimper = 8,
     Scholar = 9,
+    Maximizer = 10,
     UnderworldFigure = 11,
+    EggHunt = 12,
+    SummerCollectifun = 13,
+    Walpurgis = 14,
     #[default]
     Unknown = 245,
 }
@@ -345,85 +350,168 @@ pub enum EventTaskTheme {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 /// The type of task you have to do
-pub enum EventTaskTyp {
-    LureHeroesIntoUnderworld,
-    WinFightsAgainst(Class),
-    WinFightsBareHands,
-    SpendGoldInShop,
-    SpendGoldOnUpgrades,
-    RequestNewGoods,
+pub enum TaskType {
+    AddSocketToItem,
+    BlacksmithDismantle,
     BuyHourGlasses,
-    SkipQuest,
-    SkipGameOfDiceWait,
-    WinFights,
-    WinFightsBackToBack,
-    WinFightsNoChestplate,
-    WinFightsNoGear,
-    WinFightsNoEpicsLegendaries,
+    BuyOfferFromArenaManager,
+    ClaimSoulsFromExtractor,
+    ColectGoldFromPit,
+    ConsumeThirstForAdventure,
+    ConsumeThirstFromUnderworld,
+    DefeatGambler,
+    DrinkBeer,
     EarnMoneyCityGuard,
     EarnMoneyFromHoFFights,
     EarnMoneySellingItems,
-    ColectGoldFromPit,
-    GainXpFromQuests,
-    GainXpFromAcademy,
-    GainXpFromArenaFights,
-    GainXpFromAdventuromatic,
-    ClaimSoulsFromExtractor,
+    EnterDemonPortal,
+    FeedPets,
+
+    FightGuildHydra,
+    FightGuildPortal,
+    FightInDungeons,
+    FightInPetHabitat,
+    FightMonsterInLegendaryDungeon,
+    FightOtherPets,
+
     FillMushroomsInAdventuromatic,
-    PlayGameOfDice,
-    SpinWheelOfFortune,
-    Upgrade(AttributeType),
-    GetLuckyCoinsFromFlyingTube,
-    Unknown,
-    GainHonorInArena,
+    FindGemInFortress,
+    GainArcaneFromDismantle,
+    GainEpic,
     GainHonorExpeditions,
     GainHonorFortress,
+    GainHonorInArena,
+    GainHonorInHoF,
+    GainLegendaryFromLegendaryDungeon,
+    GainMetalFromDismantle,
+    GainSilver,
+    GainSilverFromFightsInHoF,
+    GainXP,
+    GainXpFromAcademy,
+    GainXpFromAdventuromatic,
+    GainXpFromArenaFights,
+    GainXpFromQuests,
+    GetLuckyCoinsFromFlyingTube,
+    GuildReadyFight,
+    LureHeroesIntoUnderworld,
+    PlayGameOfDice,
+    RequestNewGoods,
+    SacrificeRunes,
+    SkipGameOfDiceWait,
+    SkipQuest,
+    SpendGoldInShop,
+    SpendGoldOnUpgrades,
+    SpinWheelOfFortune,
+    ThrowEpicInToilet,
+    ThrowItemInCauldron,
+    ThrowItemInToilet,
+    TravelTo(Location),
+
+    Upgrade(AttributeType),
+    UpgradeAnyAttribute,
+    UpgradeArenaManager,
+    UpgradeItemAttributes,
+
+    WinFightsPlayerPet,
+    WinFightsAgainst(Class),
+    WinFightsBackToBack,
+    WinFightsBareHands,
+    WinFightsInArena,
+    WinFightsInHoF,
+    WinFightsNoChestplate,
+    WinFightsNoEpicsLegendaries,
+    WinFightsNoGear,
+
+    Unknown,
 }
 
-impl EventTaskTyp {
-    pub(crate) fn parse(num: i64) -> EventTaskTyp {
+impl TaskType {
+    pub(crate) fn parse(num: i64) -> TaskType {
         match num {
-            4 => EventTaskTyp::SpinWheelOfFortune,
-            11 => EventTaskTyp::PlayGameOfDice,
-            12 => EventTaskTyp::LureHeroesIntoUnderworld,
-            48 => EventTaskTyp::WinFightsAgainst(Class::Warrior),
-            49 => EventTaskTyp::WinFightsAgainst(Class::Mage),
-            50 => EventTaskTyp::WinFightsAgainst(Class::Scout),
-            51 => EventTaskTyp::WinFightsAgainst(Class::Assassin),
-            52 => EventTaskTyp::WinFightsAgainst(Class::Druid),
-            53 => EventTaskTyp::WinFightsAgainst(Class::Bard),
-            54 => EventTaskTyp::WinFightsAgainst(Class::BattleMage),
-            55 => EventTaskTyp::WinFightsAgainst(Class::Berserker),
-            56 => EventTaskTyp::WinFightsAgainst(Class::DemonHunter),
-            57 => EventTaskTyp::WinFightsBareHands,
-            59 => EventTaskTyp::GetLuckyCoinsFromFlyingTube,
-            60 => EventTaskTyp::Upgrade(AttributeType::Luck),
-            61 => EventTaskTyp::GainHonorInArena,
-            63 => EventTaskTyp::GainHonorFortress,
-            64 => EventTaskTyp::GainHonorExpeditions,
-            65 => EventTaskTyp::SpendGoldInShop,
-            66 => EventTaskTyp::SpendGoldOnUpgrades,
-            67 => EventTaskTyp::RequestNewGoods,
-            68 => EventTaskTyp::BuyHourGlasses,
-            69 => EventTaskTyp::SkipQuest,
-            70 => EventTaskTyp::SkipGameOfDiceWait,
-            71 => EventTaskTyp::WinFights,
-            72 => EventTaskTyp::WinFightsBackToBack,
-            75 => EventTaskTyp::WinFightsNoChestplate,
-            76 => EventTaskTyp::WinFightsNoGear,
-            77 => EventTaskTyp::WinFightsNoEpicsLegendaries,
-            78 => EventTaskTyp::EarnMoneyCityGuard,
-            79 => EventTaskTyp::EarnMoneyFromHoFFights,
-            80 => EventTaskTyp::EarnMoneySellingItems,
-            81 => EventTaskTyp::ColectGoldFromPit,
-            82 => EventTaskTyp::GainXpFromQuests,
-            83 => EventTaskTyp::GainXpFromAcademy,
-            84 => EventTaskTyp::GainXpFromArenaFights,
-            85 => EventTaskTyp::GainXpFromAdventuromatic,
-            90 => EventTaskTyp::ClaimSoulsFromExtractor,
-            91 => EventTaskTyp::FillMushroomsInAdventuromatic,
-            92 => EventTaskTyp::WinFightsAgainst(Class::Necromancer),
-            _ => EventTaskTyp::Unknown,
+            ..=0 | 73 | 100.. => TaskType::Unknown,
+            1 => TaskType::DrinkBeer,
+            2 => TaskType::ConsumeThirstForAdventure,
+            3 => TaskType::WinFightsInArena,
+            4 => TaskType::SpinWheelOfFortune,
+            5 => TaskType::FightGuildHydra,
+            6 => TaskType::FightGuildPortal,
+            7 => TaskType::FeedPets,
+            8 => TaskType::FightOtherPets,
+            9 => TaskType::BlacksmithDismantle,
+            10 => TaskType::ThrowItemInToilet,
+            11 => TaskType::PlayGameOfDice,
+            12 => TaskType::LureHeroesIntoUnderworld,
+            13 => TaskType::EnterDemonPortal,
+            14 => TaskType::DefeatGambler,
+            15 => TaskType::Upgrade(AttributeType::Strength),
+            16 => TaskType::Upgrade(AttributeType::Dexterity),
+            17 => TaskType::Upgrade(AttributeType::Intelligence),
+            18 => TaskType::ConsumeThirstFromUnderworld,
+            19 => TaskType::GuildReadyFight,
+            20 => TaskType::FindGemInFortress,
+            21 => TaskType::ThrowItemInCauldron,
+            22 => TaskType::FightInPetHabitat,
+            23 => TaskType::UpgradeArenaManager,
+            24 => TaskType::SacrificeRunes,
+            25..=45 => {
+                let Some(location) = FromPrimitive::from_i64(num - 24) else {
+                    return TaskType::Unknown;
+                };
+                TaskType::TravelTo(location)
+            }
+            46 => TaskType::ThrowEpicInToilet,
+            47 => TaskType::BuyOfferFromArenaManager,
+            48 => TaskType::WinFightsAgainst(Class::Warrior),
+            49 => TaskType::WinFightsAgainst(Class::Mage),
+            50 => TaskType::WinFightsAgainst(Class::Scout),
+            51 => TaskType::WinFightsAgainst(Class::Assassin),
+            52 => TaskType::WinFightsAgainst(Class::Druid),
+            53 => TaskType::WinFightsAgainst(Class::Bard),
+            54 => TaskType::WinFightsAgainst(Class::BattleMage),
+            55 => TaskType::WinFightsAgainst(Class::Berserker),
+            56 => TaskType::WinFightsAgainst(Class::DemonHunter),
+            57 => TaskType::WinFightsBareHands,
+            58 => TaskType::WinFightsPlayerPet,
+            59 => TaskType::GetLuckyCoinsFromFlyingTube,
+            60 => TaskType::Upgrade(AttributeType::Luck),
+            61 => TaskType::GainHonorInArena,
+            62 => TaskType::GainHonorInHoF,
+            63 => TaskType::GainHonorFortress,
+            64 => TaskType::GainHonorExpeditions,
+            65 => TaskType::SpendGoldInShop,
+            66 => TaskType::SpendGoldOnUpgrades,
+            67 => TaskType::RequestNewGoods,
+            68 => TaskType::BuyHourGlasses,
+            69 => TaskType::SkipQuest,
+            70 => TaskType::SkipGameOfDiceWait,
+            71 => TaskType::WinFightsInHoF,
+            72 => TaskType::WinFightsBackToBack,
+            74 => TaskType::GainSilverFromFightsInHoF,
+            75 => TaskType::WinFightsNoChestplate,
+            76 => TaskType::WinFightsNoGear,
+            77 => TaskType::WinFightsNoEpicsLegendaries,
+            78 => TaskType::EarnMoneyCityGuard,
+            79 => TaskType::EarnMoneyFromHoFFights,
+            80 => TaskType::EarnMoneySellingItems,
+            81 => TaskType::ColectGoldFromPit,
+            82 => TaskType::GainXpFromQuests,
+            83 => TaskType::GainXpFromAcademy,
+            84 => TaskType::GainXpFromArenaFights,
+            85 => TaskType::GainXpFromAdventuromatic,
+            86 => TaskType::GainArcaneFromDismantle,
+            87 => TaskType::GainMetalFromDismantle,
+            88 => TaskType::UpgradeItemAttributes,
+            89 => TaskType::AddSocketToItem,
+            90 => TaskType::ClaimSoulsFromExtractor,
+            91 => TaskType::FillMushroomsInAdventuromatic,
+            92 => TaskType::WinFightsAgainst(Class::Necromancer),
+            93 => TaskType::GainLegendaryFromLegendaryDungeon,
+            94 => TaskType::FightMonsterInLegendaryDungeon,
+            95 => TaskType::FightInDungeons,
+            96 => TaskType::UpgradeAnyAttribute,
+            97 => TaskType::GainSilver,
+            98 => TaskType::GainXP,
+            99 => TaskType::GainEpic,
         }
     }
 }
@@ -433,7 +521,7 @@ impl EventTaskTyp {
 /// Something to do to get a point reward
 pub struct EventTask {
     /// The thing you are tasked with doing or getting for this task
-    pub typ: EventTaskTyp,
+    pub typ: TaskType,
     /// The amount of times, or the amount of `typ` you have currently
     pub current: u64,
     /// The amount current has to be at to complete this task
@@ -445,9 +533,9 @@ pub struct EventTask {
 impl EventTask {
     pub(crate) fn parse(data: &[i64]) -> Result<EventTask, SFError> {
         let raw_typ = data.cget(0, "event task typ")?;
-        let typ = EventTaskTyp::parse(raw_typ);
+        let typ = TaskType::parse(raw_typ);
 
-        if typ == EventTaskTyp::Unknown {
+        if typ == TaskType::Unknown {
             warn!("Unknown event task: {data:?} {raw_typ}");
         }
         Ok(EventTask {
@@ -604,7 +692,7 @@ pub enum Event {
 /// Something you have to do to get bells
 pub struct DailyTask {
     /// The thing you have to do to get points
-    pub typ: DailyTaskType,
+    pub typ: TaskType,
     /// The amount of `typ` you have currently alredy done
     pub current: u64,
     /// The amount of `typ` you have to do to get the points
@@ -616,104 +704,11 @@ pub struct DailyTask {
 impl DailyTask {
     pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
         Ok(DailyTask {
-            typ: DailyTaskType::parse(data.cget(0, "daily task type")?),
+            typ: TaskType::parse(data.cget(0, "daily task type")?),
             current: data.csiget(1, "daily current", 0)?,
             target: data.csiget(2, "daily target", 999)?,
             point_reward: data.csiget(3, "daily bells", 0)?,
         })
-    }
-}
-
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
-/// The type of quest you have to complete to get the points of a daily task
-pub enum DailyTaskType {
-    DrinkBeer,
-    FindGemInFortress,
-    ConsumeThirstForAdventure,
-    FightGuildHydra,
-    FightGuildPortal,
-    SpinWheelOfFortune,
-    FeedPets,
-    FightOtherPets,
-    BlacksmithDismantle,
-    ThrowItemInToilet,
-    PlayDice,
-    LureHeoesInUnderworld,
-    EnterDemonPortal,
-    GuildReadyFight,
-    SacrificeRunes,
-    TravelTo(Location),
-    WinFights(Option<Class>),
-    DefeatOtherPet,
-    ThrowItemInCauldron,
-    WinFightsWithBareHands,
-    DefeatGambler,
-    Upgrade(AttributeType),
-    ConsumeThirstFromUnderworld,
-    UpgradeArenaManager,
-    ThrowEpicInToilet,
-    BuyOfferFromArenaManager,
-    FightInPetHabitat,
-    WinFightsWithoutEpics,
-    Unknown,
-}
-
-impl DailyTaskType {
-    pub(crate) fn parse(val: i64) -> DailyTaskType {
-        match val {
-            1 => DailyTaskType::DrinkBeer,
-            2 => DailyTaskType::ConsumeThirstForAdventure,
-            3 => DailyTaskType::WinFights(None),
-            4 => DailyTaskType::SpinWheelOfFortune,
-            5 => DailyTaskType::FightGuildHydra,
-            6 => DailyTaskType::FightGuildPortal,
-            7 => DailyTaskType::FeedPets,
-            8 => DailyTaskType::FightOtherPets,
-            9 => DailyTaskType::BlacksmithDismantle,
-            10 => DailyTaskType::ThrowItemInToilet,
-            11 => DailyTaskType::PlayDice,
-            12 => DailyTaskType::LureHeoesInUnderworld,
-            13 => DailyTaskType::EnterDemonPortal,
-            14 => DailyTaskType::DefeatGambler,
-            15 => DailyTaskType::Upgrade(AttributeType::Strength),
-            16 => DailyTaskType::Upgrade(AttributeType::Dexterity),
-            17 => DailyTaskType::Upgrade(AttributeType::Intelligence),
-            18 => DailyTaskType::ConsumeThirstFromUnderworld,
-            19 => DailyTaskType::GuildReadyFight,
-            20 => DailyTaskType::FindGemInFortress,
-            21 => DailyTaskType::ThrowItemInCauldron,
-            22 => DailyTaskType::FightInPetHabitat,
-            23 => DailyTaskType::UpgradeArenaManager,
-            24 => DailyTaskType::SacrificeRunes,
-            25..=45 => {
-                let Some(location) = FromPrimitive::from_i64(val - 24) else {
-                    return DailyTaskType::Unknown;
-                };
-                DailyTaskType::TravelTo(location)
-            }
-            46 => DailyTaskType::ThrowEpicInToilet,
-            47 => DailyTaskType::BuyOfferFromArenaManager,
-            48 => DailyTaskType::WinFights(Some(Class::Warrior)),
-            49 => DailyTaskType::WinFights(Some(Class::Mage)),
-            50 => DailyTaskType::WinFights(Some(Class::Scout)),
-            51 => DailyTaskType::WinFights(Some(Class::Assassin)),
-            52 => DailyTaskType::WinFights(Some(Class::Druid)),
-            53 => DailyTaskType::WinFights(Some(Class::Bard)),
-            54 => DailyTaskType::WinFights(Some(Class::BattleMage)),
-            55 => DailyTaskType::WinFights(Some(Class::Berserker)),
-            56 => DailyTaskType::WinFights(Some(Class::DemonHunter)),
-            57 => DailyTaskType::WinFightsWithBareHands,
-            58 => DailyTaskType::DefeatOtherPet,
-            77 => DailyTaskType::WinFightsWithoutEpics,
-            92 => DailyTaskType::WinFights(Some(Class::Necromancer)),
-            x => {
-                warn!("Unknown daily quest: {x}");
-                DailyTaskType::Unknown
-            }
-        }
     }
 }
 

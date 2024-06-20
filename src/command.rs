@@ -708,6 +708,8 @@ pub enum Command {
     ClaimableClaim {
         msg_id: i64,
     },
+    /// Spend 1000 mushrooms to buy a gold frame
+    BuyGoldFrame,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -1397,6 +1399,9 @@ impl Command {
             }
             Command::ClaimableClaim { msg_id } => {
                 format!("PendingRewardClaim:{msg_id}")
+            }
+            Command::BuyGoldFrame => {
+                format!("PlayerGoldFrameBuy:")
             }
         })
     }
