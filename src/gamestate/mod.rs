@@ -685,13 +685,9 @@ impl GameState {
                     // This should already be in resources
                 }
                 "dailytaskrewardpreview" => {
-                    for (chunk, chest) in val
-                        .into_list("daily task reward preview")?
-                        .chunks_exact(5)
-                        .zip(&mut self.specials.tasks.daily.rewards)
-                    {
-                        *chest = RewardChest::parse(chunk)?;
-                    }
+                    let vals: Vec<i64> =
+                        val.into_list("event task reward preview")?;
+                    self.specials.tasks.daily.rewards = parse_rewards(&vals);
                 }
                 "expeditionevent" => {
                     let data: Vec<i64> = val.into_list("exp event")?;
@@ -839,13 +835,10 @@ impl GameState {
                     }
                 }
                 "eventtaskrewardpreview" => {
-                    for (chunk, chest) in val
-                        .into_list("event task reward preview")?
-                        .chunks_exact(5)
-                        .zip(&mut self.specials.tasks.event.rewards)
-                    {
-                        *chest = RewardChest::parse(chunk)?;
-                    }
+                    let vals: Vec<i64> =
+                        val.into_list("event task reward preview")?;
+
+                    self.specials.tasks.event.rewards = parse_rewards(&vals);
                 }
                 "dailytasklist" => {
                     let data: Vec<i64> = val.into_list("daily tasks list")?;
@@ -1401,16 +1394,12 @@ impl GameState {
                         .get_or_insert_with(Default::default)
                         .resources = vals
                         .chunks_exact(2)
-                        .flat_map(
-                            |chunk| -> Result<ClaimableResource, SFError> {
-                                Ok(ClaimableResource {
-                                    typ: ClaimableResourceType::parse(
-                                        chunk.cget(0, "c typ")?,
-                                    ),
-                                    amount: chunk.cget(1, "c amount")?,
-                                })
-                            },
-                        )
+                        .flat_map(|chunk| -> Result<Reward, SFError> {
+                            Ok(Reward {
+                                typ: RewardType::parse(chunk.cget(0, "c typ")?),
+                                amount: chunk.csiget(1, "c amount", 1)?,
+                            })
+                        })
                         .collect();
                 }
                 "pendingreward" => {

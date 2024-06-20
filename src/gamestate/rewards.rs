@@ -8,7 +8,7 @@ use strum::EnumIter;
 
 use super::{
     character::Class, items::*, tavern::Location, unlockables::HabitatType,
-    ArrSkip, CCGet, CFPGet, CGet,
+    ArrSkip, CCGet, CGet, Mount,
 };
 use crate::{command::AttributeType, error::SFError};
 
@@ -466,7 +466,7 @@ pub struct RewardChest {
     /// Whether or not this chest has been unlocked
     pub opened: bool,
     /// The things you will get for opening this chest
-    pub reward: [Option<Reward>; 2],
+    pub rewards: Vec<Reward>,
 }
 
 #[derive(Debug, Clone)]
@@ -474,17 +474,88 @@ pub struct RewardChest {
 /// The reward for opening a chest
 pub struct Reward {
     /// The type of the thing you are getting
-    pub typ: RewardTyp,
+    pub typ: RewardType,
     /// The amount of `typ` you get
     pub amount: u64,
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum RewardType {
+    HellevatorPoints,
+    HellevatorCards,
+    Mushrooms,
+    Silver,
+    LuckyCoins,
+    Wood,
+    Stone,
+    Arcane,
+    Metal,
+    Souls,
+    Fruit(HabitatType),
+    LegendaryGem,
+    GoldFidget,
+    SilverFidget,
+    BronzeFidget,
+    Gem,
+    FruitBasket,
+    XP,
+    Egg,
+    QuicksandGlass,
+    Honor,
+    Beer,
+    Frame,
+    Mount(Mount),
+    Unknown,
+}
+
+impl RewardType {
+    #[must_use]
+    pub(crate) fn parse(val: i64) -> RewardType {
+        match val {
+            1 => RewardType::HellevatorPoints,
+            2 => RewardType::HellevatorCards,
+            3 => RewardType::Mushrooms,
+            4 => RewardType::Silver,
+            5 => RewardType::LuckyCoins,
+            6 => RewardType::Wood,
+            7 => RewardType::Stone,
+            8 => RewardType::Arcane,
+            9 => RewardType::Metal,
+            10 => RewardType::Souls,
+            11 => RewardType::Fruit(HabitatType::Shadow),
+            12 => RewardType::Fruit(HabitatType::Light),
+            13 => RewardType::Fruit(HabitatType::Earth),
+            14 => RewardType::Fruit(HabitatType::Fire),
+            15 => RewardType::Fruit(HabitatType::Water),
+            16 => RewardType::LegendaryGem,
+            17 => RewardType::GoldFidget,
+            18 => RewardType::SilverFidget,
+            19 => RewardType::BronzeFidget,
+            20..=22 => RewardType::Gem,
+            23 => RewardType::FruitBasket,
+            24 => RewardType::XP,
+            25 => RewardType::Egg,
+            26 => RewardType::QuicksandGlass,
+            27 => RewardType::Honor,
+            28 => RewardType::Beer,
+            29 => RewardType::Frame,
+            30 => RewardType::Mount(Mount::Cow),
+            31 => RewardType::Mount(Mount::Horse),
+            32 => RewardType::Mount(Mount::Tiger),
+            33 => RewardType::Mount(Mount::Dragon),
+            x => {
+                warn!("Unknown claimable resource type: {x}");
+                RewardType::Unknown
+            }
+        }
+    }
 }
 
 impl Reward {
     pub(crate) fn parse(data: &[i64]) -> Result<Reward, SFError> {
         Ok(Reward {
-            typ: data
-                .cfpget(0, "reward typ", |a| a)?
-                .unwrap_or(RewardTyp::Unknown),
+            typ: RewardType::parse(data.cget(0, "reward typ")?),
             amount: data.csiget(1, "reward amount", 0)?,
         })
     }
@@ -492,40 +563,16 @@ impl Reward {
 
 impl RewardChest {
     pub(crate) fn parse(data: &[i64]) -> Result<RewardChest, SFError> {
-        let mut reward: [Option<Reward>; 2] = Default::default();
-
-        let indices: &[usize] = match data.len() {
-            5 => &[3],
-            _ => &[3, 5],
-        };
-
-        for (i, reward) in indices.iter().copied().zip(&mut reward) {
-            *reward = Some(Reward::parse(data.skip(i, "dice reward")?)?);
+        let opened = data.cget(0, "rchest opened")? != 0;
+        // 1 => Chest position (obvious from position)
+        let reward_count: usize = data.ciget(2, "reward chest count")?;
+        let mut rewards = Vec::new();
+        for pos in 0..reward_count {
+            let data = data.skip(3 + pos * 2, "rchest rewards")?;
+            rewards.push(Reward::parse(data)?);
         }
-
-        Ok(RewardChest {
-            opened: data.cget(0, "rchest opened")? == 1,
-            reward,
-        })
+        Ok(RewardChest { opened, rewards })
     }
-}
-
-#[non_exhaustive]
-#[derive(Debug, Clone, FromPrimitive, Copy)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
-/// The resource you get as a reward
-pub enum RewardTyp {
-    ExtraBeer = 2,
-    Mushroom = 3,
-    Silver = 4,
-    LuckyCoins = 5,
-    Stone = 9,
-    Souls = 10,
-    Experience = 24,
-    Hourglass = 26,
-    Beer = 28,
-    Unknown = 999,
 }
 
 #[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash, EnumIter)]
@@ -668,4 +715,22 @@ impl DailyTaskType {
             }
         }
     }
+}
+
+pub(crate) fn parse_rewards(vals: &[i64]) -> [RewardChest; 3] {
+    let mut start = 0;
+    core::array::from_fn(|_| -> Result<RewardChest, SFError> {
+        let vals = vals.skip(start, "multi reward chest")?;
+        let chest = RewardChest::parse(vals)?;
+        let consumed = 3 + chest.rewards.len() * 2;
+        start += consumed;
+        Ok(chest)
+    })
+    .map(|res| match res {
+        Ok(res) => res,
+        Err(err) => {
+            warn!("Bad task rewards: {err}");
+            RewardChest::default()
+        }
+    })
 }
