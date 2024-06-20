@@ -626,7 +626,7 @@ impl RewardType {
             32 => RewardType::Mount(Mount::Tiger),
             33 => RewardType::Mount(Mount::Dragon),
             x => {
-                warn!("Unknown claimable resource type: {x}");
+                warn!("Unknown reward type: {x}");
                 RewardType::Unknown
             }
         }
