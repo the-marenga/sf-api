@@ -290,10 +290,10 @@ macro_rules! impl_tasks {
             /// Checks if a task of the given type is available and not
             /// completed
             #[must_use]
-            pub fn is_task_available(&self, task_type: TaskType) -> bool {
+            pub fn get_available(&self, task_type: TaskType) -> Option<&Task> {
                 self.tasks
                     .iter()
-                    .any(|task| task.typ == task_type && !task.is_completed())
+                    .find(|task| task.typ == task_type && !task.is_completed())
             }
         }
     };
