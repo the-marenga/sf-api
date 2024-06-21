@@ -287,10 +287,13 @@ macro_rules! impl_tasks {
                 self.tasks.iter().map(|a| a.point_reward).sum()
             }
 
-            /// Checks if a task of the given type is available and not completed
+            /// Checks if a task of the given type is available and not
+            /// completed
             #[must_use]
             pub fn is_task_available(&self, task_type: TaskType) -> bool {
-                self.tasks.iter().any(|task| task.typ == task_type && !task.is_completed())
+                self.tasks
+                    .iter()
+                    .any(|task| task.typ == task_type && !task.is_completed())
             }
         }
     };
