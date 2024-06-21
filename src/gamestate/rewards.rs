@@ -280,10 +280,20 @@ macro_rules! impl_tasks {
                     .map(|a| a.point_reward)
                     .sum()
             }
+
             /// The amount of points, that are available in total
             #[must_use]
             pub fn total_points(&self) -> u32 {
                 self.tasks.iter().map(|a| a.point_reward).sum()
+            }
+
+            /// Checks if a task of the given type is available and not
+            /// completed
+            #[must_use]
+            pub fn get_available(&self, task_type: TaskType) -> Option<&Task> {
+                self.tasks
+                    .iter()
+                    .find(|task| task.typ == task_type && !task.is_completed())
             }
         }
     };
