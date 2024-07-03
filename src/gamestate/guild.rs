@@ -149,9 +149,14 @@ impl ChatMessage {
 impl Guild {
     pub(crate) fn update_group_save(
         &mut self,
-        data: &[i64],
+        val: &str,
         server_time: ServerTime,
     ) -> Result<(), SFError> {
+        let data: Vec<_> = val
+            .split('/')
+            .map(|c| c.trim().parse::<i64>().unwrap_or_default())
+            .collect();
+
         let member_count = data.csiget(3, "guild member count", 0)?;
         self.member_count = member_count;
         self.members

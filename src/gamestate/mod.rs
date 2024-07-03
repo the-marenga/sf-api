@@ -278,13 +278,13 @@ impl GameState {
                 "owngroupattack" | "owngroupdefense" => {
                     // Annoying
                 }
+                "owngrouprequirement" => {
+                    // TODO:
+                }
                 "owngroupsave" => {
                     self.guild
                         .get_or_insert_with(Default::default)
-                        .update_group_save(
-                            &val.into_list("guild save")?,
-                            server_time,
-                        )?;
+                        .update_group_save(val.as_str(), server_time)?;
                 }
                 "owngroupmember" => self
                     .guild
