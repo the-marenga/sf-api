@@ -711,9 +711,14 @@ pub struct OtherGuildMember {
 impl OtherGuild {
     pub(crate) fn update(
         &mut self,
-        data: &[i64],
+        val: &str,
         server_time: ServerTime,
     ) -> Result<(), SFError> {
+        let data: Vec<_> = val
+            .split('/')
+            .map(|c| c.trim().parse::<i64>().unwrap_or_default())
+            .collect();
+
         self.member_count = data.csiget(3, "member count", 0)?;
         let member_count = self.member_count as usize;
         self.finished_raids = data.csiget(8, "raid count", 0)?;
