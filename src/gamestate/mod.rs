@@ -11,7 +11,7 @@ pub mod tavern;
 pub mod underworld;
 pub mod unlockables;
 
-use std::{borrow::Borrow, collections::HashSet, i64};
+use std::{borrow::Borrow, collections::HashSet};
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use enum_map::EnumMap;
@@ -278,13 +278,13 @@ impl GameState {
                 "owngroupattack" | "owngroupdefense" => {
                     // Annoying
                 }
+                "owngrouprequirement" | "othergrouprequirement" => {
+                    // TODO:
+                }
                 "owngroupsave" => {
                     self.guild
                         .get_or_insert_with(Default::default)
-                        .update_group_save(
-                            &val.into_list("guild save")?,
-                            server_time,
-                        )?;
+                        .update_group_save(val.as_str(), server_time)?;
                 }
                 "owngroupmember" => self
                     .guild
@@ -1080,10 +1080,9 @@ impl GameState {
                     guild.description = from_sf_string(desc);
                 }
                 "othergroup" => {
-                    let data: Vec<i64> = val.into_list("other group")?;
                     other_guild
                         .get_or_insert_with(Default::default)
-                        .update(&data, server_time)?;
+                        .update(val.as_str(), server_time)?;
                 }
                 "dummies" => {
                     self.character.manequin = Some(Equipment::parse(

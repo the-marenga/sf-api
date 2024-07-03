@@ -689,7 +689,10 @@ impl<'a> ResponseVal<'a> {
             .split('/')
             .map(|c| {
                 c.trim().parse::<T>().map_err(|_| {
-                    error!("Could not convert {name} into list: {self}");
+                    error!(
+                        "Could not convert {name} into list because of {c}: \
+                         {self}"
+                    );
                     SFError::ParsingError(name, format!("{c:?}"))
                 })
             })
@@ -942,7 +945,7 @@ impl Default for ConnectionOptions {
                  (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
                     .to_string(),
             ),
-            expected_server_version: 2004,
+            expected_server_version: 2005,
             error_on_unsupported_version: false,
         }
     }
