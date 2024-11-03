@@ -497,7 +497,7 @@ pub enum ExpeditionThing {
     Unicorn = 44,
 
     CupCake = 51,
-    Cake = 61,
+    SucklingPig = 61,
 
     SmallHurdle = 71,
     BigHurdle = 72,
@@ -505,7 +505,7 @@ pub enum ExpeditionThing {
 
     Socks = 81,
     ClothPile = 82,
-    RevealingCouple = 83,
+    RevealingLady = 83,
 
     SwordInStone = 91,
     BentSword = 92,
@@ -513,10 +513,10 @@ pub enum ExpeditionThing {
 
     Well = 101,
     Girl = 102,
-    Balloons = 103,
+    BewitchedStew = 103,
 
     Prince = 111,
-    RoyalFrog = 112,
+    ToxicFountainCure = 112,
 
     Hand = 121,
     Feet = 122,
@@ -533,10 +533,10 @@ pub enum ExpeditionThing {
     BurntCampfireBounty = 1003,
     UnicornBounty = 1004,
     WinnerPodiumBounty = 1007,
-    RevealingCoupleBounty = 1008,
+    RevealingLadyBounty = 1008,
     BrokenSwordBounty = 1009,
-    BaloonBounty = 1010,
-    FrogBounty = 1011,
+    BewitchedStewBounty = 1010,
+    ToxicFountainCureBounty = 1011,
     KlausBounty = 1012,
 }
 
@@ -554,10 +554,10 @@ impl ExpeditionThing {
             BurntCampfire => BurntCampfireBounty,
             Unicorn => UnicornBounty,
             WinnersPodium => WinnerPodiumBounty,
-            RevealingCouple => RevealingCoupleBounty,
+            RevealingLady => RevealingLadyBounty,
             BrokenSword => BrokenSwordBounty,
-            Balloons => BaloonBounty,
-            RoyalFrog => FrogBounty,
+            BewitchedStew => BewitchedStewBounty,
+            ToxicFountainCure => ToxicFountainCureBounty,
             Klaus => KlausBounty,
             _ => return None,
         })
@@ -576,10 +576,10 @@ impl ExpeditionThing {
             BurntCampfireBounty => &[BurntCampfire],
             UnicornBounty => &[Unicorn],
             WinnerPodiumBounty => &[WinnersPodium],
-            RevealingCoupleBounty => &[RevealingCouple],
+            RevealingLadyBounty => &[RevealingLady],
             BrokenSwordBounty => &[BrokenSword],
-            BaloonBounty => &[Balloons],
-            FrogBounty => &[RoyalFrog],
+            BewitchedStewBounty => &[BewitchedStew],
+            ToxicFountainCureBounty => &[ToxicFountainCure],
             KlausBounty => &[Klaus],
             _ => return None,
         })
