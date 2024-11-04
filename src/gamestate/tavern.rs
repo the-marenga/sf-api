@@ -283,13 +283,13 @@ impl CurrentAction {
         match (id, busy) {
             (0, None) => CurrentAction::Idle,
             (1, Some(busy_until)) => CurrentAction::CityGuard {
-                hours: soft_into(sec, "city guard time", 10),
-                busy_until,
-            },
+                    hours: soft_into(sec, "city guard time", 10),
+                    busy_until,
+                },
             (2, Some(busy_until)) => CurrentAction::Quest {
-                quest_idx: soft_into(sec, "quest index", 0),
-                busy_until,
-            },
+                    quest_idx: soft_into(sec, "quest index", 0),
+                    busy_until,
+                },
             (4, None) => CurrentAction::Expedition,
             _ => {
                 error!("Unknown action id combination: {id}, {busy:?}");
@@ -404,9 +404,9 @@ impl Expedition {
             2 => ExpeditionStage::Boss(self.boss),
             3 => ExpeditionStage::Rewards(self.rewards.clone()),
             4 => match self.busy_until {
-                Some(x) if x > Local::now() => ExpeditionStage::Waiting(x),
-                _ if self.current_floor == 10 => ExpeditionStage::Finished,
-                _ => cross_roads(),
+                    Some(x) if x > Local::now() => ExpeditionStage::Waiting(x),
+                    _ if self.current_floor == 10 => ExpeditionStage::Finished,
+                    _ => cross_roads(),
             },
             _ => ExpeditionStage::Unknown,
         }
@@ -485,27 +485,33 @@ pub enum ExpeditionThing {
     ToiletPaper = 11,
 
     Bait = 21,
+    /// New name: DragonTaming
     Dragon = 22,
 
     CampFire = 31,
     Phoenix = 32,
+    /// New name: ExtinguishedCampfire
     BurntCampfire = 33,
 
     UnicornHorn = 41,
     Donkey = 42,
     Rainbow = 43,
+    /// New name: UnicornWhisperer
     Unicorn = 44,
 
     CupCake = 51,
-    SucklingPig = 61,
+    /// New name: SucklingPig
+    Cake = 61,
 
     SmallHurdle = 71,
     BigHurdle = 72,
+    /// New name: PodiumClimber
     WinnersPodium = 73,
 
     Socks = 81,
     ClothPile = 82,
-    RevealingLady = 83,
+    /// New name: RevealingLady
+    RevealingCouple = 83,
 
     SwordInStone = 91,
     BentSword = 92,
@@ -513,14 +519,17 @@ pub enum ExpeditionThing {
 
     Well = 101,
     Girl = 102,
-    BewitchedStew = 103,
+    /// New name: BewitchedStew
+    Balloons = 103,
 
     Prince = 111,
-    ToxicFountainCure = 112,
+    /// New name: ToxicFountainCure
+    RoyalFrog = 112,
 
     Hand = 121,
     Feet = 122,
     Body = 123,
+    // New name: BuildAFriend
     Klaus = 124,
 
     Key = 131,
@@ -533,10 +542,10 @@ pub enum ExpeditionThing {
     BurntCampfireBounty = 1003,
     UnicornBounty = 1004,
     WinnerPodiumBounty = 1007,
-    RevealingLadyBounty = 1008,
+    RevealingCoupleBounty = 1008,
     BrokenSwordBounty = 1009,
-    BewitchedStewBounty = 1010,
-    ToxicFountainCureBounty = 1011,
+    BaloonBounty = 1010,
+    FrogBounty = 1011,
     KlausBounty = 1012,
 }
 
@@ -554,10 +563,10 @@ impl ExpeditionThing {
             BurntCampfire => BurntCampfireBounty,
             Unicorn => UnicornBounty,
             WinnersPodium => WinnerPodiumBounty,
-            RevealingLady => RevealingLadyBounty,
+            RevealingCouple => RevealingCoupleBounty,
             BrokenSword => BrokenSwordBounty,
-            BewitchedStew => BewitchedStewBounty,
-            ToxicFountainCure => ToxicFountainCureBounty,
+            Balloons => BaloonBounty,
+            RoyalFrog => FrogBounty,
             Klaus => KlausBounty,
             _ => return None,
         })
@@ -576,10 +585,10 @@ impl ExpeditionThing {
             BurntCampfireBounty => &[BurntCampfire],
             UnicornBounty => &[Unicorn],
             WinnerPodiumBounty => &[WinnersPodium],
-            RevealingLadyBounty => &[RevealingLady],
+            RevealingCoupleBounty => &[RevealingCouple],
             BrokenSwordBounty => &[BrokenSword],
-            BewitchedStewBounty => &[BewitchedStew],
-            ToxicFountainCureBounty => &[ToxicFountainCure],
+            BaloonBounty => &[Balloons],
+            FrogBounty => &[RoyalFrog],
             KlausBounty => &[Klaus],
             _ => return None,
         })
