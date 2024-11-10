@@ -737,6 +737,18 @@ pub enum PotionType {
     EternalLife,
 }
 
+impl From<AttributeType> for PotionType {
+    fn from(value: AttributeType) -> Self {
+        match value {
+            AttributeType::Strength => PotionType::Strength,
+            AttributeType::Dexterity => PotionType::Dexterity,
+            AttributeType::Intelligence => PotionType::Intelligence,
+            AttributeType::Constitution => PotionType::Constitution,
+            AttributeType::Luck => PotionType::Luck,
+        }
+    }
+}
+
 impl PotionType {
     pub(crate) fn parse(id: i64) -> Option<PotionType> {
         if id == 0 {
@@ -766,6 +778,14 @@ pub enum PotionSize {
 }
 
 impl PotionSize {
+    pub fn effect(&self) -> f64 {
+        match self {
+            PotionSize::Small => 1.1,
+            PotionSize::Medium => 1.15,
+            PotionSize::Large => 1.25,
+        }
+    }
+
     pub(crate) fn parse(id: i64) -> Option<Self> {
         Some(match id {
             1..=5 => PotionSize::Small,

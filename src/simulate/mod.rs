@@ -4,7 +4,9 @@ use crate::{
     command::AttributeType,
     gamestate::{
         character::{Class, Race},
-        items::{Equipment, GemSlot, GemType, ItemType, Potion},
+        items::{
+            Equipment, GemSlot, GemType, ItemType, Potion, PotionType, RuneType,
+        },
         social::OtherPlayer,
         GameState,
     },
@@ -32,16 +34,17 @@ impl From<Class> for BaseClass {
 
 #[derive(Debug, Clone)]
 pub struct UpgradeableFighter {
+    level: u16,
     class: Class,
     race: Race,
     /// The base attributes without any equipment, or other boosts
     attribute_basis: EnumMap<AttributeType, u32>,
     attributes_bought: EnumMap<AttributeType, u32>,
+    pet_attribute_bonus_perc: EnumMap<AttributeType, f64>,
 
     equipment: Equipment,
     active_potions: [Option<Potion>; 3],
     /// This should be the percentage bonus to skills from pets
-    pet_attribute_bonus_perc: EnumMap<AttributeType, f64>,
     /// The hp bonus in percent this player has from the personal demon portal
     portal_hp_bonus: u32,
     /// The damage bonus in percent this player has from the guild demon portal
@@ -50,11 +53,33 @@ pub struct UpgradeableFighter {
     attribute_additions: EnumMap<AttributeType, u32>,
 }
 
+#[derive(Debug, Clone)]
+pub struct BattleFighter {
+    attributes: EnumMap<AttributeType, u32>,
+
+    class: Class,
+    race: Race,
+
+    max_hp: u32,
+    hp: u32,
+
+}
+
+
+
+#[allow(
+    clippy::enum_glob_use,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::missing_panics_doc
+)]
 impl UpgradeableFighter {
+    #[must_use]
     pub fn new(character: impl Into<UpgradeableFighter>) -> Self {
         character.into()
     }
 
+    #[must_use]
     pub fn attributes(&self) -> EnumMap<AttributeType, u32> {
         let mut total = EnumMap::default();
 
@@ -67,7 +92,6 @@ impl UpgradeableFighter {
                 if matches!(equip.typ, ItemType::Weapon { .. }) {
                     value *= 2;
                 }
-                println!("{:?}", gem.typ);
                 match gem.typ {
                     GemType::Strength => {
                         *total.get_mut(AttributeType::Strength) += value;
@@ -111,28 +135,81 @@ impl UpgradeableFighter {
         let pet_boni = self.pet_attribute_bonus_perc;
 
         for (k, v) in &mut total {
-            println!("{k:?}");
-            println!("\t base: {}", self.attribute_basis.get(k));
-            println!("\t equipment: {v}");
             let class_bonus = (f64::from(*v) * class_bonus).trunc() as u32;
-            println!("\t class: {class_bonus:?}");
             *v += class_bonus + self.attribute_basis.get(k);
-            let pet_bonus = (f64::from(*v) * (*pet_boni.get(k))).trunc() as u32;
-            println!(
-                "\t pet: {pet_bonus:?} with a {}% bonus",
-                pet_boni.get(k) * 100.0
-            );
-            *v += pet_bonus;
-            println!("\t total: {v}");
 
+            if let Some(potion) = self
+                .active_potions
+                .iter()
+                .flatten()
+                .find(|a| a.typ == k.into())
+            {
+                *v = (f64::from(*v) * potion.size.effect()) as u32;
+            }
+
+            let pet_bonus = (f64::from(*v) * (*pet_boni.get(k))).trunc() as u32;
+            *v += pet_bonus;
         }
 
         let mut expected = self.attribute_basis;
         for n in self.attribute_additions {
             *expected.get_mut(n.0) += n.1;
         }
-
         assert!(total == expected);
+        total
+    }
+
+    #[must_use]
+    pub fn hit_points(&self) -> u32 {
+        use Class::*;
+
+        let attributes = self.attributes();
+        let mut total = *attributes.get(AttributeType::Constitution);
+
+        total *= match self.class {
+            Warrior | BattleMage | Druid => 5,
+            Scout | Assassin | Berserker | DemonHunter | Necromancer => 4,
+            Mage | Bard => 2,
+        };
+
+        total *= u32::from(self.level) + 1;
+
+        if self
+            .active_potions
+            .iter()
+            .flatten()
+            .any(|a| a.typ == PotionType::EternalLife)
+        {
+            total = (f64::from(total) * 1.25).trunc() as u32;
+        }
+
+        let portal_bonus = (f64::from(total)
+            * (f64::from(self.portal_hp_bonus) / 100.0))
+            .trunc() as u32;
+
+        total += portal_bonus;
+
+        let mut rune_multi = 0;
+        for rune in self
+            .equipment
+            .0
+            .iter()
+            .flat_map(|a| a.1)
+            .filter_map(|a| a.rune)
+        {
+            if rune.typ == RuneType::ExtraHitPoints {
+                rune_multi += u32::from(rune.value);
+            }
+        }
+
+        let rune_bonus =
+            (f64::from(total) * (f64::from(rune_multi) / 100.0)).trunc() as u32;
+
+        total += rune_bonus;
+
+        let expected = 30_739_506;
+        assert!(total == expected, "Got {total} instead of {expected}");
+
         total
     }
 }
@@ -172,6 +249,7 @@ impl From<&GameState> for UpgradeableFighter {
 
         let char = &gs.character;
         Self {
+            level: char.level,
             class: char.class,
             race: char.race,
             attribute_basis: char.attribute_basis,
