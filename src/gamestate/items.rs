@@ -457,7 +457,7 @@ impl GemSlot {
             warn!("Invalid gem power {gem_pwr}");
             return None;
         };
-        match GemType::parse(slot_val) {
+        match GemType::parse(slot_val, value) {
             Some(typ) => Some(GemSlot::Filled(Gem { typ, value })),
             None => Some(GemSlot::Empty),
         }
@@ -668,10 +668,10 @@ impl ItemType {
             }
             13 => ItemType::Scrapbook,
             15 => {
-                let Some(typ) = GemType::parse(sub_ident) else {
+                let pwr = data.csimget(11, "gem pwr", 0, |a| a >> 16)?;
+                let Some(typ) = GemType::parse(sub_ident, pwr) else {
                     return unknown_item("gem type");
                 };
-                let pwr = data.csimget(11, "gem pwr", 0, |a| a >> 16)?;
                 let gem = Gem { typ, value: pwr };
                 ItemType::Gem(gem)
             }
@@ -813,27 +813,32 @@ pub enum GemType {
 }
 
 impl GemType {
-    pub(crate) fn parse(id: i64) -> Option<GemType> {
-        if id == 4 {
-            return Some(GemType::Legendary);
-        }
-
-        if !(10..=40).contains(&id) {
-            return None;
-        }
-
-        // NOTE: id / 10 should be the shape
-        Some(match id % 10 {
-            0 => GemType::Strength,
-            1 => GemType::Dexterity,
-            2 => GemType::Intelligence,
-            3 => GemType::Constitution,
-            4 => GemType::Luck,
-            5 => GemType::All,
-            // Just put this here because it makes sense. I only ever see 4 for
-            // these
-            6 => GemType::Legendary,
+    pub(crate) fn parse(id: i64, debug_value: u32) -> Option<GemType> {
+        Some(match id {
+            0 => return None,
+            1 | 7 => GemType::Constitution,
+            2 | 8 => GemType::Luck,
+            3 | 9 => GemType::All,
+            4 => GemType::Legendary,
+            5 => GemType::Dexterity,
+            6 => GemType::Intelligence,
+            10..=40 => match id % 10 {
+                0 => GemType::Strength,
+                1 => GemType::Dexterity,
+                2 => GemType::Intelligence,
+                3 => GemType::Constitution,
+                4 => GemType::Luck,
+                5 => GemType::All,
+                // Just put this here because it makes sense. I only ever
+                // see 4 for these
+                6 => GemType::Legendary,
+                _ => {
+                    warn!("Unhandled 1. gen gem: {id} - {debug_value}");
+                    return None;
+                }
+            },
             _ => {
+                warn!("Unknown gem: {id} - {debug_value}");
                 return None;
             }
         })

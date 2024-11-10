@@ -1,6 +1,5 @@
-use sf_api::{
-    command::Command, gamestate::GameState, session::*, sso::SFAccount,
-};
+use sf_api::{command::AttributeType, gamestate::GameState, session::*, simulate::UpgradeableFighter, sso::SFAccount};
+use strum::IntoEnumIterator;
 
 #[tokio::main]
 pub async fn main() {
@@ -12,7 +11,7 @@ pub async fn main() {
     const USE_CACHE: bool = true;
 
     let custom_resp: Option<&str> = None;
-    let command = Some(Command::HellevatorPreviewRewards);
+    let command = None;
 
     let username = std::env::var("USERNAME").unwrap();
 
@@ -64,6 +63,9 @@ pub async fn main() {
     let Some(command) = command else {
         let js = serde_json::to_string_pretty(&gd).unwrap();
         std::fs::write("character.json", js).unwrap();
+
+        let uf = UpgradeableFighter::new(&gd);
+        uf.attributes();
         return;
     };
 

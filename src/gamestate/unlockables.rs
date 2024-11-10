@@ -489,7 +489,16 @@ impl Pets {
         server_time: ServerTime,
     ) -> Result<(), SFError> {
         let mut pet_id = 0;
-        for (element_idx, element) in HabitatType::iter().enumerate() {
+        for (element_idx, element) in [
+            HabitatType::Shadow,
+            HabitatType::Light,
+            HabitatType::Earth,
+            HabitatType::Fire,
+            HabitatType::Water,
+        ]
+        .into_iter()
+        .enumerate()
+        {
             let info = self.habitats.get_mut(element);
             let explored = data.csiget(210 + element_idx, "pet exp", 20)?;
             info.exploration = if explored == 20 {
@@ -588,6 +597,18 @@ pub enum HabitatType {
     Earth = 2,
     Shadow = 3,
     Fire = 4,
+}
+
+impl From<HabitatType> for AttributeType {
+    fn from(value: HabitatType) -> Self {
+        match value {
+            HabitatType::Water => AttributeType::Strength,
+            HabitatType::Light => AttributeType::Dexterity,
+            HabitatType::Earth => AttributeType::Intelligence,
+            HabitatType::Shadow => AttributeType::Constitution,
+            HabitatType::Fire => AttributeType::Luck,
+        }
+    }
 }
 
 impl HabitatType {

@@ -4,10 +4,11 @@ use crate::{
     command::AttributeType,
     gamestate::{
         character::{Class, Race},
-        items::{Equipment, Potion},
+        items::{Equipment, GemSlot, GemType, ItemType, Potion},
         social::OtherPlayer,
         GameState,
     },
+    misc::EnumMapGet,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -40,11 +41,11 @@ pub struct UpgradeableFighter {
     equipment: Equipment,
     active_potions: [Option<Potion>; 3],
     /// This should be the percentage bonus to skills from pets
-    pub pet_attribute_bonus_perc: EnumMap<AttributeType, u32>,
+    pet_attribute_bonus_perc: EnumMap<AttributeType, f64>,
     /// The hp bonus in percent this player has from the personal demon portal
-    pub portal_hp_bonus: u32,
+    portal_hp_bonus: u32,
     /// The damage bonus in percent this player has from the guild demon portal
-    pub portal_dmg_bonus: u32,
+    portal_dmg_bonus: u32,
 
     attribute_additions: EnumMap<AttributeType, u32>,
 }
@@ -53,12 +54,108 @@ impl UpgradeableFighter {
     pub fn new(character: impl Into<UpgradeableFighter>) -> Self {
         character.into()
     }
+
+    pub fn attributes(&self) -> EnumMap<AttributeType, u32> {
+        let mut total = EnumMap::default();
+
+        for equip in self.equipment.0.iter().flat_map(|a| a.1) {
+            for (k, v) in &equip.attributes {
+                *total.get_mut(k) += v;
+            }
+            if let Some(GemSlot::Filled(gem)) = &equip.gem_slot {
+                let mut value = gem.value;
+                if matches!(equip.typ, ItemType::Weapon { .. }) {
+                    value *= 2;
+                }
+                println!("{:?}", gem.typ);
+                match gem.typ {
+                    GemType::Strength => {
+                        *total.get_mut(AttributeType::Strength) += value;
+                    }
+                    GemType::Dexterity => {
+                        *total.get_mut(AttributeType::Dexterity) += value;
+                    }
+                    GemType::Intelligence => {
+                        *total.get_mut(AttributeType::Intelligence) += value;
+                    }
+                    GemType::Constitution => {
+                        *total.get_mut(AttributeType::Constitution) += value;
+                    }
+                    GemType::Luck => {
+                        *total.get_mut(AttributeType::Luck) += value;
+                    }
+                    GemType::All => {
+                        total.iter_mut().for_each(|a| *a.1 += value);
+                    }
+                    GemType::Legendary => {
+                        *total.get_mut(AttributeType::Constitution) += value;
+                        *total.get_mut(self.class.main_attribute()) += value;
+                    }
+                }
+            }
+        }
+
+        let class_bonus: f64 = match self.class {
+            Class::BattleMage => 0.1111,
+            Class::Warrior => todo!(),
+            Class::Mage => todo!(),
+            Class::Scout => todo!(),
+            Class::Assassin => todo!(),
+            Class::Berserker => todo!(),
+            Class::DemonHunter => todo!(),
+            Class::Druid => todo!(),
+            Class::Bard => todo!(),
+            Class::Necromancer => todo!(),
+        };
+
+        let pet_boni = self.pet_attribute_bonus_perc;
+
+        for (k, v) in &mut total {
+            println!("{k:?}");
+            println!("\t base: {}", self.attribute_basis.get(k));
+            println!("\t equipment: {v}");
+            let class_bonus = (f64::from(*v) * class_bonus).trunc() as u32;
+            println!("\t class: {class_bonus:?}");
+            *v += class_bonus + self.attribute_basis.get(k);
+            let pet_bonus = (f64::from(*v) * (*pet_boni.get(k))).trunc() as u32;
+            println!(
+                "\t pet: {pet_bonus:?} with a {}% bonus",
+                pet_boni.get(k) * 100.0
+            );
+            *v += pet_bonus;
+            println!("\t total: {v}");
+
+        }
+
+        let mut expected = self.attribute_basis;
+        for n in self.attribute_additions {
+            *expected.get_mut(n.0) += n.1;
+        }
+
+        assert!(total == expected);
+        total
+    }
 }
 
 impl From<&GameState> for UpgradeableFighter {
     fn from(gs: &GameState) -> Self {
-        let pet_attribute_bonus_perc =
-            gs.pets.as_ref().map(|a| a.atr_bonus).unwrap_or_default();
+        let mut pet_attribute_bonus_perc = EnumMap::default();
+        if let Some(pets) = &gs.pets {
+            for (typ, info) in &pets.habitats {
+                let mut total_bonus = 0;
+                for pet in &info.pets {
+                    total_bonus += match pet.level {
+                        0 => 0,
+                        1..100 => 100,
+                        100..150 => 150,
+                        150..200 => 175,
+                        200.. => 200,
+                    };
+                }
+                *pet_attribute_bonus_perc.get_mut(typ.into()) =
+                    (total_bonus / 100) as f64 / 100.0;
+            }
+        };
         let portal_hp_bonus = gs
             .dungeons
             .portal
