@@ -212,6 +212,22 @@ pub enum Race {
     Demon,
 }
 
+impl Race {
+    pub fn stat_modifiers(&self) -> EnumMap<AttributeType, i32> {
+        let raw = match self {
+            Race::Human => [0, 0, 0, 0, 0],
+            Race::Elf => [-1, 2, 0, -1, 0],
+            Race::Dwarf => [0, -2, -1, 2, 1],
+            Race::Gnome => [-2, 3, -1, -1, 1],
+            Race::Orc => [1, 0, -1, 0, 0],
+            Race::DarkElf => [-2, 2, 1, -1, 0],
+            Race::Goblin => [-2, 2, 0, -1, 1],
+            Race::Demon => [3, -1, 0, 1, -3],
+        };
+        EnumMap::from_array(raw)
+    }
+}
+
 #[derive(Debug, Copy, Clone, FromPrimitive, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
