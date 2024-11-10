@@ -780,9 +780,9 @@ pub enum PotionSize {
 impl PotionSize {
     pub fn effect(&self) -> f64 {
         match self {
-            PotionSize::Small => 1.1,
-            PotionSize::Medium => 1.15,
-            PotionSize::Large => 1.25,
+            PotionSize::Small => 0.1,
+            PotionSize::Medium => 0.15,
+            PotionSize::Large => 0.25,
         }
     }
 

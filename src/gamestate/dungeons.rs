@@ -5,7 +5,8 @@ use num_derive::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
 use super::{
-    items::Equipment, AttributeType, CCGet, EnumMapGet, SFError, ServerTime,
+    items::Equipment, AttributeType, CCGet, Class, EnumMapGet, SFError,
+    ServerTime,
 };
 use crate::misc::soft_into;
 
@@ -306,7 +307,7 @@ impl Dungeons {
 }
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, EnumCount, Enum, EnumIter, Hash,
+    Debug, Clone, Copy, PartialEq, Eq, EnumCount, Enum, EnumIter, Hash
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The class of a companion. There is only 1 companion per class, so this is
@@ -318,6 +319,16 @@ pub enum CompanionClass {
     Mage = 1,
     /// Kunigunde
     Scout = 2,
+}
+
+impl From<CompanionClass> for Class {
+    fn from(value: CompanionClass) -> Self {
+        match value {
+            CompanionClass::Warrior => Class::Warrior,
+            CompanionClass::Mage => Class::Mage,
+            CompanionClass::Scout => Class::Scout,
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone)]
