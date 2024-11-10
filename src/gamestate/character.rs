@@ -74,7 +74,7 @@ pub struct Character {
 
     /// The base attributes without any equipment, or other boosts
     pub attribute_basis: EnumMap<AttributeType, u32>,
-    /// All bonus attributes from quipment/pets/potions
+    /// All bonus attributes from equipment/pets/potions
     pub attribute_additions: EnumMap<AttributeType, u32>,
     /// The amount of times an atribute has been bought already.
     /// Important to calculate the price of the next attribute to buy
@@ -166,6 +166,18 @@ pub enum Class {
     Druid,
     Bard,
     Necromancer,
+}
+impl Class {
+    #[must_use]
+    #[allow(clippy::enum_glob_use)]
+    pub fn main_attribute(&self) -> AttributeType {
+        use Class::*;
+        match self {
+            BattleMage | Berserker | Warrior => AttributeType::Strength,
+            Assassin | DemonHunter | Scout => AttributeType::Dexterity,
+            Druid | Bard | Necromancer | Mage => AttributeType::Intelligence,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
