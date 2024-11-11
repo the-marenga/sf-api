@@ -1,3 +1,5 @@
+use std::io::Read;
+
 use enum_map::{Enum, EnumMap};
 
 use crate::{
@@ -76,13 +78,13 @@ pub struct BattleFighter {
 
     portal_dmg_bonus: f64,
 
-    /// The amount of rounds this fighter has been in battle already
-    rounds_out: u32,
+    rounds_in_battle: u32,
     druid_form: Option<DruidMask>,
     // todo: harp
 }
 
 impl BattleFighter {
+    #[must_use]
     pub fn from_upgradeable(char: &UpgradeableFighter) -> Self {
         let attributes = char.attributes();
         let hp = char.hit_points(&attributes) as i32;
@@ -97,8 +99,38 @@ impl BattleFighter {
             offhand: (0, 0),
         };
 
+        // https://github.com/HafisCZ/sf-tools/blob/521c2773098d62fe21ae687de2047c05f84813b7/js/sim/base.js#L746C4-L765C6
+        let fist_dmg = |offhand: bool| {
+            let Some(dmg_level) = char.level.checked_sub(9) else {
+                return (1, 2);
+            };
+            let multiplier = match char.class == Class::Assassin {
+                true if offhand => 1.25,
+                true => 0.875,
+                false => 0.7,
+            };
+
+            let base = multiplier
+                * f64::from(dmg_level)
+                * char.class.weapon_multiplier();
+            let min = (base * 2.0 / 3.0).ceil().max(1.0);
+            let max = (base * 4.0 / 3.0).ceil().max(2.0);
+            (min as u32, max as u32)
+        };
+
         for (slot, item) in &char.equipment.0 {
-            let Some(item) = item else { continue };
+            let Some(item) = item else {
+                if slot == EquipmentSlot::Weapon {
+                    equip.weapon = fist_dmg(false);
+                }
+                if slot == EquipmentSlot::Shield
+                    && char.class == Class::Assassin
+                {
+                    equip.offhand = fist_dmg(true);
+                }
+
+                continue;
+            };
             equip.armor += item.armor();
             match item.enchantment {
                 Some(Enchantment::SwordOfVengeance) => {
@@ -143,11 +175,26 @@ impl BattleFighter {
                     _ => {}
                 },
                 ItemType::Shield { block_chance } => {
-                    equip.offhand = (block_chance, 0)
+                    equip.offhand = (block_chance, 0);
                 }
                 _ => (),
             }
         }
+
+        let portal_dmg_bonus = 1.0 + f64::from(char.portal_dmg_bonus) / 100.0;
+
+        // THe samage you can see in the UI
+        let calc_damage = |base| {
+            (base as f64
+                * (1.0
+                    + (*attributes.get(AttributeType::Strength) as f64) / 10.0))
+                * portal_dmg_bonus
+        };
+        println!(
+            "{} - {}",
+            calc_damage(equip.weapon.0),
+            calc_damage(equip.weapon.1)
+        );
 
         BattleFighter {
             class: char.class,
@@ -156,10 +203,25 @@ impl BattleFighter {
             current_hp: hp,
             minion: None,
             equip,
-            rounds_out: 0,
+            rounds_in_battle: 0,
             druid_form: None,
-            portal_dmg_bonus: f64::from(char.portal_dmg_bonus) / 100.0,
+            portal_dmg_bonus,
         }
+    }
+
+    #[must_use]
+    pub fn from_squad(squad: &PlayerFighterSquad) -> Vec<Self> {
+        let mut res = if let Some(comps) = &squad.companions {
+            let mut res = Vec::with_capacity(4);
+            for comp in comps.as_array() {
+                res.push(Self::from_upgradeable(comp));
+            }
+            res
+        } else {
+            Vec::with_capacity(1)
+        };
+        res.push(BattleFighter::from_upgradeable(&squad.character));
+        res
     }
 }
 
@@ -187,15 +249,41 @@ pub enum Element {
     Fire,
 }
 
-pub struct BattleSide {
+pub struct BattleTeam {
     current_fighter: usize,
     fighters: Vec<BattleFighter>,
 }
 
+enum BattleSide {
+    Left,
+    Right,
+}
+
 pub struct Battle {
     round: u32,
-    a: BattleSide,
-    b: BattleSide,
+    started: Option<BattleSide>,
+    left: BattleTeam,
+    right: BattleTeam,
+}
+
+impl Battle {
+    pub fn new(left: Vec<BattleFighter>, right: Vec<BattleFighter>) -> Self {
+        Self {
+            round: 0,
+            started: None,
+            left: BattleTeam {
+                current_fighter: 0,
+                fighters: left,
+            },
+            right: BattleTeam {
+                current_fighter: 0,
+                fighters: right,
+            },
+        }
+    }
+
+    fn tick_side(&mut self) {
+    }
 }
 
 pub struct PlayerFighterSquad {

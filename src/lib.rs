@@ -1,17 +1,18 @@
 #![warn(
-    missing_debug_implementations,
     clippy::indexing_slicing,
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::print_stdout,
     clippy::print_stderr,
-    clippy::pedantic,
+    missing_debug_implementations,
+    // clippy::pedantic,
     // missing_docs
 )]
 #![allow(
     clippy::wildcard_imports,
     clippy::too_many_lines,
-    clippy::field_reassign_with_default
+    clippy::field_reassign_with_default,
+    clippy::match_bool
 )]
 #![deny(unsafe_code)]
 
