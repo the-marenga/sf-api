@@ -1,6 +1,7 @@
 use std::io::Read;
 
 use enum_map::{Enum, EnumMap};
+use log::info;
 
 use crate::{
     command::AttributeType,
@@ -69,18 +70,29 @@ pub enum MinionType {
 
 #[derive(Debug, Clone)]
 pub struct BattleFighter {
-    class: Class,
-    attributes: EnumMap<AttributeType, u32>,
-    max_hp: i32,
-    current_hp: i32,
-    minion: Option<Minion>,
-    equip: EquipmentEffects,
+    pub is_companion: bool,
+    pub class: Class,
+    pub attributes: EnumMap<AttributeType, u32>,
+    pub max_hp: i32,
+    pub current_hp: i32,
+    pub equip: EquipmentEffects,
+    pub portal_dmg_bonus: f64,
+    pub rounds_in_battle: u32,
+    pub class_effect: Option<ClassEffect>,
+}
 
-    portal_dmg_bonus: f64,
+#[derive(Debug, Clone, Copy)]
+pub enum HarpQuality {
+    Bad,
+    Medium,
+    Good,
+}
 
-    rounds_in_battle: u32,
-    druid_form: Option<DruidMask>,
-    // todo: harp
+#[derive(Debug, Clone, Copy)]
+pub enum ClassEffect {
+    Druid(DruidMask),
+    Bard(HarpQuality),
+    Necromancer(Minion),
 }
 
 impl BattleFighter {
@@ -99,14 +111,15 @@ impl BattleFighter {
             offhand: (0, 0),
         };
 
+        // Modified, but mostly copied from:
         // https://github.com/HafisCZ/sf-tools/blob/521c2773098d62fe21ae687de2047c05f84813b7/js/sim/base.js#L746C4-L765C6
-        let fist_dmg = |offhand: bool| {
+        let unarmed_dmg = |slot| {
             if char.level <= 10 {
                 return (1, 2);
             }
             let dmg_level = f64::from(char.level - 9);
             let multiplier = match char.class {
-                Class::Assassin if !offhand => 1.25,
+                Class::Assassin if slot == EquipmentSlot::Weapon => 1.25,
                 Class::Assassin => 0.875,
                 _ => 0.7,
             };
@@ -119,15 +132,13 @@ impl BattleFighter {
 
         for (slot, item) in &char.equipment.0 {
             let Some(item) = item else {
-                if slot == EquipmentSlot::Weapon {
-                    equip.weapon = fist_dmg(false);
+                match slot {
+                    EquipmentSlot::Weapon => equip.weapon = unarmed_dmg(slot),
+                    EquipmentSlot::Shield if char.class == Class::Assassin => {
+                        equip.offhand = unarmed_dmg(slot)
+                    }
+                    _ => {}
                 }
-                if slot == EquipmentSlot::Shield
-                    && char.class == Class::Assassin
-                {
-                    equip.offhand = fist_dmg(true);
-                }
-
                 continue;
             };
             equip.armor += item.armor();
@@ -182,30 +193,33 @@ impl BattleFighter {
 
         let portal_dmg_bonus = 1.0 + f64::from(char.portal_dmg_bonus) / 100.0;
 
-        // THe samage you can see in the UI
-        let calc_damage = |base| {
+        // The damage you can see in the UI
+        let calc_base_damage = |base| {
             ((base as f64
                 * (1.0
-                    + (*attributes.get(AttributeType::Strength) as f64)
+                    + (*attributes.get(char.class.main_attribute()) as f64)
                         / 10.0))
                 * portal_dmg_bonus)
                 .trunc()
         };
+
         println!(
-            "{} - {}",
-            calc_damage(equip.weapon.0),
-            calc_damage(equip.weapon.1)
+            "{:?}: {} - {} - {:?}",
+            char.class,
+            calc_base_damage(equip.weapon.0),
+            calc_base_damage(equip.weapon.1),
+            attributes
         );
 
         BattleFighter {
+            is_companion: char.is_companion,
             class: char.class,
             attributes,
             max_hp: hp,
             current_hp: hp,
-            minion: None,
             equip,
             rounds_in_battle: 0,
-            druid_form: None,
+            class_effect: None,
             portal_dmg_bonus,
         }
     }
@@ -287,6 +301,7 @@ impl Battle {
     }
 }
 
+#[derive(Debug)]
 pub struct PlayerFighterSquad {
     pub character: UpgradeableFighter,
     pub companions: Option<EnumMap<CompanionClass, UpgradeableFighter>>,
@@ -395,7 +410,6 @@ impl UpgradeableFighter {
             }
 
             // TODO: HP rune
-
             if let Some(GemSlot::Filled(gem)) = &equip.gem_slot {
                 use AttributeType as AT;
                 let mut value = gem.value;
@@ -431,7 +445,11 @@ impl UpgradeableFighter {
         let pet_boni = self.pet_attribute_bonus_perc;
 
         for (k, v) in &mut total {
+            info!("{:?} - {:?}", self.class, k);
+            info!("\tbase: {}", self.attribute_basis.get(k));
+            info!("\tequipment: {}", v);
             let class_bonus = (f64::from(*v) * class_bonus).trunc() as u32;
+            info!("\tclass: {}", class_bonus);
             *v += class_bonus + self.attribute_basis.get(k);
             if let Some(potion) = self
                 .active_potions
@@ -441,11 +459,15 @@ impl UpgradeableFighter {
             {
                 let potion_bonus =
                     (f64::from(*v) * potion.size.effect()) as u32;
+                info!("\tpotion: {}", v);
+
                 *v += potion_bonus;
             }
 
             let pet_bonus = (f64::from(*v) * (*pet_boni.get(k))).trunc() as u32;
+            info!("\tpet: {}", pet_bonus);
             *v += pet_bonus;
+            info!("\ttotal: {}", v);
         }
         total
     }
