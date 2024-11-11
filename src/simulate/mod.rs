@@ -101,20 +101,19 @@ impl BattleFighter {
 
         // https://github.com/HafisCZ/sf-tools/blob/521c2773098d62fe21ae687de2047c05f84813b7/js/sim/base.js#L746C4-L765C6
         let fist_dmg = |offhand: bool| {
-            let Some(dmg_level) = char.level.checked_sub(9) else {
+            if char.level <= 10 {
                 return (1, 2);
-            };
-            let multiplier = match char.class == Class::Assassin {
-                true if offhand => 1.25,
-                true => 0.875,
-                false => 0.7,
+            }
+            let dmg_level = f64::from(char.level - 9);
+            let multiplier = match char.class {
+                Class::Assassin if !offhand => 1.25,
+                Class::Assassin => 0.875,
+                _ => 0.7,
             };
 
-            let base = multiplier
-                * f64::from(dmg_level)
-                * char.class.weapon_multiplier();
-            let min = (base * 2.0 / 3.0).ceil().max(1.0);
-            let max = (base * 4.0 / 3.0).ceil().max(2.0);
+            let base = dmg_level * multiplier * char.class.weapon_multiplier();
+            let min = ((base * 2.0) / 3.0).trunc().max(1.0);
+            let max = ((base * 4.0) / 3.0).trunc().max(2.0);
             (min as u32, max as u32)
         };
 
@@ -185,10 +184,12 @@ impl BattleFighter {
 
         // THe samage you can see in the UI
         let calc_damage = |base| {
-            (base as f64
+            ((base as f64
                 * (1.0
-                    + (*attributes.get(AttributeType::Strength) as f64) / 10.0))
-                * portal_dmg_bonus
+                    + (*attributes.get(AttributeType::Strength) as f64)
+                        / 10.0))
+                * portal_dmg_bonus)
+                .trunc()
         };
         println!(
             "{} - {}",
