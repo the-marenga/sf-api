@@ -1620,9 +1620,9 @@ impl GameState {
         guild.hydra.remaining_fights =
             data.csiget(628, "remaining pet battles", 0)?;
 
-        self.character.druid_mask = data.cfpget(653, "druid mask", |a| a)?;
-        self.character.bard_instrument =
-            data.cfpget(701, "bard instrument", |a| a)?;
+        // self.character.druid_mask = data.cfpget(653, "druid mask", |a| a)?;
+        // self.character.bard_instrument =
+        //     data.cfpget(701, "bard instrument", |a| a)?;
         self.specials.calendar.collected =
             data.csimget(648, "calendat collected", 245, |a| a >> 16)?;
         self.specials.calendar.next_possible =
