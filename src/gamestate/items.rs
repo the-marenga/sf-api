@@ -457,10 +457,16 @@ impl GemSlot {
             warn!("Invalid gem power {gem_pwr}");
             return None;
         };
-        match GemType::parse(slot_val, value) {
+        let res = match GemType::parse(slot_val, value) {
             Some(typ) => Some(GemSlot::Filled(Gem { typ, value })),
             None => Some(GemSlot::Empty),
-        }
+        };
+
+        if value == 318 {
+            warn!("Was {slot_val}");
+        };
+
+        res
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
