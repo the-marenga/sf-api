@@ -250,7 +250,8 @@ impl Item {
         };
 
         let enchantment = data.cfpget(0, "item enchantment", |a| a >> 24)?;
-        let gem_slot_val = data.cimget(0, "gem slot val", |a| a >> 16 & 0xF)?;
+        let gem_slot_val =
+            data.cimget(0, "gem slot val", |a| (a >> 16) & 0xFF)?;
         let gem_pwr = data.cimget(11, "gem pwr", |a| a >> 16)?;
         let gem_slot = GemSlot::parse(gem_slot_val, gem_pwr);
 
@@ -450,9 +451,12 @@ pub enum GemSlot {
 
 impl GemSlot {
     pub(crate) fn parse(slot_val: i64, gem_pwr: i64) -> Option<GemSlot> {
-        if slot_val == 0 {
-            return None;
+        match slot_val {
+            0 => return None,
+            1 => return Some(GemSlot::Empty),
+            _ => {}
         }
+
         let Ok(value) = gem_pwr.try_into() else {
             warn!("Invalid gem power {gem_pwr}");
             return None;
@@ -461,11 +465,6 @@ impl GemSlot {
             Some(typ) => Some(GemSlot::Filled(Gem { typ, value })),
             None => Some(GemSlot::Empty),
         };
-
-        if value == 318 {
-            warn!("Was {slot_val}");
-        };
-
         res
     }
 }
@@ -841,13 +840,7 @@ pub enum GemType {
 impl GemType {
     pub(crate) fn parse(id: i64, debug_value: u32) -> Option<GemType> {
         Some(match id {
-            0 => return None,
-            1 | 7 => GemType::Constitution,
-            2 | 8 => GemType::Luck,
-            3 | 9 => GemType::All,
-            4 => GemType::Legendary,
-            5 => GemType::Dexterity,
-            6 => GemType::Intelligence,
+            0 | 1 => return None,
             10..=40 => match id % 10 {
                 0 => GemType::Strength,
                 1 => GemType::Dexterity,
@@ -859,7 +852,6 @@ impl GemType {
                 // see 4 for these
                 6 => GemType::Legendary,
                 _ => {
-                    warn!("Unhandled 1. gen gem: {id} - {debug_value}");
                     return None;
                 }
             },
