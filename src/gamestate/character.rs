@@ -173,6 +173,16 @@ impl Class {
             Druid | Bard | Necromancer | Mage => AttributeType::Intelligence,
         }
     }
+
+    #[must_use]
+    pub(crate) fn weapon_multiplier(&self) -> f64 {
+        use Class::*;
+        match self {
+            Warrior | Assassin | BattleMage | Berserker => 2.0,
+            Scout => 2.5,
+            Mage | DemonHunter | Druid | Bard | Necromancer => 4.5,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
