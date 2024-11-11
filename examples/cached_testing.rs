@@ -1,5 +1,10 @@
-use sf_api::{command::AttributeType, gamestate::GameState, session::*, simulate::UpgradeableFighter, sso::SFAccount};
-use strum::IntoEnumIterator;
+use log::info;
+use sf_api::{
+    gamestate::GameState,
+    session::*,
+    simulate::{BattleFighter, PlayerFighterSquad, UpgradeableFighter},
+    sso::SFAccount,
+};
 
 #[tokio::main]
 pub async fn main() {
@@ -64,8 +69,13 @@ pub async fn main() {
         let js = serde_json::to_string_pretty(&gd).unwrap();
         std::fs::write("character.json", js).unwrap();
 
-        let uf = UpgradeableFighter::new(&gd);
-        uf.attributes();
+        let squad = PlayerFighterSquad::new(&gd);
+        let squad = BattleFighter::from_squad(&squad);
+
+        for fighter in &squad {
+            // println!("{fighter:#?}");
+        }
+
         return;
     };
 
