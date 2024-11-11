@@ -1,12 +1,13 @@
-use enum_map::EnumMap;
+use enum_map::{Enum, EnumMap};
 
 use crate::{
     command::AttributeType,
     gamestate::{
-        character::{Class, Race},
+        character::{Class, DruidMask, Race},
         dungeons::CompanionClass,
         items::{
-            Equipment, GemSlot, GemType, ItemType, Potion, PotionType, RuneType,
+            Enchantment, Equipment, EquipmentSlot, GemSlot, GemType, ItemType,
+            Potion, PotionType, RuneType,
         },
         GameState,
     },
@@ -51,15 +52,150 @@ pub struct UpgradeableFighter {
     portal_dmg_bonus: u32,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct Minion {
+    typ: MinionType,
+    rounds_remaining: u8,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum MinionType {
+    Skeleton,
+    Hound,
+    Golem,
+}
+
 #[derive(Debug, Clone)]
 pub struct BattleFighter {
-    attributes: EnumMap<AttributeType, u32>,
-
     class: Class,
-    race: Race,
+    attributes: EnumMap<AttributeType, u32>,
+    max_hp: i32,
+    current_hp: i32,
+    minion: Option<Minion>,
+    equip: EquipmentEffects,
 
-    max_hp: u32,
-    hp: u32,
+    portal_dmg_bonus: f64,
+
+    /// The amount of rounds this fighter has been in battle already
+    rounds_out: u32,
+    druid_form: Option<DruidMask>,
+    // todo: harp
+}
+
+impl BattleFighter {
+    pub fn from_upgradeable(char: &UpgradeableFighter) -> Self {
+        let attributes = char.attributes();
+        let hp = char.hit_points(&attributes) as i32;
+
+        let mut equip = EquipmentEffects {
+            element_res: EnumMap::default(),
+            element_dmg: EnumMap::default(),
+            reaction_boost: false,
+            extra_crit_dmg: false,
+            armor: 0,
+            weapon: (0, 0),
+            offhand: (0, 0),
+        };
+
+        for (slot, item) in &char.equipment.0 {
+            let Some(item) = item else { continue };
+            equip.armor += item.armor();
+            match item.enchantment {
+                Some(Enchantment::SwordOfVengeance) => {
+                    equip.extra_crit_dmg = true;
+                }
+                Some(Enchantment::ShadowOfTheCowboy) => {
+                    equip.reaction_boost = true;
+                }
+                _ => {}
+            };
+            if let Some(rune) = item.rune {
+                use RuneType as RT;
+
+                let mut apply = |is_res, element| {
+                    let target = if is_res {
+                        &mut equip.element_res
+                    } else {
+                        &mut equip.element_dmg
+                    };
+                    *target.get_mut(element) += f64::from(rune.value) / 100.0;
+                };
+                match rune.typ {
+                    RT::FireResistance => apply(true, Element::Fire),
+                    RT::ColdResistence => apply(true, Element::Cold),
+                    RT::LightningResistance => apply(true, Element::Lightning),
+                    RT::TotalResistence => {
+                        for (_, val) in &mut equip.element_res {
+                            *val += f64::from(rune.value) / 100.0;
+                        }
+                    }
+                    RT::FireDamage => apply(false, Element::Fire),
+                    RT::ColdDamage => apply(false, Element::Cold),
+                    RT::LightningDamage => apply(false, Element::Lightning),
+                    _ => {}
+                }
+            }
+
+            match item.typ {
+                ItemType::Weapon { min_dmg, max_dmg } => match slot {
+                    EquipmentSlot::Weapon => equip.weapon = (min_dmg, max_dmg),
+                    EquipmentSlot::Shield => equip.offhand = (min_dmg, max_dmg),
+                    _ => {}
+                },
+                ItemType::Shield { block_chance } => {
+                    equip.offhand = (block_chance, 0)
+                }
+                _ => (),
+            }
+        }
+
+        BattleFighter {
+            class: char.class,
+            attributes,
+            max_hp: hp,
+            current_hp: hp,
+            minion: None,
+            equip,
+            rounds_out: 0,
+            druid_form: None,
+            portal_dmg_bonus: f64::from(char.portal_dmg_bonus) / 100.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct EquipmentEffects {
+    element_res: EnumMap<Element, f64>,
+    element_dmg: EnumMap<Element, f64>,
+
+    weapon: (u32, u32),
+    /// min,max for weapons | blockchange, 0 for shields
+    offhand: (u32, u32),
+
+    /// Shadow of the cowboy
+    reaction_boost: bool,
+    /// Sword of Vengeance
+    extra_crit_dmg: bool,
+
+    armor: u32,
+}
+
+#[derive(Debug, Clone, Copy, Enum)]
+pub enum Element {
+    Lightning,
+    Cold,
+    Fire,
+}
+
+pub struct BattleSide {
+    current_fighter: usize,
+    fighters: Vec<BattleFighter>,
+}
+
+pub struct Battle {
+    round: u32,
+    a: BattleSide,
+    b: BattleSide,
 }
 
 pub struct PlayerFighterSquad {
@@ -168,6 +304,9 @@ impl UpgradeableFighter {
             for (k, v) in &equip.attributes {
                 *total.get_mut(k) += v;
             }
+
+            // TODO: HP rune
+
             if let Some(GemSlot::Filled(gem)) = &equip.gem_slot {
                 use AttributeType as AT;
                 let mut value = gem.value;
@@ -223,10 +362,9 @@ impl UpgradeableFighter {
     }
 
     #[must_use]
-    pub fn hit_points(&self) -> u32 {
+    pub fn hit_points(&self, attributes: &EnumMap<AttributeType, u32>) -> u32 {
         use Class::*;
 
-        let attributes = self.attributes();
         let mut total = *attributes.get(AttributeType::Constitution);
         total = (f64::from(total)
             * match self.class {

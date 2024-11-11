@@ -28,11 +28,6 @@ pub struct Character {
 
     /// The class of this character
     pub class: Class,
-    /// Iff this character is a druid, this will be the currently equiped mask
-    pub druid_mask: Option<DruidMask>,
-    /// Iff this character is a bard, this will be the currently equiped
-    /// instrument
-    pub bard_instrument: Option<BardInstrument>,
 
     /// The race of this character. Has some effects on attributes, which is
     /// why this is not in portrait
