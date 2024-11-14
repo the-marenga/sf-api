@@ -305,7 +305,7 @@ impl Dungeons {
 }
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, EnumCount, Enum, EnumIter, Hash
+    Debug, Clone, Copy, PartialEq, Eq, EnumCount, Enum, EnumIter, Hash,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The class of a companion. There is only 1 companion per class, so this is
