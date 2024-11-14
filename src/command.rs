@@ -781,7 +781,9 @@ pub struct DiceReward {
     pub amount: u32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Enum, FromPrimitive, Hash, EnumIter)]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, Enum, FromPrimitive, Hash, EnumIter,
+)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 /// A type of attribute

@@ -694,11 +694,6 @@ impl GameState {
                     self.tavern.expeditions.start =
                         data.cstget(0, "expedition start", server_time)?;
                     let end = data.cstget(1, "expedition end", server_time)?;
-                    let end2 =
-                        data.cstget(1, "expedition end2", server_time)?;
-                    if end != end2 {
-                        warn!("Weird expedition time");
-                    }
                     self.tavern.expeditions.end = end;
                 }
                 "expeditions" => {
