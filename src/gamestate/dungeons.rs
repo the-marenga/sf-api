@@ -148,6 +148,8 @@ pub enum LightDungeon {
     SchoolOfMagicExpress = 27,
     AshMountain = 28,
     PlayaGamesHQ = 29,
+    TrainingCamp = 30,
+    Sandstorm = 31,
 }
 
 impl From<LightDungeon> for Dungeon {
