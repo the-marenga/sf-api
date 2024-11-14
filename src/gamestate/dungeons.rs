@@ -1,5 +1,5 @@
 use chrono::{DateTime, Local};
-use enum_map::{Enum, EnumMap};
+use enum_map::{Enum, EnumArray, EnumMap};
 use num::FromPrimitive;
 use num_derive::FromPrimitive;
 use strum::{EnumCount, EnumIter};
@@ -8,7 +8,10 @@ use super::{
     items::Equipment, AttributeType, CCGet, Class, EnumMapGet, SFError,
     ServerTime,
 };
-use crate::misc::soft_into;
+use crate::{
+    constants::{Monster, LIGHT_ENEMIES},
+    misc::soft_into,
+};
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -64,6 +67,28 @@ pub struct Dungeons {
     pub companions: Option<EnumMap<CompanionClass, Companion>>,
 }
 
+impl Dungeons {
+    /// Returns the progress for that dungeon
+    pub fn progress(&self, dungeon: impl Into<Dungeon>) -> DungeonProgress {
+        let dungeon: Dungeon = dungeon.into();
+        match dungeon {
+            Dungeon::Light(dungeon) => *self.light.get(dungeon),
+            Dungeon::Shadow(dungeon) => *self.shadow.get(dungeon),
+        }
+    }
+
+    /// Returns the current enemy for that dungeon. Note that the special
+    /// "mirrorimage" enemy will be listed as a warrior with 0 stats/lvl/xp/hp.
+    // If you care about the actual stats, you should map this to the player
+    // stats yourself
+    pub fn current_enemy(
+        &self,
+        dungeon: impl Into<Dungeon> + Copy,
+    ) -> Option<&'static Monster> {
+        dungeon_enemy(dungeon, self.progress(dungeon))
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The current state of a dungeon
@@ -75,8 +100,6 @@ pub enum DungeonProgress {
     Open {
         /// The amount of enemies already finished
         finished: u16,
-        /// The level of the enemy currently
-        level: u16,
     },
     /// The dungeon has been fully cleared and can not be entered anymore
     Finished,
@@ -214,63 +237,27 @@ impl From<ShadowDungeon> for Dungeon {
     }
 }
 
-macro_rules! update_progress {
-    ($data:expr, $dungeons:expr) => {
-        for (dungeon_id, progress) in $data.iter().copied().enumerate() {
-            let Some(dungeon_typ) = FromPrimitive::from_usize(dungeon_id)
-            else {
-                continue;
-            };
-            let dungeon = $dungeons.get_mut(dungeon_typ);
-            let level = match dungeon {
-                DungeonProgress::Open { level, .. } => *level,
-                _ => 0,
-            };
-            *dungeon = match progress {
-                -1 => DungeonProgress::Locked,
-                x => {
-                    let stage = soft_into(x, "dungeon progress", 0);
-                    if stage == 10 || stage == 100 && dungeon_id == 14 {
-                        DungeonProgress::Finished
-                    } else {
-                        DungeonProgress::Open {
-                            finished: stage,
-                            level,
-                        }
-                    }
+fn update_progress<T: FromPrimitive + EnumArray<DungeonProgress>>(
+    data: &[i64],
+    dungeons: &mut EnumMap<T, DungeonProgress>,
+) {
+    for (dungeon_id, progress) in data.iter().copied().enumerate() {
+        let Some(dungeon_typ) = FromPrimitive::from_usize(dungeon_id) else {
+            continue;
+        };
+        let dungeon = dungeons.get_mut(dungeon_typ);
+        *dungeon = match progress {
+            -1 => DungeonProgress::Locked,
+            x => {
+                let stage = soft_into(x, "dungeon progress", 0);
+                if stage == 10 || stage == 100 && dungeon_id == 14 {
+                    DungeonProgress::Finished
+                } else {
+                    DungeonProgress::Open { finished: stage }
                 }
-            };
-        }
-    };
-}
-
-macro_rules! update_levels {
-    ($dungeons:expr, $data:expr) => {
-        for (dungeon_id, level) in $data.iter().copied().enumerate() {
-            let Some(dungeon_typ) = FromPrimitive::from_usize(dungeon_id)
-            else {
-                continue;
-            };
-            let dungeon = $dungeons.get_mut(dungeon_typ);
-
-            if level < 1 {
-                // Either Finished or not unlocked
-                continue;
             }
-
-            let stage = match dungeon {
-                DungeonProgress::Open {
-                    finished: stage, ..
-                } => *stage,
-                _ => 0,
-            };
-
-            *dungeon = DungeonProgress::Open {
-                finished: stage,
-                level,
-            }
-        }
-    };
+        };
+    }
 }
 
 impl Dungeons {
@@ -280,9 +267,9 @@ impl Dungeons {
         dungeon_type: DungeonType,
     ) {
         match dungeon_type {
-            DungeonType::Light => update_progress!(data, self.light),
+            DungeonType::Light => update_progress(data, &mut self.light),
             DungeonType::Shadow => {
-                update_progress!(data, self.shadow);
+                update_progress(data, &mut self.shadow);
                 for (dungeon, limit) in [
                     (ShadowDungeon::ContinuousLoopofIdols, 21),
                     (ShadowDungeon::Twister, 1000),
@@ -295,13 +282,6 @@ impl Dungeons {
                     }
                 }
             }
-        };
-    }
-
-    pub(crate) fn update_levels(&mut self, data: &[u16], typ: DungeonType) {
-        match typ {
-            DungeonType::Light => update_levels!(self.light, data),
-            DungeonType::Shadow => update_levels!(self.shadow, data),
         };
     }
 }
@@ -343,4 +323,23 @@ pub struct Companion {
     pub equipment: Equipment,
     /// The total attributes of this companion
     pub attributes: EnumMap<AttributeType, u32>,
+}
+
+pub fn dungeon_enemy(
+    dungeon: impl Into<Dungeon>,
+    progress: DungeonProgress,
+) -> Option<&'static Monster> {
+    let stage = match progress {
+        DungeonProgress::Open { finished } => finished,
+        DungeonProgress::Locked | DungeonProgress::Finished => return None,
+    };
+
+    let dungeon: Dungeon = dungeon.into();
+    match dungeon {
+        Dungeon::Light(dungeon) => {
+            let enemies = LIGHT_ENEMIES;
+            enemies.get(dungeon).get(stage as usize)
+        }
+        Dungeon::Shadow(_) => todo!(),
+    }
 }

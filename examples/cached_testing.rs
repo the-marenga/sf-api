@@ -1,4 +1,3 @@
-use log::info;
 use sf_api::{
     gamestate::GameState,
     session::*,
@@ -69,12 +68,12 @@ pub async fn main() {
         let js = serde_json::to_string_pretty(&gd).unwrap();
         std::fs::write("character.json", js).unwrap();
 
-        let squad = PlayerFighterSquad::new(&gd);
-        let squad = BattleFighter::from_squad(&squad);
+        // let squad = PlayerFighterSquad::new(&gd);
+        // let squad = BattleFighter::from_squad(&squad);
 
-        for fighter in &squad {
-            // println!("{fighter:#?}");
-        }
+        // for fighter in &squad {
+        //     // println!("{fighter:#?}");
+        // }
 
         return;
     };
