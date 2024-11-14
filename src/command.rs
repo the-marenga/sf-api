@@ -530,7 +530,7 @@ pub enum Command {
     },
     /// Finishes an upgrade after the time has run out (or before using
     /// mushrooms)
-    UnderworldUpgradeComplete {
+    UnderworldUpgradeFinish {
         building: UnderworldBuildingType,
         mushrooms: u32,
     },
@@ -1122,7 +1122,7 @@ impl Command {
                 format!("FortressBuildStop:{}", *f_type as usize + 1)
             }
             Command::FortressBuildFinish { f_type, mushrooms } => format!(
-                "FortressBuildFinish:{}/{mushrooms}",
+                "FortressBuildFinished:{}/{mushrooms}",
                 *f_type as usize + 1
             ),
             Command::FortressBuildUnit { unit, count } => {
@@ -1172,7 +1172,7 @@ impl Command {
             Command::UnderworldUpgradeCancel { building } => {
                 format!("UnderworldBuildStop:{}", *building as usize + 1)
             }
-            Command::UnderworldUpgradeComplete {
+            Command::UnderworldUpgradeFinish {
                 building,
                 mushrooms,
             } => format!(
