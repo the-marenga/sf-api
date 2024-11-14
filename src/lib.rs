@@ -25,6 +25,7 @@ use session::{ServerConnection, Session};
 
 pub mod command;
 pub mod error;
+pub mod constants;
 pub mod gamestate;
 pub mod misc;
 pub mod session;
