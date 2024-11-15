@@ -340,39 +340,61 @@ impl Battle {
             Right => (right, left),
         };
 
-        // TODO: class effects
+        let can_dodge =
+            attacker.class != Class::Mage && defender.class == Class::Scout;
 
-        let char_damage_modifier = (1.0
-            + (*attacker.attributes.get(attacker.class.main_attribute())
-                as f64)
-                / 10.0);
-
-        let mut elemental_bonus = 1.0;
-        for element in Element::iter() {
-            let plus = attacker.equip.element_dmg.get(element);
-            let minus = defender.equip.element_dmg.get(element);
-
-            if plus > minus {
-                elemental_bonus += plus - minus;
-            }
+        if !can_dodge || self.rng.bool() {
+            weapon_attack(attacker, defender, &mut self.rng, false);
         }
 
-        // TODO: Check the order of all of this
-        let damage_bonus =
-            char_damage_modifier * attacker.portal_dmg_bonus * elemental_bonus;
+        if attacker.class == Class::Assassin && (!can_dodge || self.rng.bool())
+        {
+            weapon_attack(attacker, defender, &mut self.rng, true);
+        }
 
-        let calc_damage = |base| (base as f64 * damage_bonus).trunc() as u32;
-
-        let min_base_damage = calc_damage(attacker.equip.weapon.0);
-        let max_base_damage = calc_damage(attacker.equip.weapon.1);
-
-        let attacker_damage = self.rng.u32(min_base_damage..=max_base_damage);
-
-
-
+        // TODO: class effects
 
         None
     }
+}
+
+fn weapon_attack(
+    attacker: &mut BattleFighter,
+    defender: &mut BattleFighter,
+    rng: &mut Rng,
+    offhand: bool,
+) {
+    let char_damage_modifier = (1.0
+        + (*attacker.attributes.get(attacker.class.main_attribute()) as f64)
+            / 10.0);
+
+    let mut elemental_bonus = 1.0;
+    for element in Element::iter() {
+        let plus = attacker.equip.element_dmg.get(element);
+        let minus = defender.equip.element_dmg.get(element);
+
+        if plus > minus {
+            elemental_bonus += plus - minus;
+        }
+    }
+
+    // TODO: Check the order of all of this
+    let damage_bonus =
+        char_damage_modifier * attacker.portal_dmg_bonus * elemental_bonus;
+
+    let calc_damage = |base| (base as f64 * damage_bonus).trunc() as u32;
+
+    let weapon = if offhand {
+        attacker.equip.offhand
+    } else {
+        attacker.equip.weapon
+    };
+    let min_base_damage = calc_damage(weapon.0);
+    let max_base_damage = calc_damage(weapon.1);
+
+    let attacker_damage = rng.u32(min_base_damage..=max_base_damage);
+
+    // TODO: damage reduction
 }
 
 #[derive(Debug)]
