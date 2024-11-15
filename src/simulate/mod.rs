@@ -1,5 +1,6 @@
 #![allow(unused)]
 use enum_map::{Enum, EnumMap};
+use fastrand::Rng;
 use log::info;
 
 use crate::{
@@ -269,7 +270,13 @@ pub struct BattleTeam {
     fighters: Vec<BattleFighter>,
 }
 
-#[derive(Debug, Clone, Copy)]
+impl BattleTeam {
+    pub fn current(&mut self) -> Option<&mut BattleFighter> {
+        self.fighters.get_mut(self.current_fighter)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BattleSide {
     Left,
     Right,
@@ -281,10 +288,15 @@ pub struct Battle {
     started: Option<BattleSide>,
     left: BattleTeam,
     right: BattleTeam,
+    rng: Rng,
 }
 
 impl Battle {
-    pub fn new(left: Vec<BattleFighter>, right: Vec<BattleFighter>) -> Self {
+    pub fn new(
+        left: Vec<BattleFighter>,
+        right: Vec<BattleFighter>,
+        seed: u64,
+    ) -> Self {
         Self {
             round: 0,
             started: None,
@@ -296,10 +308,56 @@ impl Battle {
                 current_fighter: 0,
                 fighters: right,
             },
+            rng: fastrand::Rng::with_seed(seed),
         }
     }
 
-    fn tick_side(&mut self) {
+    /// Simulates one turn (attack) in a battle. If one side is not able
+    /// to fight anymore, or is for another reason invalid, the other side is
+    /// returned as the winner
+    fn simulate_turn(&mut self) -> Option<BattleSide> {
+        use BattleSide::{Left, Right};
+
+        let Some(mut left) = self.left.current() else {
+            return Some(Right);
+        };
+        let Some(mut right) = self.right.current() else {
+            return Some(Left);
+        };
+
+        self.round += 1;
+        left.rounds_in_battle += 1;
+        right.rounds_in_battle += 1;
+
+        let starting_side = if let Some(started) = self.started {
+            let one_vs_one_round =
+                left.rounds_in_battle.min(right.rounds_in_battle);
+
+            // If We are at the same cycle, as the first turn, the one that
+            // started on the first turn starts here. Otherwise the other one
+            match started {
+                _ if one_vs_one_round % 2 == 1 => started,
+                Left => Right,
+                Right => Left,
+            }
+        } else {
+            // The battle has not yet started. Figure out who side starts
+            let mut starter =
+                match (right.equip.reaction_boost, left.equip.reaction_boost) {
+                    (true, true) | (false, false) if self.rng.bool() => Right,
+                    (true, false) => Right,
+                    _ => Left,
+                };
+            self.started = Some(starter);
+            starter
+        };
+
+        let (attacker, defender) = match starting_side {
+            Left => (left, right),
+            Right => (right, left),
+        };
+
+        None
     }
 }
 
