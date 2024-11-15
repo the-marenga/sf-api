@@ -498,6 +498,8 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
     &[],
     // PlayaGamesHQ
     &[],
-
-    // TODO:
+    // TrainingCamp
+    &[],
+    // Sandstorm
+    &[]
 ]);
