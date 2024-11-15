@@ -2,6 +2,7 @@
 use enum_map::{Enum, EnumMap};
 use fastrand::Rng;
 use log::info;
+use strum::{EnumIter, IntoEnumIterator};
 
 use crate::{
     command::AttributeType,
@@ -193,24 +194,6 @@ impl BattleFighter {
 
         let portal_dmg_bonus = 1.0 + f64::from(char.portal_dmg_bonus) / 100.0;
 
-        // // The damage you can see in the UI
-        // let calc_base_damage = |base| {
-        //     ((base as f64
-        //         * (1.0
-        //             + (*attributes.get(char.class.main_attribute()) as f64) /
-        //               10.0))
-        //         * portal_dmg_bonus)
-        //         .trunc()
-        // };
-
-        // println!(
-        //     "{:?}: {} - {} - {:?}",
-        //     char.class,
-        //     calc_base_damage(equip.weapon.0),
-        //     calc_base_damage(equip.weapon.1),
-        //     attributes
-        // );
-
         BattleFighter {
             is_companion: char.is_companion,
             class: char.class,
@@ -257,7 +240,7 @@ pub struct EquipmentEffects {
     armor: u32,
 }
 
-#[derive(Debug, Clone, Copy, Enum)]
+#[derive(Debug, Clone, Copy, Enum, EnumIter)]
 pub enum Element {
     Lightning,
     Cold,
@@ -356,6 +339,37 @@ impl Battle {
             Left => (left, right),
             Right => (right, left),
         };
+
+        // TODO: class effects
+
+        let char_damage_modifier = (1.0
+            + (*attacker.attributes.get(attacker.class.main_attribute())
+                as f64)
+                / 10.0);
+
+        let mut elemental_bonus = 1.0;
+        for element in Element::iter() {
+            let plus = attacker.equip.element_dmg.get(element);
+            let minus = defender.equip.element_dmg.get(element);
+
+            if plus > minus {
+                elemental_bonus += plus - minus;
+            }
+        }
+
+        // TODO: Check the order of all of this
+        let damage_bonus =
+            char_damage_modifier * attacker.portal_dmg_bonus * elemental_bonus;
+
+        let calc_damage = |base| (base as f64 * damage_bonus).trunc() as u32;
+
+        let min_base_damage = calc_damage(attacker.equip.weapon.0);
+        let max_base_damage = calc_damage(attacker.equip.weapon.1);
+
+        let attacker_damage = self.rng.u32(min_base_damage..=max_base_damage);
+
+
+
 
         None
     }
