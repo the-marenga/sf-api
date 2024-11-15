@@ -689,7 +689,7 @@ impl Unlockable {
             .map(|chunk| {
                 Ok(Unlockable {
                     main_ident: chunk.cget(0, "unlockable ident")?,
-                    sub_ident: chunk.cget(0, "unlockable sub ident")?,
+                    sub_ident: chunk.cget(1, "unlockable sub ident")?,
                 })
             })
             .collect()
