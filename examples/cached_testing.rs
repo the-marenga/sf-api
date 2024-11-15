@@ -1,9 +1,10 @@
 use sf_api::{
-    gamestate::GameState,
+    gamestate::{dungeons::LightDungeon, GameState},
     session::*,
     simulate::{BattleFighter, PlayerFighterSquad, UpgradeableFighter},
     sso::SFAccount,
 };
+use strum::IntoEnumIterator;
 
 #[tokio::main]
 pub async fn main() {
@@ -67,6 +68,13 @@ pub async fn main() {
     let Some(command) = command else {
         let js = serde_json::to_string_pretty(&gd).unwrap();
         std::fs::write("character.json", js).unwrap();
+
+        for dungeon in LightDungeon::iter() {
+            let Some(enemy) = gd.dungeons.current_enemy(dungeon) else {
+                continue;
+            };
+            println!("{dungeon:?} => {enemy:?}");
+        }
 
         // let squad = PlayerFighterSquad::new(&gd);
         // let squad = BattleFighter::from_squad(&squad);

@@ -7,11 +7,11 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Monster {
-    level: u16,
-    class: Class,
-    attributes: EnumMap<AttributeType, u32>,
-    hp: u32,
-    xp: u32,
+    pub level: u16,
+    pub class: Class,
+    pub attributes: EnumMap<AttributeType, u32>,
+    pub hp: u32,
+    pub xp: u32,
 }
 
 impl Monster {

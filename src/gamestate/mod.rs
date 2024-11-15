@@ -405,8 +405,8 @@ impl GameState {
                         .production
                         .per_hour_next_lvl = val.into("wood next lvl")?;
                 }
-                "shadowlevel" | "dungeonlevel"=> {
-                   // We just look at the db
+                "shadowlevel" | "dungeonlevel" => {
+                    // We just look at the db
                 }
                 "gttime" => {
                     self.update_gttime(&val.into_list("gttime")?, server_time)?;

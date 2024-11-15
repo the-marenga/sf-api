@@ -26,15 +26,17 @@ pub struct Inventory {
 }
 
 impl Inventory {
-    pub fn free_slot(&self) -> Option<(PlayerItemPlace, usize)> {
+    /// Returns a place in the inventory, that can store a new item
+    #[must_use]
+    pub fn free_slot(&self) -> Option<(InventoryType, usize)> {
         if let Some(bag_pos) = self.bag.iter().position(Option::is_none) {
-            return Some((PlayerItemPlace::MainInventory, bag_pos));
+            return Some((InventoryType::MainInventory, bag_pos));
         } else if let Some(e_bag_pos) = self
             .fortress_chest
             .as_ref()
             .and_then(|a| a.iter().position(Option::is_none))
         {
-            return Some((PlayerItemPlace::ExtendedInventory, e_bag_pos));
+            return Some((InventoryType::ExtendedInventory, e_bag_pos));
         }
         None
     }
