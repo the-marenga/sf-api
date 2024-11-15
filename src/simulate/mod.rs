@@ -72,6 +72,7 @@ pub enum MinionType {
 #[derive(Debug, Clone)]
 pub struct BattleFighter {
     pub is_companion: bool,
+    pub level: u16,
     pub class: Class,
     pub attributes: EnumMap<AttributeType, u32>,
     pub max_hp: i32,
@@ -204,6 +205,7 @@ impl BattleFighter {
             rounds_in_battle: 0,
             class_effect: None,
             portal_dmg_bonus,
+            level: char.level,
         }
     }
 
@@ -364,6 +366,8 @@ fn weapon_attack(
     rng: &mut Rng,
     offhand: bool,
 ) {
+    // TODO: Most of this can be reused, as long as the opponent does not
+    // change. Should make sure this is correct first though
     let char_damage_modifier = (1.0
         + (*attacker.attributes.get(attacker.class.main_attribute()) as f64)
             / 10.0);
@@ -378,17 +382,27 @@ fn weapon_attack(
         }
     }
 
-    // TODO: Check the order of all of this
-    let damage_bonus =
-        char_damage_modifier * attacker.portal_dmg_bonus * elemental_bonus;
+    let def_reduction = ((defender.equip.armor as f64
+        * defender.class.armor_factor())
+        / attacker.level as f64)
+        .min(defender.class.max_damage_reduction());
 
-    let calc_damage = |base| (base as f64 * damage_bonus).trunc() as u32;
+    // TODO: Check the order of all of this
+    let damage_bonus = char_damage_modifier
+        * attacker.portal_dmg_bonus
+        * elemental_bonus
+        * def_reduction
+        * attacker.class.damage_factor();
 
     let weapon = if offhand {
         attacker.equip.offhand
     } else {
         attacker.equip.weapon
     };
+
+    let calc_damage =
+        |weapon_dmg| (weapon_dmg as f64 * damage_bonus).trunc() as u32;
+
     let min_base_damage = calc_damage(weapon.0);
     let max_base_damage = calc_damage(weapon.1);
 

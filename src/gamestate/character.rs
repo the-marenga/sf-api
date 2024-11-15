@@ -183,6 +183,41 @@ impl Class {
             Mage | DemonHunter | Druid | Bard | Necromancer => 4.5,
         }
     }
+
+    #[must_use]
+    pub(crate) fn armor_factor(&self) -> f64 {
+        use Class::*;
+        match self {
+            Berserker => 0.5,
+            Warrior | Mage | Scout | DemonHunter | Druid | Assassin => 1.0,
+            Bard | Necromancer => 2.0,
+            BattleMage => 5.0,
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn max_damage_reduction(&self) -> f64 {
+        use Class::*;
+        1.0 - match self {
+            Bard | BattleMage | DemonHunter | Warrior => 0.5,
+            Druid | Assassin | Berserker | Scout => 0.25,
+            Necromancer => 0.2,
+            Mage => 0.1,
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn damage_factor(&self) -> f64 {
+        use Class::*;
+        match self {
+            Druid => 0.33,
+            Necromancer => 0.56,
+            Assassin => 0.625,
+            Warrior | Mage | Scout | BattleMage | DemonHunter => 1.0,
+            Bard => 1.125,
+            Berserker => 1.25,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
