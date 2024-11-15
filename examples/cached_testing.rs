@@ -1,7 +1,6 @@
 use sf_api::{
     gamestate::{dungeons::LightDungeon, GameState},
     session::*,
-    simulate::{BattleFighter, PlayerFighterSquad, UpgradeableFighter},
     sso::SFAccount,
 };
 use strum::IntoEnumIterator;
