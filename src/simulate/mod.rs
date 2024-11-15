@@ -1,12 +1,11 @@
-use std::io::Read;
-
+#![allow(unused)]
 use enum_map::{Enum, EnumMap};
 use log::info;
 
 use crate::{
     command::AttributeType,
     gamestate::{
-        character::{Class, DruidMask, Race},
+        character::{Class, DruidMask},
         dungeons::CompanionClass,
         items::{
             Enchantment, Equipment, EquipmentSlot, GemSlot, GemType, ItemType,
@@ -193,23 +192,23 @@ impl BattleFighter {
 
         let portal_dmg_bonus = 1.0 + f64::from(char.portal_dmg_bonus) / 100.0;
 
-        // The damage you can see in the UI
-        let calc_base_damage = |base| {
-            ((base as f64
-                * (1.0
-                    + (*attributes.get(char.class.main_attribute()) as f64)
-                        / 10.0))
-                * portal_dmg_bonus)
-                .trunc()
-        };
+        // // The damage you can see in the UI
+        // let calc_base_damage = |base| {
+        //     ((base as f64
+        //         * (1.0
+        //             + (*attributes.get(char.class.main_attribute()) as f64) /
+        //               10.0))
+        //         * portal_dmg_bonus)
+        //         .trunc()
+        // };
 
-        println!(
-            "{:?}: {} - {} - {:?}",
-            char.class,
-            calc_base_damage(equip.weapon.0),
-            calc_base_damage(equip.weapon.1),
-            attributes
-        );
+        // println!(
+        //     "{:?}: {} - {} - {:?}",
+        //     char.class,
+        //     calc_base_damage(equip.weapon.0),
+        //     calc_base_damage(equip.weapon.1),
+        //     attributes
+        // );
 
         BattleFighter {
             is_companion: char.is_companion,
@@ -264,16 +263,19 @@ pub enum Element {
     Fire,
 }
 
+#[derive(Debug, Clone)]
 pub struct BattleTeam {
     current_fighter: usize,
     fighters: Vec<BattleFighter>,
 }
 
+#[derive(Debug, Clone, Copy)]
 enum BattleSide {
     Left,
     Right,
 }
 
+#[derive(Debug, Clone)]
 pub struct Battle {
     round: u32,
     started: Option<BattleSide>,

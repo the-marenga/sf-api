@@ -1,11 +1,10 @@
 use std::{borrow::Borrow, time::Duration};
 
 use chrono::{DateTime, Local};
-use enum_map::{EnumArray, EnumMap};
 use sf_api::{
     command::Command,
     constants::Monster,
-    gamestate::dungeons::{Dungeon, DungeonProgress, LightDungeon},
+    gamestate::dungeons::{Dungeon, LightDungeon},
     SimpleSession,
 };
 use strum::IntoEnumIterator;
