@@ -866,7 +866,7 @@ impl GameState {
                         data.cstget(1, "event t end", server_time)?;
                 }
                 "scrapbook" => {
-                    self.character.scrapbok = ScrapBook::parse(val.as_str());
+                    self.character.scrapbook = ScrapBook::parse(val.as_str());
                 }
                 "dungeonfaces" | "shadowfaces" => {
                     // Gets returned after winning a dungeon fight. This looks a

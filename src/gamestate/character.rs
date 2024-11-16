@@ -92,7 +92,7 @@ pub struct Character {
     /// pieces
     pub mirror: Mirror,
     /// If the scrapbook has been unlocked, it can be found here
-    pub scrapbok: Option<ScrapBook>,
+    pub scrapbook: Option<ScrapBook>,
 
     /// A list of other characters, that the set some sort of special relation
     /// to. Either good, or bad
