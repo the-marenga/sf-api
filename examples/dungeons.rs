@@ -3,8 +3,8 @@ use std::{borrow::Borrow, time::Duration};
 use chrono::{DateTime, Local};
 use sf_api::{
     command::Command,
-    constants::Monster,
     gamestate::dungeons::{Dungeon, LightDungeon},
+    simulate::Monster,
     SimpleSession,
 };
 use strum::IntoEnumIterator;
