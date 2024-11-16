@@ -569,6 +569,11 @@ impl GameState {
                 "Ranklistplayer" => {
                     self.hall_of_fames.players.clear();
                     for player in val.as_str().trim_matches(';').split(';') {
+                        // Stop parsing once we receive an empty player
+                        if player.ends_with(",,,0,0,0,") {
+                            break;
+                        }
+                        
                         match HallOfFamePlayer::parse(player) {
                             Ok(x) => {
                                 self.hall_of_fames.players.push(x);
