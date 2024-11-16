@@ -8,7 +8,7 @@ use strum::EnumIter;
 
 use super::{
     character::Class, items::*, tavern::Location, unlockables::HabitatType,
-    ArrSkip, CCGet, CGet, Mount,
+    ArrSkip, CCGet, CGet, LightDungeon, Mount,
 };
 use crate::{command::AttributeType, error::SFError};
 
@@ -17,7 +17,7 @@ use crate::{command::AttributeType, error::SFError};
 #[non_exhaustive]
 #[allow(missing_docs)]
 /// The type of a reward you can win by spinning the wheel. The wheel can be
-/// upgraded, so some rewards may not always eb available
+/// upgraded, so some rewards may not always be available
 pub enum WheelRewardType {
     Mushrooms,
     Stone,
@@ -52,7 +52,7 @@ impl WheelReward {
     ) -> Result<WheelReward, SFError> {
         let raw_typ = data.cget(0, "wheel reward typ")?;
         let mut amount = data.cget(1, "wheel reward amount")?;
-        // NOTE: I have only tested upgraded and infered not upgraded from that
+        // NOTE: I have only tested upgraded and inferred not upgraded from that
         let typ = match raw_typ {
             0 => WheelRewardType::Mushrooms,
             1 => {
@@ -221,7 +221,7 @@ pub struct Calendar {
     pub collected: usize,
     /// The things you can get from the calendar
     pub rewards: Vec<CalendarReward>,
-    /// The time at which the calendar door wll be unlocked. If this is in the
+    /// The time at which the calendar door will be unlocked. If this is in the
     /// past, that means it is available to open
     pub next_possible: Option<DateTime<Local>>,
 }
@@ -235,6 +235,8 @@ pub struct Tasks {
     /// The tasks, that follow some server wide theme
     pub event: EventTasks,
 }
+
+const POINTS_REQUIRED_FOR_CHEST: [u32; 3] = [5, 10, 20];
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -265,7 +267,7 @@ pub struct EventTasks {
 macro_rules! impl_tasks {
     ($t:ty) => {
         impl $t {
-            /// The amount of tasks you have collected
+            /// The amount of tasks you have completed
             #[must_use]
             pub fn completed(&self) -> usize {
                 self.tasks.iter().filter(|a| a.is_completed()).count()
@@ -294,6 +296,36 @@ macro_rules! impl_tasks {
                 self.tasks
                     .iter()
                     .find(|task| task.typ == task_type && !task.is_completed())
+            }
+
+            /// Returns all uncompleted tasks
+            #[must_use]
+            pub fn get_uncompleted(&self) -> Vec<&Task> {
+                self.tasks
+                    .iter()
+                    .filter(|task| !task.is_completed())
+                    .collect()
+            }
+
+            /// Checks if the chest at the given index can be opened
+            #[must_use]
+            #[allow(clippy::indexing_slicing)]
+            pub fn can_open_chest(&self, index: usize) -> bool {
+                // Ensure index is valid
+                if index >= self.rewards.len() {
+                    return false;
+                }
+
+                // Get the chest at the given index
+                let chest = &self.rewards[index];
+
+                // We can't open the chest twice
+                if chest.opened {
+                    return false;
+                }
+
+                // Check if we have enough points to open the given chest
+                self.earned_points() >= POINTS_REQUIRED_FOR_CHEST[index]
             }
         }
     };
@@ -359,7 +391,7 @@ pub enum TaskType {
     BuyHourGlasses,
     BuyOfferFromArenaManager,
     ClaimSoulsFromExtractor,
-    ColectGoldFromPit,
+    CollectGoldFromPit,
     ConsumeThirstForAdventure,
     ConsumeThirstFromUnderworld,
     DefeatGambler,
@@ -425,13 +457,23 @@ pub enum TaskType {
     WinFightsNoEpicsLegendaries,
     WinFightsNoGear,
 
+    LeaseMount,
+    DefeatMonstersLightDungeon(LightDungeon),
+    BuyWeaponInWeaponsShop,
+    FightHigherRankedPlayer,
+    AddFriend,
+    ClaimNewCustomerPack,
+    JoinOrCreateGuild,
+    UpgradeAnyGuildSkill,
+    CityGuardHours,
+    DrinkPotion(PotionType),
+
     Unknown,
 }
 
 impl TaskType {
     pub(crate) fn parse(num: i64) -> TaskType {
         match num {
-            ..=0 | 73 | 100.. => TaskType::Unknown,
             1 => TaskType::DrinkBeer,
             2 => TaskType::ConsumeThirstForAdventure,
             3 => TaskType::WinFightsInArena,
@@ -496,7 +538,7 @@ impl TaskType {
             78 => TaskType::EarnMoneyCityGuard,
             79 => TaskType::EarnMoneyFromHoFFights,
             80 => TaskType::EarnMoneySellingItems,
-            81 => TaskType::ColectGoldFromPit,
+            81 => TaskType::CollectGoldFromPit,
             82 => TaskType::GainXpFromQuests,
             83 => TaskType::GainXpFromAcademy,
             84 => TaskType::GainXpFromArenaFights,
@@ -515,6 +557,26 @@ impl TaskType {
             97 => TaskType::GainSilver,
             98 => TaskType::GainXP,
             99 => TaskType::GainEpic,
+
+            117 => {
+                TaskType::DefeatMonstersLightDungeon(LightDungeon::TrainingCamp)
+            }
+            118 => TaskType::ClaimNewCustomerPack,
+            119 => TaskType::JoinOrCreateGuild,
+            120 => TaskType::UpgradeAnyGuildSkill,
+            121 => TaskType::AddFriend,
+            122 => TaskType::DrinkPotion(PotionType::Constitution),
+            123 => TaskType::DrinkPotion(PotionType::Strength),
+            124 => TaskType::DrinkPotion(PotionType::Dexterity),
+            125 => TaskType::DrinkPotion(PotionType::Intelligence),
+            126 => TaskType::DrinkPotion(PotionType::EternalLife),
+            127 => TaskType::LeaseMount,
+            128 => TaskType::FightHigherRankedPlayer,
+            129 => TaskType::CityGuardHours,
+            130 => TaskType::BuyWeaponInWeaponsShop,
+            131 => TaskType::Upgrade(AttributeType::Constitution),
+
+            _ => TaskType::Unknown,
         }
     }
 }
@@ -687,7 +749,7 @@ pub enum Event {
     PieceworkParty,
     LuckyDay,
     CrazyMushroomHarvest,
-    HollidaySale,
+    HolidaySale,
 }
 
 pub(crate) fn parse_rewards(vals: &[i64]) -> [RewardChest; 3] {
