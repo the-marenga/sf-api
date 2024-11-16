@@ -265,7 +265,7 @@ impl BattleTeam {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum BattleSide {
+pub enum BattleSide {
     Left,
     Right,
 }
@@ -280,11 +280,7 @@ pub struct Battle {
 }
 
 impl Battle {
-    pub fn new(
-        left: Vec<BattleFighter>,
-        right: Vec<BattleFighter>,
-        seed: u64,
-    ) -> Self {
+    pub fn new(left: Vec<BattleFighter>, right: Vec<BattleFighter>) -> Self {
         Self {
             round: 0,
             started: None,
@@ -296,7 +292,18 @@ impl Battle {
                 current_fighter: 0,
                 fighters: right,
             },
-            rng: fastrand::Rng::with_seed(seed),
+            rng: fastrand::Rng::default(),
+        }
+    }
+
+    /// Simulates a battle between the two sides. Returns the winning side.
+    /// The result for invalid starting states (dead/damaged/no fighters) is
+    /// undefined
+    pub fn simulate(&mut self) -> BattleSide {
+        loop {
+            if let Some(winner) = self.simulate_turn() {
+                return winner;
+            }
         }
     }
 
@@ -321,7 +328,7 @@ impl Battle {
         left.rounds_in_battle += 1;
         right.rounds_in_battle += 1;
 
-        let starting_side = if let Some(started) = self.started {
+        let attacking_side = if let Some(started) = self.started {
             let one_vs_one_round =
                 left.rounds_in_battle.min(right.rounds_in_battle);
 
@@ -344,7 +351,7 @@ impl Battle {
             starter
         };
 
-        let (attacker, defender) = match starting_side {
+        let (attacker, defender) = match attacking_side {
             Left => (left, right),
             Right => (right, left),
         };
@@ -388,15 +395,22 @@ impl Battle {
             Bard => todo!("Start Melodies"),
             Necromancer => todo!("Summon minions & do their stuff"),
         }
-
-        // TODO: revive demon hunter
-
+        if defender.current_hp <= 0 {
+            match attacking_side {
+                Left => self.right.current_fighter += 1,
+                Right => self.left.current_fighter += 1,
+            }
+        }
         None
     }
 }
 
 // Does the specified amount of damage, whilst
 fn do_damage(to: &mut BattleFighter, damage: u32, rng: &mut Rng) {
+    if to.current_hp <= 0 {
+        // Skip pointless attacks
+        return;
+    }
     to.current_hp -= damage as i32;
     if to.current_hp > 0 {
         return;
