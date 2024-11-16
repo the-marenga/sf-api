@@ -1,6 +1,3 @@
-#![allow(unused)]
-use std::ops::Sub;
-
 use enum_map::{Enum, EnumMap};
 use fastrand::Rng;
 use log::info;
@@ -11,10 +8,7 @@ use crate::{
     gamestate::{
         character::{Class, DruidMask},
         dungeons::CompanionClass,
-        items::{
-            Enchantment, Equipment, EquipmentSlot, GemSlot, GemType, ItemType,
-            Potion, PotionType, RuneType,
-        },
+        items::*,
         GameState,
     },
     misc::EnumMapGet,
@@ -46,7 +40,7 @@ pub struct UpgradeableFighter {
     class: Class,
     /// The base attributes without any equipment, or other boosts
     pub attribute_basis: EnumMap<AttributeType, u32>,
-    attributes_bought: EnumMap<AttributeType, u32>,
+    _attributes_bought: EnumMap<AttributeType, u32>,
     pet_attribute_bonus_perc: EnumMap<AttributeType, f64>,
 
     equipment: Equipment,
@@ -60,8 +54,8 @@ pub struct UpgradeableFighter {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Minion {
-    typ: MinionType,
-    rounds_remaining: u8,
+    pub typ: MinionType,
+    pub rounds_remaining: u8,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -320,10 +314,10 @@ impl<'a> Battle<'a> {
             Necromancer, Scout, Warrior,
         };
 
-        let Some(mut left) = self.left.current() else {
+        let Some(left) = self.left.current() else {
             return Some(Right);
         };
-        let Some(mut right) = self.right.current() else {
+        let Some(right) = self.right.current() else {
             return Some(Left);
         };
 
@@ -344,14 +338,14 @@ impl<'a> Battle<'a> {
             }
         } else {
             // The battle has not yet started. Figure out who side starts
-            let mut starter =
+            let attacking_side =
                 match (right.equip.reaction_boost, left.equip.reaction_boost) {
                     (true, true) | (false, false) if self.rng.bool() => Right,
                     (true, false) => Right,
                     _ => Left,
                 };
-            self.started = Some(starter);
-            starter
+            self.started = Some(attacking_side);
+            attacking_side
         };
 
         let (attacker, defender) = match attacking_side {
@@ -368,11 +362,9 @@ impl<'a> Battle<'a> {
                 weapon_attack(attacker, defender, &mut self.rng, true);
             }
             Berserker => {
-                weapon_attack(attacker, defender, &mut self.rng, false);
-                for attack_no in 0..14 {
+                for _ in 0..15 {
+                    weapon_attack(attacker, defender, &mut self.rng, false);
                     if self.rng.bool() {
-                        weapon_attack(attacker, defender, &mut self.rng, false);
-                    } else {
                         break;
                     }
                 }
@@ -388,9 +380,7 @@ impl<'a> Battle<'a> {
                             attacker.max_hp as u32 / 4
                         }
                     };
-                    if dmg > 0 {
-                        do_damage(defender, dmg, &mut self.rng);
-                    }
+                    do_damage(defender, dmg, &mut self.rng);
                 }
                 weapon_attack(attacker, defender, &mut self.rng, false)
             }
@@ -410,7 +400,7 @@ impl<'a> Battle<'a> {
 
 // Does the specified amount of damage, whilst
 fn do_damage(to: &mut BattleFighter, damage: u32, rng: &mut Rng) {
-    if to.current_hp <= 0 {
+    if to.current_hp <= 0 || damage == 0 {
         // Skip pointless attacks
         return;
     }
@@ -461,9 +451,9 @@ fn weapon_attack(
 
     // TODO: Most of this can be reused, as long as the opponent does not
     // change. Should make sure this is correct first though
-    let char_damage_modifier = (1.0
+    let char_damage_modifier = 1.0
         + (*attacker.attributes.get(attacker.class.main_attribute()) as f64)
-            / 10.0);
+            / 10.0;
 
     let mut elemental_bonus = 1.0;
     for element in Element::iter() {
@@ -512,8 +502,7 @@ fn weapon_attack(
             damage *= 2;
         }
     }
-    do_damage(defender, damage, rng);
-    // TODO: damage reduction
+    do_damage(defender, damage.max(1), rng);
 }
 
 #[derive(Debug)]
@@ -568,7 +557,7 @@ impl PlayerFighterSquad {
             level: char.level,
             class: char.class,
             attribute_basis: char.attribute_basis,
-            attributes_bought: char.attribute_times_bought,
+            _attributes_bought: char.attribute_times_bought,
             equipment: char.equipment.clone(),
             active_potions: char.active_potions,
             pet_attribute_bonus_perc,
@@ -590,7 +579,7 @@ impl PlayerFighterSquad {
                     level: comp.level.try_into().unwrap_or(1),
                     class: class.into(),
                     attribute_basis: comp.attributes,
-                    attributes_bought: EnumMap::default(),
+                    _attributes_bought: EnumMap::default(),
                     equipment: comp.equipment.clone(),
                     active_potions: char.active_potions,
                     pet_attribute_bonus_perc,
