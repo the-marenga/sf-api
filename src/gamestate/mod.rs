@@ -405,17 +405,8 @@ impl GameState {
                         .production
                         .per_hour_next_lvl = val.into("wood next lvl")?;
                 }
-                "shadowlevel" => {
-                    self.dungeons.update_levels(
-                        &val.into_list("shadow dungeon levels")?,
-                        DungeonType::Shadow,
-                    );
-                }
-                "dungeonlevel" => {
-                    self.dungeons.update_levels(
-                        &val.into_list("shadow dungeon levels")?,
-                        DungeonType::Light,
-                    );
+                "shadowlevel" | "dungeonlevel" => {
+                    // We just look at the db
                 }
                 "gttime" => {
                     self.update_gttime(&val.into_list("gttime")?, server_time)?;
@@ -699,11 +690,6 @@ impl GameState {
                     self.tavern.expeditions.start =
                         data.cstget(0, "expedition start", server_time)?;
                     let end = data.cstget(1, "expedition end", server_time)?;
-                    let end2 =
-                        data.cstget(1, "expedition end2", server_time)?;
-                    if end != end2 {
-                        warn!("Weird expedition time");
-                    }
                     self.tavern.expeditions.end = end;
                 }
                 "expeditions" => {
@@ -1625,9 +1611,10 @@ impl GameState {
         guild.hydra.remaining_fights =
             data.csiget(628, "remaining pet battles", 0)?;
 
-        self.character.druid_mask = data.cfpget(653, "druid mask", |a| a)?;
-        self.character.bard_instrument =
-            data.cfpget(701, "bard instrument", |a| a)?;
+        // self.character.druid_mask = data.cfpget(653, "druid mask", |a| a)?;
+        // self.character.bard_instrument =
+        //     data.cfpget(701, "bard instrument", |a| a)?;
+
         self.specials.calendar.collected =
             data.csimget(648, "calendat collected", 245, |a| a >> 16)?;
         self.specials.calendar.next_possible =

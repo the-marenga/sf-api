@@ -393,8 +393,7 @@ impl Session {
     ///
     /// # Errors
     /// - `InvalidRequest`: If you call this function with anything other, than
-    ///   an
-    /// SSO-Session
+    ///   an SSO-Session
     /// - Other errors, depending on if the session is able to renew the
     ///   credentials
     pub async fn renew_sso_creds(&mut self) -> Result<(), SFError> {

@@ -63,6 +63,21 @@ You just need to run the following command in your [Rust](https://rustup.rs/) pr
 cargo add sf-api
 ```
 
+Since S&F is constantly changing, you might want to consider using the in
+development veersion though, since new features & fixes will be applied there
+first and can take some time to land in the full release. To use the development
+version, you should instead run
+
+```
+cargo add --git https://github.com/the-marenga/sf-api.git
+```
+
+To update both of these channels after an update, you need to run
+
+```
+cargo update
+```
+
 ## Guidelines
 
 Here are a few things you should note before getting your account banned:
