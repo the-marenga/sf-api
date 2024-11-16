@@ -60,7 +60,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(56, Class::Scout, [250, 960, 240, 680, 345], 155040, 86309),
         Monster::new(66, Class::Scout, [300, 1160, 290, 880, 420], 235840, 148282),
         Monster::new(70, Class::Warrior, [1240, 385, 360, 960, 340], 340800, 181085),
-    ] as &[Monster],
+    ],
     // RuinsOfGnark
     &[
         Monster::new(32, Class::Scout, [155, 486, 161, 276, 205], 36432, 16557),
@@ -73,7 +73,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(76, Class::Scout, [350, 1360, 340, 1080, 495], 332640, 240784),
         Monster::new(86, Class::Warrior, [1560, 505, 480, 1280, 420], 556800, 374041),
         Monster::new(90, Class::Warrior, [1640, 535, 510, 1360, 440], 618800, 441608),
-    ] as &[Monster],
+    ],
     // CutthroatGrotto
     &[
         Monster::new(52, Class::Scout, [230, 880, 220, 601, 315], 127412, 68234),
@@ -86,7 +86,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(96, Class::Warrior, [1760, 580, 555, 1480, 470], 717800, 560797),
         Monster::new(102, Class::Scout, [480, 1880, 470, 1600, 690], 659200, 704509),
         Monster::new(110, Class::Scout, [520, 2040, 510, 1760, 750], 781440, 940791),
-    ] as &[Monster],
+    ],
     // EmeraldScaleAltar
     &[
         Monster::new(72, Class::Scout, [330, 1280, 320, 1000, 465], 292000, 199497),
@@ -99,7 +99,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(114, Class::Mage, [520, 540, 2200, 1760, 775], 404800, 1081088),
         Monster::new(122, Class::Warrior, [2280, 775, 750, 2000, 600], 1230000, 1412064),
         Monster::new(130, Class::Scout, [620, 2440, 610, 2160, 900], 1131840, 1821461),
-    ] as &[Monster],
+    ],
     // ToxicTree
     &[
         Monster::new(92, Class::Warrior, [1680, 550, 525, 1400, 450], 651000, 478738),
@@ -112,7 +112,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(136, Class::Mage, [630, 650, 2640, 2200, 940], 602800, 2187846),
         Monster::new(144, Class::Scout, [690, 2720, 680, 2440, 1005], 1415200, 2767832),
         Monster::new(150, Class::Scout, [720, 2840, 710, 2560, 1050], 1546240, 3280697),
-    ] as &[Monster],
+    ],
     // MagmaStream
     &[
         Monster::new(112, Class::Scout, [530, 2080, 520, 1800, 765], 813600, 1009041),
@@ -125,7 +125,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(146, Class::Warrior, [2760, 955, 930, 2480, 720], 1822800, 2930646),
         Monster::new(148, Class::Warrior, [2800, 970, 945, 2520, 730], 1877400, 3101774),
         Monster::new(170, Class::Warrior, [3240, 1135, 1110, 2960, 840], 2530800, 5583708),
-    ] as &[Monster],
+    ],
     // FrostBloodTemple
     &[
         Monster::new(132, Class::Warrior, [2480, 850, 825, 2200, 650], 1463000, 1937541),
@@ -138,7 +138,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(180, Class::Scout, [870, 3440, 860, 3160, 1275], 2287840, 7157815),
         Monster::new(185, Class::Mage, [875, 895, 3620, 3180, 1305], 1182960, 8070081),
         Monster::new(200, Class::Mage, [950, 970, 3920, 3480, 1410], 1398960, 11412835),
-    ] as &[Monster],
+    ],
     // PyramidsofMadness
     &[
         Monster::new(152, Class::Warrior, [2880, 1000, 975, 2600, 750], 1989000, 3467701),
@@ -151,7 +151,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(178, Class::Scout, [860, 3400, 850, 3120, 1260], 2233920, 6816906),
         Monster::new(190, Class::Mage, [900, 920, 3720, 3280, 1340], 1252960, 9081081),
         Monster::new(0, Class::Warrior, [0, 0, 0, 0, 0], 0, 0),
-    ] as &[Monster],
+    ],
     // BlackSkullFortress
     &[
         Monster::new(205, Class::Scout, [995, 3940, 985, 3660, 1450], 3015840, 12751538),
@@ -164,7 +164,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(240, Class::Warrior, [4640, 1630, 1605, 4360, 1130], 5253800, 26302843),
         Monster::new(245, Class::Warrior, [4740, 1665, 1640, 4460, 1150], 5485800, 28966329),
         Monster::new(250, Class::Warrior, [4840, 1700, 1675, 4560, 1170], 5722800, 31862139),
-    ] as &[Monster],
+    ],
     // CircusOfHorror
     &[
         Monster::new(255, Class::Warrior, [4940, 1735, 1710, 4660, 1190], 5964800, 34985806),
@@ -177,7 +177,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(290, Class::Scout, [1420, 5640, 1410, 5360, 2045], 6239040, 64942539),
         Monster::new(295, Class::Mage, [1425, 1445, 5820, 5380, 2075], 3184960, 70595045),
         Monster::new(300, Class::Warrior, [5840, 2050, 2025, 5560, 1370], 8787200, 76669139),
-    ] as &[Monster],
+    ],
     // Hell
     &[
         Monster::new(305, Class::Mage, [1475, 1495, 6020, 5580, 2145], 3414960, 83158305),
@@ -190,7 +190,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(340, Class::Warrior, [6640, 2330, 2305, 6360, 1530], 10843800, 143018630),
         Monster::new(345, Class::Warrior, [6740, 2365, 2340, 6460, 1550], 11175800, 153964246),
         Monster::new(350, Class::Warrior, [6840, 2400, 2375, 6560, 1570], 11512800, 165631756),
-    ] as &[Monster],
+    ],
     // The13thFloor
     &[
         Monster::new(355, Class::Warrior, [7570, 2655, 2630, 7290, 1716], 12976200, 178017293),
@@ -213,7 +213,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(480, Class::Warrior, [72320, 25300, 25230, 35460, 15280], 85281296, 300000000),
         Monster::new(490, Class::Scout, [30360, 86780, 30270, 39000, 18330], 76596000, 300000000),
         Monster::new(500, Class::Warrior, [0, 0, 0, 0, 0], 0, 300000000),
-    ] as &[Monster],
+    ],
     // Easteros
     &[
         Monster::new(310, Class::Warrior, [6040, 2120, 2095, 5760, 1410], 8956800, 90125436),
@@ -236,7 +236,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(480, Class::Mage, [18060, 18200, 73080, 70000, 25844], 67340000, 300000000),
         Monster::new(490, Class::Warrior, [74200, 26012, 25837, 72240, 16254], 177349200, 300000000),
         Monster::new(500, Class::Scout, [19040, 75880, 18970, 73920, 27055], 148135680, 300000000),
-    ] as &[Monster],
+    ],
     // Tower
     &[
         Monster::new(200, Class::Warrior, [4194, 1697, 1665, 15940, 2589], 16019700, 267461),
@@ -339,7 +339,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(394, Class::Warrior, [19856, 9175, 8354, 75919, 11850], 149940032, 7008597),
         Monster::new(396, Class::Warrior, [20413, 9432, 8564, 78007, 12138], 154843888, 7195163),
         Monster::new(398, Class::Warrior, [20977, 9686, 8769, 80151, 12429], 159901248, 7386146),
-    ] as &[Monster],
+    ],
     // TimeHonoredSchoolofMagic
     &[
         Monster::new(250, Class::Scout, [1400, 11000, 1400, 35000, 4500], 62500000, 31862139),
@@ -362,7 +362,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(377, Class::Mage, [5774, 5775, 24520, 96430, 13751], 125754360, 242313317),
         Monster::new(385, Class::Scout, [12400, 29300, 12600, 130350, 18640], 379430016, 270120546),
         Monster::new(400, Class::Mage, [8447, 8378, 30585, 126470, 18375], 190324704, 300000000),
-    ] as &[Monster],
+    ],
     // Hemorridor
     &[
         Monster::new(200, Class::Warrior, [8800, 1120, 1120, 28000, 3600], 28140000, 11412835),
@@ -385,7 +385,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(456, Class::Warrior, [29669, 6998, 6998, 116680, 16639], 266613792, 300000000),
         Monster::new(474, Class::Warrior, [36039, 15498, 15498, 160331, 22927], 380786112, 300000000),
         Monster::new(500, Class::Warrior, [38231, 10473, 10474, 158088, 22969], 396010432, 300000000),
-    ] as &[Monster],
+    ],
     // NordicGods
     &[
         Monster::new(210, Class::Warrior, [8000, 2000, 2000, 36000, 4000], 43560000, 14222021),
@@ -398,7 +398,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(420, Class::Scout, [10500, 22500, 10500, 112500, 15500], 212850000, 300000000),
         Monster::new(455, Class::Warrior, [29500, 7000, 7000, 115000, 16000], 235290000, 300000000),
         Monster::new(500, Class::Warrior, [38500, 10500, 10500, 158000, 23000], 354552000, 300000000),
-    ] as &[Monster],
+    ],
     // MountOlympus
     &[
         Monster::new(210, Class::Mage, [2000, 2000, 8000, 80000, 4000], 52800000, 14222021),
@@ -411,7 +411,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(420, Class::Scout, [16000, 36000, 16000, 220000, 12000], 567600000, 300000000),
         Monster::new(455, Class::Scout, [28000, 40000, 28000, 250000, 13000], 697500032, 300000000),
         Monster::new(500, Class::Mage, [33333, 33333, 44444, 300000, 15000], 459000000, 300000000),
-    ] as &[Monster],
+    ],
     // TavernoftheDarkDoppelgangers
     &[
         Monster::new(410, Class::Mage, [7000, 7000, 20000, 18000, 4000], 10000000, 300000000),
@@ -424,7 +424,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(480, Class::Mage, [25000, 25000, 72000, 35000, 15000], 50000000, 300000000),
         Monster::new(490, Class::Warrior, [86000, 30000, 30000, 39000, 19000], 30000000, 300000000),
         Monster::new(500, Class::Mage, [35000, 35000, 90000, 43000, 21000], 50000000, 300000000),
-    ] as &[Monster],
+    ],
     // DragonsHoard
     &[
         Monster::new(210, Class::Scout, [3100, 6200, 3100, 10500, 3100], 16000000, 14222021),
@@ -437,7 +437,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(231, Class::Warrior, [8720, 4360, 4360, 21000, 4360], 47500000, 22012436),
         Monster::new(234, Class::Scout, [4540, 9080, 4540, 22500, 4540], 52000000, 23374540),
         Monster::new(240, Class::Mage, [4900, 4900, 9800, 25500, 4900], 61000000, 26302843),
-    ] as &[Monster],
+    ],
     // HouseOfHorrors
     &[
         Monster::new(240, Class::Mage, [4900, 4900, 9800, 25500, 4900], 61000000, 26302843),
@@ -450,7 +450,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(261, Class::Mage, [6160, 6160, 12320, 36000, 6160], 92500000, 39074626),
         Monster::new(264, Class::Mage, [6340, 6340, 12680, 37500, 6340], 97000000, 41269055),
         Monster::new(270, Class::Scout, [6700, 13400, 6700, 40500, 6700], 106000000, 45958126),
-    ] as &[Monster],
+    ],
     // ThirdLeagueOfSuperheroes
     &[
         Monster::new(280, Class::Mage, [7300, 7300, 14600, 45500, 7300], 121000000, 54764113),
@@ -463,7 +463,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(301, Class::Mage, [8560, 8560, 17120, 56000, 8560], 152500000, 77926126),
         Monster::new(304, Class::Mage, [8740, 8740, 17480, 57500, 8740], 157000000, 81832831),
         Monster::new(310, Class::Scout, [9100, 18200, 9100, 60500, 9100], 166000000, 90125436),
-    ] as &[Monster],
+    ],
     // DojoOfChildhoodHeroes
     &[
         Monster::new(313, Class::Warrior, [18560, 9280, 9280, 62000, 9280], 170500000, 94521325),
@@ -476,7 +476,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(334, Class::Mage, [10540, 10540, 21080, 72500, 10540], 202000000, 130745487),
         Monster::new(337, Class::Warrior, [21440, 10720, 10720, 74000, 10720], 206500000, 136754704),
         Monster::new(340, Class::Mage, [10900, 10900, 21800, 75500, 10900], 211000000, 143018630),
-    ] as &[Monster],
+    ],
     // MonsterGrotto
     &[
         Monster::new(480, Class::Warrior, [66000, 35000, 35000, 174000, 35000], 540000000, 300000000),
@@ -489,7 +489,7 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(501, Class::Scout, [40250, 80500, 40250, 190800, 40250], 603000000, 300000000),
         Monster::new(504, Class::Warrior, [82000, 41000, 41000, 193200, 41000], 612000000, 300000000),
         Monster::new(510, Class::Warrior, [85000, 42500, 42500, 198000, 42500], 630000000, 300000000),
-    ] as &[Monster],
+    ],
     // CityOfIntrigues
     &[],
     // SchoolOfMagicExpress
@@ -498,8 +498,19 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
     &[],
     // PlayaGamesHQ
     &[],
-    // TrainingCamp
-    &[],
+    // TrainingCamp @Seraphine725 (https://github.com/the-marenga/sf-api/pull/87#issuecomment-2480177940)
+    &[
+        Monster::new(1, Class::Mage, [5, 5, 10, 10, 5], 50, 80),
+        Monster::new(2, Class::Mage, [10, 10, 20, 20, 10], 120, 180),
+        Monster::new(3, Class::Scout, [15, 30, 15, 30, 15], 480, 280),
+        Monster::new(4, Class::Warrior, [40, 20, 20, 40, 20],  1000, 360),
+        Monster::new(5, Class::Warrior, [50, 25, 25, 50, 25],  1500, 440),
+        Monster::new(6, Class::Mage, [30, 30, 60, 60, 30], 840, 578),
+        Monster::new(7, Class::Scout, [35, 70, 35, 70, 35], 2240, 716),
+        Monster::new(8, Class::Warrior, [80, 40, 40, 80, 40],  3600, 881),
+        Monster::new(9, Class::Scout, [40, 80, 40, 90, 45], 3600, 1071),
+        Monster::new(10, Class::Mage, [40, 40, 80, 100, 50], 2200, 1287),
+    ],
     // Sandstorm
     &[]
 ]);
