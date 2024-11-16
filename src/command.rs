@@ -793,7 +793,7 @@ pub enum AttributeType {
     Luck = 5,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Enum, EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Enum, EnumIter, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 /// A type of shop. This is a subset of `ItemPlace`
@@ -802,7 +802,7 @@ pub enum ShopType {
     Magic = 4,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 /// The "curency" you want to use to skip a quest

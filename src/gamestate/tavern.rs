@@ -283,13 +283,13 @@ impl CurrentAction {
         match (id, busy) {
             (0, None) => CurrentAction::Idle,
             (1, Some(busy_until)) => CurrentAction::CityGuard {
-                    hours: soft_into(sec, "city guard time", 10),
-                    busy_until,
-                },
+                hours: soft_into(sec, "city guard time", 10),
+                busy_until,
+            },
             (2, Some(busy_until)) => CurrentAction::Quest {
-                    quest_idx: soft_into(sec, "quest index", 0),
-                    busy_until,
-                },
+                quest_idx: soft_into(sec, "quest index", 0),
+                busy_until,
+            },
             (4, None) => CurrentAction::Expedition,
             _ => {
                 error!("Unknown action id combination: {id}, {busy:?}");
@@ -404,9 +404,9 @@ impl Expedition {
             2 => ExpeditionStage::Boss(self.boss),
             3 => ExpeditionStage::Rewards(self.rewards.clone()),
             4 => match self.busy_until {
-                    Some(x) if x > Local::now() => ExpeditionStage::Waiting(x),
-                    _ if self.current_floor == 10 => ExpeditionStage::Finished,
-                    _ => cross_roads(),
+                Some(x) if x > Local::now() => ExpeditionStage::Waiting(x),
+                _ if self.current_floor == 10 => ExpeditionStage::Finished,
+                _ => cross_roads(),
             },
             _ => ExpeditionStage::Unknown,
         }
@@ -485,32 +485,32 @@ pub enum ExpeditionThing {
     ToiletPaper = 11,
 
     Bait = 21,
-    /// New name: DragonTaming
+    /// New name: `DragonTaming`
     Dragon = 22,
 
     CampFire = 31,
     Phoenix = 32,
-    /// New name: ExtinguishedCampfire
+    /// New name: `ExtinguishedCampfire`
     BurntCampfire = 33,
 
     UnicornHorn = 41,
     Donkey = 42,
     Rainbow = 43,
-    /// New name: UnicornWhisperer
+    /// New name: `UnicornWhisperer`
     Unicorn = 44,
 
     CupCake = 51,
-    /// New name: SucklingPig
+    /// New name: `SucklingPig`
     Cake = 61,
 
     SmallHurdle = 71,
     BigHurdle = 72,
-    /// New name: PodiumClimber
+    /// New name: `PodiumClimber`
     WinnersPodium = 73,
 
     Socks = 81,
     ClothPile = 82,
-    /// New name: RevealingLady
+    /// New name: `RevealingLady`
     RevealingCouple = 83,
 
     SwordInStone = 91,
@@ -519,11 +519,11 @@ pub enum ExpeditionThing {
 
     Well = 101,
     Girl = 102,
-    /// New name: BewitchedStew
+    /// New name: `BewitchedStew`
     Balloons = 103,
 
     Prince = 111,
-    /// New name: ToxicFountainCure
+    /// New name: `ToxicFountainCure`
     RoyalFrog = 112,
 
     Hand = 121,

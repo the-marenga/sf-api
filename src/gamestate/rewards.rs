@@ -8,7 +8,7 @@ use strum::EnumIter;
 
 use super::{
     character::Class, items::*, tavern::Location, unlockables::HabitatType,
-    ArrSkip, CCGet, CGet, LightDungeon, Mount,
+    ArrSkip, CCGet, CGet, LightDungeon, Mount, ShopType,
 };
 use crate::{command::AttributeType, error::SFError};
 
@@ -468,6 +468,20 @@ pub enum TaskType {
     CityGuardHours,
     DrinkPotion(PotionType),
 
+    BuyFromShop(ShopType),
+    FindFruitsOnExpedition,
+    BrewPotions,
+    CollectWood,
+    CollectStone,
+    CommandFortressBattle,
+    FightHellevator,
+    BuyHellevatorTreats,
+    DefeatHellevatorFloors,
+    EnterLegendaryDungeon,
+    OpenLegendaryDungeonCrateChests,
+    FeedPetType(HabitatType),
+    SpendCardsHellevator,
+
     Unknown,
 }
 
@@ -531,6 +545,7 @@ impl TaskType {
             70 => TaskType::SkipGameOfDiceWait,
             71 => TaskType::WinFightsInHoF,
             72 => TaskType::WinFightsBackToBack,
+            73 => TaskType::SpendCardsHellevator,
             74 => TaskType::GainSilverFromFightsInHoF,
             75 => TaskType::WinFightsNoChestplate,
             76 => TaskType::WinFightsNoGear,
@@ -557,7 +572,23 @@ impl TaskType {
             97 => TaskType::GainSilver,
             98 => TaskType::GainXP,
             99 => TaskType::GainEpic,
-
+            100 => TaskType::BuyFromShop(ShopType::Magic),
+            101 => TaskType::BuyFromShop(ShopType::Weapon),
+            102 => TaskType::FindFruitsOnExpedition,
+            103 => TaskType::BrewPotions,
+            104 => TaskType::CollectWood,
+            105 => TaskType::CollectStone,
+            106 => TaskType::CommandFortressBattle,
+            107 => TaskType::FightHellevator,
+            108 => TaskType::BuyHellevatorTreats,
+            109 => TaskType::DefeatHellevatorFloors,
+            110 => TaskType::EnterLegendaryDungeon,
+            111 => TaskType::OpenLegendaryDungeonCrateChests,
+            112 => TaskType::FeedPetType(HabitatType::Shadow),
+            113 => TaskType::FeedPetType(HabitatType::Light),
+            114 => TaskType::FeedPetType(HabitatType::Earth),
+            115 => TaskType::FeedPetType(HabitatType::Fire),
+            116 => TaskType::FeedPetType(HabitatType::Water),
             117 => {
                 TaskType::DefeatMonstersLightDungeon(LightDungeon::TrainingCamp)
             }
@@ -576,7 +607,7 @@ impl TaskType {
             130 => TaskType::BuyWeaponInWeaponsShop,
             131 => TaskType::Upgrade(AttributeType::Constitution),
 
-            _ => TaskType::Unknown,
+            ..=0 | 132.. => TaskType::Unknown,
         }
     }
 }
