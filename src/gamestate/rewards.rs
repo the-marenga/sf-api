@@ -236,8 +236,6 @@ pub struct Tasks {
     pub event: EventTasks,
 }
 
-const POINTS_REQUIRED_FOR_CHEST: [u32; 3] = [5, 10, 20];
-
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Information about the tasks, that reset every day
@@ -309,15 +307,11 @@ macro_rules! impl_tasks {
 
             /// Checks if the chest at the given index can be opened
             #[must_use]
-            #[allow(clippy::indexing_slicing)]
             pub fn can_open_chest(&self, index: usize) -> bool {
-                // Ensure index is valid
-                if index >= self.rewards.len() {
-                    return false;
-                }
-
                 // Get the chest at the given index
-                let chest = &self.rewards[index];
+                let Some(chest) = self.rewards.get(index) else {
+                    return false;
+                };
 
                 // We can't open the chest twice
                 if chest.opened {
@@ -325,7 +319,7 @@ macro_rules! impl_tasks {
                 }
 
                 // Check if we have enough points to open the given chest
-                self.earned_points() >= POINTS_REQUIRED_FOR_CHEST[index]
+                self.earned_points() >= chest.required_points
             }
         }
     };
@@ -649,6 +643,8 @@ impl Task {
 pub struct RewardChest {
     /// Whether or not this chest has been unlocked
     pub opened: bool,
+    /// The amount of points required to open this chest
+    pub required_points: u32,
     /// The things you will get for opening this chest
     pub rewards: Vec<Reward>,
 }
@@ -748,14 +744,18 @@ impl Reward {
 impl RewardChest {
     pub(crate) fn parse(data: &[i64]) -> Result<RewardChest, SFError> {
         let opened = data.cget(0, "rchest opened")? != 0;
-        // 1 => Chest position (obvious from position)
+        let required_points = data.ciget(1, "reward chest required points")?;
         let reward_count: usize = data.ciget(2, "reward chest count")?;
         let mut rewards = Vec::new();
         for pos in 0..reward_count {
             let data = data.skip(3 + pos * 2, "rchest rewards")?;
             rewards.push(Reward::parse(data)?);
         }
-        Ok(RewardChest { opened, rewards })
+        Ok(RewardChest {
+            opened,
+            required_points,
+            rewards,
+        })
     }
 }
 
