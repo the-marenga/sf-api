@@ -252,13 +252,13 @@ pub enum Element {
     Fire,
 }
 
-#[derive(Debug, Clone)]
-pub struct BattleTeam {
+#[derive(Debug)]
+pub struct BattleTeam<'a> {
     current_fighter: usize,
-    fighters: Vec<BattleFighter>,
+    fighters: &'a mut [BattleFighter],
 }
 
-impl BattleTeam {
+impl<'a> BattleTeam<'a> {
     pub fn current(&mut self) -> Option<&mut BattleFighter> {
         self.fighters.get_mut(self.current_fighter)
     }
@@ -270,17 +270,20 @@ pub enum BattleSide {
     Right,
 }
 
-#[derive(Debug, Clone)]
-pub struct Battle {
+#[derive(Debug)]
+pub struct Battle<'a> {
     round: u32,
     started: Option<BattleSide>,
-    left: BattleTeam,
-    right: BattleTeam,
+    left: BattleTeam<'a>,
+    right: BattleTeam<'a>,
     rng: Rng,
 }
 
-impl Battle {
-    pub fn new(left: Vec<BattleFighter>, right: Vec<BattleFighter>) -> Self {
+impl<'a> Battle<'a> {
+    pub fn new(
+        left: &'a mut [BattleFighter],
+        right: &'a mut [BattleFighter],
+    ) -> Self {
         Self {
             round: 0,
             started: None,
