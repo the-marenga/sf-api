@@ -1,6 +1,5 @@
 use enum_map::{Enum, EnumMap};
 use fastrand::Rng;
-use log::info;
 use strum::{EnumIter, IntoEnumIterator};
 
 use crate::{
@@ -86,6 +85,29 @@ pub enum HarpQuality {
     Good,
 }
 
+// Modified, but mostly copied from:
+// https://github.com/HafisCZ/sf-tools/blob/521c2773098d62fe21ae687de2047c05f84813b7/js/sim/base.js#L746C4-L765C6
+fn calc_unarmed_base_dmg(
+    slot: EquipmentSlot,
+    level: u16,
+    class: Class,
+) -> (u32, u32) {
+    if level <= 10 {
+        return (1, 2);
+    }
+    let dmg_level = f64::from(level - 9);
+    let multiplier = match class {
+        Class::Assassin if slot == EquipmentSlot::Weapon => 1.25,
+        Class::Assassin => 0.875,
+        _ => 0.7,
+    };
+
+    let base = dmg_level * multiplier * class.weapon_multiplier();
+    let min = ((base * 2.0) / 3.0).trunc().max(1.0);
+    let max = ((base * 4.0) / 3.0).trunc().max(2.0);
+    (min as u32, max as u32)
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum ClassEffect {
     Druid(DruidMask),
@@ -95,6 +117,38 @@ pub enum ClassEffect {
 }
 
 impl BattleFighter {
+    #[must_use]
+    pub fn from_monster(monster: &Monster) -> Self {
+        // TODO: I assume this is unarmed damage, but I have have to
+        // check
+        let weapon = calc_unarmed_base_dmg(
+            EquipmentSlot::Weapon,
+            monster.level,
+            monster.class,
+        );
+
+        Self {
+            is_companion: false,
+            level: monster.level,
+            class: monster.class,
+            attributes: monster.attributes,
+            max_hp: monster.hp as i32,
+            current_hp: monster.hp as i32,
+            equip: EquipmentEffects {
+                element_res: Default::default(),
+                element_dmg: Default::default(),
+                weapon,
+                offhand: (0, 0),
+                reaction_boost: false,
+                extra_crit_dmg: false,
+                armor: 0,
+            },
+            portal_dmg_bonus: 1.0,
+            rounds_in_battle: 0,
+            class_effect: None,
+        }
+    }
+
     #[must_use]
     pub fn from_upgradeable(char: &UpgradeableFighter) -> Self {
         let attributes = char.attributes();
@@ -110,31 +164,16 @@ impl BattleFighter {
             offhand: (0, 0),
         };
 
-        // Modified, but mostly copied from:
-        // https://github.com/HafisCZ/sf-tools/blob/521c2773098d62fe21ae687de2047c05f84813b7/js/sim/base.js#L746C4-L765C6
-        let unarmed_dmg = |slot| {
-            if char.level <= 10 {
-                return (1, 2);
-            }
-            let dmg_level = f64::from(char.level - 9);
-            let multiplier = match char.class {
-                Class::Assassin if slot == EquipmentSlot::Weapon => 1.25,
-                Class::Assassin => 0.875,
-                _ => 0.7,
-            };
-
-            let base = dmg_level * multiplier * char.class.weapon_multiplier();
-            let min = ((base * 2.0) / 3.0).trunc().max(1.0);
-            let max = ((base * 4.0) / 3.0).trunc().max(2.0);
-            (min as u32, max as u32)
-        };
-
         for (slot, item) in &char.equipment.0 {
             let Some(item) = item else {
                 match slot {
-                    EquipmentSlot::Weapon => equip.weapon = unarmed_dmg(slot),
+                    EquipmentSlot::Weapon => {
+                        equip.weapon =
+                            calc_unarmed_base_dmg(slot, char.level, char.class)
+                    }
                     EquipmentSlot::Shield if char.class == Class::Assassin => {
-                        equip.offhand = unarmed_dmg(slot)
+                        equip.offhand =
+                            calc_unarmed_base_dmg(slot, char.level, char.class)
                     }
                     _ => {}
                 }
@@ -220,6 +259,12 @@ impl BattleFighter {
         res.push(BattleFighter::from_upgradeable(&squad.character));
         res
     }
+
+    pub fn reset(&mut self) {
+        self.class_effect = None;
+        self.current_hp = self.max_hp;
+        self.rounds_in_battle = 0;
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -256,9 +301,16 @@ impl<'a> BattleTeam<'a> {
     pub fn current(&mut self) -> Option<&mut BattleFighter> {
         self.fighters.get_mut(self.current_fighter)
     }
+
+    fn reset(&mut self) {
+        self.current_fighter = 0;
+        for fighter in self.fighters.iter_mut() {
+            fighter.reset();
+        }
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Enum)]
 pub enum BattleSide {
     Left,
     Right,
@@ -294,14 +346,20 @@ impl<'a> Battle<'a> {
     }
 
     /// Simulates a battle between the two sides. Returns the winning side.
-    /// The result for invalid starting states (dead/damaged/no fighters) is
-    /// undefined
     pub fn simulate(&mut self) -> BattleSide {
+        self.reset();
         loop {
             if let Some(winner) = self.simulate_turn() {
                 return winner;
             }
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.round = 0;
+        self.left.reset();
+        self.right.reset();
+        self.started = None;
     }
 
     /// Simulates one turn (attack) in a battle. If one side is not able
@@ -400,6 +458,11 @@ impl<'a> Battle<'a> {
 
 // Does the specified amount of damage, whilst
 fn do_damage(to: &mut BattleFighter, damage: u32, rng: &mut Rng) {
+    // debug!(
+    //     "Doing {damage} damage to {:?} with {:.2}% hp",
+    //     to.class,
+    //     (to.current_hp as f32 / to.max_hp as f32) * 100.0
+    // );
     if to.current_hp <= 0 || damage == 0 {
         // Skip pointless attacks
         return;
@@ -442,7 +505,7 @@ fn weapon_attack(
         }
         if defender.class == Class::Warrior
             && !defender.is_companion
-            && rng.bool()
+            && defender.equip.offhand.0 as f32 / 100.0 > rng.f32()
         {
             // defender blocked
             return;
@@ -474,7 +537,7 @@ fn weapon_attack(
     let damage_bonus = char_damage_modifier
         * attacker.portal_dmg_bonus
         * elemental_bonus
-        * def_reduction
+        * (1.0 - def_reduction)
         * attacker.class.damage_factor();
 
     let weapon = if offhand {
@@ -511,12 +574,6 @@ pub struct PlayerFighterSquad {
     pub companions: Option<EnumMap<CompanionClass, UpgradeableFighter>>,
 }
 
-#[allow(
-    clippy::enum_glob_use,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_truncation,
-    clippy::missing_panics_doc
-)]
 impl PlayerFighterSquad {
     #[must_use]
     pub fn new(gs: &GameState) -> PlayerFighterSquad {
@@ -649,11 +706,7 @@ impl UpgradeableFighter {
         let pet_boni = self.pet_attribute_bonus_perc;
 
         for (k, v) in &mut total {
-            info!("{:?} - {:?}", self.class, k);
-            info!("\tbase: {}", self.attribute_basis.get(k));
-            info!("\tequipment: {}", v);
             let class_bonus = (f64::from(*v) * class_bonus).trunc() as u32;
-            info!("\tclass: {}", class_bonus);
             *v += class_bonus + self.attribute_basis.get(k);
             if let Some(potion) = self
                 .active_potions
@@ -663,15 +716,11 @@ impl UpgradeableFighter {
             {
                 let potion_bonus =
                     (f64::from(*v) * potion.size.effect()) as u32;
-                info!("\tpotion: {}", v);
-
                 *v += potion_bonus;
             }
 
             let pet_bonus = (f64::from(*v) * (*pet_boni.get(k))).trunc() as u32;
-            info!("\tpet: {}", pet_bonus);
             *v += pet_bonus;
-            info!("\ttotal: {}", v);
         }
         total
     }
@@ -725,5 +774,32 @@ impl UpgradeableFighter {
 
         total += rune_bonus;
         total
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Monster {
+    pub level: u16,
+    pub class: Class,
+    pub attributes: EnumMap<AttributeType, u32>,
+    pub hp: u32,
+    pub xp: u32,
+}
+
+impl Monster {
+    pub const fn new(
+        level: u16,
+        class: Class,
+        attribs: [u32; 5],
+        hp: u32,
+        xp: u32,
+    ) -> Self {
+        Monster {
+            level,
+            class,
+            attributes: EnumMap::from_array(attribs),
+            hp,
+            xp,
+        }
     }
 }

@@ -8,10 +8,7 @@ use super::{
     items::Equipment, AttributeType, CCGet, Class, EnumMapGet, SFError,
     ServerTime,
 };
-use crate::{
-    constants::{Monster, LIGHT_ENEMIES},
-    misc::soft_into,
-};
+use crate::{constants::LIGHT_ENEMIES, misc::soft_into, simulate::Monster};
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

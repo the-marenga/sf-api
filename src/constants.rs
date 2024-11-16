@@ -1,36 +1,9 @@
 use enum_map::EnumMap;
 
 use crate::{
-    command::AttributeType,
     gamestate::{character::Class, dungeons::LightDungeon},
+    simulate::Monster,
 };
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Monster {
-    pub level: u16,
-    pub class: Class,
-    pub attributes: EnumMap<AttributeType, u32>,
-    pub hp: u32,
-    pub xp: u32,
-}
-
-impl Monster {
-    pub const fn new(
-        level: u16,
-        class: Class,
-        attribs: [u32; 5],
-        hp: u32,
-        xp: u32,
-    ) -> Self {
-        Monster {
-            level,
-            class,
-            attributes: EnumMap::from_array(attribs),
-            hp,
-            xp,
-        }
-    }
-}
 
 // Values sourced from: https://www.4m7.de
 #[rustfmt::skip]

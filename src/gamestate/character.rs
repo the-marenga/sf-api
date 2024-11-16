@@ -198,7 +198,7 @@ impl Class {
     #[must_use]
     pub(crate) fn max_damage_reduction(&self) -> f64 {
         use Class::*;
-        1.0 - match self {
+        match self {
             Bard | BattleMage | DemonHunter | Warrior => 0.5,
             Druid | Assassin | Berserker | Scout => 0.25,
             Necromancer => 0.2,
