@@ -8,7 +8,11 @@ use super::{
     items::Equipment, AttributeType, CCGet, Class, EnumMapGet, SFError,
     ServerTime,
 };
-use crate::{constants::LIGHT_ENEMIES, misc::soft_into, simulate::Monster};
+use crate::{
+    constants::{LIGHT_ENEMIES, SHADOW_ENEMIES},
+    misc::soft_into,
+    simulate::Monster,
+};
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -334,9 +338,10 @@ pub fn dungeon_enemy(
     let dungeon: Dungeon = dungeon.into();
     match dungeon {
         Dungeon::Light(dungeon) => {
-            let enemies = LIGHT_ENEMIES;
-            enemies.get(dungeon).get(stage as usize)
+            LIGHT_ENEMIES.get(dungeon).get(stage as usize)
         }
-        Dungeon::Shadow(_) => todo!(),
+        Dungeon::Shadow(dungeon) => {
+            SHADOW_ENEMIES.get(dungeon).get(stage as usize)
+        }
     }
 }

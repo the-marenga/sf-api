@@ -374,9 +374,7 @@ impl GameState {
                     DungeonType::Shadow,
                 ),
                 "portalprogress" => {
-                    self.dungeons
-                        .portal
-                        .get_or_insert_with(Default::default)
+                    self.dungeons.portal.get_or_insert_with(Default::default)
                         .update(&val.into_list("portal progress")?, server_time)?;
                 }
                 "tavernspecialend" => {

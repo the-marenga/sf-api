@@ -70,8 +70,8 @@ pub struct BattleFighter {
     pub level: u16,
     pub class: Class,
     pub attributes: EnumMap<AttributeType, u32>,
-    pub max_hp: i32,
-    pub current_hp: i32,
+    pub max_hp: i64,
+    pub current_hp: i64,
     pub equip: EquipmentEffects,
     pub portal_dmg_bonus: f64,
     pub rounds_in_battle: u32,
@@ -132,8 +132,8 @@ impl BattleFighter {
             level: monster.level,
             class: monster.class,
             attributes: monster.attributes,
-            max_hp: monster.hp as i32,
-            current_hp: monster.hp as i32,
+            max_hp: monster.hp as i64,
+            current_hp: monster.hp as i64,
             equip: EquipmentEffects {
                 element_res: Default::default(),
                 element_dmg: Default::default(),
@@ -152,7 +152,7 @@ impl BattleFighter {
     #[must_use]
     pub fn from_upgradeable(char: &UpgradeableFighter) -> Self {
         let attributes = char.attributes();
-        let hp = char.hit_points(&attributes) as i32;
+        let hp = char.hit_points(&attributes);
 
         let mut equip = EquipmentEffects {
             element_res: EnumMap::default(),
@@ -431,12 +431,10 @@ impl<'a> Battle<'a> {
                 if attacker.rounds_in_battle == 1 && defender.class != Mage {
                     let dmg = match defender.class {
                         Mage => 0,
-                        Bard => attacker.max_hp as u32 / 10,
+                        Bard => attacker.max_hp / 10,
                         Scout | Assassin | Berserker | Necromancer
-                        | DemonHunter => attacker.max_hp as u32 / 5,
-                        Warrior | BattleMage | Druid => {
-                            attacker.max_hp as u32 / 4
-                        }
+                        | DemonHunter => attacker.max_hp / 5,
+                        Warrior | BattleMage | Druid => attacker.max_hp / 4,
                     };
                     do_damage(defender, dmg, &mut self.rng);
                 }
@@ -457,7 +455,7 @@ impl<'a> Battle<'a> {
 }
 
 // Does the specified amount of damage, whilst
-fn do_damage(to: &mut BattleFighter, damage: u32, rng: &mut Rng) {
+fn do_damage(to: &mut BattleFighter, damage: i64, rng: &mut Rng) {
     // debug!(
     //     "Doing {damage} damage to {:?} with {:.2}% hp",
     //     to.class,
@@ -467,7 +465,7 @@ fn do_damage(to: &mut BattleFighter, damage: u32, rng: &mut Rng) {
         // Skip pointless attacks
         return;
     }
-    to.current_hp -= damage as i32;
+    to.current_hp -= damage;
     if to.current_hp > 0 {
         return;
     }
@@ -488,7 +486,7 @@ fn do_damage(to: &mut BattleFighter, damage: u32, rng: &mut Rng) {
     }
 
     // The demon hunter revived
-    to.current_hp = (hp_restore * to.max_hp as f64) as i32;
+    to.current_hp = (hp_restore * to.max_hp as f64) as i64;
     *revived += 1;
 }
 
@@ -547,12 +545,12 @@ fn weapon_attack(
     };
 
     let calc_damage =
-        |weapon_dmg| (weapon_dmg as f64 * damage_bonus).trunc() as u32;
+        |weapon_dmg| (weapon_dmg as f64 * damage_bonus).trunc() as i64;
 
     let min_base_damage = calc_damage(weapon.0);
     let max_base_damage = calc_damage(weapon.1);
 
-    let mut damage = rng.u32(min_base_damage..=max_base_damage);
+    let mut damage = rng.i64(min_base_damage..=max_base_damage);
 
     let luck_mod = attacker.attributes.get(AttributeType::Luck) * 5;
     let raw_crit_chance = luck_mod as f64 / (defender.level as f64);
@@ -560,7 +558,7 @@ fn weapon_attack(
 
     if rng.f64() <= crit_chance {
         if attacker.equip.extra_crit_dmg {
-            damage = (damage as f64 * 2.05) as u32;
+            damage = (damage as f64 * 2.05) as i64;
         } else {
             damage *= 2;
         }
@@ -726,20 +724,20 @@ impl UpgradeableFighter {
     }
 
     #[must_use]
-    pub fn hit_points(&self, attributes: &EnumMap<AttributeType, u32>) -> u32 {
+    pub fn hit_points(&self, attributes: &EnumMap<AttributeType, u32>) -> i64 {
         use Class::*;
 
-        let mut total = *attributes.get(AttributeType::Constitution);
-        total = (f64::from(total)
+        let mut total = *attributes.get(AttributeType::Constitution) as i64;
+        total = (total as f64
             * match self.class {
                 Warrior if self.is_companion => 6.1,
                 Warrior | BattleMage | Druid => 5.0,
                 Scout | Assassin | Berserker | DemonHunter | Necromancer => 4.0,
                 Mage | Bard => 2.0,
             })
-        .trunc() as u32;
+        .trunc() as i64;
 
-        total *= u32::from(self.level) + 1;
+        total *= i64::from(self.level) + 1;
 
         if self
             .active_potions
@@ -747,12 +745,12 @@ impl UpgradeableFighter {
             .flatten()
             .any(|a| a.typ == PotionType::EternalLife)
         {
-            total = (f64::from(total) * 1.25).trunc() as u32;
+            total = (total as f64 * 1.25).trunc() as i64;
         }
 
-        let portal_bonus = (f64::from(total)
+        let portal_bonus = (total as f64
             * (f64::from(self.portal_hp_bonus) / 100.0))
-            .trunc() as u32;
+            .trunc() as i64;
 
         total += portal_bonus;
 
@@ -770,7 +768,7 @@ impl UpgradeableFighter {
         }
 
         let rune_bonus =
-            (f64::from(total) * (f64::from(rune_multi) / 100.0)).trunc() as u32;
+            (total as f64 * (f64::from(rune_multi) / 100.0)).trunc() as i64;
 
         total += rune_bonus;
         total
@@ -782,7 +780,7 @@ pub struct Monster {
     pub level: u16,
     pub class: Class,
     pub attributes: EnumMap<AttributeType, u32>,
-    pub hp: u32,
+    pub hp: u64,
     pub xp: u32,
 }
 
@@ -791,7 +789,7 @@ impl Monster {
         level: u16,
         class: Class,
         attribs: [u32; 5],
-        hp: u32,
+        hp: u64,
         xp: u32,
     ) -> Self {
         Monster {
