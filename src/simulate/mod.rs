@@ -1,4 +1,6 @@
 #![allow(unused)]
+use std::ops::Sub;
+
 use enum_map::{Enum, EnumMap};
 use fastrand::Rng;
 use log::info;
@@ -95,6 +97,7 @@ pub enum ClassEffect {
     Druid(DruidMask),
     Bard(HarpQuality),
     Necromancer(Minion),
+    DemonHunter { revived: u8 },
 }
 
 impl BattleFighter {
@@ -302,6 +305,10 @@ impl Battle {
     /// returned as the winner
     fn simulate_turn(&mut self) -> Option<BattleSide> {
         use BattleSide::{Left, Right};
+        use Class::{
+            Assassin, Bard, BattleMage, Berserker, DemonHunter, Druid, Mage,
+            Necromancer, Scout, Warrior,
+        };
 
         let Some(mut left) = self.left.current() else {
             return Some(Right);
@@ -342,22 +349,77 @@ impl Battle {
             Right => (right, left),
         };
 
-        let can_dodge =
-            attacker.class != Class::Mage && defender.class == Class::Scout;
-
-        if !can_dodge || self.rng.bool() {
-            weapon_attack(attacker, defender, &mut self.rng, false);
+        match attacker.class {
+            Warrior | Scout | Mage | DemonHunter => {
+                weapon_attack(attacker, defender, &mut self.rng, false)
+            }
+            Assassin => {
+                weapon_attack(attacker, defender, &mut self.rng, false);
+                weapon_attack(attacker, defender, &mut self.rng, true);
+            }
+            Berserker => {
+                weapon_attack(attacker, defender, &mut self.rng, false);
+                for attack_no in 0..14 {
+                    if self.rng.bool() {
+                        weapon_attack(attacker, defender, &mut self.rng, false);
+                    } else {
+                        break;
+                    }
+                }
+            }
+            BattleMage => {
+                if attacker.rounds_in_battle == 1 && defender.class != Mage {
+                    let dmg = match defender.class {
+                        Mage => 0,
+                        Bard => attacker.max_hp as u32 / 10,
+                        Scout | Assassin | Berserker | Necromancer
+                        | DemonHunter => attacker.max_hp as u32 / 5,
+                        Warrior | BattleMage | Druid => {
+                            attacker.max_hp as u32 / 4
+                        }
+                    };
+                    if dmg > 0 {
+                        do_damage(defender, dmg, &mut self.rng);
+                    }
+                }
+                weapon_attack(attacker, defender, &mut self.rng, false)
+            }
+            Druid => todo!("All the forms"),
+            Bard => todo!("Start Melodies"),
+            Necromancer => todo!("Summon minions & do their stuff"),
         }
 
-        if attacker.class == Class::Assassin && (!can_dodge || self.rng.bool())
-        {
-            weapon_attack(attacker, defender, &mut self.rng, true);
-        }
-
-        // TODO: class effects
+        // TODO: revive demon hunter
 
         None
     }
+}
+
+// Does the specified amount of damage, whilst
+fn do_damage(to: &mut BattleFighter, damage: u32, rng: &mut Rng) {
+    to.current_hp -= damage as i32;
+    if to.current_hp > 0 {
+        return;
+    }
+    let Some(ClassEffect::DemonHunter { revived }) = &mut to.class_effect
+    else {
+        return;
+    };
+    let (chance, hp_restore) = match revived {
+        0 => (0.44, 0.9),
+        1 => (0.33, 0.8),
+        2 => (0.22, 0.7),
+        3 => (0.11, 0.6),
+        _ => return,
+    };
+
+    if rng.f32() >= chance {
+        return;
+    }
+
+    // The demon hunter revived
+    to.current_hp = (hp_restore * to.max_hp as f64) as i32;
+    *revived += 1;
 }
 
 fn weapon_attack(
@@ -366,6 +428,20 @@ fn weapon_attack(
     rng: &mut Rng,
     offhand: bool,
 ) {
+    if attacker.class != Class::Mage {
+        if defender.class == Class::Scout && rng.bool() {
+            // defender dodged
+            return;
+        }
+        if defender.class == Class::Warrior
+            && !defender.is_companion
+            && rng.bool()
+        {
+            // defender blocked
+            return;
+        }
+    }
+
     // TODO: Most of this can be reused, as long as the opponent does not
     // change. Should make sure this is correct first though
     let char_damage_modifier = (1.0
@@ -387,7 +463,7 @@ fn weapon_attack(
         / attacker.level as f64)
         .min(defender.class.max_damage_reduction());
 
-    // TODO: Check the order of all of this
+    // FIME: Check the order of all of this
     let damage_bonus = char_damage_modifier
         * attacker.portal_dmg_bonus
         * elemental_bonus
@@ -406,8 +482,20 @@ fn weapon_attack(
     let min_base_damage = calc_damage(weapon.0);
     let max_base_damage = calc_damage(weapon.1);
 
-    let attacker_damage = rng.u32(min_base_damage..=max_base_damage);
+    let mut damage = rng.u32(min_base_damage..=max_base_damage);
 
+    let luck_mod = attacker.attributes.get(AttributeType::Luck) * 5;
+    let raw_crit_chance = luck_mod as f64 / (defender.level as f64);
+    let crit_chance = raw_crit_chance.min(0.5);
+
+    if rng.f64() <= crit_chance {
+        if attacker.equip.extra_crit_dmg {
+            damage = (damage as f64 * 2.05) as u32;
+        } else {
+            damage *= 2;
+        }
+    }
+    do_damage(defender, damage, rng);
     // TODO: damage reduction
 }
 

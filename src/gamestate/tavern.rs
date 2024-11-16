@@ -283,13 +283,13 @@ impl CurrentAction {
         match (id, busy) {
             (0, None) => CurrentAction::Idle,
             (1, Some(busy_until)) => CurrentAction::CityGuard {
-                    hours: soft_into(sec, "city guard time", 10),
-                    busy_until,
-                },
+                hours: soft_into(sec, "city guard time", 10),
+                busy_until,
+            },
             (2, Some(busy_until)) => CurrentAction::Quest {
-                    quest_idx: soft_into(sec, "quest index", 0),
-                    busy_until,
-                },
+                quest_idx: soft_into(sec, "quest index", 0),
+                busy_until,
+            },
             (4, None) => CurrentAction::Expedition,
             _ => {
                 error!("Unknown action id combination: {id}, {busy:?}");
@@ -404,9 +404,9 @@ impl Expedition {
             2 => ExpeditionStage::Boss(self.boss),
             3 => ExpeditionStage::Rewards(self.rewards.clone()),
             4 => match self.busy_until {
-                    Some(x) if x > Local::now() => ExpeditionStage::Waiting(x),
-                    _ if self.current_floor == 10 => ExpeditionStage::Finished,
-                    _ => cross_roads(),
+                Some(x) if x > Local::now() => ExpeditionStage::Waiting(x),
+                _ if self.current_floor == 10 => ExpeditionStage::Finished,
+                _ => cross_roads(),
             },
             _ => ExpeditionStage::Unknown,
         }

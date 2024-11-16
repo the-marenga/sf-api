@@ -32,7 +32,7 @@ impl Monster {
     }
 }
 
-// Values sourced from: https://www4m7de
+// Values sourced from: https://www.4m7.de
 #[rustfmt::skip]
 pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::from_array([
     // DesecratedCatacombs
