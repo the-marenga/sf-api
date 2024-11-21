@@ -292,6 +292,13 @@ pub enum Command {
         /// The position of the item you want to move
         to_pos: usize,
     },
+    /// Allows using an potion from any position
+    UsePotion {
+        /// The place of the potion you use from
+        from: ItemPlace,
+        /// The position of the potion you want to use
+        from_pos: usize,
+    },
     /// Opens the message at the specified index [0-100]
     MessageOpen {
         /// The index of the message in the inbox vec
@@ -1047,6 +1054,9 @@ impl Command {
                 *to as usize,
                 *to_pos + 1
             ),
+            Command::UsePotion { from, from_pos } => {
+                format!("PlayerItemMove:{}/{}/1/0/", *from as usize, *from_pos + 1)
+            }
             Command::UnlockFeature { unlockable } => format!(
                 "UnlockFeature:{}/{}",
                 unlockable.main_ident, unlockable.sub_ident
