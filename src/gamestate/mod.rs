@@ -450,7 +450,10 @@ impl GameState {
                         )?;
                 }
                 "soldieradvice" => {
-                    // I think they removed this
+                    other_player
+                        .get_or_insert_with(Default::default)
+                        .soldier_advice =
+                        val.into::<u16>("other player soldier advice").ok();
                 }
                 "owngroupdescription" => self
                     .guild
@@ -975,6 +978,7 @@ impl GameState {
                             oop.pet_attribute_bonus_perc;
                         op.wall_combat_lvl = oop.wall_combat_lvl;
                         op.fortress_rank = oop.fortress_rank;
+                        op.soldier_advice = oop.soldier_advice;
                     }
                     other_player = Some(op);
                 }

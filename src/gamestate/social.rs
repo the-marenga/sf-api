@@ -410,7 +410,7 @@ pub struct OtherPlayer {
     pub armor: u64,
     pub min_damage_base: u32,
     pub max_damage_base: u32,
-
+    pub soldier_advice: Option<u16>,
     pub fortress: Option<OtherFortress>,
 }
 
