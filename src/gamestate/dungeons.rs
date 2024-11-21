@@ -5,7 +5,8 @@ use num_derive::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
 use super::{
-    items::Equipment, AttributeType, CCGet, EnumMapGet, SFError, ServerTime,
+    items::Equipment, AttributeType, CCGet, EnumMapGet, Item, ItemType,
+    SFError, ServerTime,
 };
 use crate::misc::soft_into;
 
@@ -61,6 +62,39 @@ pub struct Dungeons {
     /// The companions unlocked from unlocking the tower. Note that the tower
     /// info itself is just handled as a normal light dungeon
     pub companions: Option<EnumMap<CompanionClass, Companion>>,
+}
+
+impl Dungeons {
+    /// Check if a specific companion can equip the given item
+    #[must_use]
+    pub fn can_companion_equip_item(
+        &self,
+        companion: CompanionClass,
+        item: &Item,
+    ) -> bool {
+        // When we have no companions they can also not equip anything
+        if self.companions.is_none() {
+            return false;
+        }
+
+        match item.typ {
+            ItemType::Hat
+            | ItemType::BreastPlate
+            | ItemType::Gloves
+            | ItemType::FootWear
+            | ItemType::Weapon { .. }
+            | ItemType::Amulet
+            | ItemType::Belt
+            | ItemType::Ring
+            | ItemType::Talisman => {
+                // For normal equipment check if the companion class can use this item
+                item.can_class_use_this(companion.into())
+            }
+
+            // Companions cannot equip a shield and everything else is not equipable
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]

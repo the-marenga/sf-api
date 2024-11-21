@@ -5,7 +5,7 @@ use enum_map::EnumMap;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use super::{Mirror, RelationEntry, SFError, ScrapBook};
+use super::{CompanionClass, Mirror, RelationEntry, SFError, ScrapBook};
 use crate::{command::*, gamestate::items::*, misc::*, PlayerId};
 
 #[derive(Debug, Clone, Default)]
@@ -99,6 +99,14 @@ pub struct Character {
     pub relations: Vec<RelationEntry>,
 }
 
+impl Character {
+    /// Checks if the character can use the specific item
+    #[must_use]
+    pub fn can_use(&self, item: &Item) -> bool {
+        item.can_class_use_this(self.class)
+    }
+}
+
 /// All the exclusively cosmetic info necessary to build a player image, that is
 /// otherwise useless. As these values might change their based on each other,
 /// some of them are not fully parsed (to a more descriptive enum)
@@ -166,6 +174,16 @@ pub enum Class {
     Druid,
     Bard,
     Necromancer,
+}
+
+impl From<CompanionClass> for Class {
+    fn from(class: CompanionClass) -> Self {
+        match class {
+            CompanionClass::Warrior => Self::Warrior,
+            CompanionClass::Mage => Self::Mage,
+            CompanionClass::Scout => Self::Scout,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]

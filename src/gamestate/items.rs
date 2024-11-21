@@ -240,6 +240,73 @@ impl Item {
         }
     }
 
+    /// Checks if this item is a weapon.
+    #[must_use]
+    pub const fn is_weapon(&self) -> bool {
+        matches!(self.typ, ItemType::Weapon { .. })
+    }
+
+    /// Checks if a character of the given class can use this item.
+    ///
+    /// Returns `true` if the item does not have a class requirement, or if the
+    /// class requirement matches the given class.
+    #[must_use]
+    pub fn can_class_use_this(&self, class: Class) -> bool {
+        // Without a class requirement any class can use this
+        let Some(class_requirement) = self.class else {
+            return true;
+        };
+
+        // Class requirements
+        // Warrior => Weapon: Meele,  Armor: Heavy
+        // Scout   => Weapon: Ranged, Armor: Medium
+        // Mage    => Weapon: Magic,  Armor: Light
+        match class {
+            // Weapon: Meele, Armor: Heavy
+            Class::Warrior | Class::Berserker => {
+                class_requirement == Class::Warrior
+            }
+            // Weapon: Ranged, Armor: Medium
+            Class::Scout => class_requirement == Class::Scout,
+            // Weapon: Magic, Armor: Light
+            Class::Mage | Class::Necromancer => {
+                class_requirement == Class::Mage
+            }
+            // Weapon: Meele, Armor: Medium
+            Class::Assassin => {
+                if self.is_weapon() {
+                    class_requirement == Class::Warrior
+                } else {
+                    class_requirement == Class::Scout
+                }
+            }
+            // Weapon: Magic, Armor: Medium
+            Class::Bard | Class::Druid => {
+                if self.is_weapon() {
+                    class_requirement == Class::Mage
+                } else {
+                    class_requirement == Class::Scout
+                }
+            }
+            // Weapon: Meele, Armor: Light
+            Class::BattleMage => {
+                if self.is_weapon() {
+                    class_requirement == Class::Warrior
+                } else {
+                    class_requirement == Class::Mage
+                }
+            }
+            // Weapon: Ranged, Armor: Heavy
+            Class::DemonHunter => {
+                if self.is_weapon() {
+                    class_requirement == Class::Scout
+                } else {
+                    class_requirement == Class::Warrior
+                }
+            }
+        }
+    }
+
     /// Parses an item, that starts at the start of the given data
     pub(crate) fn parse(
         data: &[i64],
