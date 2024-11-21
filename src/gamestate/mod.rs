@@ -1451,10 +1451,8 @@ impl GameState {
                 self.guild = None;
             }
         }
-        if let Some(t) = &self.fortress {
-            if t.upgrades == 0 {
-                self.fortress = None;
-            }
+        if self.fortress.is_some() && self.character.level < 25 {
+            self.fortress = None;
         }
         if let Some(t) = &self.underworld {
             if t.honor == 0 {
