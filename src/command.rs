@@ -506,6 +506,8 @@ pub enum Command {
     FortressSetCAEnemy {
         msg_id: u32,
     },
+    /// Upgrades the Hall of Knights to the next level
+    FortressUpgradeHallOfKnights,
     /// Sends a wihsper message to another player
     Whisper {
         player_name: String,
@@ -1145,6 +1147,9 @@ impl Command {
             }
             Command::FortressSetCAEnemy { msg_id } => {
                 format!("FortressEnemy:0/{}", *msg_id)
+            }
+            Command::FortressUpgradeHallOfKnights => {
+                format!("FortressGroupBonusUpgrade:")
             }
             Command::Whisper {
                 player_name: player,
