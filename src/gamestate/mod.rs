@@ -453,10 +453,7 @@ impl GameState {
                     other_player
                         .get_or_insert_with(Default::default)
                         .soldier_advice =
-                        match val.into::<i16>("other player soldier advice")? {
-                            ..=-1 => None,
-                            x => Some(x.try_into().unwrap_or(1)),
-                        };
+                        val.into::<u16>("other player soldier advice").ok();
                 }
                 "owngroupdescription" => self
                     .guild
