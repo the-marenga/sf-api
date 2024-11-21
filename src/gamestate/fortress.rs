@@ -51,8 +51,8 @@ pub struct Fortress {
     pub upgrades: u16,
     /// The honor you have in the fortress Hall of Fame
     pub honor: u32,
-    /// The rank you have in the fortress Hall of Fame
-    pub rank: u32,
+    /// The rank you have in the fortress Hall of Fame if you have any
+    pub rank: Option<u32>,
 
     /// Information about searching for gems
     pub gem_search: FortressAction<GemType>,
@@ -328,7 +328,13 @@ impl Fortress {
 
         self.upgrades = data.csiget(581, "fortress lvl", 0)?;
         self.honor = data.csiget(582, "fortress honor", 0)?;
-        self.rank = data.csiget(583, "fortress rank", 0)?;
+        let fortress_rank: i64 = data.csiget(583, "fortress rank", 0)?;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        if fortress_rank > 0 {
+            self.rank = Some(fortress_rank as u32);
+        } else {
+            self.rank = None;
+        }
 
         self.gem_search.start =
             data.cstget(596, "gem search start", server_time)?;
