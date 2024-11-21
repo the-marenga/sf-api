@@ -199,8 +199,16 @@ impl GameState {
                 "login count" | "sessionid" | "cryptokey" | "cryptoid" => {
                     // Should already be handled when receiving the response
                 }
-                "preregister" | "languagecodelist" | "tracking"
-                | "skipvideo" | "webshopid" | "cidstring" | "mountexpired" => {
+                "preregister"
+                | "languagecodelist"
+                | "tracking"
+                | "skipvideo"
+                | "webshopid"
+                | "cidstring"
+                | "mountexpired"
+                | "tracking_netto"
+                | "tracking_coins"
+                | "tutorial_game_entry" => {
                     // Stuff that looks irrellevant
                 }
                 "ownplayername" => {
