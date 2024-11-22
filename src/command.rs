@@ -123,7 +123,7 @@ pub enum Command {
     StartQuest {
         /// The position of the quest in the quest array
         quest_pos: usize,
-        /// Has the player acknowledget, that their inventory is full and this
+        /// Has the player acknowledged, that their inventory is full and this
         /// may lead to the loss of an item?
         overwrite_inv: bool,
     },
@@ -158,7 +158,7 @@ pub enum Command {
     /// Increases the given base attribute to the requested number. Should be
     /// `current + 1`
     IncreaseAttribute {
-        /// The atrribute you want to increase
+        /// The attribute you want to increase
         attribute: AttributeType,
         /// The value you increase it to. This should be `current + 1`
         increase_to: u32,
@@ -307,7 +307,7 @@ pub enum Command {
     /// Deletes a single message, if you provide the index. -1 = all
     MessageDelete {
         /// The position of the message to delete in the inbox vec. If this is
-        /// -1, it seletes all
+        /// -1, it deletes all
         pos: i32,
     },
     /// Pulls up your scrapbook to reveal more info, than normal
@@ -394,7 +394,7 @@ pub enum Command {
     },
     /// Sends a message to another player
     SendMessage {
-        /// The name of the player to send a mesage to
+        /// The name of the player to send a message to
         to: String,
         /// The message to send
         msg: String,
@@ -403,8 +403,8 @@ pub enum Command {
     /// server. The problem is, that special chars like '/' have to get
     /// escaped into two chars "$s" before getting send to the server.
     /// That means this string can be 120-240 chars long depending on the
-    /// amount of escaped chars. We 'could' trunctate the response, but
-    /// that could get weird with character boundries in UTF8 and split the
+    /// amount of escaped chars. We 'could' truncate the response, but
+    /// that could get weird with character boundaries in UTF8 and split the
     /// escapes themself, so just make sure you provide a valid value here
     /// to begin with and be prepared for a server error
     SetDescription {
@@ -492,7 +492,7 @@ pub enum Command {
     },
     /// Starts the search for gems
     FortressGemStoneSearch,
-    /// Cancles the search for gems
+    /// Cancels the search for gems
     FortressGemStoneSearchCancel,
     /// Finishes the gem stone search using the appropriate amount of
     /// mushrooms. The price is one mushroom per 600 sec / 10 minutes of time
@@ -520,7 +520,7 @@ pub enum Command {
         player_name: String,
         message: String,
     },
-    /// Collects the ressources of the selected type in the underworld
+    /// Collects the resources of the selected type in the underworld
     UnderworldCollect {
         resource: UnderWorldResourceType,
     },
@@ -569,7 +569,7 @@ pub enum Command {
     },
     /// Sacrifice all the money in the idle game for runes
     IdleSacrifice,
-    /// Upgrades a skill to the requested atribute. Should probably be just
+    /// Upgrades a skill to the requested attribute. Should probably be just
     /// current + 1 to mimic a user clicking
     UpgradeSkill {
         attribute: AttributeType,
@@ -814,7 +814,7 @@ pub enum ShopType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The "curency" you want to use to skip a quest
+/// The "currency" you want to use to skip a quest
 pub enum TimeSkip {
     Mushroom = 1,
     Glass = 2,

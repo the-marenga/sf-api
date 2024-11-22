@@ -28,9 +28,9 @@ pub struct Character {
 
     /// The class of this character
     pub class: Class,
-    /// Iff this character is a druid, this will be the currently equiped mask
+    /// Iff this character is a druid, this will be the currently equipped mask
     pub druid_mask: Option<DruidMask>,
-    /// Iff this character is a bard, this will be the currently equiped
+    /// Iff this character is a bard, this will be the currently equipped
     /// instrument
     pub bard_instrument: Option<BardInstrument>,
 
@@ -64,7 +64,7 @@ pub struct Character {
     /// The potions currently active
     pub active_potions: [Option<Potion>; 3],
 
-    /// The total armor of our character. Basically all equiped armor combined
+    /// The total armor of our character. Basically all equipped armor combined
     pub armor: u64,
 
     /// The min amount of damage the weapon claims it can do without any bonus
@@ -76,7 +76,7 @@ pub struct Character {
     pub attribute_basis: EnumMap<AttributeType, u32>,
     /// All bonus attributes from quipment/pets/potions
     pub attribute_additions: EnumMap<AttributeType, u32>,
-    /// The amount of times an atribute has been bought already.
+    /// The amount of times an attribute has been bought already.
     /// Important to calculate the price of the next attribute to buy
     pub attribute_times_bought: EnumMap<AttributeType, u32>,
 

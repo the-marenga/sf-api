@@ -53,7 +53,7 @@ If you use a single sign-on S&F Account, you can use it like this:
 
 The `SimpleSession` is not optimal for more complex usecases. For these, have a
 look at `Session::new()` & `GameState::new()` to handle session and gamestate
-seperately
+separately
 
 ## Installation
 
@@ -75,7 +75,7 @@ Here are a few things you should note before getting your account banned:
 
 ## Performance
 
-Performace should not matter to you, as you are not supposed to run this library on a scale, where you have to think about this. Disregarding this fact, this library is build with high scalabillity and low resource usage in mind. Parsing the login gamestate will take < 1ms on my machine with full updates after that taking < 100µs.
+Performance should not matter to you, as you are not supposed to run this library on a scale, where you have to think about this. Disregarding this fact, this library is build with high scalabillity and low resource usage in mind. Parsing the login gamestate will take < 1ms on my machine with full updates after that taking < 100µs.
 
 Everything is parsed into the exact datatype, that is expected, which also catches weird, or unexpected errors compared to just i64ing every int. A lot of these conversion errors are shown as log warnings and defaulting to some value, instead of returning an error. This way you will not get hard stuck, just because the mushroom price of an item somewhere is negative
 

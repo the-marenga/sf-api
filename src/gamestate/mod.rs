@@ -134,11 +134,11 @@ impl Shop {
 }
 
 impl GameState {
-    /// Constructs a new `GameState` from the provided response. The reponse has
+    /// Constructs a new `GameState` from the provided response. The response has
     /// to be the login response from a `Session`.
     ///
     /// # Errors
-    /// If the reponse contains any errors, or does not contain enough
+    /// If the response contains any errors, or does not contain enough
     /// information about the player to build a full `GameState`, this will
     /// return a `ParsingError`, or `TooShortResponse` depending on the
     /// exact error

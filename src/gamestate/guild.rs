@@ -13,7 +13,7 @@ use crate::misc::{from_sf_string, soft_into, warning_parse};
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Informaion about the characters current guild
+/// Information about the characters current guild
 pub struct Guild {
     /// The internal server id of this guild
     pub id: u32,
@@ -56,7 +56,7 @@ pub struct Guild {
     pub pet_id: u32,
     /// The maximum level, that the pet can be at
     pub pet_max_lvl: u16,
-    /// All informations about the hydra the guild pet can fight
+    /// All information about the hydra the guild pet can fight
     pub hydra: GuildHydra,
     /// The thing each player can enter and fight once a day
     pub portal: GuildPortal,
@@ -95,7 +95,7 @@ pub struct GuildHydra {
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The customizeable emblem each guild has
+/// The customizable emblem each guild has
 pub struct Emblem {
     raw: String,
 }
