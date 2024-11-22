@@ -27,7 +27,7 @@ pub(crate) fn sha1_hash(val: &str) -> String {
 }
 
 /// Converts a raw value into the appropriate type. If that is not possible,
-/// a warning will be emmitted and the given default returned. This is useful
+/// a warning will be emitted and the given default returned. This is useful
 /// for stuff, that should not crash everything, when there is a weird value and
 /// the silent failure of `as T`, or `unwrap_or_default()` would yield worse
 /// results and/or no warning

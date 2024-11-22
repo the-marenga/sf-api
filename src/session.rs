@@ -48,7 +48,7 @@ pub struct Session {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The pasword of a character, hashed in the way, that the server expects
+/// The password of a character, hashed in the way, that the server expects
 pub struct PWHash(String);
 
 impl PWHash {
@@ -59,7 +59,7 @@ impl PWHash {
         Self(sha1_hash(&(password.to_string() + HASH_CONST)))
     }
     /// If you have access to the hash of the password directly, this method
-    /// lets you contruct a `PWHash` directly
+    /// lets you construct a `PWHash` directly
     #[must_use]
     pub fn from_hash(hash: String) -> Self {
         Self(hash)
@@ -139,7 +139,7 @@ impl Session {
 
     /// Checks if this session has ever been able to successfully login to the
     /// server to establish a session id. You should not need to check this, as
-    /// `login()` should return error on unsuccessfull logins, but if you want
+    /// `login()` should return error on unsuccessful logins, but if you want
     /// to make sure, you can make sure here
     #[must_use]
     pub fn has_session_id(&self) -> bool {
@@ -518,7 +518,7 @@ impl<'de> serde::Deserialize<'de> for Response {
                     .ok_or_else(|| serde::de::Error::missing_field("j"))?;
 
                 Response::parse(body, received_at).map_err(|_| {
-                    serde::de::Error::custom("invalid resopnse body")
+                    serde::de::Error::custom("invalid response body")
                 })
             }
         }
@@ -554,15 +554,15 @@ impl Response {
         self.with_received_at(|a| *a)
     }
 
-    /// Parses a response body from the server into a useable format
-    /// You might want to use this, if you are analyzing reponses from the
+    /// Parses a response body from the server into a usable format
+    /// You might want to use this, if you are analyzing responses from the
     /// browsers network tab. If you are trying to store/read responses to/from
     /// disk to cache them, or otherwise, you should use the sso feature to
     /// serialize/deserialize them instead
     ///
     /// # Errors
     /// - `ServerError`: If the server responsed with an error
-    /// - `ParsingError`: If the reponse does not follow the standard S&F server
+    /// - `ParsingError`: If the response does not follow the standard S&F server
     ///   response schema
     pub fn parse(
         og_body: String,
@@ -660,7 +660,7 @@ impl<'a> ResponseVal<'a> {
     /// Converts the response value into the required type
     ///
     /// # Errors
-    /// If the reponse value can not be parsed into the output
+    /// If the response value can not be parsed into the output
     /// value, a `ParsingError` will be returned
     pub fn into<T: FromStr>(self, name: &'static str) -> Result<T, SFError> {
         self.value.trim().parse().map_err(|_| {
@@ -753,7 +753,7 @@ enum LoginData {
 }
 
 #[derive(Debug, Clone)]
-/// Stores all information necessary to talk to the server. Noteably, if you
+/// Stores all information necessary to talk to the server. Notably, if you
 /// clone this, instead of creating this multiple times for characters on a
 /// server, this will use the same `reqwest::Client`, which can have slight
 /// benefits to performance
@@ -837,7 +837,7 @@ pub(crate) fn reqwest_client(
 }
 
 /// This function is designed for reverseengineering encrypted commands from the
-/// S&F web client. It expects a login resonse, which is the ~3KB string
+/// S&F web client. It expects a login response, which is the ~3KB string
 /// response you can see in the network tab of your browser, that starts with
 /// `serverversion` after a login. After that, you can take any url the client
 /// sends to the server and have it decoded into the actual string command, that

@@ -196,7 +196,7 @@ impl SFAccount {
     }
 
     /// Queries the SSO for all characters associated with this account. This
-    /// consumes the Account, as the character sessions may need to referesh
+    /// consumes the Account, as the character sessions may need to refresh
     /// the accounts session, which they are only allowed to do, if they own it
     /// (in an Arc<Mutex<_>>) and there should be no need to keep the account
     /// around anyways
@@ -252,7 +252,7 @@ impl SFAccount {
     }
 }
 
-/// Send a request to the SSO server. The endoint will be "json/*". We try
+/// Send a request to the SSO server. The endpoint will be "json/*". We try
 /// to check if the response is bad in any way, but S&F responses never obey
 /// to HTML status codes, or their own system, so good luck
 #[allow(clippy::items_after_statements)]

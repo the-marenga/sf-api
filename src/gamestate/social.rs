@@ -368,7 +368,7 @@ pub struct OtherPlayer {
     pub name: String,
     /// The level of the player
     pub level: u16,
-    /// The description this player has set for themselfes
+    /// The description this player has set for themselves
     pub description: String,
     /// If the player is in a guild, this will contain the name
     pub guild: Option<String>,

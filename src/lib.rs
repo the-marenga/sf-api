@@ -33,7 +33,7 @@ pub mod sso;
 /// This is the numerical id of a player on a server. Note that in rare edge
 /// cases this might be 0 (you are the first person to unlock the Dungeon. Who
 /// do you fight?), but you can almost always expect this to be > 0
-/// whereever found
+/// wherever found
 pub type PlayerId = u32;
 
 #[derive(Debug)]
@@ -123,7 +123,7 @@ impl SimpleSession {
     /// - `ParsingError`: If the response from the server was unexpected in some
     ///   way
     /// - `TooShortResponse` Similar to `ParsingError`, but specific to a
-    ///   response being too short, which would normaly trigger a out of bound
+    ///   response being too short, which would normally trigger a out of bound
     ///   panic
     /// - `ServerError`: If the server itself responded with an ingame error
     ///   like "you do not have enough silver to do that"

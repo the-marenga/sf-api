@@ -25,7 +25,7 @@ pub struct Underworld {
     pub last_collectable_update: Option<DateTime<Local>>,
 
     // Both XP&silver are not really resources, so I just have this here,
-    // instead of in a resouce info struct like in fortress
+    // instead of in a resource info struct like in fortress
     /// The current souls in the underworld
     pub souls_current: u64,
     /// The maximum amount of souls, that you can store in the underworld.  If
@@ -184,7 +184,7 @@ pub struct UnderworldProduction {
     /// The maximum amount of this resource, that this building can store. If
     /// `building_collectable == building_limit` the production stops
     pub limit: u64,
-    /// The amount of this resource the coresponding production building
+    /// The amount of this resource the corresponding production building
     /// produces per hour. The adventuromatics amount will be per day here
     pub per_hour: u64,
 }
