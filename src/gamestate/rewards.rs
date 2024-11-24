@@ -370,6 +370,8 @@ pub enum EventTaskTheme {
     EggHunt = 12,
     SummerCollectifun = 13,
     Walpurgis = 14,
+
+    Hellevator = 18,
     #[default]
     Unknown = 245,
 }
