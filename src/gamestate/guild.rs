@@ -164,9 +164,18 @@ impl Guild {
 
         for (offset, member) in self.members.iter_mut().enumerate() {
             member.battles_joined =
-                data.cfpget(64 + offset, "member joined", |x| x / 1000)?;
+                match data.csiget(445 + offset, "guild member battles joined", 0)? % 100 {
+                    0 => None,
+                    1 => Some(BattlesJoined::Defense),
+                    10 => Some(BattlesJoined::Attack),
+                    11 => Some(BattlesJoined::Both),
+                    x => {
+                        warn!("Unknown battles joined: {x}");
+                        None
+                    }
+                };
             member.level =
-                data.csiget(64 + offset % 1000, "guild member level", 0)?;
+                data.csiget(64 + offset, "guild member level", 0)?;
             member.last_online =
                 data.cstget(114 + offset, "guild last online", server_time)?;
             member.treasure_skill =
