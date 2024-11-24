@@ -5,10 +5,7 @@ use strum::{EnumIter, IntoEnumIterator};
 use crate::{
     command::AttributeType,
     gamestate::{
-        character::{Class, DruidMask},
-        dungeons::CompanionClass,
-        items::*,
-        GameState,
+        character::Class, dungeons::CompanionClass, items::*, GameState,
     },
     misc::EnumMapGet,
 };
@@ -51,13 +48,13 @@ pub struct UpgradeableFighter {
     portal_dmg_bonus: u32,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Minion {
     pub typ: MinionType,
     pub rounds_remaining: u8,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MinionType {
     Skeleton,
     Hound,
@@ -75,10 +72,10 @@ pub struct BattleFighter {
     pub equip: EquipmentEffects,
     pub portal_dmg_bonus: f64,
     pub rounds_in_battle: u32,
-    pub class_effect: Option<ClassEffect>,
+    pub class_effect: ClassEffect,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HarpQuality {
     Bad,
     Medium,
@@ -108,12 +105,36 @@ fn calc_unarmed_base_dmg(
     (min as u32, max as u32)
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClassEffect {
-    Druid(DruidMask),
+    Druid {
+        /// Has the druid just dodged an attack?
+        bear: bool,
+        /// The amount of swoops the druid has done so far
+        swoops: u8,
+    },
     Bard(HarpQuality),
     Necromancer(Minion),
-    DemonHunter { revived: u8 },
+    DemonHunter {
+        revived: u8,
+    },
+    Normal,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AttackType {
+    Weapon,
+    Offhand,
+    Swoop,
+}
+
+impl ClassEffect {
+    pub fn druid_swoops(&self) -> u8 {
+        match self {
+            ClassEffect::Druid { swoops, .. } => *swoops,
+            _ => 0,
+        }
+    }
 }
 
 impl BattleFighter {
@@ -145,7 +166,7 @@ impl BattleFighter {
             },
             portal_dmg_bonus: 1.0,
             rounds_in_battle: 0,
-            class_effect: None,
+            class_effect: ClassEffect::Normal,
         }
     }
 
@@ -239,7 +260,7 @@ impl BattleFighter {
             current_hp: hp,
             equip,
             rounds_in_battle: 0,
-            class_effect: None,
+            class_effect: ClassEffect::Normal,
             portal_dmg_bonus,
             level: char.level,
         }
@@ -261,7 +282,7 @@ impl BattleFighter {
     }
 
     pub fn reset(&mut self) {
-        self.class_effect = None;
+        self.class_effect = ClassEffect::Normal;
         self.current_hp = self.max_hp;
         self.rounds_in_battle = 0;
     }
@@ -411,17 +432,19 @@ impl<'a> Battle<'a> {
             Right => (right, left),
         };
 
+        use AttackType::{Offhand, Swoop, Weapon};
+
         match attacker.class {
             Warrior | Scout | Mage | DemonHunter => {
-                weapon_attack(attacker, defender, &mut self.rng, false)
+                fighter_attack(attacker, defender, &mut self.rng, Weapon)
             }
             Assassin => {
-                weapon_attack(attacker, defender, &mut self.rng, false);
-                weapon_attack(attacker, defender, &mut self.rng, true);
+                fighter_attack(attacker, defender, &mut self.rng, Weapon);
+                fighter_attack(attacker, defender, &mut self.rng, Offhand);
             }
             Berserker => {
                 for _ in 0..15 {
-                    weapon_attack(attacker, defender, &mut self.rng, false);
+                    fighter_attack(attacker, defender, &mut self.rng, Weapon);
                     if self.rng.bool() {
                         break;
                     }
@@ -436,11 +459,44 @@ impl<'a> Battle<'a> {
                         | DemonHunter => attacker.max_hp / 5,
                         Warrior | BattleMage | Druid => attacker.max_hp / 4,
                     };
+                    // TODO: Can you dodge this?
                     do_damage(defender, dmg, &mut self.rng);
                 }
-                weapon_attack(attacker, defender, &mut self.rng, false)
+                fighter_attack(attacker, defender, &mut self.rng, Weapon)
             }
-            Druid => todo!("All the forms"),
+            Druid => {
+                // Check if we do a sweep attack
+                if !matches!(
+                    attacker.class_effect,
+                    ClassEffect::Druid { bear: true, .. }
+                ) {
+                    let swoops = attacker.class_effect.druid_swoops();
+                    let swoop_chance = 0.15 + ((swoops as f32 * 5.0) / 100.0);
+                    if defender.class != Class::Mage
+                        && self.rng.f32() <= swoop_chance
+                    {
+                        fighter_attack(
+                            attacker,
+                            defender,
+                            &mut self.rng,
+                            Swoop,
+                        );
+                        attacker.class_effect = ClassEffect::Druid {
+                            bear: false,
+                            // max 7 to limit chance to 50%
+                            swoops: (swoops + 1).min(7),
+                        }
+                    }
+                }
+
+                fighter_attack(attacker, defender, &mut self.rng, Weapon);
+                // TODO: Does this reset here, or on the start of the next
+                // attack?
+                attacker.class_effect = ClassEffect::Druid {
+                    bear: false,
+                    swoops: attacker.class_effect.druid_swoops(),
+                };
+            }
             Bard => todo!("Start Melodies"),
             Necromancer => todo!("Summon minions & do their stuff"),
         }
@@ -469,8 +525,7 @@ fn do_damage(to: &mut BattleFighter, damage: i64, rng: &mut Rng) {
     if to.current_hp > 0 {
         return;
     }
-    let Some(ClassEffect::DemonHunter { revived }) = &mut to.class_effect
-    else {
+    let ClassEffect::DemonHunter { revived } = &mut to.class_effect else {
         return;
     };
     let (chance, hp_restore) = match revived {
@@ -490,15 +545,24 @@ fn do_damage(to: &mut BattleFighter, damage: i64, rng: &mut Rng) {
     *revived += 1;
 }
 
-fn weapon_attack(
+fn fighter_attack(
     attacker: &mut BattleFighter,
     defender: &mut BattleFighter,
     rng: &mut Rng,
-    offhand: bool,
+    typ: AttackType,
 ) {
     if attacker.class != Class::Mage {
+        // TODO: Different dedge rates (druid 35%)
         if defender.class == Class::Scout && rng.bool() {
             // defender dodged
+            if defender.class == Class::Druid {
+                // TODO: is this instant, or does this trigger on start of def.
+                // turn?
+                defender.class_effect = ClassEffect::Druid {
+                    bear: true,
+                    swoops: defender.class_effect.druid_swoops(),
+                };
+            }
             return;
         }
         if defender.class == Class::Warrior
@@ -531,14 +595,20 @@ fn weapon_attack(
         / attacker.level as f64)
         .min(defender.class.max_damage_reduction());
 
+    let swoop_bonus = match typ {
+        AttackType::Swoop => 1.8,
+        _ => 1.0,
+    };
+
     // FIME: Check the order of all of this
     let damage_bonus = char_damage_modifier
         * attacker.portal_dmg_bonus
         * elemental_bonus
         * (1.0 - def_reduction)
-        * attacker.class.damage_factor();
+        * attacker.class.damage_factor(defender.class)
+        * swoop_bonus;
 
-    let weapon = if offhand {
+    let weapon = if typ == AttackType::Offhand {
         attacker.equip.offhand
     } else {
         attacker.equip.weapon
@@ -554,14 +624,24 @@ fn weapon_attack(
 
     let luck_mod = attacker.attributes.get(AttributeType::Luck) * 5;
     let raw_crit_chance = luck_mod as f64 / (defender.level as f64);
-    let crit_chance = raw_crit_chance.min(0.5);
+
+    let is_bear =
+        matches!(attacker.class_effect, ClassEffect::Druid { bear: true, .. });
+    let mut crit_chance = raw_crit_chance.min(0.5);
+    if is_bear {
+        crit_chance += 0.1;
+    }
 
     if rng.f64() <= crit_chance {
+        let mut crit_dmg_factor = 2.0;
         if attacker.equip.extra_crit_dmg {
-            damage = (damage as f64 * 2.05) as i64;
-        } else {
-            damage *= 2;
-        }
+            crit_dmg_factor += 0.05;
+        };
+        if is_bear {
+            // TODO: Is this right, or do we set to 4.0?
+            crit_dmg_factor += 2.0;
+        };
+        damage = (damage as f64 * crit_dmg_factor) as i64;
     }
     do_damage(defender, damage.max(1), rng);
 }
