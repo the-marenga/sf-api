@@ -196,7 +196,7 @@ impl Class {
     }
 
     #[must_use]
-    pub(crate) fn max_damage_reduction(&self) -> f64 {
+    pub(crate) fn max_dmg_reduction(&self) -> f64 {
         use Class::*;
         match self {
             Bard | BattleMage | DemonHunter | Warrior => 0.5,
@@ -210,11 +210,12 @@ impl Class {
     pub(crate) fn damage_factor(&self, against: Class) -> f64 {
         use Class::*;
         match self {
-            // TODO: Are these right, or should this be a * 1.15 somewhere else
+            // TODO: Are these right, or should this be a * 1.XX somewhere else
             // instead?
             Druid if against == Class::DemonHunter => 0.33 + 0.15,
             Druid if against == Class::Mage => 0.33 + 0.33,
             Druid => 0.33,
+            Necromancer if against == Class::DemonHunter => 0.56 + 0.1,
             Necromancer => 0.56,
             Assassin => 0.625,
             Warrior | Mage | Scout | BattleMage | DemonHunter => 1.0,

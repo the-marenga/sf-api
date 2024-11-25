@@ -1,5 +1,6 @@
 use enum_map::{Enum, EnumMap};
 use fastrand::Rng;
+use log::debug;
 use strum::{EnumIter, IntoEnumIterator};
 
 use crate::{
@@ -49,14 +50,8 @@ pub struct UpgradeableFighter {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Minion {
-    pub typ: MinionType,
-    pub rounds_remaining: u8,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MinionType {
-    Skeleton,
+pub enum Minion {
+    Skeleton { revived: u8 },
     Hound,
     Golem,
 }
@@ -117,7 +112,10 @@ pub enum ClassEffect {
         quality: HarpQuality,
         remaining: u8,
     },
-    Necromancer(Minion),
+    Necromancer {
+        typ: Minion,
+        remaining: u8,
+    },
     DemonHunter {
         revived: u8,
     },
@@ -129,6 +127,7 @@ pub enum AttackType {
     Weapon,
     Offhand,
     Swoop,
+    Minion,
 }
 
 impl ClassEffect {
@@ -138,22 +137,12 @@ impl ClassEffect {
             _ => 0,
         }
     }
-
-    pub fn harp_quality(&self, against: Class) -> Option<HarpQuality> {
-        match self {
-            ClassEffect::Bard { quality, .. } if against != Class::Mage => {
-                Some(*quality)
-            }
-            _ => None,
-        }
-    }
 }
 
 impl BattleFighter {
     #[must_use]
     pub fn from_monster(monster: &Monster) -> Self {
-        // TODO: I assume this is unarmed damage, but I have have to
-        // check
+        // TODO: I assume this is unarmed damage, but I should check
         let weapon = calc_unarmed_base_dmg(
             EquipmentSlot::Weapon,
             monster.level,
@@ -528,7 +517,57 @@ impl<'a> Battle<'a> {
                     *remaining = remaining.saturating_sub(1);
                 }
             }
-            Necromancer => todo!("Summon minions & do their stuff"),
+            Necromancer => {
+                let has_minion = matches!(
+                    attacker.class_effect,
+                    ClassEffect::Necromancer { remaining: 1.., .. }
+                );
+                if !has_minion
+                    && defender.class != Class::Mage
+                    && self.rng.bool()
+                {
+                    let (typ, rem) = match self.rng.u8(0..3) {
+                        0 => (Minion::Skeleton { revived: 0 }, 3),
+                        1 => (Minion::Hound, 2),
+                        _ => (Minion::Golem, 4),
+                    };
+                    attacker.class_effect = ClassEffect::Necromancer {
+                        typ,
+                        remaining: rem,
+                    };
+                    if has_minion {
+                        fighter_attack(
+                            attacker,
+                            defender,
+                            &mut self.rng,
+                            AttackType::Minion,
+                        );
+                    }
+                } else {
+                    if has_minion {
+                        fighter_attack(
+                            attacker,
+                            defender,
+                            &mut self.rng,
+                            AttackType::Minion,
+                        );
+                    }
+                    fighter_attack(attacker, defender, &mut self.rng, Weapon);
+                }
+                if let ClassEffect::Necromancer { remaining, typ } =
+                    &mut attacker.class_effect
+                {
+                    if *remaining > 0 {
+                        if let Minion::Skeleton { revived } = typ {
+                            if *revived < 2 && self.rng.bool() {
+                                *revived += 1;
+                                *remaining = 2;
+                            }
+                        }
+                        *remaining -= 1;
+                    }
+                }
+            }
         }
         if defender.current_hp <= 0 {
             match attacking_side {
@@ -542,11 +581,12 @@ impl<'a> Battle<'a> {
 
 // Does the specified amount of damage, whilst
 fn do_damage(to: &mut BattleFighter, damage: i64, rng: &mut Rng) {
-    // debug!(
-    //     "Doing {damage} damage to {:?} with {:.2}% hp",
-    //     to.class,
-    //     (to.current_hp as f32 / to.max_hp as f32) * 100.0
-    // );
+    debug!(
+        "Doing {damage} damage to {:?} with {:.2}% hp ({})",
+        to.class,
+        (to.current_hp as f32 / to.max_hp as f32) * 100.0,
+        to.current_hp
+    );
     if to.current_hp <= 0 || damage == 0 {
         // Skip pointless attacks
         return;
@@ -581,8 +621,9 @@ fn fighter_attack(
     rng: &mut Rng,
     typ: AttackType,
 ) {
+    // Check dodges
     if attacker.class != Class::Mage {
-        // TODO: Different dedge rates (druid 35%)
+        // TODO: Different dodge rates (druid 35%)
         if defender.class == Class::Scout && rng.bool() {
             // defender dodged
             if defender.class == Class::Druid {
@@ -620,35 +661,47 @@ fn fighter_attack(
         }
     }
 
-    let def_reduction = ((defender.equip.armor as f64
-        * defender.class.armor_factor())
-        / attacker.level as f64)
-        .min(defender.class.max_damage_reduction());
+    let armor = defender.equip.armor as f64 * defender.class.armor_factor();
+    let max_dr = defender.class.max_dmg_reduction();
+    // TODO: Is this how mage armor negate works?
+    let armor_damage_effect = if attacker.class != Class::Mage {
+        1.0 - (armor / attacker.level as f64).min(max_dr)
+    } else {
+        1.0
+    };
 
-    let swoop_bonus = match typ {
-        AttackType::Swoop => 1.8,
+    // The damage bonus you get from some class specific gimmic
+    let class_effect_dmg_bonus = match attacker.class_effect {
+        ClassEffect::Bard { quality, .. } if defender.class != Class::Mage => {
+            match quality {
+                HarpQuality::Bad => 1.2,
+                HarpQuality::Medium => 1.4,
+                HarpQuality::Good => 1.6,
+            }
+        }
+        ClassEffect::Necromancer {
+            typ: minion_type,
+            remaining: 1..,
+        } if typ == AttackType::Minion => match minion_type {
+            Minion::Skeleton { .. } => 1.25,
+            Minion::Hound => 2.0,
+            Minion::Golem => 1.0,
+        },
+        ClassEffect::Druid { .. } if typ == AttackType::Swoop => 1.8,
         _ => 1.0,
     };
-    let harp_bonus = match attacker.class_effect.harp_quality(defender.class) {
-        None => 1.0,
-        Some(HarpQuality::Bad) => 1.2,
-        Some(HarpQuality::Medium) => 1.4,
-        Some(HarpQuality::Good) => 1.6,
-    };
 
-    // FIME: Check the order of all of this
     let damage_bonus = char_damage_modifier
         * attacker.portal_dmg_bonus
         * elemental_bonus
-        * (1.0 - def_reduction)
+        * armor_damage_effect
         * attacker.class.damage_factor(defender.class)
-        * swoop_bonus
-        * harp_bonus;
+        * class_effect_dmg_bonus;
 
-    let weapon = if typ == AttackType::Offhand {
-        attacker.equip.offhand
-    } else {
-        attacker.equip.weapon
+    // FIXME: Is minion damage based on weapon, or unarmed damage?
+    let weapon = match typ {
+        AttackType::Offhand => attacker.equip.weapon,
+        _ => attacker.equip.weapon,
     };
 
     let calc_damage =
@@ -659,28 +712,35 @@ fn fighter_attack(
 
     let mut damage = rng.i64(min_base_damage..=max_base_damage);
 
+    // Crits
+
     let luck_mod = attacker.attributes.get(AttributeType::Luck) * 5;
     let raw_crit_chance = luck_mod as f64 / (defender.level as f64);
-
-    let is_bear =
-        matches!(attacker.class_effect, ClassEffect::Druid { bear: true, .. });
     let mut crit_chance = raw_crit_chance.min(0.5);
-    if is_bear {
-        crit_chance += 0.1;
+    let mut crit_dmg_factor = 2.0;
+
+    match attacker.class_effect {
+        ClassEffect::Druid { bear: true, .. } => {
+            crit_chance += 0.1;
+            crit_dmg_factor += 2.0;
+        }
+        ClassEffect::Necromancer {
+            typ: Minion::Hound, ..
+        } => {
+            crit_chance += 0.1;
+            crit_dmg_factor += 0.5;
+        }
+        _ => {}
     }
 
     if rng.f64() <= crit_chance {
-        let mut crit_dmg_factor = 2.0;
         if attacker.equip.extra_crit_dmg {
             crit_dmg_factor += 0.05;
         };
-        if is_bear {
-            // TODO: Is this right, or do we set to 4.0?
-            crit_dmg_factor += 2.0;
-        };
         damage = (damage as f64 * crit_dmg_factor) as i64;
     }
-    do_damage(defender, damage.max(1), rng);
+
+    do_damage(defender, damage, rng);
 }
 
 #[derive(Debug)]
@@ -785,7 +845,6 @@ impl UpgradeableFighter {
                 *total.get_mut(k) += v;
             }
 
-            // TODO: HP rune
             if let Some(GemSlot::Filled(gem)) = &equip.gem_slot {
                 use AttributeType as AT;
                 let mut value = gem.value;
@@ -794,7 +853,8 @@ impl UpgradeableFighter {
                 {
                     value *= 2;
                 }
-                let mut add_atr = move |at| *total.get_mut(at) += value;
+
+                let mut add_atr = |at| *total.get_mut(at) += value;
                 match gem.typ {
                     GemType::Strength => add_atr(AT::Strength),
                     GemType::Dexterity => add_atr(AT::Dexterity),
