@@ -113,7 +113,10 @@ pub enum ClassEffect {
         /// The amount of swoops the druid has done so far
         swoops: u8,
     },
-    Bard(HarpQuality),
+    Bard {
+        quality: HarpQuality,
+        remaining: u8,
+    },
     Necromancer(Minion),
     DemonHunter {
         revived: u8,
@@ -133,6 +136,15 @@ impl ClassEffect {
         match self {
             ClassEffect::Druid { swoops, .. } => *swoops,
             _ => 0,
+        }
+    }
+
+    pub fn harp_quality(&self, against: Class) -> Option<HarpQuality> {
+        match self {
+            ClassEffect::Bard { quality, .. } if against != Class::Mage => {
+                Some(*quality)
+            }
+            _ => None,
         }
     }
 }
@@ -497,7 +509,25 @@ impl<'a> Battle<'a> {
                     swoops: attacker.class_effect.druid_swoops(),
                 };
             }
-            Bard => todo!("Start Melodies"),
+            Bard => {
+                // Start a new melody every 4 turns
+                if attacker.rounds_in_battle % 4 == 0 {
+                    let quality = self.rng.u8(0..4);
+                    let (quality, remaining) = match quality {
+                        0 => (HarpQuality::Bad, 3),
+                        1 | 2 => (HarpQuality::Medium, 3),
+                        _ => (HarpQuality::Good, 4),
+                    };
+                    attacker.class_effect =
+                        ClassEffect::Bard { quality, remaining }
+                }
+                fighter_attack(attacker, defender, &mut self.rng, Weapon);
+                if let ClassEffect::Bard { remaining, .. } =
+                    &mut attacker.class_effect
+                {
+                    *remaining = remaining.saturating_sub(1);
+                }
+            }
             Necromancer => todo!("Summon minions & do their stuff"),
         }
         if defender.current_hp <= 0 {
@@ -599,6 +629,12 @@ fn fighter_attack(
         AttackType::Swoop => 1.8,
         _ => 1.0,
     };
+    let harp_bonus = match attacker.class_effect.harp_quality(defender.class) {
+        None => 1.0,
+        Some(HarpQuality::Bad) => 1.2,
+        Some(HarpQuality::Medium) => 1.4,
+        Some(HarpQuality::Good) => 1.6,
+    };
 
     // FIME: Check the order of all of this
     let damage_bonus = char_damage_modifier
@@ -606,7 +642,8 @@ fn fighter_attack(
         * elemental_bonus
         * (1.0 - def_reduction)
         * attacker.class.damage_factor(defender.class)
-        * swoop_bonus;
+        * swoop_bonus
+        * harp_bonus;
 
     let weapon = if typ == AttackType::Offhand {
         attacker.equip.offhand
