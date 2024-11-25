@@ -196,7 +196,7 @@ impl Class {
     }
 
     #[must_use]
-    pub(crate) fn max_dmg_reduction(&self) -> f64 {
+    pub(crate) fn max_damage_reduction(&self) -> f64 {
         use Class::*;
         match self {
             Bard | BattleMage | DemonHunter | Warrior => 0.5,

@@ -1,6 +1,6 @@
 use enum_map::{Enum, EnumMap};
 use fastrand::Rng;
-use log::debug;
+use log::{debug, info};
 use strum::{EnumIter, IntoEnumIterator};
 
 use crate::{
@@ -434,19 +434,20 @@ impl<'a> Battle<'a> {
         };
 
         use AttackType::{Offhand, Swoop, Weapon};
-
+        let turn = self.round;
+        let rng = &mut self.rng;
         match attacker.class {
             Warrior | Scout | Mage | DemonHunter => {
-                fighter_attack(attacker, defender, &mut self.rng, Weapon)
+                fighter_attack(attacker, defender, rng, Weapon, turn)
             }
             Assassin => {
-                fighter_attack(attacker, defender, &mut self.rng, Weapon);
-                fighter_attack(attacker, defender, &mut self.rng, Offhand);
+                fighter_attack(attacker, defender, rng, Weapon, turn);
+                fighter_attack(attacker, defender, rng, Offhand, turn);
             }
             Berserker => {
                 for _ in 0..15 {
-                    fighter_attack(attacker, defender, &mut self.rng, Weapon);
-                    if self.rng.bool() {
+                    fighter_attack(attacker, defender, rng, Weapon, turn);
+                    if rng.bool() {
                         break;
                     }
                 }
@@ -461,9 +462,9 @@ impl<'a> Battle<'a> {
                         Warrior | BattleMage | Druid => attacker.max_hp / 4,
                     };
                     // TODO: Can you dodge this?
-                    do_damage(defender, dmg, &mut self.rng);
+                    do_damage(defender, dmg, rng);
                 }
-                fighter_attack(attacker, defender, &mut self.rng, Weapon)
+                fighter_attack(attacker, defender, rng, Weapon, turn)
             }
             Druid => {
                 // Check if we do a sweep attack
@@ -474,14 +475,9 @@ impl<'a> Battle<'a> {
                     let swoops = attacker.class_effect.druid_swoops();
                     let swoop_chance = 0.15 + ((swoops as f32 * 5.0) / 100.0);
                     if defender.class != Class::Mage
-                        && self.rng.f32() <= swoop_chance
+                        && rng.f32() <= swoop_chance
                     {
-                        fighter_attack(
-                            attacker,
-                            defender,
-                            &mut self.rng,
-                            Swoop,
-                        );
+                        fighter_attack(attacker, defender, rng, Swoop, turn);
                         attacker.class_effect = ClassEffect::Druid {
                             bear: false,
                             // max 7 to limit chance to 50%
@@ -490,7 +486,7 @@ impl<'a> Battle<'a> {
                     }
                 }
 
-                fighter_attack(attacker, defender, &mut self.rng, Weapon);
+                fighter_attack(attacker, defender, rng, Weapon, turn);
                 // TODO: Does this reset here, or on the start of the next
                 // attack?
                 attacker.class_effect = ClassEffect::Druid {
@@ -501,7 +497,7 @@ impl<'a> Battle<'a> {
             Bard => {
                 // Start a new melody every 4 turns
                 if attacker.rounds_in_battle % 4 == 0 {
-                    let quality = self.rng.u8(0..4);
+                    let quality = rng.u8(0..4);
                     let (quality, remaining) = match quality {
                         0 => (HarpQuality::Bad, 3),
                         1 | 2 => (HarpQuality::Medium, 3),
@@ -510,7 +506,7 @@ impl<'a> Battle<'a> {
                     attacker.class_effect =
                         ClassEffect::Bard { quality, remaining }
                 }
-                fighter_attack(attacker, defender, &mut self.rng, Weapon);
+                fighter_attack(attacker, defender, rng, Weapon, turn);
                 if let ClassEffect::Bard { remaining, .. } =
                     &mut attacker.class_effect
                 {
@@ -522,11 +518,8 @@ impl<'a> Battle<'a> {
                     attacker.class_effect,
                     ClassEffect::Necromancer { remaining: 1.., .. }
                 );
-                if !has_minion
-                    && defender.class != Class::Mage
-                    && self.rng.bool()
-                {
-                    let (typ, rem) = match self.rng.u8(0..3) {
+                if !has_minion && defender.class != Class::Mage && rng.bool() {
+                    let (typ, rem) = match rng.u8(0..3) {
                         0 => (Minion::Skeleton { revived: 0 }, 3),
                         1 => (Minion::Hound, 2),
                         _ => (Minion::Golem, 4),
@@ -539,8 +532,9 @@ impl<'a> Battle<'a> {
                         fighter_attack(
                             attacker,
                             defender,
-                            &mut self.rng,
+                            rng,
                             AttackType::Minion,
+                            turn,
                         );
                     }
                 } else {
@@ -548,11 +542,12 @@ impl<'a> Battle<'a> {
                         fighter_attack(
                             attacker,
                             defender,
-                            &mut self.rng,
+                            rng,
                             AttackType::Minion,
+                            turn,
                         );
                     }
-                    fighter_attack(attacker, defender, &mut self.rng, Weapon);
+                    fighter_attack(attacker, defender, rng, Weapon, turn);
                 }
                 if let ClassEffect::Necromancer { remaining, typ } =
                     &mut attacker.class_effect
@@ -581,12 +576,12 @@ impl<'a> Battle<'a> {
 
 // Does the specified amount of damage, whilst
 fn do_damage(to: &mut BattleFighter, damage: i64, rng: &mut Rng) {
-    debug!(
-        "Doing {damage} damage to {:?} with {:.2}% hp ({})",
-        to.class,
-        (to.current_hp as f32 / to.max_hp as f32) * 100.0,
-        to.current_hp
-    );
+    // debug!(
+    //     "Doing {damage} damage to {:?} with {:.2}% hp ({})",
+    //     to.class,
+    //     (to.current_hp as f32 / to.max_hp as f32) * 100.0,
+    //     to.current_hp
+    // );
     if to.current_hp <= 0 || damage == 0 {
         // Skip pointless attacks
         return;
@@ -620,6 +615,7 @@ fn fighter_attack(
     defender: &mut BattleFighter,
     rng: &mut Rng,
     typ: AttackType,
+    turn: u32,
 ) {
     // Check dodges
     if attacker.class != Class::Mage {
@@ -662,7 +658,7 @@ fn fighter_attack(
     }
 
     let armor = defender.equip.armor as f64 * defender.class.armor_factor();
-    let max_dr = defender.class.max_dmg_reduction();
+    let max_dr = defender.class.max_damage_reduction();
     // TODO: Is this how mage armor negate works?
     let armor_damage_effect = if attacker.class != Class::Mage {
         1.0 - (armor / attacker.level as f64).min(max_dr)
@@ -691,16 +687,20 @@ fn fighter_attack(
         _ => 1.0,
     };
 
+    // TODO: Is this the correct formula
+    let rage_bonus = 1.0 * (turn.saturating_sub(1) as f64 / 6.0);
+
     let damage_bonus = char_damage_modifier
         * attacker.portal_dmg_bonus
         * elemental_bonus
         * armor_damage_effect
         * attacker.class.damage_factor(defender.class)
+        * rage_bonus
         * class_effect_dmg_bonus;
 
     // FIXME: Is minion damage based on weapon, or unarmed damage?
     let weapon = match typ {
-        AttackType::Offhand => attacker.equip.weapon,
+        AttackType::Offhand => attacker.equip.offhand,
         _ => attacker.equip.weapon,
     };
 
