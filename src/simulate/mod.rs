@@ -1,6 +1,5 @@
 use enum_map::{Enum, EnumMap};
 use fastrand::Rng;
-use log::{debug, info};
 use strum::{EnumIter, IntoEnumIterator};
 
 use crate::{
@@ -10,6 +9,8 @@ use crate::{
     },
     misc::EnumMapGet,
 };
+
+pub mod constants;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum BaseClass {

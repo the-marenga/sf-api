@@ -24,7 +24,6 @@ use gamestate::GameState;
 use session::{ServerConnection, Session};
 
 pub mod command;
-pub mod constants;
 pub mod error;
 pub mod gamestate;
 pub mod misc;

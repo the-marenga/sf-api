@@ -9,9 +9,11 @@ use super::{
     ServerTime,
 };
 use crate::{
-    constants::{LIGHT_ENEMIES, SHADOW_ENEMIES},
     misc::soft_into,
-    simulate::Monster,
+    simulate::{
+        constants::{LIGHT_ENEMIES, SHADOW_ENEMIES},
+        Monster,
+    },
 };
 
 #[derive(Debug, Default, Clone)]
