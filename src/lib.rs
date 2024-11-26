@@ -32,3 +32,6 @@ pub mod sso;
 /// do you fight?), but you can almost always expect this to be > 0
 /// wherever found
 pub type PlayerId = u32;
+
+#[cfg(feature = "session")]
+pub use session::SimpleSession;
