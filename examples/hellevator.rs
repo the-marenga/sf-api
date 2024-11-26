@@ -10,7 +10,7 @@ use sf_api::{
         unlockables::HellevatorStatus,
     },
     misc::EnumMapGet,
-    SimpleSession,
+    session::SimpleSession,
 };
 use sha1::digest::Update;
 use tokio::time::sleep;
@@ -60,7 +60,7 @@ pub async fn login_with_env() -> SimpleSession {
     let username = std::env::var("USERNAME").unwrap();
     let password = std::env::var("PASSWORD").unwrap();
     let server = std::env::var("SERVER").unwrap();
-    sf_api::SimpleSession::login(&username, &password, &server)
+    SimpleSession::login(&username, &password, &server)
         .await
         .unwrap()
 }

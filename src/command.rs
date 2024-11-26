@@ -5,10 +5,9 @@ use num_derive::FromPrimitive;
 use strum::EnumIter;
 
 use crate::{
-    error::SFError,
     gamestate::{
         character::*,
-        dungeons::{CompanionClass, Dungeon, LightDungeon, ShadowDungeon},
+        dungeons::{CompanionClass, Dungeon},
         fortress::*,
         guild::{Emblem, GuildSkill},
         idle::IdleBuildingType,
@@ -17,7 +16,6 @@ use crate::{
         underworld::*,
         unlockables::{HabitatType, HellevatorTreatType, Unlockable},
     },
-    misc::{sha1_hash, to_sf_string, HASH_CONST},
     PlayerId,
 };
 
@@ -790,7 +788,9 @@ pub struct DiceReward {
     pub amount: u32,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Enum, FromPrimitive, Hash)]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, Enum, FromPrimitive, Hash, EnumIter,
+)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 /// A type of attribute
@@ -824,8 +824,17 @@ impl Command {
     /// Returns the unencrypted string, that has to be send to the server to to
     /// perform the request
     #[allow(deprecated, clippy::useless_format)]
-    pub(crate) fn request_string(&self) -> Result<String, SFError> {
+    #[cfg(feature = "session")]
+    pub(crate) fn request_string(
+        &self,
+    ) -> Result<String, crate::error::SFError> {
         const APP_VERSION: &str = "2100000000000";
+        use crate::{
+            error::SFError,
+            gamestate::dungeons::{LightDungeon, ShadowDungeon},
+            misc::{sha1_hash, to_sf_string, HASH_CONST},
+        };
+
         Ok(match self {
             Command::Custom {
                 cmd_name,
@@ -1057,7 +1066,11 @@ impl Command {
                 *to_pos + 1
             ),
             Command::UsePotion { from, from_pos } => {
-                format!("PlayerItemMove:{}/{}/1/0/", *from as usize, *from_pos + 1)
+                format!(
+                    "PlayerItemMove:{}/{}/1/0/",
+                    *from as usize,
+                    *from_pos + 1
+                )
             }
             Command::UnlockFeature { unlockable } => format!(
                 "UnlockFeature:{}/{}",

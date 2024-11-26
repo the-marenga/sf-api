@@ -1,12 +1,13 @@
 use std::{borrow::Borrow, time::Duration};
 
 use chrono::{DateTime, Local};
-use enum_map::{EnumArray, EnumMap};
 use sf_api::{
     command::Command,
-    gamestate::dungeons::{Dungeon, DungeonProgress},
-    SimpleSession,
+    gamestate::dungeons::{Dungeon, LightDungeon},
+    session::SimpleSession,
+    simulate::Monster,
 };
+use strum::IntoEnumIterator;
 use tokio::time::sleep;
 
 #[tokio::main]
@@ -45,27 +46,23 @@ pub async fn main() {
             break;
         }
 
-        // You should make a better heuristic to find these, but for now we just
-        // find the lowest level
-        let best_light_dungeon = find_lowest_lvl_dungeon(&gs.dungeons.light);
-        let best_shadow_dungeon = find_lowest_lvl_dungeon(&gs.dungeons.shadow);
-
-        let (target_dungeon, target_level) =
-            match (best_light_dungeon, best_shadow_dungeon) {
-                (Some(x), Some(y)) => {
-                    if x.1 < y.1 {
-                        x
-                    } else {
-                        y
-                    }
-                }
-                (Some(x), _) => x,
-                (_, Some(x)) => x,
-                (None, None) => {
-                    println!("There are no dungeons to fight in!");
-                    break;
-                }
+        let mut best: Option<(Dungeon, &'static Monster)> = None;
+        // TODO: ShadowDungeons
+        for l in LightDungeon::iter() {
+            let Some(current) = gs.dungeons.current_enemy(l) else {
+                continue;
             };
+            // You should make a better heuristic to find these, but for now we
+            // just find the lowest level
+            if best.map_or(true, |old| old.1.level > current.level) {
+                best = Some((l.into(), current))
+            }
+        }
+
+        let Some((target_dungeon, target_monster)) = best else {
+            println!("There are no more enemies left to fight");
+            break;
+        };
 
         println!("Chose: {target_dungeon:?} as the best dungeon to fight in");
 
@@ -77,7 +74,7 @@ pub async fn main() {
 
         if rem > Duration::from_secs(60 * 5)
             && gs.character.mushrooms > 1000
-            && target_level <= gs.character.level + 20
+            && target_monster.level <= gs.character.level + 20
         {
             // You should add some better logic on when to skip this
             println!("Using mushrooms to fight in the dungeon");
@@ -89,7 +86,7 @@ pub async fn main() {
                 .await
                 .unwrap();
         } else {
-            println!("Waiting {rem:?} until we can fight in a dungeon");
+            println!("Waiting {rem:?} until we can fight in the dungeon again");
             sleep(rem).await;
             session
                 .send_command(Command::FightDungeon {
@@ -102,23 +99,6 @@ pub async fn main() {
     }
 }
 
-fn find_lowest_lvl_dungeon<T: EnumArray<DungeonProgress> + Into<Dungeon>>(
-    dungeons: &EnumMap<T, DungeonProgress>,
-) -> Option<(Dungeon, u16)> {
-    dungeons
-        .iter()
-        .filter_map(|a| {
-            if let DungeonProgress::Open { level, .. } = a.1 {
-                Some((a.0.into(), *level))
-            } else {
-                None
-            }
-        })
-        .min_by_key(|a| {
-            a.1
-        })
-}
-
 pub fn time_remaining<T: Borrow<DateTime<Local>>>(time: T) -> Duration {
     (*time.borrow() - Local::now()).to_std().unwrap_or_default()
 }
@@ -127,7 +107,7 @@ pub async fn login_with_env() -> SimpleSession {
     let username = std::env::var("USERNAME").unwrap();
     let password = std::env::var("PASSWORD").unwrap();
     let server = std::env::var("SERVER").unwrap();
-    sf_api::SimpleSession::login(&username, &password, &server)
+    SimpleSession::login(&username, &password, &server)
         .await
         .unwrap()
 }

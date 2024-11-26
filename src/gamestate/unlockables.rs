@@ -235,16 +235,16 @@ pub struct HellevatorShopTreat {
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorDailyReward {
-    gold_chests: u16,
-    silver: u64,
+    pub gold_chests: u16,
+    pub silver: u64,
 
-    fortress_chests: u16,
-    wood: u64,
-    stone: u64,
+    pub fortress_chests: u16,
+    pub wood: u64,
+    pub stone: u64,
 
-    blacksmith_chests: u16,
-    arcane: u64,
-    metal: u64,
+    pub blacksmith_chests: u16,
+    pub arcane: u64,
+    pub metal: u64,
 }
 
 impl HellevatorDailyReward {
@@ -489,7 +489,16 @@ impl Pets {
         server_time: ServerTime,
     ) -> Result<(), SFError> {
         let mut pet_id = 0;
-        for (element_idx, element) in HabitatType::iter().enumerate() {
+        for (element_idx, element) in [
+            HabitatType::Shadow,
+            HabitatType::Light,
+            HabitatType::Earth,
+            HabitatType::Fire,
+            HabitatType::Water,
+        ]
+        .into_iter()
+        .enumerate()
+        {
             let info = self.habitats.get_mut(element);
             let explored = data.csiget(210 + element_idx, "pet exp", 20)?;
             info.exploration = if explored == 20 {
@@ -588,6 +597,18 @@ pub enum HabitatType {
     Earth = 2,
     Shadow = 3,
     Fire = 4,
+}
+
+impl From<HabitatType> for AttributeType {
+    fn from(value: HabitatType) -> Self {
+        match value {
+            HabitatType::Water => AttributeType::Strength,
+            HabitatType::Light => AttributeType::Dexterity,
+            HabitatType::Earth => AttributeType::Intelligence,
+            HabitatType::Shadow => AttributeType::Constitution,
+            HabitatType::Fire => AttributeType::Luck,
+        }
+    }
 }
 
 impl HabitatType {

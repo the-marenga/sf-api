@@ -4,17 +4,23 @@ use std::{
 };
 
 use aho_corasick::AhoCorasick;
+use base64::Engine;
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumArray, EnumMap};
 use log::{error, warn};
-use num::FromPrimitive;
+use num_traits::FromPrimitive;
 use once_cell::sync::Lazy;
 
 use crate::{error::SFError, gamestate::ServerTime};
 
-pub(crate) const HASH_CONST: &str = "ahHoj2woo1eeChiech6ohphoB7Aithoh";
+pub const HASH_CONST: &str = "ahHoj2woo1eeChiech6ohphoB7Aithoh";
+pub const DEFAULT_CRYPTO_KEY: &str = "[_/$VV&*Qg&)r?~g";
+pub const DEFAULT_CRYPTO_ID: &str = "0-00000000000000";
+pub const DEFAULT_SESSION_ID: &str = "00000000000000000000000000000000";
+pub const CRYPTO_IV: &str = "jXT#/vz]3]5X7Jl\\";
 
-pub(crate) fn sha1_hash(val: &str) -> String {
+#[must_use]
+pub fn sha1_hash(val: &str) -> String {
     use sha1::{Digest, Sha1};
     let mut hasher = Sha1::new();
     hasher.update(val.as_bytes());
@@ -83,13 +89,15 @@ pub(crate) fn warning_from_str<T: FromStr>(val: &str, name: &str) -> Option<T> {
 
 /// Converts a  s&f string from the server to their original unescaped
 /// representation
-pub(crate) fn from_sf_string(val: &str) -> String {
+#[must_use]
+pub fn from_sf_string(val: &str) -> String {
     pattern_replace::<true>(val)
 }
 
 /// Makes a user controlled string, like the character description safe to use
 /// in a request
-pub(crate) fn to_sf_string(val: &str) -> String {
+#[must_use]
+pub fn to_sf_string(val: &str) -> String {
     pattern_replace::<false>(val)
 }
 
@@ -131,6 +139,120 @@ fn pattern_replace<const FROM: bool>(str: &str) -> String {
         error!("replace generated invalid utf8");
         String::new()
     }
+}
+
+/// This function is designed for reverseengineering encrypted commands from the
+/// S&F web client. It expects a login resonse, which is the ~3KB string
+/// response you can see in the network tab of your browser, that starts with
+/// `serverversion` after a login. After that, you can take any url the client
+/// sends to the server and have it decoded into the actual string command, that
+/// was sent. Note that this function technically only needs the crypto key, not
+/// the full response, but it is way easier to just copy paste the full
+/// response. The command returned here will be `Command::Custom`
+///
+/// # Errors
+///
+/// If either the url, or the response do not contain the necessary crypto
+/// values, an `InvalidRequest` error will be returned, that mentions the part,
+/// that is missing or malformed. The same goes for the necessary parts of the
+/// decrypted command
+pub fn decrypt_url(
+    encrypted_url: &str,
+    login_resp: Option<&str>,
+) -> Result<crate::command::Command, SFError> {
+    let crypto_key = if let Some(login_resp) = login_resp {
+        login_resp
+            .split('&')
+            .filter_map(|a| a.split_once(':'))
+            .find(|a| a.0 == "cryptokey")
+            .ok_or(SFError::InvalidRequest("No crypto key in login resp"))?
+            .1
+    } else {
+        DEFAULT_CRYPTO_KEY
+    };
+
+    let encrypted = encrypted_url
+        .split_once("req=")
+        .ok_or(SFError::InvalidRequest("url does not contain request"))?
+        .1
+        .rsplit_once("&rnd=")
+        .ok_or(SFError::InvalidRequest("url does not contain rnd"))?
+        .0;
+
+    let resp = encrypted.get(DEFAULT_CRYPTO_ID.len()..).ok_or(
+        SFError::InvalidRequest("encrypted command does not contain crypto id"),
+    )?;
+    let full_resp = decrypt_server_request(resp, crypto_key)?;
+
+    let (_session_id, command) = full_resp.split_once('|').ok_or(
+        SFError::InvalidRequest("decrypted command has no session id"),
+    )?;
+
+    let (cmd_name, args) = command
+        .split_once(':')
+        .ok_or(SFError::InvalidRequest("decrypted command has no name"))?;
+    let args: Vec<_> = args
+        .trim_end_matches('|')
+        .split('/')
+        .map(std::string::ToString::to_string)
+        .collect();
+
+    Ok(crate::command::Command::Custom {
+        cmd_name: cmd_name.to_string(),
+        arguments: args,
+    })
+}
+
+#[allow(clippy::missing_errors_doc)]
+pub fn decrypt_server_request(
+    to_decrypt: &str,
+    key: &str,
+) -> Result<String, SFError> {
+    let text = base64::engine::general_purpose::URL_SAFE
+        .decode(to_decrypt)
+        .map_err(|_| {
+            SFError::InvalidRequest("Value to decode is not base64")
+        })?;
+
+    let mut my_key = [0; 16];
+    my_key.copy_from_slice(
+        key.as_bytes()
+            .get(..16)
+            .ok_or(SFError::InvalidRequest("Key is not 16 bytes long"))?,
+    );
+
+    let mut cipher = libaes::Cipher::new_128(&my_key);
+    cipher.set_auto_padding(false);
+    let decrypted = cipher.cbc_decrypt(CRYPTO_IV.as_bytes(), &text);
+
+    String::from_utf8(decrypted)
+        .map_err(|_| SFError::InvalidRequest("Decrypted value is not UTF8"))
+}
+
+#[cfg(feature = "session")]
+pub(crate) fn encrypt_server_request(
+    to_encrypt: String,
+    key: &str,
+) -> Result<String, SFError> {
+    let mut my_key = [0; 16];
+    my_key.copy_from_slice(
+        key.as_bytes()
+            .get(..16)
+            .ok_or(SFError::InvalidRequest("Invalid crypto key"))?,
+    );
+
+    let mut cipher = libaes::Cipher::new_128(&my_key);
+    cipher.set_auto_padding(false);
+
+    // This feels wrong, but the normal padding does not work. No idea what the
+    // default padding strategy is
+    let mut to_encrypt = to_encrypt.into_bytes();
+    while to_encrypt.len() % 16 != 0 {
+        to_encrypt.push(0);
+    }
+    let encrypted = cipher.cbc_encrypt(CRYPTO_IV.as_bytes(), &to_encrypt);
+
+    Ok(base64::engine::general_purpose::URL_SAFE.encode(encrypted))
 }
 
 pub(crate) fn parse_vec<B: Display + Copy + std::fmt::Debug, T, F>(
@@ -184,6 +306,7 @@ impl<T: Copy + std::fmt::Debug + Display> CGet<T> for [T] {
     }
 }
 
+#[allow(unused)]
 pub(crate) trait CCGet<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> {
     fn csiget(
         &self,

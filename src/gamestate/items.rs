@@ -1,8 +1,8 @@
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
 use log::{error, warn};
-use num::FromPrimitive;
 use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 use strum::EnumIter;
 
 use super::{
@@ -26,15 +26,17 @@ pub struct Inventory {
 }
 
 impl Inventory {
-    pub fn free_slot(&self) -> Option<(PlayerItemPlace, usize)> {
+    /// Returns a place in the inventory, that can store a new item
+    #[must_use]
+    pub fn free_slot(&self) -> Option<(InventoryType, usize)> {
         if let Some(bag_pos) = self.bag.iter().position(Option::is_none) {
-            return Some((PlayerItemPlace::MainInventory, bag_pos));
+            return Some((InventoryType::MainInventory, bag_pos));
         } else if let Some(e_bag_pos) = self
             .fortress_chest
             .as_ref()
             .and_then(|a| a.iter().position(Option::is_none))
         {
-            return Some((PlayerItemPlace::ExtendedInventory, e_bag_pos));
+            return Some((InventoryType::ExtendedInventory, e_bag_pos));
         }
         None
     }
@@ -319,7 +321,8 @@ impl Item {
         };
 
         let enchantment = data.cfpget(0, "item enchantment", |a| a >> 24)?;
-        let gem_slot_val = data.cimget(0, "gem slot val", |a| a >> 16 & 0xF)?;
+        let gem_slot_val =
+            data.cimget(0, "gem slot val", |a| (a >> 16) & 0xFF)?;
         let gem_pwr = data.cimget(11, "gem pwr", |a| a >> 16)?;
         let gem_slot = GemSlot::parse(gem_slot_val, gem_pwr);
 
@@ -472,7 +475,8 @@ impl Enchantment {
         }
     }
 
-    pub(crate) fn enchant_id(self) -> u32 {
+    #[must_use]
+    pub fn enchant_id(self) -> u32 {
         ((self as u32) / 10) * 10
     }
 }
@@ -519,14 +523,18 @@ pub enum GemSlot {
 
 impl GemSlot {
     pub(crate) fn parse(slot_val: i64, gem_pwr: i64) -> Option<GemSlot> {
-        if slot_val == 0 {
-            return None;
+        match slot_val {
+            0 => return None,
+            1 => return Some(GemSlot::Empty),
+            _ => {}
         }
+
         let Ok(value) = gem_pwr.try_into() else {
             warn!("Invalid gem power {gem_pwr}");
             return None;
         };
-        match GemType::parse(slot_val) {
+
+        match GemType::parse(slot_val, value) {
             Some(typ) => Some(GemSlot::Filled(Gem { typ, value })),
             None => Some(GemSlot::Empty),
         }
@@ -749,10 +757,10 @@ impl ItemType {
             }
             13 => ItemType::Scrapbook,
             15 => {
-                let Some(typ) = GemType::parse(sub_ident) else {
+                let pwr = data.csimget(11, "gem pwr", 0, |a| a >> 16)?;
+                let Some(typ) = GemType::parse(sub_ident, pwr) else {
                     return unknown_item("gem type");
                 };
-                let pwr = data.csimget(11, "gem pwr", 0, |a| a >> 16)?;
                 let gem = Gem { typ, value: pwr };
                 ItemType::Gem(gem)
             }
@@ -818,6 +826,18 @@ pub enum PotionType {
     EternalLife,
 }
 
+impl From<AttributeType> for PotionType {
+    fn from(value: AttributeType) -> Self {
+        match value {
+            AttributeType::Strength => PotionType::Strength,
+            AttributeType::Dexterity => PotionType::Dexterity,
+            AttributeType::Intelligence => PotionType::Intelligence,
+            AttributeType::Constitution => PotionType::Constitution,
+            AttributeType::Luck => PotionType::Luck,
+        }
+    }
+}
+
 impl PotionType {
     pub(crate) fn parse(id: i64) -> Option<PotionType> {
         if id == 0 {
@@ -847,6 +867,15 @@ pub enum PotionSize {
 }
 
 impl PotionSize {
+    #[must_use]
+    pub fn effect(&self) -> f64 {
+        match self {
+            PotionSize::Small => 0.1,
+            PotionSize::Medium => 0.15,
+            PotionSize::Large => 0.25,
+        }
+    }
+
     pub(crate) fn parse(id: i64) -> Option<Self> {
         Some(match id {
             1..=5 => PotionSize::Small,
@@ -894,27 +923,25 @@ pub enum GemType {
 }
 
 impl GemType {
-    pub(crate) fn parse(id: i64) -> Option<GemType> {
-        if id == 4 {
-            return Some(GemType::Legendary);
-        }
-
-        if !(10..=40).contains(&id) {
-            return None;
-        }
-
-        // NOTE: id / 10 should be the shape
-        Some(match id % 10 {
-            0 => GemType::Strength,
-            1 => GemType::Dexterity,
-            2 => GemType::Intelligence,
-            3 => GemType::Constitution,
-            4 => GemType::Luck,
-            5 => GemType::All,
-            // Just put this here because it makes sense. I only ever see 4 for
-            // these
-            6 => GemType::Legendary,
+    pub(crate) fn parse(id: i64, debug_value: u32) -> Option<GemType> {
+        Some(match id {
+            0 | 1 => return None,
+            10..=40 => match id % 10 {
+                0 => GemType::Strength,
+                1 => GemType::Dexterity,
+                2 => GemType::Intelligence,
+                3 => GemType::Constitution,
+                4 => GemType::Luck,
+                5 => GemType::All,
+                // Just put this here because it makes sense. I only ever
+                // see 4 for these
+                6 => GemType::Legendary,
+                _ => {
+                    return None;
+                }
+            },
             _ => {
+                warn!("Unknown gem: {id} - {debug_value}");
                 return None;
             }
         })

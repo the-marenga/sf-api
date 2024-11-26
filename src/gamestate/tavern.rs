@@ -473,7 +473,7 @@ pub struct ExpeditionEncounter {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The type of something you can encounter on the expedition. Can also be found
 /// as the target, or in the items section
-#[allow(missing_docs)]
+#[allow(missing_docs, clippy::doc_markdown)]
 pub enum ExpeditionThing {
     #[default]
     Unknown = 0,
