@@ -236,6 +236,7 @@ impl Response {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[allow(clippy::module_name_repetitions)]
 /// This is the raw &str, that the server send as a value to some key. This
 /// often requires extra conversions/parsing to use practically, so we associate
 /// the most common parsing functions as methods to this data.

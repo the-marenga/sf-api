@@ -5,7 +5,7 @@
     clippy::print_stdout,
     clippy::print_stderr,
     missing_debug_implementations,
-    // clippy::pedantic,
+    clippy::pedantic,
     // missing_docs
 )]
 #![allow(

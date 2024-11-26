@@ -406,6 +406,7 @@ impl Enchantment {
         }
     }
 
+    #[must_use]
     pub fn enchant_id(self) -> u32 {
         ((self as u32) / 10) * 10
     }
@@ -785,6 +786,7 @@ pub enum PotionSize {
 }
 
 impl PotionSize {
+    #[must_use]
     pub fn effect(&self) -> f64 {
         match self {
             PotionSize::Small => 0.1,

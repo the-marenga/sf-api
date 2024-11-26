@@ -1,3 +1,9 @@
+#![allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation
+)]
 use enum_map::{Enum, EnumMap};
 use fastrand::Rng;
 use strum::{EnumIter, IntoEnumIterator};
@@ -115,9 +121,9 @@ pub enum AttackType {
 }
 
 impl ClassEffect {
-    pub fn druid_swoops(&self) -> u8 {
+    fn druid_swoops(self) -> u8 {
         match self {
-            ClassEffect::Druid { swoops, .. } => *swoops,
+            ClassEffect::Druid { swoops, .. } => swoops,
             _ => 0,
         }
     }
@@ -141,8 +147,8 @@ impl BattleFighter {
             max_hp: monster.hp as i64,
             current_hp: monster.hp as i64,
             equip: EquipmentEffects {
-                element_res: Default::default(),
-                element_dmg: Default::default(),
+                element_res: EnumMap::default(),
+                element_dmg: EnumMap::default(),
                 weapon,
                 offhand: (0, 0),
                 reaction_boost: false,
@@ -175,11 +181,11 @@ impl BattleFighter {
                 match slot {
                     EquipmentSlot::Weapon => {
                         equip.weapon =
-                            calc_unarmed_base_dmg(slot, char.level, char.class)
+                            calc_unarmed_base_dmg(slot, char.level, char.class);
                     }
                     EquipmentSlot::Shield if char.class == Class::Assassin => {
                         equip.offhand =
-                            calc_unarmed_base_dmg(slot, char.level, char.class)
+                            calc_unarmed_base_dmg(slot, char.level, char.class);
                     }
                     _ => {}
                 }
@@ -304,9 +310,11 @@ pub struct BattleTeam<'a> {
 }
 
 impl<'a> BattleTeam<'a> {
+    #[must_use]
     pub fn current(&self) -> Option<&BattleFighter> {
         self.fighters.get(self.current_fighter)
     }
+    #[must_use]
     pub fn current_mut(&mut self) -> Option<&mut BattleFighter> {
         self.fighters.get_mut(self.current_fighter)
     }
@@ -378,11 +386,13 @@ impl<'a> Battle<'a> {
         &mut self,
         logger: &mut impl BattleLogger,
     ) -> Option<BattleSide> {
+        use AttackType::{Offhand, Swoop, Weapon};
         use BattleSide::{Left, Right};
         use Class::{
             Assassin, Bard, BattleMage, Berserker, DemonHunter, Druid, Mage,
             Necromancer, Scout, Warrior,
         };
+
         logger.log(BE::TurnUpdate(self));
 
         let Some(left) = self.left.current_mut() else {
@@ -426,12 +436,11 @@ impl<'a> Battle<'a> {
             Right => (right, left),
         };
 
-        use AttackType::{Offhand, Swoop, Weapon};
         let turn = self.round;
         let rng = &mut self.rng;
         match attacker.class {
             Warrior | Scout | Mage | DemonHunter => {
-                attack(attacker, defender, rng, Weapon, turn, logger)
+                attack(attacker, defender, rng, Weapon, turn, logger);
             }
             Assassin => {
                 attack(attacker, defender, rng, Weapon, turn, logger);
@@ -447,7 +456,9 @@ impl<'a> Battle<'a> {
             }
             BattleMage => {
                 if attacker.rounds_in_battle == 1 {
-                    if defender.class != Mage {
+                    if defender.class == Mage {
+                        logger.log(BE::CometRepelled(attacker, defender));
+                    } else {
                         let dmg = match defender.class {
                             Mage => 0,
                             Bard => attacker.max_hp / 10,
@@ -458,11 +469,9 @@ impl<'a> Battle<'a> {
                         logger.log(BE::CometAttack(attacker, defender));
                         // TODO: Can you dodge this?
                         do_damage(attacker, defender, dmg, rng, logger);
-                    } else {
-                        logger.log(BE::CometRepelled(attacker, defender));
                     }
                 }
-                attack(attacker, defender, rng, Weapon, turn, logger)
+                attack(attacker, defender, rng, Weapon, turn, logger);
             }
             Druid => {
                 // Check if we do a sweep attack
@@ -471,7 +480,8 @@ impl<'a> Battle<'a> {
                     ClassEffect::Druid { bear: true, .. }
                 ) {
                     let swoops = attacker.class_effect.druid_swoops();
-                    let swoop_chance = 0.15 + ((swoops as f32 * 5.0) / 100.0);
+                    let swoop_chance =
+                        0.15 + ((f32::from(swoops) * 5.0) / 100.0);
                     if defender.class != Class::Mage
                         && rng.f32() <= swoop_chance
                     {
@@ -668,7 +678,7 @@ fn attack(
     // TODO: Most of this can be reused, as long as the opponent does not
     // change. Should make sure this is correct first though
     let char_damage_modifier = 1.0
-        + (*attacker.attributes.get(attacker.class.main_attribute()) as f64)
+        + f64::from(*attacker.attributes.get(attacker.class.main_attribute()))
             / 10.0;
 
     let mut elemental_bonus = 1.0;
@@ -681,13 +691,13 @@ fn attack(
         }
     }
 
-    let armor = defender.equip.armor as f64 * defender.class.armor_factor();
+    let armor = f64::from(defender.equip.armor) * defender.class.armor_factor();
     let max_dr = defender.class.max_damage_reduction();
     // TODO: Is this how mage armor negate works?
-    let armor_damage_effect = if attacker.class != Class::Mage {
-        1.0 - (armor / attacker.level as f64).min(max_dr)
-    } else {
+    let armor_damage_effect = if attacker.class == Class::Mage {
         1.0
+    } else {
+        1.0 - (armor / f64::from(attacker.level)).min(max_dr)
     };
 
     // The damage bonus you get from some class specific gimmic
@@ -712,7 +722,7 @@ fn attack(
     };
 
     // TODO: Is this the correct formula
-    let rage_bonus = 1.0 * (turn.saturating_sub(1) as f64 / 6.0);
+    let rage_bonus = 1.0 * (f64::from(turn.saturating_sub(1)) / 6.0);
 
     let damage_bonus = char_damage_modifier
         * attacker.portal_dmg_bonus
@@ -729,7 +739,7 @@ fn attack(
     };
 
     let calc_damage =
-        |weapon_dmg| (weapon_dmg as f64 * damage_bonus).trunc() as i64;
+        |weapon_dmg| (f64::from(weapon_dmg) * damage_bonus).trunc() as i64;
 
     let min_base_damage = calc_damage(weapon.0);
     let max_base_damage = calc_damage(weapon.1);
@@ -739,7 +749,7 @@ fn attack(
     // Crits
 
     let luck_mod = attacker.attributes.get(AttributeType::Luck) * 5;
-    let raw_crit_chance = luck_mod as f64 / (defender.level as f64);
+    let raw_crit_chance = f64::from(luck_mod) / f64::from(defender.level);
     let mut crit_chance = raw_crit_chance.min(0.5);
     let mut crit_dmg_factor = 2.0;
 
@@ -907,9 +917,7 @@ impl UpgradeableFighter {
                 .flatten()
                 .find(|a| a.typ == k.into())
             {
-                let potion_bonus =
-                    (f64::from(*v) * potion.size.effect()) as u32;
-                *v += potion_bonus;
+                *v += (f64::from(*v) * potion.size.effect()) as u32;
             }
 
             let pet_bonus = (f64::from(*v) * (*pet_boni.get(k))).trunc() as u32;
@@ -919,10 +927,11 @@ impl UpgradeableFighter {
     }
 
     #[must_use]
+    #[allow(clippy::enum_glob_use)]
     pub fn hit_points(&self, attributes: &EnumMap<AttributeType, u32>) -> i64 {
         use Class::*;
 
-        let mut total = *attributes.get(AttributeType::Constitution) as i64;
+        let mut total = i64::from(*attributes.get(AttributeType::Constitution));
         total = (total as f64
             * match self.class {
                 Warrior if self.is_companion => 6.1,
@@ -980,6 +989,7 @@ pub struct Monster {
 }
 
 impl Monster {
+    #[must_use]
     pub const fn new(
         level: u16,
         class: Class,

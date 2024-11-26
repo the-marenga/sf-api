@@ -162,6 +162,8 @@ pub enum Class {
     Bard,
     Necromancer,
 }
+
+#[allow(clippy::enum_glob_use)]
 impl Class {
     #[must_use]
     #[allow(clippy::enum_glob_use)]
@@ -175,7 +177,7 @@ impl Class {
     }
 
     #[must_use]
-    pub(crate) fn weapon_multiplier(&self) -> f64 {
+    pub(crate) fn weapon_multiplier(self) -> f64 {
         use Class::*;
         match self {
             Warrior | Assassin | BattleMage | Berserker => 2.0,
@@ -185,7 +187,7 @@ impl Class {
     }
 
     #[must_use]
-    pub(crate) fn armor_factor(&self) -> f64 {
+    pub(crate) fn armor_factor(self) -> f64 {
         use Class::*;
         match self {
             Berserker => 0.5,
@@ -196,7 +198,7 @@ impl Class {
     }
 
     #[must_use]
-    pub(crate) fn max_damage_reduction(&self) -> f64 {
+    pub(crate) fn max_damage_reduction(self) -> f64 {
         use Class::*;
         match self {
             Bard | BattleMage | DemonHunter | Warrior => 0.5,
@@ -207,7 +209,7 @@ impl Class {
     }
 
     #[must_use]
-    pub(crate) fn damage_factor(&self, against: Class) -> f64 {
+    pub(crate) fn damage_factor(self, against: Class) -> f64 {
         use Class::*;
         match self {
             // TODO: Are these right, or should this be a * 1.XX somewhere else
@@ -258,7 +260,8 @@ pub enum Race {
 }
 
 impl Race {
-    pub fn stat_modifiers(&self) -> EnumMap<AttributeType, i32> {
+    #[must_use]
+    pub fn stat_modifiers(self) -> EnumMap<AttributeType, i32> {
         let raw = match self {
             Race::Human => [0, 0, 0, 0, 0],
             Race::Elf => [-1, 2, 0, -1, 0],

@@ -531,14 +531,13 @@ impl Default for ConnectionOptions {
     }
 }
 
-#[cfg(feature = "session")]
 #[derive(Debug)]
+#[allow(clippy::module_name_repetitions)]
 pub struct SimpleSession {
     session: Session,
     gamestate: Option<GameState>,
 }
 
-#[cfg(feature = "session")]
 impl SimpleSession {
     async fn short_sleep() {
         tokio::time::sleep(Duration::from_millis(fastrand::u64(1000..2000)))

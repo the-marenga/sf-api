@@ -19,6 +19,7 @@ pub const DEFAULT_CRYPTO_ID: &str = "0-00000000000000";
 pub const DEFAULT_SESSION_ID: &str = "00000000000000000000000000000000";
 pub const CRYPTO_IV: &str = "jXT#/vz]3]5X7Jl\\";
 
+#[must_use]
 pub fn sha1_hash(val: &str) -> String {
     use sha1::{Digest, Sha1};
     let mut hasher = Sha1::new();
@@ -88,12 +89,14 @@ pub(crate) fn warning_from_str<T: FromStr>(val: &str, name: &str) -> Option<T> {
 
 /// Converts a  s&f string from the server to their original unescaped
 /// representation
+#[must_use]
 pub fn from_sf_string(val: &str) -> String {
     pattern_replace::<true>(val)
 }
 
 /// Makes a user controlled string, like the character description safe to use
 /// in a request
+#[must_use]
 pub fn to_sf_string(val: &str) -> String {
     pattern_replace::<false>(val)
 }
@@ -200,6 +203,7 @@ pub fn decrypt_url(
     })
 }
 
+#[allow(clippy::missing_errors_doc)]
 pub fn decrypt_server_request(
     to_decrypt: &str,
     key: &str,
