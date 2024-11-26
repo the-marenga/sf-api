@@ -368,7 +368,7 @@ pub struct OtherPlayer {
     pub name: String,
     /// The level of the player
     pub level: u16,
-    /// The description this player has set for themselfes
+    /// The description this player has set for themselves
     pub description: String,
     /// If the player is in a guild, this will contain the name
     pub guild: Option<String>,
@@ -410,7 +410,7 @@ pub struct OtherPlayer {
     pub armor: u64,
     pub min_damage_base: u32,
     pub max_damage_base: u32,
-
+    pub soldier_advice: Option<u16>,
     pub fortress: Option<OtherFortress>,
 }
 

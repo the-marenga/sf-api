@@ -134,11 +134,11 @@ impl Shop {
 }
 
 impl GameState {
-    /// Constructs a new `GameState` from the provided response. The reponse has
+    /// Constructs a new `GameState` from the provided response. The response has
     /// to be the login response from a `Session`.
     ///
     /// # Errors
-    /// If the reponse contains any errors, or does not contain enough
+    /// If the response contains any errors, or does not contain enough
     /// information about the player to build a full `GameState`, this will
     /// return a `ParsingError`, or `TooShortResponse` depending on the
     /// exact error
@@ -199,8 +199,16 @@ impl GameState {
                 "login count" | "sessionid" | "cryptokey" | "cryptoid" => {
                     // Should already be handled when receiving the response
                 }
-                "preregister" | "languagecodelist" | "tracking"
-                | "skipvideo" | "webshopid" | "cidstring" | "mountexpired" => {
+                "preregister"
+                | "languagecodelist"
+                | "tracking"
+                | "skipvideo"
+                | "webshopid"
+                | "cidstring"
+                | "mountexpired"
+                | "tracking_netto"
+                | "tracking_coins"
+                | "tutorial_game_entry" => {
                     // Stuff that looks irrellevant
                 }
                 "ownplayername" => {
@@ -431,7 +439,10 @@ impl GameState {
                         )?;
                 }
                 "soldieradvice" => {
-                    // I think they removed this
+                    other_player
+                        .get_or_insert_with(Default::default)
+                        .soldier_advice =
+                        val.into::<u16>("other player soldier advice").ok();
                 }
                 "owngroupdescription" => self
                     .guild
@@ -558,6 +569,11 @@ impl GameState {
                 "Ranklistplayer" => {
                     self.hall_of_fames.players.clear();
                     for player in val.as_str().trim_matches(';').split(';') {
+                        // Stop parsing once we receive an empty player
+                        if player.ends_with(",,,0,0,0,") {
+                            break;
+                        }
+
                         match HallOfFamePlayer::parse(player) {
                             Ok(x) => {
                                 self.hall_of_fames.players.push(x);
@@ -845,7 +861,7 @@ impl GameState {
                         data.cstget(1, "event t end", server_time)?;
                 }
                 "scrapbook" => {
-                    self.character.scrapbok = ScrapBook::parse(val.as_str());
+                    self.character.scrapbook = ScrapBook::parse(val.as_str());
                 }
                 "dungeonfaces" | "shadowfaces" => {
                     // Gets returned after winning a dungeon fight. This looks a
@@ -946,6 +962,7 @@ impl GameState {
                             oop.pet_attribute_bonus_perc;
                         op.wall_combat_lvl = oop.wall_combat_lvl;
                         op.fortress_rank = oop.fortress_rank;
+                        op.soldier_advice = oop.soldier_advice;
                     }
                     other_player = Some(op);
                 }
@@ -1430,10 +1447,8 @@ impl GameState {
                 self.guild = None;
             }
         }
-        if let Some(t) = &self.fortress {
-            if t.upgrades == 0 {
-                self.fortress = None;
-            }
+        if self.fortress.is_some() && self.character.level < 25 {
+            self.fortress = None;
         }
         if let Some(t) = &self.underworld {
             if t.honor == 0 {

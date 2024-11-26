@@ -59,9 +59,9 @@ impl Portal {
 pub struct Dungeons {
     /// The next time you can fight in the dungeons for free
     pub next_free_fight: Option<DateTime<Local>>,
-    /// All the light dungeons. Noteably tower information is also in here
+    /// All the light dungeons. Notably tower information is also in here
     pub light: EnumMap<LightDungeon, DungeonProgress>,
-    /// All the shadow dungeons. Noteably twister & cont. loop of idols is also
+    /// All the shadow dungeons. Notably twister & cont. loop of idols is also
     /// in here
     pub shadow: EnumMap<ShadowDungeon, DungeonProgress>,
     pub portal: Option<Portal>,

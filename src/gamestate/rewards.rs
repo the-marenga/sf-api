@@ -8,7 +8,7 @@ use strum::EnumIter;
 
 use super::{
     character::Class, items::*, tavern::Location, unlockables::HabitatType,
-    ArrSkip, CCGet, CGet, Mount,
+    ArrSkip, CCGet, CGet, LightDungeon, Mount, ShopType,
 };
 use crate::{command::AttributeType, error::SFError};
 
@@ -17,7 +17,7 @@ use crate::{command::AttributeType, error::SFError};
 #[non_exhaustive]
 #[allow(missing_docs)]
 /// The type of a reward you can win by spinning the wheel. The wheel can be
-/// upgraded, so some rewards may not always eb available
+/// upgraded, so some rewards may not always be available
 pub enum WheelRewardType {
     Mushrooms,
     Stone,
@@ -52,7 +52,7 @@ impl WheelReward {
     ) -> Result<WheelReward, SFError> {
         let raw_typ = data.cget(0, "wheel reward typ")?;
         let mut amount = data.cget(1, "wheel reward amount")?;
-        // NOTE: I have only tested upgraded and infered not upgraded from that
+        // NOTE: I have only tested upgraded and inferred not upgraded from that
         let typ = match raw_typ {
             0 => WheelRewardType::Mushrooms,
             1 => {
@@ -221,7 +221,7 @@ pub struct Calendar {
     pub collected: usize,
     /// The things you can get from the calendar
     pub rewards: Vec<CalendarReward>,
-    /// The time at which the calendar door wll be unlocked. If this is in the
+    /// The time at which the calendar door will be unlocked. If this is in the
     /// past, that means it is available to open
     pub next_possible: Option<DateTime<Local>>,
 }
@@ -265,7 +265,7 @@ pub struct EventTasks {
 macro_rules! impl_tasks {
     ($t:ty) => {
         impl $t {
-            /// The amount of tasks you have collected
+            /// The amount of tasks you have completed
             #[must_use]
             pub fn completed(&self) -> usize {
                 self.tasks.iter().filter(|a| a.is_completed()).count()
@@ -294,6 +294,32 @@ macro_rules! impl_tasks {
                 self.tasks
                     .iter()
                     .find(|task| task.typ == task_type && !task.is_completed())
+            }
+
+            /// Returns all uncompleted tasks
+            #[must_use]
+            pub fn get_uncompleted(&self) -> Vec<&Task> {
+                self.tasks
+                    .iter()
+                    .filter(|task| !task.is_completed())
+                    .collect()
+            }
+
+            /// Checks if the chest at the given index can be opened
+            #[must_use]
+            pub fn can_open_chest(&self, index: usize) -> bool {
+                // Get the chest at the given index
+                let Some(chest) = self.rewards.get(index) else {
+                    return false;
+                };
+
+                // We can't open the chest twice
+                if chest.opened {
+                    return false;
+                }
+
+                // Check if we have enough points to open the given chest
+                self.earned_points() >= chest.required_points
             }
         }
     };
@@ -344,6 +370,8 @@ pub enum EventTaskTheme {
     EggHunt = 12,
     SummerCollectifun = 13,
     Walpurgis = 14,
+
+    Hellevator = 18,
     #[default]
     Unknown = 245,
 }
@@ -359,7 +387,7 @@ pub enum TaskType {
     BuyHourGlasses,
     BuyOfferFromArenaManager,
     ClaimSoulsFromExtractor,
-    ColectGoldFromPit,
+    CollectGoldFromPit,
     ConsumeThirstForAdventure,
     ConsumeThirstFromUnderworld,
     DefeatGambler,
@@ -425,13 +453,37 @@ pub enum TaskType {
     WinFightsNoEpicsLegendaries,
     WinFightsNoGear,
 
+    LeaseMount,
+    DefeatMonstersLightDungeon(LightDungeon),
+    BuyWeaponInWeaponsShop,
+    FightHigherRankedPlayer,
+    AddFriend,
+    ClaimNewCustomerPack,
+    JoinOrCreateGuild,
+    UpgradeAnyGuildSkill,
+    CityGuardHours,
+    DrinkPotion(PotionType),
+
+    BuyFromShop(ShopType),
+    FindFruitsOnExpedition,
+    BrewPotions,
+    CollectWood,
+    CollectStone,
+    CommandFortressBattle,
+    FightHellevator,
+    BuyHellevatorTreats,
+    DefeatHellevatorFloors,
+    EnterLegendaryDungeon,
+    OpenLegendaryDungeonCrateChests,
+    FeedPetType(HabitatType),
+    SpendCardsHellevator,
+
     Unknown,
 }
 
 impl TaskType {
     pub(crate) fn parse(num: i64) -> TaskType {
         match num {
-            ..=0 | 73 | 100.. => TaskType::Unknown,
             1 => TaskType::DrinkBeer,
             2 => TaskType::ConsumeThirstForAdventure,
             3 => TaskType::WinFightsInArena,
@@ -489,6 +541,7 @@ impl TaskType {
             70 => TaskType::SkipGameOfDiceWait,
             71 => TaskType::WinFightsInHoF,
             72 => TaskType::WinFightsBackToBack,
+            73 => TaskType::SpendCardsHellevator,
             74 => TaskType::GainSilverFromFightsInHoF,
             75 => TaskType::WinFightsNoChestplate,
             76 => TaskType::WinFightsNoGear,
@@ -496,7 +549,7 @@ impl TaskType {
             78 => TaskType::EarnMoneyCityGuard,
             79 => TaskType::EarnMoneyFromHoFFights,
             80 => TaskType::EarnMoneySellingItems,
-            81 => TaskType::ColectGoldFromPit,
+            81 => TaskType::CollectGoldFromPit,
             82 => TaskType::GainXpFromQuests,
             83 => TaskType::GainXpFromAcademy,
             84 => TaskType::GainXpFromArenaFights,
@@ -515,6 +568,42 @@ impl TaskType {
             97 => TaskType::GainSilver,
             98 => TaskType::GainXP,
             99 => TaskType::GainEpic,
+            100 => TaskType::BuyFromShop(ShopType::Magic),
+            101 => TaskType::BuyFromShop(ShopType::Weapon),
+            102 => TaskType::FindFruitsOnExpedition,
+            103 => TaskType::BrewPotions,
+            104 => TaskType::CollectWood,
+            105 => TaskType::CollectStone,
+            106 => TaskType::CommandFortressBattle,
+            107 => TaskType::FightHellevator,
+            108 => TaskType::BuyHellevatorTreats,
+            109 => TaskType::DefeatHellevatorFloors,
+            110 => TaskType::EnterLegendaryDungeon,
+            111 => TaskType::OpenLegendaryDungeonCrateChests,
+            112 => TaskType::FeedPetType(HabitatType::Shadow),
+            113 => TaskType::FeedPetType(HabitatType::Light),
+            114 => TaskType::FeedPetType(HabitatType::Earth),
+            115 => TaskType::FeedPetType(HabitatType::Fire),
+            116 => TaskType::FeedPetType(HabitatType::Water),
+            117 => {
+                TaskType::DefeatMonstersLightDungeon(LightDungeon::TrainingCamp)
+            }
+            118 => TaskType::ClaimNewCustomerPack,
+            119 => TaskType::JoinOrCreateGuild,
+            120 => TaskType::UpgradeAnyGuildSkill,
+            121 => TaskType::AddFriend,
+            122 => TaskType::DrinkPotion(PotionType::Constitution),
+            123 => TaskType::DrinkPotion(PotionType::Strength),
+            124 => TaskType::DrinkPotion(PotionType::Dexterity),
+            125 => TaskType::DrinkPotion(PotionType::Intelligence),
+            126 => TaskType::DrinkPotion(PotionType::EternalLife),
+            127 => TaskType::LeaseMount,
+            128 => TaskType::FightHigherRankedPlayer,
+            129 => TaskType::CityGuardHours,
+            130 => TaskType::BuyWeaponInWeaponsShop,
+            131 => TaskType::Upgrade(AttributeType::Constitution),
+
+            ..=0 | 132.. => TaskType::Unknown,
         }
     }
 }
@@ -556,6 +645,8 @@ impl Task {
 pub struct RewardChest {
     /// Whether or not this chest has been unlocked
     pub opened: bool,
+    /// The amount of points required to open this chest
+    pub required_points: u32,
     /// The things you will get for opening this chest
     pub rewards: Vec<Reward>,
 }
@@ -655,14 +746,18 @@ impl Reward {
 impl RewardChest {
     pub(crate) fn parse(data: &[i64]) -> Result<RewardChest, SFError> {
         let opened = data.cget(0, "rchest opened")? != 0;
-        // 1 => Chest position (obvious from position)
+        let required_points = data.ciget(1, "reward chest required points")?;
         let reward_count: usize = data.ciget(2, "reward chest count")?;
         let mut rewards = Vec::new();
         for pos in 0..reward_count {
             let data = data.skip(3 + pos * 2, "rchest rewards")?;
             rewards.push(Reward::parse(data)?);
         }
-        Ok(RewardChest { opened, rewards })
+        Ok(RewardChest {
+            opened,
+            required_points,
+            rewards,
+        })
     }
 }
 
@@ -687,7 +782,7 @@ pub enum Event {
     PieceworkParty,
     LuckyDay,
     CrazyMushroomHarvest,
-    HollidaySale,
+    HolidaySale,
 }
 
 pub(crate) fn parse_rewards(vals: &[i64]) -> [RewardChest; 3] {

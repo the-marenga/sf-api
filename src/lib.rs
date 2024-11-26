@@ -30,5 +30,5 @@ pub mod sso;
 /// This is the numerical id of a player on a server. Note that in rare edge
 /// cases this might be 0 (you are the first person to unlock the Dungeon. Who
 /// do you fight?), but you can almost always expect this to be > 0
-/// whereever found
+/// wherever found
 pub type PlayerId = u32;

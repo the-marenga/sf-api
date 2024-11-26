@@ -33,7 +33,7 @@ pub async fn main() {
                     // normally you could just do quests here
                     if !exp.is_event_ongoing() {
                         println!(
-                            "Expeditions are currrently not enabled, so we \
+                            "Expeditions are currently not enabled, so we \
                              can not do anything"
                         );
                         break;

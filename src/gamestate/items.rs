@@ -140,7 +140,7 @@ pub struct Equipment(pub EnumMap<EquipmentSlot, Option<Item>>);
 
 impl Equipment {
     #[must_use]
-    /// Checks if the character has an item with the enchantment equiped
+    /// Checks if the character has an item with the enchantment equipped
     pub fn has_enchantment(&self, enchantment: Enchantment) -> bool {
         let item = self.0.get(enchantment.equipment_slot());
         if let Some(item) = item {
@@ -185,7 +185,7 @@ pub struct Item {
     /// or the weapon types damages though, if you want to have a safe
     /// abstraction. This is only public in case I am missing a case here
     pub type_specific_val: u32,
-    /// The stats this item gives, when equiped
+    /// The stats this item gives, when equipped
     pub attributes: EnumMap<AttributeType, u32>,
     /// The gemslot of this item, if any. A gemslot can be filled or empty
     pub gem_slot: Option<GemSlot>,
@@ -419,7 +419,7 @@ pub struct Rune {
     /// The type of tune this is
     pub typ: RuneType,
     /// The "strength" of this rune. So a value like 50 here and a typ of
-    /// `FireResistance` would mean 50% fire resistence
+    /// `FireResistance` would mean 50% fire resistance
     pub value: u8,
 }
 
@@ -569,7 +569,7 @@ impl ItemType {
         )
     }
 
-    /// The equipment slot, that this item type can be equiped to
+    /// The equipment slot, that this item type can be equipped to
     #[must_use]
     pub fn equipment_slot(&self) -> Option<EquipmentSlot> {
         Some(match self {
@@ -732,7 +732,7 @@ impl ItemType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 /// The effect, that the potion is going to have
@@ -808,7 +808,7 @@ impl PotionSize {
 #[derive(Debug, Clone, PartialEq, Eq, Copy, FromPrimitive)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// Differenciates resource items
+/// Differentiates resource items
 pub enum ResourceType {
     Wood = 17,
     Stone,
@@ -870,7 +870,7 @@ impl GemType {
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Enum, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// Denotes the place, where an item is equiped
+/// Denotes the place, where an item is equipped
 pub enum EquipmentSlot {
     Hat = 1,
     BreastPlate,
@@ -907,7 +907,7 @@ impl EquipmentSlot {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// An item useable for pets
+/// An item usable for pets
 pub enum PetItem {
     Egg(HabitatType),
     SpecialEgg(HabitatType),

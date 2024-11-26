@@ -59,7 +59,7 @@ pub struct Character {
     /// The potions currently active
     pub active_potions: [Option<Potion>; 3],
 
-    /// The total armor of our character. Basically all equiped armor combined
+    /// The total armor of our character. Basically all equipped armor combined
     pub armor: u64,
 
     /// The min amount of damage the weapon claims it can do without any bonus
@@ -71,7 +71,7 @@ pub struct Character {
     pub attribute_basis: EnumMap<AttributeType, u32>,
     /// All bonus attributes from equipment/pets/potions
     pub attribute_additions: EnumMap<AttributeType, u32>,
-    /// The amount of times an atribute has been bought already.
+    /// The amount of times an attribute has been bought already.
     /// Important to calculate the price of the next attribute to buy
     pub attribute_times_bought: EnumMap<AttributeType, u32>,
 
@@ -87,7 +87,7 @@ pub struct Character {
     /// pieces
     pub mirror: Mirror,
     /// If the scrapbook has been unlocked, it can be found here
-    pub scrapbok: Option<ScrapBook>,
+    pub scrapbook: Option<ScrapBook>,
 
     /// A list of other characters, that the set some sort of special relation
     /// to. Either good, or bad

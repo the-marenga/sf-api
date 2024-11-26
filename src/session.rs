@@ -47,7 +47,7 @@ pub struct Session {
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The pasword of a character, hashed in the way, that the server expects
+/// The password of a character, hashed in the way, that the server expects
 pub struct PWHash(String);
 
 impl PWHash {
@@ -58,7 +58,7 @@ impl PWHash {
         Self(sha1_hash(&(password.to_string() + HASH_CONST)))
     }
     /// If you have access to the hash of the password directly, this method
-    /// lets you contruct a `PWHash` directly
+    /// lets you construct a `PWHash` directly
     #[must_use]
     pub fn from_hash(hash: String) -> Self {
         Self(hash)
@@ -138,7 +138,7 @@ impl Session {
 
     /// Checks if this session has ever been able to successfully login to the
     /// server to establish a session id. You should not need to check this, as
-    /// `login()` should return error on unsuccessfull logins, but if you want
+    /// `login()` should return error on unsuccessful logins, but if you want
     /// to make sure, you can make sure here
     #[must_use]
     pub fn has_session_id(&self) -> bool {
@@ -445,7 +445,7 @@ enum LoginData {
 }
 
 #[derive(Debug, Clone)]
-/// Stores all information necessary to talk to the server. Noteably, if you
+/// Stores all information necessary to talk to the server. Notably, if you
 /// clone this, instead of creating this multiple times for characters on a
 /// server, this will use the same `reqwest::Client`, which can have slight
 /// benefits to performance

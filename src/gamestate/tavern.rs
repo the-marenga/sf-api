@@ -36,7 +36,7 @@ pub struct Tavern {
     pub toilet: Option<Toilet>,
     /// The dice game you can play with the weird guy in the tavern
     pub dice_game: DiceGame,
-    /// Informations about everything related to expeditions
+    /// Information about everything related to expeditions
     pub expeditions: ExpeditionsEvent,
     /// Decides if you can on on expeditions, or quests, when this event is
     /// currently ongoing
@@ -47,7 +47,7 @@ pub struct Tavern {
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Informations about everything related to expeditions
+/// Information about everything related to expeditions
 pub struct ExpeditionsEvent {
     /// The time the expeditions mechanic was enabled at
     pub start: Option<DateTime<Local>>,
@@ -55,7 +55,7 @@ pub struct ExpeditionsEvent {
     pub end: Option<DateTime<Local>>,
     /// The expeditions available to do
     pub available: Vec<AvailableExpedition>,
-    /// The expedition the player is currenty doing. Accessable via the
+    /// The expedition the player is currently doing. Accessible via the
     /// `active()` method.
     pub(crate) active: Option<Expedition>,
 }
@@ -173,7 +173,7 @@ impl Tavern {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// One of the three possible quests in the tavern
 pub struct Quest {
-    /// The legth of this quest in sec (without item enchantment)
+    /// The length of this quest in sec (without item enchantment)
     pub base_length: u32,
     /// The silver reward for this quest (without item enchantment)
     pub base_silver: u32,
@@ -181,9 +181,9 @@ pub struct Quest {
     pub base_experience: u32,
     /// The item reward for this quest
     pub item: Option<Item>,
-    /// The place where this quest takes place. Usefull for the scrapbook
+    /// The place where this quest takes place. Useful for the scrapbook
     pub location_id: Location,
-    /// The enemy you fight in this quest. Usefull for the scrapbook
+    /// The enemy you fight in this quest. Useful for the scrapbook
     pub monster_id: u16,
 }
 
@@ -392,7 +392,7 @@ impl Expedition {
     }
 
     #[must_use]
-    /// Returns the current stage the player is doing. This is dependant on
+    /// Returns the current stage the player is doing. This is dependent on
     /// time, because the timers are lazily evaluated. That means it might
     /// flip from Waiting->Encounters/Finished between calls
     pub fn current_stage(&self) -> ExpeditionStage {
@@ -413,7 +413,7 @@ impl Expedition {
     }
 
     #[must_use]
-    /// Cheks, if the last timer of this expedition has run out
+    /// Checks, if the last timer of this expedition has run out
     pub fn is_finished(&self) -> bool {
         matches!(self.current_stage(), ExpeditionStage::Finished)
     }
@@ -430,7 +430,7 @@ pub enum ExpeditionStage {
     /// The different encounters, that you can choose between. Should be <= 3
     Encounters(Vec<ExpeditionEncounter>),
     /// We have to wait until the specified time to continue in the expedition.
-    /// When this is `< Local::now()`, you can can send teh update command to
+    /// When this is `< Local::now()`, you can can send the update command to
     /// update the expedition stage, which will make `current_stage()` yield
     /// the new encounters
     Waiting(DateTime<Local>),
@@ -485,32 +485,32 @@ pub enum ExpeditionThing {
     ToiletPaper = 11,
 
     Bait = 21,
-    /// New name: DragonTaming
+    /// New name: `DragonTaming`
     Dragon = 22,
 
     CampFire = 31,
     Phoenix = 32,
-    /// New name: ExtinguishedCampfire
+    /// New name: `ExtinguishedCampfire`
     BurntCampfire = 33,
 
     UnicornHorn = 41,
     Donkey = 42,
     Rainbow = 43,
-    /// New name: UnicornWhisperer
+    /// New name: `UnicornWhisperer`
     Unicorn = 44,
 
     CupCake = 51,
-    /// New name: SucklingPig
+    /// New name: `SucklingPig`
     Cake = 61,
 
     SmallHurdle = 71,
     BigHurdle = 72,
-    /// New name: PodiumClimber
+    /// New name: `PodiumClimber`
     WinnersPodium = 73,
 
     Socks = 81,
     ClothPile = 82,
-    /// New name: RevealingLady
+    /// New name: `RevealingLady`
     RevealingCouple = 83,
 
     SwordInStone = 91,
@@ -519,11 +519,11 @@ pub enum ExpeditionThing {
 
     Well = 101,
     Girl = 102,
-    /// New name: BewitchedStew
+    /// New name: `BewitchedStew`
     Balloons = 103,
 
     Prince = 111,
-    /// New name: ToxicFountainCure
+    /// New name: `ToxicFountainCure`
     RoyalFrog = 112,
 
     Hand = 121,

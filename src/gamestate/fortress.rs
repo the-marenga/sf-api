@@ -51,8 +51,8 @@ pub struct Fortress {
     pub upgrades: u16,
     /// The honor you have in the fortress Hall of Fame
     pub honor: u32,
-    /// The rank you have in the fortress Hall of Fame
-    pub rank: u32,
+    /// The rank you have in the fortress Hall of Fame if you have any
+    pub rank: Option<u32>,
 
     /// Information about searching for gems
     pub gem_search: FortressAction<GemType>,
@@ -128,11 +128,11 @@ pub struct FortressProduction {
     /// The maximum amount of this resource, that this building can store. If
     /// `building_collectable == building_limit` the production stops
     pub limit: u64,
-    /// The amount of this resource the coresponding production building
+    /// The amount of this resource the corresponding production building
     /// produces per hour
     pub per_hour: u64,
     /// The amount of this resource the building produces on the next level per
-    /// hour. If the resouce is Experience, this will be 0
+    /// hour. If the resource is Experience, this will be 0
     pub per_hour_next_lvl: u64,
 }
 
@@ -220,7 +220,7 @@ impl<T> Default for FortressAction<T> {
 #[derive(Debug, Clone, Copy, EnumCount, PartialEq, Eq, Enum, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The type of a unit useable in the fortress
+/// The type of a unit usable in the fortress
 pub enum FortressUnitType {
     Soldier = 0,
     Magician = 1,
@@ -328,14 +328,19 @@ impl Fortress {
 
         self.upgrades = data.csiget(581, "fortress lvl", 0)?;
         self.honor = data.csiget(582, "fortress honor", 0)?;
-        self.rank = data.csiget(583, "fortress rank", 0)?;
+        let fortress_rank: i64 = data.csiget(583, "fortress rank", 0)?;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        if fortress_rank > 0 {
+            self.rank = Some(fortress_rank as u32);
+        } else {
+            self.rank = None;
+        }
 
         self.gem_search.start =
-            data.cstget(595, "gem search start", server_time)?;
+            data.cstget(596, "gem search start", server_time)?;
         self.gem_search.finish =
-            data.cstget(596, "gem search end", server_time)?;
-        self.gem_search.target =
-            GemType::parse(data.cget(594, "gem target")?, 0);
+            data.cstget(595, "gem search end", server_time)?;
+        self.gem_search.target = GemType::parse(data.cget(594, "gem target")?, 0);
 
         self.attack_target = data.cwiget(587, "fortress enemy")?;
         self.attack_free_reroll =
