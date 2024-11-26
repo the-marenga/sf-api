@@ -99,14 +99,6 @@ pub struct Character {
     pub relations: Vec<RelationEntry>,
 }
 
-impl Character {
-    /// Checks if the character can use the specific item
-    #[must_use]
-    pub fn can_use(&self, item: &Item) -> bool {
-        item.can_class_use_this(self.class)
-    }
-}
-
 /// All the exclusively cosmetic info necessary to build a player image, that is
 /// otherwise useless. As these values might change their based on each other,
 /// some of them are not fully parsed (to a more descriptive enum)
