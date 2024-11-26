@@ -235,16 +235,16 @@ pub struct HellevatorShopTreat {
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorDailyReward {
-    gold_chests: u16,
-    silver: u64,
+    pub gold_chests: u16,
+    pub silver: u64,
 
-    fortress_chests: u16,
-    wood: u64,
-    stone: u64,
+    pub fortress_chests: u16,
+    pub wood: u64,
+    pub stone: u64,
 
-    blacksmith_chests: u16,
-    arcane: u64,
-    metal: u64,
+    pub blacksmith_chests: u16,
+    pub arcane: u64,
+    pub metal: u64,
 }
 
 impl HellevatorDailyReward {

@@ -1,7 +1,7 @@
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumArray, EnumMap};
-use num::FromPrimitive;
 use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
 use super::{

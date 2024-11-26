@@ -5,10 +5,9 @@ use num_derive::FromPrimitive;
 use strum::{EnumIter, IntoEnumIterator};
 
 use crate::{
-    error::SFError,
     gamestate::{
         character::*,
-        dungeons::{CompanionClass, Dungeon, LightDungeon, ShadowDungeon},
+        dungeons::{CompanionClass, Dungeon},
         fortress::*,
         guild::{Emblem, GuildSkill},
         idle::IdleBuildingType,
@@ -17,7 +16,6 @@ use crate::{
         underworld::*,
         unlockables::{HabitatType, HellevatorTreatType, Unlockable},
     },
-    misc::{sha1_hash, to_sf_string, HASH_CONST},
     PlayerId,
 };
 
@@ -817,8 +815,17 @@ impl Command {
     /// Returns the unencrypted string, that has to be send to the server to to
     /// perform the request
     #[allow(deprecated, clippy::useless_format)]
-    pub(crate) fn request_string(&self) -> Result<String, SFError> {
+    #[cfg(feature = "session")]
+    pub(crate) fn request_string(
+        &self,
+    ) -> Result<String, crate::error::SFError> {
         const APP_VERSION: &str = "2100000000000";
+        use crate::{
+            error::SFError,
+            gamestate::dungeons::{LightDungeon, ShadowDungeon},
+            misc::{sha1_hash, to_sf_string, HASH_CONST},
+        };
+
         Ok(match self {
             Command::Custom {
                 cmd_name,

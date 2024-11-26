@@ -1,8 +1,8 @@
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
 use log::{error, warn};
-use num::FromPrimitive;
 use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 use strum::EnumIter;
 
 use super::{
@@ -406,7 +406,7 @@ impl Enchantment {
         }
     }
 
-    pub(crate) fn enchant_id(self) -> u32 {
+    pub fn enchant_id(self) -> u32 {
         ((self as u32) / 10) * 10
     }
 }

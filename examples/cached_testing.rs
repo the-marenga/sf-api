@@ -17,7 +17,7 @@ pub async fn main() {
         .init();
 
     const SSO: bool = false;
-    const USE_CACHE: bool = false;
+    const USE_CACHE: bool = true;
 
     let custom_resp: Option<&str> = None;
     let command = None;
@@ -84,15 +84,16 @@ pub async fn main() {
             let mut monster = [monster];
             let mut battle = Battle::new(&mut player_squad, &mut monster);
             let mut winners: EnumMap<BattleSide, u32> = EnumMap::default();
-            let rounds: usize = 1000;
+            let rounds: usize = 100_000;
             let now = Instant::now();
             for _ in 0..rounds {
-                let winner = battle.simulate();
+                let winner = battle.simulate(&mut ());
                 *winners.get_mut(winner) += 1;
             }
             println!(
-                "won {:.2}% against {dungeon:?} lvl {} in {:?}",
+                "won {:.2}% against {dungeon:?} ({:?}) lvl {} in {:?}",
                 (*winners.get(BattleSide::Left) as f32 / rounds as f32) * 100.0,
+                monster[0].class,
                 monster[0].level,
                 now.elapsed()
             );
@@ -100,7 +101,6 @@ pub async fn main() {
 
         return;
     };
-
     let cache_name = format!(
         "cache/{username}-{}.response",
         serde_json::to_string(&command).unwrap()

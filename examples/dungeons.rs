@@ -4,8 +4,8 @@ use chrono::{DateTime, Local};
 use sf_api::{
     command::Command,
     gamestate::dungeons::{Dungeon, LightDungeon},
+    session::SimpleSession,
     simulate::Monster,
-    SimpleSession,
 };
 use strum::IntoEnumIterator;
 use tokio::time::sleep;
@@ -107,7 +107,7 @@ pub async fn login_with_env() -> SimpleSession {
     let username = std::env::var("USERNAME").unwrap();
     let password = std::env::var("PASSWORD").unwrap();
     let server = std::env::var("SERVER").unwrap();
-    sf_api::SimpleSession::login(&username, &password, &server)
+    SimpleSession::login(&username, &password, &server)
         .await
         .unwrap()
 }

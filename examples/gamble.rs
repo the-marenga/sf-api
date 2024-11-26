@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use sf_api::{
-    command::Command, gamestate::tavern::GambleResult, SimpleSession,
+    command::Command, gamestate::tavern::GambleResult, session::SimpleSession,
 };
 use tokio::time::sleep;
 
@@ -45,7 +45,7 @@ pub async fn login_with_env() -> SimpleSession {
     let username = std::env::var("USERNAME").unwrap();
     let password = std::env::var("PASSWORD").unwrap();
     let server = std::env::var("SERVER").unwrap();
-    sf_api::SimpleSession::login(&username, &password, &server)
+    SimpleSession::login(&username, &password, &server)
         .await
         .unwrap()
 }
