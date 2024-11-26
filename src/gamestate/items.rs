@@ -240,6 +240,75 @@ impl Item {
         }
     }
 
+    /// Checks if a companion of the given class can equip this item.
+    ///
+    /// Returns `true` if the item itself is equipment and this class has the
+    /// ability to wear it
+    #[must_use]
+    pub fn can_be_equipped_by_companion(
+        &self,
+        class: impl Into<Class>,
+    ) -> bool {
+        !self.typ.is_shield() && self.can_be_equipped_by(class.into())
+    }
+
+    /// Checks if a character of the given class can equip this item. Note that
+    /// this only checks the class, so this will make no sense if you use this
+    /// for anything that can not equip items at all (monsters, etc.). For
+    /// companions you should use `can_companion_equip`
+    ///
+    /// Returns `true` if the item itself is equipment and this class has the
+    /// ability to wear it
+    #[must_use]
+    pub fn can_be_equipped_by(&self, class: Class) -> bool {
+        self.typ.equipment_slot().is_some() && self.can_be_used_by(class)
+    }
+
+    /// Checks if a character of the given class can use this item. If you want
+    /// to check equipment, you should use `can_be_equipped_by`
+    ///
+    /// Returns `true` if the item does not have a class requirement, or if the
+    /// class requirement matches the given class.
+    #[must_use]
+    #[allow(clippy::enum_glob_use, clippy::match_same_arms)]
+    pub fn can_be_used_by(&self, class: Class) -> bool {
+        use Class::*;
+
+        // Without a class requirement any class can use this
+        let Some(class_requirement) = self.class else {
+            return true;
+        };
+
+        // Class requirements
+        // Warrior => Weapon: Meele,  Armor: Heavy
+        // Scout   => Weapon: Ranged, Armor: Medium
+        // Mage    => Weapon: Magic,  Armor: Light
+        match (class, class_requirement) {
+            // Weapon: Meele, Armor: Heavy
+            (Warrior, Warrior) => true,
+            (Berserker, Warrior) => !self.typ.is_shield(),
+            // Weapon: Ranged, Armor: Medium
+            (Scout, Scout) => true,
+            // Weapon: Magic, Armor: Light
+            (Mage | Necromancer, Mage) => true,
+            // Weapon: Meele, Armor: Medium
+            (Assassin, Warrior) => self.typ.is_weapon(),
+            (Assassin, Scout) => !self.typ.is_weapon(),
+            // Weapon: Magic, Armor: Medium
+            (Bard | Druid, Mage) => self.typ.is_weapon(),
+            (Bard | Druid, Scout) => !self.typ.is_weapon(),
+            // Weapon: Meele, Armor: Light
+            (BattleMage, Warrior) => self.typ.is_weapon(),
+            (BattleMage, Mage) => !self.typ.is_weapon(),
+            // Weapon: Ranged, Armor: Heavy
+            (DemonHunter, Scout) => self.typ.is_weapon(),
+            (DemonHunter, Warrior) => {
+                !self.typ.is_weapon() && !self.typ.is_shield()
+            }
+            _ => false,
+        }
+    }
+
     /// Parses an item, that starts at the start of the given data
     pub(crate) fn parse(
         data: &[i64],
@@ -528,6 +597,18 @@ pub enum ItemType {
 }
 
 impl ItemType {
+    /// Checks if this item type is a weapon.
+    #[must_use]
+    pub const fn is_weapon(self) -> bool {
+        matches!(self, ItemType::Weapon { .. })
+    }
+
+    /// Checks if this item type is a shield.
+    #[must_use]
+    pub const fn is_shield(self) -> bool {
+        matches!(self, ItemType::Shield { .. })
+    }
+
     /// Checks if this type can only be worn by only a particular class
     #[must_use]
     pub fn is_class_item(&self) -> bool {

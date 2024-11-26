@@ -5,7 +5,7 @@ use enum_map::EnumMap;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use super::{Mirror, RelationEntry, SFError, ScrapBook};
+use super::{CompanionClass, Mirror, RelationEntry, SFError, ScrapBook};
 use crate::{command::*, gamestate::items::*, misc::*, PlayerId};
 
 #[derive(Debug, Clone, Default)]
@@ -166,6 +166,16 @@ pub enum Class {
     Druid,
     Bard,
     Necromancer,
+}
+
+impl From<CompanionClass> for Class {
+    fn from(class: CompanionClass) -> Self {
+        match class {
+            CompanionClass::Warrior => Self::Warrior,
+            CompanionClass::Mage => Self::Mage,
+            CompanionClass::Scout => Self::Scout,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
