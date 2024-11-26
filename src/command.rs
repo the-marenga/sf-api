@@ -2,7 +2,7 @@
 use enum_map::Enum;
 use log::warn;
 use num_derive::FromPrimitive;
-use strum::{EnumIter, IntoEnumIterator};
+use strum::EnumIter;
 
 use crate::{
     error::SFError,
@@ -1422,121 +1422,101 @@ impl Command {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
-/// The flag of a country, that will be visible in the Hall of Fame
-pub enum Flag {
-    Australia,
-    Austria,
-    Belgium,
-    Brazil,
-    Bulgaria,
-    Canada,
-    Chile,
-    China,
-    Colombia,
-    Czechia,
-    Denmark,
-    Ecuador,
-    Finland,
-    France,
-    Germany,
-    GreatBritain,
-    Greece,
-    Honduras,
-    Hungary,
-    India,
-    Italy,
-    Japan,
-    Lithuania,
-    Mexico,
-    Netherlands,
-    Panama,
-    Paraguay,
-    Peru,
-    Philippines,
-    Poland,
-    Portugal,
-    Romania,
-    Russia,
-    SaudiArabia,
-    Slovakia,
-    SouthKorea,
-    Spain,
-    Sweden,
-    Switzerland,
-    Thailand,
-    Turkey,
-    Ukraine,
-    UnitedArabEmirates,
-    UnitedStates,
-    Vietnam,
-}
-impl Flag {
-    pub(crate) fn code(self) -> &'static str {
-        match self {
-            Flag::Australia => "au",
-            Flag::Austria => "at",
-            Flag::Belgium => "be",
-            Flag::Brazil => "br",
-            Flag::Bulgaria => "bg",
-            Flag::Canada => "ca",
-            Flag::Chile => "cl",
-            Flag::China => "cn",
-            Flag::Colombia => "co",
-            Flag::Czechia => "cz",
-            Flag::Denmark => "dk",
-            Flag::Ecuador => "ec",
-            Flag::Finland => "fi",
-            Flag::France => "fr",
-            Flag::Germany => "de",
-            Flag::GreatBritain => "gb",
-            Flag::Greece => "gr",
-            Flag::Honduras => "hn",
-            Flag::Hungary => "hu",
-            Flag::India => "in",
-            Flag::Italy => "it",
-            Flag::Japan => "jp",
-            Flag::Lithuania => "lt",
-            Flag::Mexico => "mx",
-            Flag::Netherlands => "nl",
-            Flag::Panama => "pa",
-            Flag::Paraguay => "py",
-            Flag::Peru => "pe",
-            Flag::Philippines => "ph",
-            Flag::Poland => "pl",
-            Flag::Portugal => "pt",
-            Flag::Romania => "ro",
-            Flag::Russia => "ru",
-            Flag::SaudiArabia => "sa",
-            Flag::Slovakia => "sk",
-            Flag::SouthKorea => "kr",
-            Flag::Spain => "es",
-            Flag::Sweden => "se",
-            Flag::Switzerland => "ch",
-            Flag::Thailand => "th",
-            Flag::Turkey => "tr",
-            Flag::Ukraine => "ua",
-            Flag::UnitedArabEmirates => "ae",
-            Flag::UnitedStates => "us",
-            Flag::Vietnam => "vn",
+macro_rules! generate_flag_enum {
+    ($($variant:ident => $code:expr),*) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        #[allow(missing_docs)]
+        /// The flag of a country, that will be visible in the Hall of Fame
+        pub enum Flag {
+            $(
+                $variant,
+            )*
         }
-    }
 
-    pub(crate) fn parse(val: &str) -> Option<Self> {
-        if val.is_empty() {
-            return None;
-        };
+        impl Flag {
+            pub(crate) fn code(self) -> &'static str {
+                match self {
+                    $(
+                        Flag::$variant => $code,
+                    )*
+                }
+            }
 
-        // This is not fast, but I am not willing to copy & invert the match
-        // from above
-        for v in Flag::iter() {
-            if v.code() == val {
-                return Some(v);
+            pub(crate) fn parse(value: &str) -> Option<Self> {
+                if value.is_empty() {
+                    return None;
+                }
+
+                // Mapping from string codes to enum variants
+                match value {
+                    $(
+                        $code => Some(Flag::$variant),
+                    )*
+
+                    _ => {
+                        warn!("Invalid flag value: {value}");
+                        None
+                    }
+                }
             }
         }
-        warn!("Invalid flag value: {val}");
-        None
-    }
+    };
+}
+
+// Use the macro to generate the Flag enum and its methods
+// Source: https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2#Officially_assigned_code_elements
+generate_flag_enum! {
+    Argentina => "ar",
+    Australia => "au",
+    Austria => "at",
+    Belgium => "be",
+    Bolivia => "bo",
+    Brazil => "br",
+    Bulgaria => "bg",
+    Canada => "ca",
+    Chile => "cl",
+    China => "cn",
+    Colombia => "co",
+    CostaRica => "cr",
+    Czechia => "cz",
+    Denmark => "dk",
+    DominicanRepublic => "do",
+    Ecuador => "ec",
+    ElSalvador =>"sv",
+    Finland => "fi",
+    France => "fr",
+    Germany => "de",
+    GreatBritain => "gb",
+    Greece => "gr",
+    Honduras => "hn",
+    Hungary => "hu",
+    India => "in",
+    Italy => "it",
+    Japan => "jp",
+    Lithuania => "lt",
+    Mexico => "mx",
+    Netherlands => "nl",
+    Panama => "pa",
+    Paraguay => "py",
+    Peru => "pe",
+    Philippines => "ph",
+    Poland => "pl",
+    Portugal => "pt",
+    Romania => "ro",
+    Russia => "ru",
+    SaudiArabia => "sa",
+    Slovakia => "sk",
+    SouthKorea => "kr",
+    Spain => "es",
+    Sweden => "se",
+    Switzerland => "ch",
+    Thailand => "th",
+    Turkey => "tr",
+    Ukraine => "ua",
+    UnitedArabEmirates => "ae",
+    UnitedStates => "us",
+    Uruguay => "uy",
+    Venezuela => "ve",
+    Vietnam => "vn"
 }
