@@ -340,7 +340,8 @@ impl Fortress {
             data.cstget(596, "gem search start", server_time)?;
         self.gem_search.finish =
             data.cstget(595, "gem search end", server_time)?;
-        self.gem_search.target = GemType::parse(data.cget(594, "gem target")?, 0);
+        self.gem_search.target =
+            GemType::parse(data.cget(594, "gem target")?, 0);
 
         self.attack_target = data.cwiget(587, "fortress enemy")?;
         self.attack_free_reroll =

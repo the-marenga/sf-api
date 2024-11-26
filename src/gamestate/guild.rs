@@ -157,37 +157,35 @@ impl Guild {
             .map(|c| c.trim().parse::<i64>().unwrap_or_default())
             .collect();
 
-        let member_count = data.csiget(3, "guild member count", 0)?;
+        let member_count = data.csiget(3, "member count", 0)?;
         self.member_count = member_count;
         self.members
             .resize_with(member_count as usize, Default::default);
 
         for (offset, member) in self.members.iter_mut().enumerate() {
             member.battles_joined =
-                data.cfpget(64 + offset, "member joined", |x| x / 1000)?;
-            member.level =
-                data.csiget(64 + offset % 1000, "guild member level", 0)?;
+                data.cfpget(445 + offset, "member fights joined", |x| x % 100)?;
+            member.level = data.csiget(64 + offset, "member level", 0)?;
             member.last_online =
-                data.cstget(114 + offset, "guild last online", server_time)?;
+                data.cstget(114 + offset, "member last online", server_time)?;
             member.treasure_skill =
-                data.csiget(214 + offset, "guild member treasure skill", 0)?;
+                data.csiget(214 + offset, "member treasure skill", 0)?;
             member.instructor_skill =
-                data.csiget(264 + offset, "guild member master skill", 0)?;
-            member.guild_rank =
-                match data.cget(314 + offset, "guild member rank")? {
-                    1 => GuildRank::Leader,
-                    2 => GuildRank::Officer,
-                    3 => GuildRank::Member,
-                    4 => GuildRank::Invited,
-                    x => {
-                        warn!("Unknown guild rank: {x}");
-                        GuildRank::Invited
-                    }
-                };
+                data.csiget(264 + offset, "member master skill", 0)?;
+            member.guild_rank = match data.cget(314 + offset, "member rank")? {
+                1 => GuildRank::Leader,
+                2 => GuildRank::Officer,
+                3 => GuildRank::Member,
+                4 => GuildRank::Invited,
+                x => {
+                    warn!("Unknown guild rank: {x}");
+                    GuildRank::Invited
+                }
+            };
             member.portal_fought =
-                data.cstget(164 + offset, "portal fought", server_time)?;
+                data.cstget(164 + offset, "member portal fought", server_time)?;
             member.guild_pet_lvl =
-                data.csiget(390 + offset, "guild member pet skill", 0)?;
+                data.csiget(390 + offset, "member pet skill", 0)?;
         }
 
         self.honor = data.csiget(13, "guild honor", 0)?;
@@ -368,13 +366,13 @@ pub struct GuildPortal {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Which battles a member will participate in
 pub enum BattlesJoined {
-    /// The player has only joined the offensive attack against another guild
-    Attack = 1,
     /// The player has only joined the defense of the guild
-    Defense,
+    Defense = 1,
+    /// The player has only joined the offensive attack against another guild
+    Attack = 10,
     /// The player has only joined both the offense and defensive battles of
     /// the guild
-    Both,
+    Both = 11,
 }
 
 #[derive(Debug, Clone, Default)]

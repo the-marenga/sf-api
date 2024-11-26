@@ -134,8 +134,8 @@ impl Shop {
 }
 
 impl GameState {
-    /// Constructs a new `GameState` from the provided response. The response has
-    /// to be the login response from a `Session`.
+    /// Constructs a new `GameState` from the provided response. The response
+    /// has to be the login response from a `Session`.
     ///
     /// # Errors
     /// If the response contains any errors, or does not contain enough

@@ -5,7 +5,7 @@ use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
 use super::{
-    items::Equipment, AttributeType, CCGet, Class, EnumMapGet, SFError,
+    items::Equipment, AttributeType, CCGet, Class, EnumMapGet, Item, SFError,
     ServerTime,
 };
 use crate::{
@@ -264,6 +264,20 @@ fn update_progress<T: FromPrimitive + EnumArray<DungeonProgress>>(
 }
 
 impl Dungeons {
+    /// Check if a specific companion can equip the given item
+    #[must_use]
+    pub fn can_companion_equip(
+        &self,
+        companion: CompanionClass,
+        item: &Item,
+    ) -> bool {
+        // When we have no companions they can also not equip anything
+        if self.companions.is_none() {
+            return false;
+        }
+        item.can_be_equipped_by_companion(companion)
+    }
+
     pub(crate) fn update_progress(
         &mut self,
         data: &[i64],
