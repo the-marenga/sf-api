@@ -12,24 +12,7 @@ use crate::{
 
 pub mod constants;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum BaseClass {
-    Warrior = 0,
-    Mage,
-    Scout,
-}
-
-#[allow(clippy::enum_glob_use)]
-impl From<Class> for BaseClass {
-    fn from(value: Class) -> Self {
-        use Class::*;
-        match value {
-            BattleMage | Berserker | Warrior => BaseClass::Warrior,
-            Assassin | DemonHunter | Scout => BaseClass::Scout,
-            Druid | Bard | Necromancer | Mage => BaseClass::Mage,
-        }
-    }
-}
+use BattleEvent as BE;
 
 #[derive(Debug, Clone)]
 pub struct UpgradeableFighter {
@@ -321,7 +304,10 @@ pub struct BattleTeam<'a> {
 }
 
 impl<'a> BattleTeam<'a> {
-    pub fn current(&mut self) -> Option<&mut BattleFighter> {
+    pub fn current(&self) -> Option<&BattleFighter> {
+        self.fighters.get(self.current_fighter)
+    }
+    pub fn current_mut(&mut self) -> Option<&mut BattleFighter> {
         self.fighters.get_mut(self.current_fighter)
     }
 
@@ -341,11 +327,11 @@ pub enum BattleSide {
 
 #[derive(Debug)]
 pub struct Battle<'a> {
-    round: u32,
-    started: Option<BattleSide>,
-    left: BattleTeam<'a>,
-    right: BattleTeam<'a>,
-    rng: Rng,
+    pub round: u32,
+    pub started: Option<BattleSide>,
+    pub left: BattleTeam<'a>,
+    pub right: BattleTeam<'a>,
+    pub rng: Rng,
 }
 
 impl<'a> Battle<'a> {
@@ -369,10 +355,10 @@ impl<'a> Battle<'a> {
     }
 
     /// Simulates a battle between the two sides. Returns the winning side.
-    pub fn simulate(&mut self) -> BattleSide {
+    pub fn simulate(&mut self, logger: &mut impl BattleLogger) -> BattleSide {
         self.reset();
         loop {
-            if let Some(winner) = self.simulate_turn() {
+            if let Some(winner) = self.simulate_turn(logger) {
                 return winner;
             }
         }
@@ -388,17 +374,23 @@ impl<'a> Battle<'a> {
     /// Simulates one turn (attack) in a battle. If one side is not able
     /// to fight anymore, or is for another reason invalid, the other side is
     /// returned as the winner
-    fn simulate_turn(&mut self) -> Option<BattleSide> {
+    pub fn simulate_turn(
+        &mut self,
+        logger: &mut impl BattleLogger,
+    ) -> Option<BattleSide> {
         use BattleSide::{Left, Right};
         use Class::{
             Assassin, Bard, BattleMage, Berserker, DemonHunter, Druid, Mage,
             Necromancer, Scout, Warrior,
         };
+        logger.log(BE::TurnUpdate(self));
 
-        let Some(left) = self.left.current() else {
+        let Some(left) = self.left.current_mut() else {
+            logger.log(BE::BattleEnd(self, Right));
             return Some(Right);
         };
-        let Some(right) = self.right.current() else {
+        let Some(right) = self.right.current_mut() else {
+            logger.log(BE::BattleEnd(self, Left));
             return Some(Left);
         };
 
@@ -439,33 +431,38 @@ impl<'a> Battle<'a> {
         let rng = &mut self.rng;
         match attacker.class {
             Warrior | Scout | Mage | DemonHunter => {
-                fighter_attack(attacker, defender, rng, Weapon, turn)
+                attack(attacker, defender, rng, Weapon, turn, logger)
             }
             Assassin => {
-                fighter_attack(attacker, defender, rng, Weapon, turn);
-                fighter_attack(attacker, defender, rng, Offhand, turn);
+                attack(attacker, defender, rng, Weapon, turn, logger);
+                attack(attacker, defender, rng, Offhand, turn, logger);
             }
             Berserker => {
                 for _ in 0..15 {
-                    fighter_attack(attacker, defender, rng, Weapon, turn);
-                    if rng.bool() {
+                    attack(attacker, defender, rng, Weapon, turn, logger);
+                    if defender.current_hp <= 0 || rng.bool() {
                         break;
                     }
                 }
             }
             BattleMage => {
-                if attacker.rounds_in_battle == 1 && defender.class != Mage {
-                    let dmg = match defender.class {
-                        Mage => 0,
-                        Bard => attacker.max_hp / 10,
-                        Scout | Assassin | Berserker | Necromancer
-                        | DemonHunter => attacker.max_hp / 5,
-                        Warrior | BattleMage | Druid => attacker.max_hp / 4,
-                    };
-                    // TODO: Can you dodge this?
-                    do_damage(defender, dmg, rng);
+                if attacker.rounds_in_battle == 1 {
+                    if defender.class != Mage {
+                        let dmg = match defender.class {
+                            Mage => 0,
+                            Bard => attacker.max_hp / 10,
+                            Scout | Assassin | Berserker | Necromancer
+                            | DemonHunter => attacker.max_hp / 5,
+                            Warrior | BattleMage | Druid => attacker.max_hp / 4,
+                        };
+                        logger.log(BE::CometAttack(attacker, defender));
+                        // TODO: Can you dodge this?
+                        do_damage(attacker, defender, dmg, rng, logger);
+                    } else {
+                        logger.log(BE::CometRepelled(attacker, defender));
+                    }
                 }
-                fighter_attack(attacker, defender, rng, Weapon, turn)
+                attack(attacker, defender, rng, Weapon, turn, logger)
             }
             Druid => {
                 // Check if we do a sweep attack
@@ -478,7 +475,7 @@ impl<'a> Battle<'a> {
                     if defender.class != Class::Mage
                         && rng.f32() <= swoop_chance
                     {
-                        fighter_attack(attacker, defender, rng, Swoop, turn);
+                        attack(attacker, defender, rng, Swoop, turn, logger);
                         attacker.class_effect = ClassEffect::Druid {
                             bear: false,
                             // max 7 to limit chance to 50%
@@ -487,7 +484,7 @@ impl<'a> Battle<'a> {
                     }
                 }
 
-                fighter_attack(attacker, defender, rng, Weapon, turn);
+                attack(attacker, defender, rng, Weapon, turn, logger);
                 // TODO: Does this reset here, or on the start of the next
                 // attack?
                 attacker.class_effect = ClassEffect::Druid {
@@ -505,9 +502,10 @@ impl<'a> Battle<'a> {
                         _ => (HarpQuality::Good, 4),
                     };
                     attacker.class_effect =
-                        ClassEffect::Bard { quality, remaining }
+                        ClassEffect::Bard { quality, remaining };
+                    logger.log(BE::BardPlay(attacker, defender, quality));
                 }
-                fighter_attack(attacker, defender, rng, Weapon, turn);
+                attack(attacker, defender, rng, Weapon, turn, logger);
                 if let ClassEffect::Bard { remaining, .. } =
                     &mut attacker.class_effect
                 {
@@ -529,65 +527,80 @@ impl<'a> Battle<'a> {
                         typ,
                         remaining: rem,
                     };
-                    if has_minion {
-                        fighter_attack(
-                            attacker,
-                            defender,
-                            rng,
-                            AttackType::Minion,
-                            turn,
-                        );
-                    }
+                    logger.log(BE::MinionSpawned(attacker, defender, typ));
+                    attack(
+                        attacker,
+                        defender,
+                        rng,
+                        AttackType::Minion,
+                        turn,
+                        logger,
+                    );
                 } else {
                     if has_minion {
-                        fighter_attack(
+                        attack(
                             attacker,
                             defender,
                             rng,
                             AttackType::Minion,
                             turn,
+                            logger,
                         );
                     }
-                    fighter_attack(attacker, defender, rng, Weapon, turn);
+                    attack(attacker, defender, rng, Weapon, turn, logger);
                 }
                 if let ClassEffect::Necromancer { remaining, typ } =
                     &mut attacker.class_effect
                 {
                     if *remaining > 0 {
+                        let mut has_revived = false;
                         if let Minion::Skeleton { revived } = typ {
                             if *revived < 2 && self.rng.bool() {
                                 *revived += 1;
-                                *remaining = 2;
+                                has_revived = true;
                             }
                         }
-                        *remaining -= 1;
+                        if has_revived {
+                            // TODO: this revives for one turn, right?
+                            *remaining = 1;
+                            logger.log(BE::MinionSkeletonRevived(
+                                attacker, defender,
+                            ));
+                        } else {
+                            *remaining -= 1;
+                        }
                     }
                 }
             }
         }
         if defender.current_hp <= 0 {
             match attacking_side {
-                Left => self.right.current_fighter += 1,
-                Right => self.left.current_fighter += 1,
+                Left => {
+                    self.right.current_fighter += 1;
+                    logger.log(BE::FighterDefeat(self, Right));
+                }
+                Right => {
+                    self.left.current_fighter += 1;
+                    logger.log(BE::FighterDefeat(self, Left));
+                }
             }
         }
         None
     }
 }
 
-// Does the specified amount of damage, whilst
-fn do_damage(to: &mut BattleFighter, damage: i64, rng: &mut Rng) {
-    // debug!(
-    //     "Doing {damage} damage to {:?} with {:.2}% hp ({})",
-    //     to.class,
-    //     (to.current_hp as f32 / to.max_hp as f32) * 100.0,
-    //     to.current_hp
-    // );
-    if to.current_hp <= 0 || damage == 0 {
-        // Skip pointless attacks
-        return;
-    }
+// Does the specified amount of damage to the target. The only special thing
+// this does is revive demon hunters
+fn do_damage(
+    from: &mut BattleFighter,
+    to: &mut BattleFighter,
+    damage: i64,
+    rng: &mut Rng,
+    logger: &mut impl BattleLogger,
+) {
     to.current_hp -= damage;
+    logger.log(BE::DamageReceived(from, to, damage));
+
     if to.current_hp > 0 {
         return;
     }
@@ -609,15 +622,23 @@ fn do_damage(to: &mut BattleFighter, damage: i64, rng: &mut Rng) {
     // The demon hunter revived
     to.current_hp = (hp_restore * to.max_hp as f64) as i64;
     *revived += 1;
+    logger.log(BE::DemonHunterRevived(from, to));
 }
 
-fn fighter_attack(
+fn attack(
     attacker: &mut BattleFighter,
     defender: &mut BattleFighter,
     rng: &mut Rng,
     typ: AttackType,
     turn: u32,
+    logger: &mut impl BattleLogger,
 ) {
+    if defender.current_hp <= 0 {
+        // Skip pointless attacks
+        return;
+    }
+
+    logger.log(BE::Attack(attacker, defender, typ));
     // Check dodges
     if attacker.class != Class::Mage {
         // TODO: Different dodge rates (druid 35%)
@@ -631,6 +652,7 @@ fn fighter_attack(
                     swoops: defender.class_effect.druid_swoops(),
                 };
             }
+            logger.log(BE::Dodged(attacker, defender));
             return;
         }
         if defender.class == Class::Warrior
@@ -638,6 +660,7 @@ fn fighter_attack(
             && defender.equip.offhand.0 as f32 / 100.0 > rng.f32()
         {
             // defender blocked
+            logger.log(BE::Blocked(attacker, defender));
             return;
         }
     }
@@ -738,10 +761,11 @@ fn fighter_attack(
         if attacker.equip.extra_crit_dmg {
             crit_dmg_factor += 0.05;
         };
+        logger.log(BE::Crit(attacker, defender));
         damage = (damage as f64 * crit_dmg_factor) as i64;
     }
 
-    do_damage(defender, damage, rng);
+    do_damage(attacker, defender, damage, rng, logger);
 }
 
 #[derive(Debug)]
@@ -830,12 +854,6 @@ impl PlayerFighterSquad {
     }
 }
 
-#[allow(
-    clippy::enum_glob_use,
-    clippy::cast_sign_loss,
-    clippy::cast_possible_truncation,
-    clippy::missing_panics_doc
-)]
 impl UpgradeableFighter {
     #[must_use]
     pub fn attributes(&self) -> EnumMap<AttributeType, u32> {
@@ -873,10 +891,9 @@ impl UpgradeableFighter {
             }
         }
 
-        let class_bonus: f64 = if self.class == Class::BattleMage {
-            0.1111
-        } else {
-            0.0
+        let class_bonus: f64 = match self.class {
+            Class::BattleMage => 0.1111,
+            _ => 0.0,
         };
 
         let pet_boni = self.pet_attribute_bonus_perc;
@@ -977,5 +994,33 @@ impl Monster {
             hp,
             xp,
         }
+    }
+}
+
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum BattleEvent<'a, 'b> {
+    TurnUpdate(&'a Battle<'b>),
+    BattleEnd(&'a Battle<'b>, BattleSide),
+    Attack(&'b BattleFighter, &'b BattleFighter, AttackType),
+    Dodged(&'b BattleFighter, &'b BattleFighter),
+    Blocked(&'b BattleFighter, &'b BattleFighter),
+    Crit(&'b BattleFighter, &'b BattleFighter),
+    DamageReceived(&'b BattleFighter, &'b BattleFighter, i64),
+    DemonHunterRevived(&'b BattleFighter, &'b BattleFighter),
+    CometRepelled(&'b BattleFighter, &'b BattleFighter),
+    CometAttack(&'b BattleFighter, &'b BattleFighter),
+    MinionSpawned(&'b BattleFighter, &'b BattleFighter, Minion),
+    MinionSkeletonRevived(&'b BattleFighter, &'b BattleFighter),
+    BardPlay(&'b BattleFighter, &'b BattleFighter, HarpQuality),
+    FighterDefeat(&'a Battle<'b>, BattleSide),
+}
+
+pub trait BattleLogger {
+    fn log(&mut self, event: BattleEvent<'_, '_>);
+}
+
+impl BattleLogger for () {
+    fn log(&mut self, _event: BattleEvent<'_, '_>) {
     }
 }
