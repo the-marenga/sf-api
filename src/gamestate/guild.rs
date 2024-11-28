@@ -39,7 +39,7 @@ pub struct Guild {
 
     /// The skill you yourself contribute to the guild
     pub own_instructor_skill: u16,
-    /// The price to pay to upgrade tyour instructor by one rank
+    /// The price to pay to upgrade your instructor by one rank
     pub own_instructor_upgrade: NormalCost,
 
     /// How many raids this guild has completed already
@@ -401,7 +401,7 @@ pub struct GuildMemberData {
     /// dynamic check if they have fought it today, because today changes
     pub portal_fought: Option<DateTime<Local>>,
     /// The potions this player has active. This will always be potion, no
-    /// other itemtype
+    /// other item type
     // TODO: make this explicit
     pub potions: [Option<ItemType>; 3],
     /// The level of this members hall of knights

@@ -51,7 +51,7 @@ If you use a single sign-on S&F Account, you can use it like this:
 
 ```
 
-The `SimpleSession` is not optimal for more complex usecases. For these, have a
+The `SimpleSession` is not optimal for more complex use cases. For these, have a
 look at `Session::new()` & `GameState::new()` to handle session and gamestate
 separately.
 
@@ -94,7 +94,7 @@ Here are a few things you should note before getting your account banned:
 
 Performance should not matter to you, as you are not supposed to run this
 library on a scale, where you have to think about this. Disregarding this fact,
-this library is build with high scalabillity and low resource usage in mind.
+this library is build with high scalability and low resource usage in mind.
 Parsing the login gamestate will take < 1ms on my machine with full updates
 after that taking < 100µs.
 
@@ -116,7 +116,7 @@ the `session` feature.
 
 This crate is not meant to be run in the browser (via WASM), at least not with
 the `session` feature enabled. If you actually need/want to use it that way,
-please open an issue and describe your usecase and I will see what I can do for
+please open an issue and describe your use case and I will see what I can do for
 you in terms of opening up the internals like request URLs and session auth for
 you to handle yourself.
 

@@ -23,7 +23,7 @@ use crate::{misc::*, PlayerId};
 pub struct Mail {
     /// All the fights, that the character has stored for some reason
     pub combat_log: Vec<CombatLogEntry>,
-    /// The amount of messages the  inbo xcan store
+    /// The amount of messages the  inbox can store
     pub inbox_capacity: u16,
     /// Messages and notifications
     pub inbox: Vec<InboxEntry>,

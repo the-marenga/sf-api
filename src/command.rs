@@ -56,7 +56,7 @@ pub enum Command {
     /// a safer abstraction
     #[deprecated = "Use a login method instead"]
     SSOLogin {
-        /// The Identifies the s&f account, that has this character
+        /// The Identifies the S&F account, that has this character
         uuid: String,
         /// Identifies the specific character an account has
         character_id: String,
@@ -503,7 +503,7 @@ pub enum Command {
     FortressAttack {
         soldiers: u32,
     },
-    /// Rerolls the enemy in the fortress
+    /// Re-rolls the enemy in the fortress
     FortressNewEnemy {
         use_mushroom: bool,
     },
@@ -513,7 +513,7 @@ pub enum Command {
     },
     /// Upgrades the Hall of Knights to the next level
     FortressUpgradeHallOfKnights,
-    /// Sends a wihsper message to another player
+    /// Sends a whisper message to another player
     Whisper {
         player_name: String,
         message: String,
@@ -545,8 +545,8 @@ pub enum Command {
     UnderworldAttack {
         player_id: PlayerId,
     },
-    /// Rolls the dice. The first round should be all rerolls, after that,
-    /// either reroll again, or take some of the dice on the table
+    /// Rolls the dice. The first round should be all re-rolls, after that,
+    /// either re-roll again, or take some of the dice on the table
     RollDice {
         payment: RollDicePrice,
         dices: [DiceType; 5],

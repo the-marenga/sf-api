@@ -23,7 +23,7 @@ pub enum SFError {
     /// is likely recoverable,  i.e you are able to reuse your session. You
     /// should just not resend the same command, as the server had some error
     /// with it. Most likely that you were not allowed to do your action (spend
-    /// money you dont have, etc.)
+    /// money you don't have, etc.)
     ServerError(String),
     /// The server version is newer, than the limit set in the server
     /// communication

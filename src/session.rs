@@ -621,7 +621,7 @@ impl SimpleSession {
     /// - `ParsingError`: If the response from the server was unexpected in some
     ///   way
     /// - `TooShortResponse` Similar to `ParsingError`, but specific to a
-    ///   response being too short, which would normaly trigger a out of bound
+    ///   response being too short, which would normally trigger a out of bound
     ///   panic
     /// - `ServerError`: If the server itself responded with an ingame error
     ///   like "you do not have enough silver to do that"

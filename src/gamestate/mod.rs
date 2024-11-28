@@ -1623,7 +1623,7 @@ impl GameState {
         //     data.cfpget(701, "bard instrument", |a| a)?;
 
         self.specials.calendar.collected =
-            data.csimget(648, "calendat collected", 245, |a| a >> 16)?;
+            data.csimget(648, "calendar collected", 245, |a| a >> 16)?;
         self.specials.calendar.next_possible =
             data.cstget(649, "calendar next", server_time)?;
         self.tavern.dice_game.next_free =

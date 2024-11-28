@@ -14,8 +14,8 @@ use crate::error::SFError;
 /// and references into it. This is faster & uses less memory, but because of
 /// rusts borrow checker requires some weird syntax here.
 // Technically we could do this safely with an iterator, that parses on demand,
-// but send_command() needs to access specifix response keys to keep the session
-// running, which means a hashmap needs to be constructed no matter what
+// but send_command() needs to access specific response keys to keep the session
+// running, which means a HashMap needs to be constructed no matter what
 pub struct Response {
     body: String,
     #[borrows(body)]
@@ -106,7 +106,7 @@ impl<'de> serde::Deserialize<'de> for Response {
                     .ok_or_else(|| serde::de::Error::missing_field("j"))?;
 
                 Response::parse(body, received_at).map_err(|_| {
-                    serde::de::Error::custom("invalid resopnse body")
+                    serde::de::Error::custom("invalid response body")
                 })
             }
         }
@@ -142,15 +142,15 @@ impl Response {
         self.with_received_at(|a| *a)
     }
 
-    /// Parses a response body from the server into a useable format
-    /// You might want to use this, if you are analyzing reponses from the
+    /// Parses a response body from the server into a usable format
+    /// You might want to use this, if you are analyzing responses from the
     /// browsers network tab. If you are trying to store/read responses to/from
     /// disk to cache them, or otherwise, you should use the sso feature to
     /// serialize/deserialize them instead
     ///
     /// # Errors
     /// - `ServerError`: If the server responsed with an error
-    /// - `ParsingError`: If the reponse does not follow the standard S&F server
+    /// - `ParsingError`: If the response does not follow the standard S&F server
     ///   response schema
     pub fn parse(
         og_body: String,
@@ -249,7 +249,7 @@ impl<'a> ResponseVal<'a> {
     /// Converts the response value into the required type
     ///
     /// # Errors
-    /// If the reponse value can not be parsed into the output
+    /// If the response value can not be parsed into the output
     /// value, a `ParsingError` will be returned
     pub fn into<T: FromStr>(self, name: &'static str) -> Result<T, SFError> {
         self.value.trim().parse().map_err(|_| {
