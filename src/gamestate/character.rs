@@ -161,6 +161,7 @@ pub enum Class {
     Druid,
     Bard,
     Necromancer,
+    Paladin,
 }
 
 #[allow(clippy::enum_glob_use)]
@@ -170,7 +171,9 @@ impl Class {
     pub fn main_attribute(&self) -> AttributeType {
         use Class::*;
         match self {
-            BattleMage | Berserker | Warrior => AttributeType::Strength,
+            Paladin | BattleMage | Berserker | Warrior => {
+                AttributeType::Strength
+            }
             Assassin | DemonHunter | Scout => AttributeType::Dexterity,
             Druid | Bard | Necromancer | Mage => AttributeType::Intelligence,
         }
@@ -180,7 +183,7 @@ impl Class {
     pub(crate) fn weapon_multiplier(self) -> f64 {
         use Class::*;
         match self {
-            Warrior | Assassin | BattleMage | Berserker => 2.0,
+            Paladin | Warrior | Assassin | BattleMage | Berserker => 2.0,
             Scout => 2.5,
             Mage | DemonHunter | Druid | Bard | Necromancer => 4.5,
         }
@@ -191,7 +194,8 @@ impl Class {
         use Class::*;
         match self {
             Berserker => 0.5,
-            Warrior | Mage | Scout | DemonHunter | Druid | Assassin => 1.0,
+            Paladin | Warrior | Mage | Scout | DemonHunter | Druid
+            | Assassin => 1.0,
             Bard | Necromancer => 2.0,
             BattleMage => 5.0,
         }
@@ -202,9 +206,18 @@ impl Class {
         use Class::*;
         match self {
             Bard | BattleMage | DemonHunter | Warrior => 0.5,
+            Paladin => 0.45,
             Druid | Assassin | Berserker | Scout => 0.25,
             Necromancer => 0.2,
             Mage => 0.1,
+        }
+    }
+
+    #[must_use]
+    pub fn can_wear_shield(self) -> bool {
+        match self {
+            Self::Paladin | Self::Warrior => true,
+            _ => false,
         }
     }
 
@@ -220,6 +233,7 @@ impl Class {
             Necromancer if against == Class::DemonHunter => 0.56 + 0.1,
             Necromancer => 0.56,
             Assassin => 0.625,
+            Paladin => 0.83,
             Warrior | Mage | Scout | BattleMage | DemonHunter => 1.0,
             Bard => 1.125,
             Berserker => 1.25,
