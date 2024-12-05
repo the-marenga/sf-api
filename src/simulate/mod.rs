@@ -309,7 +309,8 @@ pub struct BattleTeam<'a> {
     fighters: &'a mut [BattleFighter],
 }
 
-impl<'a> BattleTeam<'a> {
+#[allow(clippy::extra_unused_lifetimes)]
+impl<'a> BattleTeam<'_> {
     #[must_use]
     pub fn current(&self) -> Option<&BattleFighter> {
         self.fighters.get(self.current_fighter)
@@ -390,7 +391,7 @@ impl<'a> Battle<'a> {
         use BattleSide::{Left, Right};
         use Class::{
             Assassin, Bard, BattleMage, Berserker, DemonHunter, Druid, Mage,
-            Necromancer, Scout, Warrior,
+            Necromancer, Paladin, Scout, Warrior,
         };
 
         logger.log(BE::TurnUpdate(self));
@@ -439,6 +440,10 @@ impl<'a> Battle<'a> {
         let turn = self.round;
         let rng = &mut self.rng;
         match attacker.class {
+            Paladin => {
+                // TODO: Actually implement stances and stuff
+                attack(attacker, defender, rng, Weapon, turn, logger);
+            }
             Warrior | Scout | Mage | DemonHunter => {
                 attack(attacker, defender, rng, Weapon, turn, logger);
             }
@@ -465,7 +470,11 @@ impl<'a> Battle<'a> {
                             Scout | Assassin | Berserker | Necromancer
                             | DemonHunter => attacker.max_hp / 5,
                             Warrior | BattleMage | Druid => attacker.max_hp / 4,
+                            Paladin => (attacker.max_hp as f64 / (10.0 / 3.0))
+                                .trunc()
+                                as i64,
                         };
+                        let dmg = dmg.min(defender.max_hp / 3);
                         logger.log(BE::CometAttack(attacker, defender));
                         // TODO: Can you dodge this?
                         do_damage(attacker, defender, dmg, rng, logger);
@@ -935,6 +944,7 @@ impl UpgradeableFighter {
         total = (total as f64
             * match self.class {
                 Warrior if self.is_companion => 6.1,
+                Paladin => 6.0,
                 Warrior | BattleMage | Druid => 5.0,
                 Scout | Assassin | Berserker | DemonHunter | Necromancer => 4.0,
                 Mage | Bard => 2.0,
