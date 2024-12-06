@@ -592,11 +592,11 @@ pub struct PetStats {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HabitatType {
     #[default]
-    Water = 0,
+    Shadow = 0,
     Light = 1,
     Earth = 2,
-    Shadow = 3,
-    Fire = 4,
+    Fire = 3,
+    Water = 4,
 }
 
 impl From<HabitatType> for AttributeType {
