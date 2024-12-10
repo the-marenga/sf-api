@@ -731,7 +731,7 @@ fn attack(
     };
 
     // TODO: Is this the correct formula
-    let rage_bonus = 1.0 * (f64::from(turn.saturating_sub(1)) / 6.0);
+    let rage_bonus = 1.0 + (f64::from(turn.saturating_sub(1)) / 6.0);
 
     let damage_bonus = char_damage_modifier
         * attacker.portal_dmg_bonus
