@@ -394,8 +394,6 @@ impl<'a> Battle<'a> {
             Necromancer, Paladin, Scout, Warrior,
         };
 
-        logger.log(BE::TurnUpdate(self));
-
         let Some(left) = self.left.current_mut() else {
             logger.log(BE::BattleEnd(self, Right));
             return Some(Right);
@@ -431,6 +429,8 @@ impl<'a> Battle<'a> {
             self.started = Some(attacking_side);
             attacking_side
         };
+
+        logger.log(BE::TurnUpdate(attacking_side));
 
         let (attacker, defender) = match attacking_side {
             Left => (left, right),
@@ -1020,7 +1020,7 @@ impl Monster {
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum BattleEvent<'a, 'b> {
-    TurnUpdate(&'a Battle<'b>),
+    TurnUpdate(BattleSide),
     BattleEnd(&'a Battle<'b>, BattleSide),
     Attack(&'b BattleFighter, &'b BattleFighter, AttackType),
     Dodged(&'b BattleFighter, &'b BattleFighter),
