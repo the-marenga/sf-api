@@ -670,8 +670,10 @@ fn attack(
             };
             logger.log(BE::Dodged(attacker, defender));
         }
-        if defender.class == Class::Scout && rng.bool() {
-            
+        // Scout and assassin have 50% dodge chance
+        if (defender.class == Class::Scout || defender.class == Class::Assassin)
+            && rng.bool()
+        {
             logger.log(BE::Dodged(attacker, defender));
             return;
         }
