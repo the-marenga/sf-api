@@ -604,8 +604,9 @@ impl TaskType {
             129 => TaskType::CityGuardHours,
             130 => TaskType::BuyWeaponInWeaponsShop,
             131 => TaskType::Upgrade(AttributeType::Constitution),
+            132 => TaskType::WinFightsAgainst(Class::Paladin),
 
-            ..=0 | 132.. => TaskType::Unknown,
+            ..=0 | 133.. => TaskType::Unknown,
         }
     }
 }
