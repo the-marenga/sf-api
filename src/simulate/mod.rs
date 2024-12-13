@@ -660,17 +660,20 @@ fn attack(
     logger.log(BE::Attack(attacker, defender, typ));
     // Check dodges
     if attacker.class != Class::Mage {
-        // TODO: Different dodge rates (druid 35%)
-        if defender.class == Class::Scout && rng.bool() {
-            // defender dodged
-            if defender.class == Class::Druid {
-                // TODO: is this instant, or does this trigger on start of def.
-                // turn?
-                defender.class_effect = ClassEffect::Druid {
-                    bear: true,
-                    swoops: defender.class_effect.druid_swoops(),
-                };
-            }
+        // Druid has 35% dodge chance
+        if defender.class == Class::Druid && rng.f32() <= 0.35 {
+            // TODO: is this instant, or does this trigger on start of def.
+            // turn?
+            defender.class_effect = ClassEffect::Druid {
+                bear: true,
+                swoops: defender.class_effect.druid_swoops(),
+            };
+            logger.log(BE::Dodged(attacker, defender));
+        }
+        // Scout and assassin have 50% dodge chance
+        if (defender.class == Class::Scout || defender.class == Class::Assassin)
+            && rng.bool()
+        {
             logger.log(BE::Dodged(attacker, defender));
             return;
         }
