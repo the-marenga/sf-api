@@ -733,27 +733,32 @@ impl ItemType {
                     piece => ItemType::Shard { piece },
                 }
             }
-            12 if sub_ident > 16 => {
-                let Some(typ) = FromPrimitive::from_i64(sub_ident) else {
-                    return unknown_item("resource type");
-                };
-                ItemType::Resource {
-                    amount: data.csiget(7, "resource amount", 0)?,
-                    typ,
-                }
-            }
             12 => {
-                let Some(typ) = PotionType::parse(sub_ident) else {
-                    return unknown_item("potion type");
-                };
-                let Some(size) = PotionSize::parse(sub_ident) else {
-                    return unknown_item("potion size");
-                };
-                ItemType::Potion(Potion {
-                    typ,
-                    size,
-                    expires: data.cstget(4, "potion expires", server_time)?,
-                })
+                if sub_ident > 16 {
+                    let Some(typ) = FromPrimitive::from_i64(sub_ident) else {
+                        return unknown_item("resource type");
+                    };
+                    ItemType::Resource {
+                        amount: data.csiget(7, "resource amount", 0)?,
+                        typ,
+                    }
+                } else {
+                    let Some(typ) = PotionType::parse(sub_ident) else {
+                        return unknown_item("potion type");
+                    };
+                    let Some(size) = PotionSize::parse(sub_ident) else {
+                        return unknown_item("potion size");
+                    };
+                    ItemType::Potion(Potion {
+                        typ,
+                        size,
+                        expires: data.cstget(
+                            4,
+                            "potion expires",
+                            server_time,
+                        )?,
+                    })
+                }
             }
             13 => ItemType::Scrapbook,
             15 => {
