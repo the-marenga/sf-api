@@ -734,8 +734,10 @@ impl ItemType {
                 }
             }
             12 => {
-                if sub_ident > 16 {
-                    let Some(typ) = FromPrimitive::from_i64(sub_ident) else {
+                let id = sub_ident & 0xFF;
+
+                if id > 16 {
+                    let Some(typ) = FromPrimitive::from_i64(id) else {
                         return unknown_item("resource type");
                     };
                     ItemType::Resource {
@@ -743,10 +745,10 @@ impl ItemType {
                         typ,
                     }
                 } else {
-                    let Some(typ) = PotionType::parse(sub_ident) else {
+                    let Some(typ) = PotionType::parse(id) else {
                         return unknown_item("potion type");
                     };
-                    let Some(size) = PotionSize::parse(sub_ident) else {
+                    let Some(size) = PotionSize::parse(id) else {
                         return unknown_item("potion size");
                     };
                     ItemType::Potion(Potion {
