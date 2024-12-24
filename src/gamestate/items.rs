@@ -168,7 +168,7 @@ impl Equipment {
 /// Information about a single item. This can be anything, that is either in a
 /// inventory, in a reward slot, or similar
 pub struct Item {
-    /// The type of this  item. May contain further type specific values
+    /// The type of this item. May contain further type specific values
     pub typ: ItemType,
     /// Either the price to buy, or sell
     pub price: u32,

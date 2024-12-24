@@ -459,7 +459,7 @@ impl GameState {
                 "chattime" => {
                     // let _chat_time = server_time
                     //     .convert_to_local(val.into("chat time")?, "chat
-                    // time"); Pretty sure this is the time  something last
+                    // time"); Pretty sure this is the time something last
                     // happened in chat, but nobody cares and messages have a
                     // time
                 }

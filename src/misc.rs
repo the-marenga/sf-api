@@ -87,7 +87,7 @@ pub(crate) fn warning_from_str<T: FromStr>(val: &str, name: &str) -> Option<T> {
     })
 }
 
-/// Converts a  S&F string from the server to their original unescaped
+/// Converts a S&F string from the server to their original unescaped
 /// representation
 #[must_use]
 pub fn from_sf_string(val: &str) -> String {

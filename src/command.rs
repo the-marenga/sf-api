@@ -643,8 +643,8 @@ pub enum Command {
     },
     /// Changes the look of the item to the selected `raw_model_id` for 10
     /// mushrooms. Note that this is NOT the normal model id. it is the
-    /// `model_id  + (class as usize) * 1000` if I remember correctly. Pretty
-    /// sure nobody  will ever uses this though, as it is only for looks.
+    /// `model_id + (class as usize) * 1000` if I remember correctly. Pretty
+    /// sure nobody will ever uses this though, as it is only for looks.
     ChangeItemLook {
         inv: ItemPlace,
         pos: usize,

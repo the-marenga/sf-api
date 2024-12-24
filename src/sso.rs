@@ -117,7 +117,7 @@ impl SFAccount {
     }
 
     /// Initializes a `SFAccount` by logging the user in using the hashed
-    /// password and the provided options to use for  communication
+    /// password and the provided options to use for communication
     ///
     /// # Errors
     /// May return basically every possible `SFError` variant, because we are
@@ -414,7 +414,7 @@ impl ServerLookup {
     }
 
     /// Returns a set of all the servers, that are currently active, so no
-    /// merged, or not  yet available servers
+    /// merged, or not yet available servers
     #[must_use]
     pub fn all(&self) -> HashSet<Url> {
         self.0.iter().map(|a| a.1.clone()).collect()

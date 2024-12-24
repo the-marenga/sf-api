@@ -21,7 +21,7 @@ pub struct IdleGame {
     /// The time at which new items will be present in the shop
     pub merchant_new_goods: DateTime<Local>,
     /// I think this the total amount of money you have sacrificed, or the last
-    /// plus X, or something related  to that. I am not sure and I do not
+    /// plus X, or something related to that. I am not sure and I do not
     /// really care
     pub total_sacrificed: BigInt,
     // Slightly larger than current_money, but I have no Idea why.

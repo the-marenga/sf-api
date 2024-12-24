@@ -23,7 +23,7 @@ use crate::{misc::*, PlayerId};
 pub struct Mail {
     /// All the fights, that the character has stored for some reason
     pub combat_log: Vec<CombatLogEntry>,
-    /// The amount of messages the  inbox can store
+    /// The amount of messages the inbox can store
     pub inbox_capacity: u16,
     /// Messages and notifications
     pub inbox: Vec<InboxEntry>,
@@ -220,9 +220,9 @@ impl HallOfFameGuild {
         let rank = data.cfsuget(0, "hof guild rank")?;
         let name = data.cget(1, "hof guild name")?.to_string();
         let leader = data.cget(2, "hof guild leader")?.to_string();
-        let member = data.cfsuget(3, "hof guild  member")?;
+        let member = data.cfsuget(3, "hof guild member")?;
         let honor = data.cfsuget(4, "hof guild fame")?;
-        let attack_status: u8 = data.cfsuget(5, "hof guild  atk")?;
+        let attack_status: u8 = data.cfsuget(5, "hof guild atk")?;
 
         Ok(HallOfFameGuild {
             rank,

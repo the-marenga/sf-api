@@ -20,7 +20,7 @@ The most basic example on how to use this would be:
     let gs = session.game_state().unwrap();
     println!("Our current description is: {}", gs.character.description);
 
-    //  Lets do something like changing the description as an example
+    // Lets do something like changing the description as an example
     let new_description = "I love sushi!".to_string();
     let gs = session
         .send_command(Command::SetDescription {
