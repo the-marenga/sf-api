@@ -170,20 +170,20 @@ pub enum FortressBuildingType {
 impl FortressBuildingType {
     /// Minimal fortress level which is required to be allowed to build this
     /// building
+    #[must_use]
     pub fn required_min_fortress_level(&self) -> u16 {
         match self {
             FortressBuildingType::Fortress => 0,
-            FortressBuildingType::LaborersQuarters => 1,
-            FortressBuildingType::WoodcuttersHut => 1,
-            FortressBuildingType::Quarry => 1,
-            FortressBuildingType::GemMine => 3,
-            FortressBuildingType::Academy => 6,
-            FortressBuildingType::ArcheryGuild => 5,
-            FortressBuildingType::Barracks => 4,
-            FortressBuildingType::MagesTower => 7,
+            FortressBuildingType::LaborersQuarters
+            | FortressBuildingType::Quarry
+            | FortressBuildingType::Smithy
+            | FortressBuildingType::WoodcuttersHut => 1,
             FortressBuildingType::Treasury => 2,
-            FortressBuildingType::Smithy => 1,
-            FortressBuildingType::Wall => 4,
+            FortressBuildingType::GemMine => 3,
+            FortressBuildingType::Barracks | FortressBuildingType::Wall => 4,
+            FortressBuildingType::ArcheryGuild => 5,
+            FortressBuildingType::Academy => 6,
+            FortressBuildingType::MagesTower => 7,
         }
     }
 }
