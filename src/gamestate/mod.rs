@@ -19,13 +19,12 @@ use log::{error, warn};
 use num_traits::FromPrimitive;
 use strum::IntoEnumIterator;
 
-use self::underworld::Underworld;
 use crate::{
     command::*,
     error::*,
     gamestate::{
         arena::*, character::*, dungeons::*, fortress::*, guild::*, idle::*,
-        items::*, rewards::*, social::*, tavern::*, unlockables::*,
+        items::*, rewards::*, social::*, tavern::*, unlockables::*,underworld::*,
     },
     misc::*,
     response::Response,
@@ -1451,7 +1450,7 @@ impl GameState {
             self.fortress = None;
         }
         if let Some(t) = &self.underworld {
-            if t.honor == 0 {
+            if t.buildings[UnderworldBuildingType::HeartOfDarkness].level < 1 {
                 self.underworld = None;
             }
         }
