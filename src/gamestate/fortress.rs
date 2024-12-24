@@ -170,20 +170,20 @@ pub enum FortressBuildingType {
 impl FortressBuildingType {
     /// Minimal fortress level which is required to be allowed to build this
     /// building
+    #[must_use]
     pub fn required_min_fortress_level(&self) -> u16 {
         match self {
             FortressBuildingType::Fortress => 0,
-            FortressBuildingType::LaborersQuarters => 1,
-            FortressBuildingType::WoodcuttersHut => 1,
-            FortressBuildingType::Quarry => 1,
-            FortressBuildingType::GemMine => 3,
-            FortressBuildingType::Academy => 6,
-            FortressBuildingType::ArcheryGuild => 5,
-            FortressBuildingType::Barracks => 4,
-            FortressBuildingType::MagesTower => 7,
+            FortressBuildingType::LaborersQuarters
+            | FortressBuildingType::Quarry
+            | FortressBuildingType::Smithy
+            | FortressBuildingType::WoodcuttersHut => 1,
             FortressBuildingType::Treasury => 2,
-            FortressBuildingType::Smithy => 1,
-            FortressBuildingType::Wall => 4,
+            FortressBuildingType::GemMine => 3,
+            FortressBuildingType::Barracks | FortressBuildingType::Wall => 4,
+            FortressBuildingType::ArcheryGuild => 5,
+            FortressBuildingType::Academy => 6,
+            FortressBuildingType::MagesTower => 7,
         }
     }
 }
@@ -261,6 +261,55 @@ pub struct FortressBuilding {
 }
 
 impl Fortress {
+    /// Checks whether or not it is possible to build/upgrade a building
+    #[must_use]
+    pub fn can_build(
+        &self,
+        building_type: FortressBuildingType,
+        available_silver: u64,
+    ) -> bool {
+        let building_info = self.buildings.get(building_type);
+        let fortress_level =
+            self.buildings.get(FortressBuildingType::Fortress).level;
+        let smithy_required_buildings = [
+            FortressBuildingType::ArcheryGuild,
+            FortressBuildingType::Barracks,
+            FortressBuildingType::MagesTower,
+            FortressBuildingType::Wall,
+        ];
+        // Smithy can only be built if these buildings exist
+        let can_smithy_be_built = smithy_required_buildings
+            .map(|required_building| {
+                self.buildings.get(required_building).level
+            })
+            .iter()
+            .all(|level| *level > 0);
+
+        if matches!(building_type, FortressBuildingType::Smithy)
+            && !can_smithy_be_built
+        {
+            // Some buildings which are required to built Smithy do not exist
+            false
+        } else if !matches!(building_type, FortressBuildingType::Fortress)
+            && building_info.level == fortress_level
+        {
+            // It is not possible to upgrade a building to a higher level than
+            // the fortress level
+            false
+        } else {
+            let upgrade_cost = building_info.upgrade_cost;
+
+            // Check if required fortress level has been reached
+            building_type.required_min_fortress_level() <= fortress_level
+            // Check that no construction is in progress
+            && self.building_upgrade.target.is_none()
+            // Check if there are enough resources
+            && upgrade_cost.stone <= self.resources.get(FortressResourceType::Stone).current
+            && upgrade_cost.wood <= self.resources.get(FortressResourceType::Wood).current
+            && upgrade_cost.silver <= available_silver
+        }
+    }
+
     pub(crate) fn update(
         &mut self,
         data: &[i64],
