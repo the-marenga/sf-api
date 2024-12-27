@@ -20,7 +20,7 @@ use crate::{
 };
 
 #[non_exhaustive]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A command, that can be send to the sf server
 pub enum Command {
@@ -735,7 +735,7 @@ pub enum ExpeditionSetting {
     PreferQuests,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BlacksmithAction {
     Dismantle = 201,
@@ -746,7 +746,7 @@ pub enum BlacksmithAction {
     Upgrade = 204,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FortunePayment {
     LuckyCoins = 0,
@@ -754,7 +754,7 @@ pub enum FortunePayment {
     FreeTurn,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The price you have to pay to roll the dice
 pub enum RollDicePrice {

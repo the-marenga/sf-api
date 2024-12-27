@@ -160,7 +160,7 @@ impl Underworld {
     }
 }
 
-#[derive(Debug, Clone, Copy, strum::EnumCount, Enum)]
+#[derive(Debug, Clone, Copy, strum::EnumCount, Enum, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 /// The type of a produceable resource in the underworld
@@ -190,7 +190,14 @@ pub struct UnderworldProduction {
 }
 
 #[derive(
-    Debug, Clone, Copy, FromPrimitive, strum::EnumCount, Enum, EnumIter,
+    Debug,
+    Clone,
+    Copy,
+    FromPrimitive,
+    strum::EnumCount,
+    Enum,
+    EnumIter,
+    PartialEq,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
@@ -208,7 +215,7 @@ pub enum UnderworldBuildingType {
     Keeper = 9,
 }
 
-#[derive(Debug, Clone, Copy, strum::EnumCount, Enum, EnumIter)]
+#[derive(Debug, Clone, Copy, strum::EnumCount, Enum, EnumIter, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 /// The type of unit in the underworld
