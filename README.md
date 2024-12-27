@@ -108,7 +108,7 @@ just because the mushroom price of an item somewhere is negative
 
 This crate has support for `serde` to (de)serialize the character state and
 the S&F Account (`sso`) behind the respective feature flags. Note that `sso`
-depends on the serde crate internally to talk to the server via json.
+depends on the serde crate internally to talk to the server via JSON.
 
 If you do not care about, or can't use the built in server communication
 via. [reqwest](https://crates.io/crates/reqwest/), you can also disable
@@ -117,7 +117,7 @@ the `session` feature.
 This crate is not meant to be run in the browser (via WASM), at least not with
 the `session` feature enabled. If you actually need/want to use it that way,
 please open an issue and describe your usecase and I will see what I can do for
-you in terms of opening up the internals like request urls and session auth for
+you in terms of opening up the internals like request URLs and session auth for
 you to handle yourself.
 
 ## Misc.

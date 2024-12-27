@@ -328,7 +328,7 @@ async fn send_api_request(
 pub struct ServerLookup(HashMap<i32, Url>);
 
 impl ServerLookup {
-    /// Fetches the current mapping of numeric server ids to their urls.
+    /// Fetches the current mapping of numeric server ids to their URLs.
     ///
     /// # Errors
     /// Returns `ConnectionError`, if the server could not be reached, ro
@@ -337,7 +337,7 @@ impl ServerLookup {
         Self::fetch_with_client(&reqwest::Client::new()).await
     }
 
-    /// Fetches the current mapping of server ids to server urls.
+    /// Fetches the current mapping of server ids to server URLs.
     #[allow(clippy::items_after_statements)]
     async fn fetch_with_client(
         client: &Client,
@@ -402,7 +402,7 @@ impl ServerLookup {
         Ok(ServerLookup(servers))
     }
 
-    /// Gets the mapping of a server id to a url
+    /// Gets the mapping of a server id to a URL
     ///
     /// # Errors
     /// Reutns `InvalidRequest` if there was no server with this id
@@ -464,7 +464,7 @@ impl SSOAuth {
         send_api_request(&self.client, "", endpoint, method).await
     }
 
-    /// Returns the SSO auth url, that the user has to login through
+    /// Returns the SSO auth URL, that the user has to login through
     #[must_use]
     pub fn auth_url(&self) -> &Url {
         &self.auth_url

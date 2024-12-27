@@ -61,7 +61,7 @@ pub struct Guild {
     /// The thing each player can enter and fight once a day
     pub portal: GuildPortal,
 
-    // This should just be members.len(). I think this is only in the api
+    // This should just be members.len(). I think this is only in the API
     // because they are bad at varsize arrays or smth.
     member_count: u8,
     /// Information about the members of the guild. This includes the player

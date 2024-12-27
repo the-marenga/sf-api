@@ -129,7 +129,7 @@ impl Session {
         self.session_id = DEFAULT_SESSION_ID.to_string();
     }
 
-    /// Returns a reference to the server url, that this session is sending
+    /// Returns a reference to the server URL, that this session is sending
     /// requests to
     #[must_use]
     pub fn server_url(&self) -> &url::Url {
@@ -262,7 +262,7 @@ impl Session {
         );
         trace!("Full request url: {url}");
 
-        // Make sure we dont have any weird stuff in our url
+        // Make sure we dont have any weird stuff in our URL
         url::Url::parse(&url).map_err(|_| {
             SFError::InvalidRequest("Could not parse command url")
         })?;
@@ -430,7 +430,7 @@ enum LoginData {
         /// A reference to the Account, that owns this character. Used to have
         /// an easy way of renewing credentials.
         account: std::sync::Arc<tokio::sync::Mutex<crate::sso::SFAccount>>,
-        /// The sso account session. We "cache" this to A, not constanty do a
+        /// The SSO account session. We "cache" this to A, not constanty do a
         /// mutex lookup and B, because we have to know, if the accounts
         /// session has changed since we last used it. Otherwise we
         /// could have multiple characters all seeing an expired
@@ -456,7 +456,7 @@ pub struct ServerConnection {
 }
 
 impl ServerConnection {
-    /// Creates a new server instance. This basically just makes sure the url
+    /// Creates a new server instance. This basically just makes sure the URL
     /// is valid and otherwise tries to make it valid
     #[must_use]
     pub fn new(server_url: &str) -> Option<ServerConnection> {
@@ -467,7 +467,7 @@ impl ServerConnection {
     }
 
     /// Creates a new server instance with the options provided. This basically
-    /// just makes sure the url is valid and otherwise tries to make it
+    /// just makes sure the URL is valid and otherwise tries to make it
     /// valid
     #[must_use]
     pub fn new_with_options(
