@@ -1748,13 +1748,6 @@ impl ServerTime {
         Local::now().naive_local() + Duration::seconds(self.0)
     }
 
-    /// Checks whether or not `datetime` is in the future compared to the server
-    /// time
-    #[must_use]
-    pub fn is_in_future(&self, datetime: &DateTime<Local>) -> bool {
-        datetime.naive_local() > self.current()
-    }
-
     #[must_use]
     pub fn next_midnight(&self) -> std::time::Duration {
         let current = self.current();
