@@ -20,7 +20,7 @@ pub struct Arena {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A complete fight, which can be between mutltiple fighters for guild/tower
+/// A complete fight, which can be between multiple fighters for guild/tower
 /// fights
 pub struct Fight {
     /// The name of the attacking player for pet battles, or the name of the

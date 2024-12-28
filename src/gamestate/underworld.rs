@@ -163,7 +163,7 @@ impl Underworld {
 #[derive(Debug, Clone, Copy, strum::EnumCount, Enum, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The type of a produceable resource in the underworld
+/// The type of a producible resource in the underworld
 pub enum UnderWorldResourceType {
     Souls = 0,
     Silver = 1,

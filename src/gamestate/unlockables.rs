@@ -12,9 +12,9 @@ use crate::{gamestate::items::*, misc::*, PlayerId};
 /// Information about the Hellevator event on the server. If it is active, you
 /// can get more detailed info via `active()`
 pub struct HellevatorEvent {
-    /// The time the helevator event was enabled at
+    /// The time the hellevator event was enabled at
     pub start: Option<DateTime<Local>>,
-    /// The time the helevator event will be disabled at
+    /// The time the hellevator event will be disabled at
     pub end: Option<DateTime<Local>>,
     /// The time at which you will no longer be able to collect things for the
     /// hellevator
@@ -296,8 +296,8 @@ impl Hellevator {
         self.points = data.csiget(4, "h points", 0)?;
         self.start_contrib_date =
             data.cstget(5, "start contrib", server_time)?;
-        self.has_final_reward = data.cget(6, "helevator final")? == 1;
-        self.own_best_floor = data.csiget(7, "helevator best rank", 0)?;
+        self.has_final_reward = data.cget(6, "hellevator final")? == 1;
+        self.own_best_floor = data.csiget(7, "hellevator best rank", 0)?;
 
         for (pos, shop_item) in self.shop_items.iter_mut().enumerate() {
             let start = data.skip(8 + pos, "shop item start")?;

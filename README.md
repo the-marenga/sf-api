@@ -20,7 +20,7 @@ The most basic example on how to use this would be:
     let gs = session.game_state().unwrap();
     println!("Our current description is: {}", gs.character.description);
 
-    //  Lets do something like changing the description as an example
+    // Lets do something like changing the description as an example
     let new_description = "I love sushi!".to_string();
     let gs = session
         .send_command(Command::SetDescription {
@@ -51,7 +51,7 @@ If you use a single sign-on S&F Account, you can use it like this:
 
 ```
 
-The `SimpleSession` is not optimal for more complex usecases. For these, have a
+The `SimpleSession` is not optimal for more complex use cases. For these, have a
 look at `Session::new()` & `GameState::new()` to handle session and gamestate
 separately.
 
@@ -94,7 +94,7 @@ Here are a few things you should note before getting your account banned:
 
 Performance should not matter to you, as you are not supposed to run this
 library on a scale, where you have to think about this. Disregarding this fact,
-this library is build with high scalabillity and low resource usage in mind.
+this library is build with high scalability and low resource usage in mind.
 Parsing the login gamestate will take < 1ms on my machine with full updates
 after that taking < 100µs.
 
@@ -108,7 +108,7 @@ just because the mushroom price of an item somewhere is negative
 
 This crate has support for `serde` to (de)serialize the character state and
 the S&F Account (`sso`) behind the respective feature flags. Note that `sso`
-depends on the serde crate internally to talk to the server via json.
+depends on the serde crate internally to talk to the server via JSON.
 
 If you do not care about, or can't use the built in server communication
 via. [reqwest](https://crates.io/crates/reqwest/), you can also disable
@@ -116,8 +116,8 @@ the `session` feature.
 
 This crate is not meant to be run in the browser (via WASM), at least not with
 the `session` feature enabled. If you actually need/want to use it that way,
-please open an issue and describe your usecase and I will see what I can do for
-you in terms of opening up the internals like request urls and session auth for
+please open an issue and describe your use case and I will see what I can do for
+you in terms of opening up the internals like request URLs and session auth for
 you to handle yourself.
 
 ## Misc.

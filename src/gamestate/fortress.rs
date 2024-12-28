@@ -64,13 +64,13 @@ pub struct Fortress {
     pub hall_of_knights_upgrade_price: FortressCost,
 
     /// The next enemy you can choose to battle. This should always be Some,
-    /// but there is the edgecase of being the first player on a server to get
+    /// but there is the edge case of being the first player on a server to get
     /// a fortress, which I can not even test for, so I just assume this could
     /// be none then.
     pub attack_target: Option<PlayerId>,
     /// The time at which switching is free again
     pub attack_free_reroll: Option<DateTime<Local>>,
-    /// The price in silver rerolling costs
+    /// The price in silver re-rolling costs
     pub opponent_reroll_price: u64,
 }
 
@@ -117,7 +117,7 @@ pub struct FortressResource {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Information about the producion of a resource in the fortress.  Note that
+/// Information about the production of a resource in the fortress.  Note that
 /// experience will not have some of these fields
 pub struct FortressProduction {
     /// The amount the production building has already produced, that you can
@@ -218,7 +218,7 @@ pub struct FortressAction<T> {
     /// When this action was started. This can be months in the past, as this
     /// will often not be cleared by the server
     pub start: Option<DateTime<Local>>,
-    /// Wheen this action will be finished
+    /// When this action will be finished
     pub finish: Option<DateTime<Local>>,
     /// The amount of resources it costs to do this
     pub cost: FortressCost,

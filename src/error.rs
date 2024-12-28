@@ -8,7 +8,7 @@ use std::{error::Error, fmt::Display};
 pub enum SFError {
     /// Whatever you were trying to send was not possible to send. This is
     /// either our issue when you were doing something normal, or you were
-    /// sending invalid stuff, like a ssologin on a normal logged in character
+    /// sending invalid stuff, like a SSO login on a normal logged in character
     InvalidRequest(&'static str),
     /// The server replied with an empty response. This could have a range of
     /// reasons. Could be a bad request, not logged in, or something else
@@ -17,13 +17,13 @@ pub enum SFError {
     /// likely the server, or your connection is down
     ConnectionError,
     /// Whatever the server send back was invalid. Could be because of features
-    /// not yet supported, or a bug in the api
+    /// not yet supported, or a bug in the API
     ParsingError(&'static str, String),
     /// The server responded with an error. If you are already logged in, this
     /// is likely recoverable,  i.e you are able to reuse your session. You
     /// should just not resend the same command, as the server had some error
     /// with it. Most likely that you were not allowed to do your action (spend
-    /// money you dont have, etc.)
+    /// money you don't have, etc.)
     ServerError(String),
     /// The server version is newer, than the limit set in the server
     /// communication

@@ -631,7 +631,7 @@ impl Task {
         let typ = TaskType::parse(raw_typ);
 
         if typ == TaskType::Unknown {
-            warn!("Unknown  task: {data:?} {raw_typ}");
+            warn!("Unknown task: {data:?} {raw_typ}");
         }
         Ok(Task {
             typ,

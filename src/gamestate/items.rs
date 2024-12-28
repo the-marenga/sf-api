@@ -135,7 +135,7 @@ pub enum ItemPlace {
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// All the equipment a player is weraing
+/// All the equipment a player is wearing
 pub struct Equipment(pub EnumMap<EquipmentSlot, Option<Item>>);
 
 impl Equipment {
@@ -168,7 +168,7 @@ impl Equipment {
 /// Information about a single item. This can be anything, that is either in a
 /// inventory, in a reward slot, or similar
 pub struct Item {
-    /// The type of this  item. May contain further type specific values
+    /// The type of this item. May contain further type specific values
     pub typ: ItemType,
     /// Either the price to buy, or sell
     pub price: u32,
@@ -556,7 +556,7 @@ pub struct Potion {
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// Identifies a specifix item and contains all values related to the specific
+/// Identifies a specific item and contains all values related to the specific
 /// type. The only thing missing is armor, which can be found as a method on
 /// `Item`
 pub enum ItemType {
