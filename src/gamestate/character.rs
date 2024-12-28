@@ -5,7 +5,7 @@ use enum_map::EnumMap;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use super::{Mirror, RelationEntry, SFError, ScrapBook};
+use super::{Mirror, NormalCost, RelationEntry, SFError, ScrapBook};
 use crate::{command::*, gamestate::items::*, misc::*, PlayerId};
 
 #[derive(Debug, Clone, Default)]
@@ -298,4 +298,29 @@ pub enum Mount {
     Horse = 2,
     Tiger = 3,
     Dragon = 4,
+}
+
+impl Mount {
+    /// Returns the cost of this mount
+    #[must_use]
+    pub fn cost(&self) -> NormalCost {
+        match self {
+            Mount::Cow => NormalCost {
+                silver: 100,
+                mushrooms: 0,
+            },
+            Mount::Horse => NormalCost {
+                silver: 500,
+                mushrooms: 0,
+            },
+            Mount::Tiger => NormalCost {
+                silver: 1000,
+                mushrooms: 1,
+            },
+            Mount::Dragon => NormalCost {
+                silver: 0,
+                mushrooms: 25,
+            },
+        }
+    }
 }
