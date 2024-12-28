@@ -435,7 +435,7 @@ pub struct OtherFortress {
     pub fortress_archers_lvl: u16,
 }
 
-#[derive(Debug, Default, Clone, FromPrimitive, Copy)]
+#[derive(Debug, Default, Clone, FromPrimitive, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Relationship {
     #[default]

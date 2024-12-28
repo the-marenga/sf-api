@@ -93,7 +93,7 @@ pub struct GuildHydra {
     pub attributes: EnumMap<AttributeType, u32>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The customizable emblem each guild has
 pub struct Emblem {
@@ -420,7 +420,7 @@ pub enum GuildRank {
     Invited = 4,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Something the player can upgrade in the guild
 #[allow(missing_docs)]
