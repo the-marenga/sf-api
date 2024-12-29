@@ -220,10 +220,17 @@ impl GameState {
                     self.tavern.guard_wage = val.into("tavern wage")?;
                 }
                 "toilettfull" => {
-                    self.tavern
-                        .toilet
-                        .get_or_insert_with(Default::default)
-                        .used = val.into::<i32>("toilet full status")? != 0;
+                    let used = val.into::<i32>("toilet full status")? != 0;
+
+                    // This response is sent, even if the toilet is locked. A
+                    // default toilet should therefore only be inserted if the
+                    // toilet was actually used.
+                    if used {
+                        self.tavern
+                            .toilet
+                            .get_or_insert_with(Default::default)
+                            .used = used;
+                    }
                 }
                 "skipallow" => {
                     let raw_skip = val.into::<i32>("skip allow")?;
