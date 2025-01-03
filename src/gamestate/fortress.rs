@@ -278,7 +278,7 @@ impl Fortress {
             FortressBuildingType::Wall,
         ];
 
-        // Check if units are being trained in the building (soldiers in barracks, magicians in mages' tower, archers in archery guild)
+        // Check if units are being trained in the building (soldiers in barracks, magicians in mages' tower, archers in archery guild), or gem mining is in progress
         match building_type {
             FortressBuildingType::Barracks => {
                 if let Some(finish) = self.units.get(FortressUnitType::Soldier).training.finish {
@@ -296,6 +296,13 @@ impl Fortress {
             },
             FortressBuildingType::ArcheryGuild => {
                 if let Some(finish) = self.units.get(FortressUnitType::Archer).training.finish {
+                    if finish > Local::now() {
+                        return false;
+                    }
+                }
+            },
+            FortressBuildingType::GemMine => {
+                if let Some(finish) = self.gem_search.finish {
                     if finish > Local::now() {
                         return false;
                     }
