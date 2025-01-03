@@ -277,6 +277,33 @@ impl Fortress {
             FortressBuildingType::MagesTower,
             FortressBuildingType::Wall,
         ];
+
+        // Check if units are being trained in the building (soldiers in barracks, magicians in mages' tower, archers in archery guild)
+        match building_type {
+            FortressBuildingType::Barracks => {
+                if let Some(finish) = self.units.get(FortressUnitType::Soldier).training.finish {
+                    if finish > Local::now() {
+                        return false;
+                    }
+                }
+            },
+            FortressBuildingType::MagesTower => {
+                if let Some(finish) = self.units.get(FortressUnitType::Magician).training.finish {
+                    if finish > Local::now() {
+                        return false;
+                    }
+                }
+            },
+            FortressBuildingType::ArcheryGuild => {
+                if let Some(finish) = self.units.get(FortressUnitType::Archer).training.finish {
+                    if finish > Local::now() {
+                        return false;
+                    }
+                }
+            },
+            _ => {}
+        };
+        
         // Smithy can only be built if these buildings exist
         let can_smithy_be_built = smithy_required_buildings
             .map(|required_building| {
