@@ -186,6 +186,17 @@ impl FortressBuildingType {
             FortressBuildingType::MagesTower => 7,
         }
     }
+
+    /// Get the unit type associated with this building type
+    #[must_use]
+    pub fn unit_produced(self) -> Option<FortressUnitType> {
+        match self {
+            FortressBuildingType::Barracks => Some(FortressUnitType::Soldier),
+            FortressBuildingType::MagesTower => Some(FortressUnitType::Magician),
+            FortressBuildingType::ArcheryGuild => Some(FortressUnitType::Archer),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -261,12 +272,35 @@ pub struct FortressBuilding {
 }
 
 impl Fortress {
+    /// Check if units are being trained in the building (soldiers in barracks, magicians in mages' tower, archers in archery guild), or gem mining is in progress
+    #[must_use]
+    pub fn in_use(&self, building_type: FortressBuildingType) -> bool {
+        // Check if associated units are training
+        if let Some(unit_type) = building_type.unit_produced() {
+            if let Some(finish) = self.units.get(unit_type).training.finish {
+                if finish > Local::now() {
+                    return true;
+                }
+            }
+        }
+
+        // Check if gem mining is in progress
+        if building_type == FortressBuildingType::GemMine {
+            if let Some(finish) = self.gem_search.finish {
+                if finish > Local::now() {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
     /// Checks whether or not it is possible to build/upgrade a building
     #[must_use]
     pub fn can_build(
         &self,
         building_type: FortressBuildingType,
-        available_silver: u64,
+        available_silver: u64
     ) -> bool {
         let building_info = self.buildings.get(building_type);
         let fortress_level =
@@ -277,6 +311,12 @@ impl Fortress {
             FortressBuildingType::MagesTower,
             FortressBuildingType::Wall,
         ];
+
+        // Checks whether a building is in use, in such a way that it prevents upgrading (for example, if a unit is being trained, or gem mining is in progress)
+        if self.in_use(building_type) {
+            return false;
+        }
+        
         // Smithy can only be built if these buildings exist
         let can_smithy_be_built = smithy_required_buildings
             .map(|required_building| {
