@@ -186,6 +186,17 @@ impl FortressBuildingType {
             FortressBuildingType::MagesTower => 7,
         }
     }
+
+    /// Get the unit type associated with this building type
+    #[must_use]
+    pub fn unit_produced(self) -> Option<FortressUnitType> {
+        match self {
+            FortressBuildingType::Barracks => Some(FortressUnitType::Soldier),
+            FortressBuildingType::MagesTower => Some(FortressUnitType::Magician),
+            FortressBuildingType::ArcheryGuild => Some(FortressUnitType::Archer),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -261,22 +272,11 @@ pub struct FortressBuilding {
 }
 
 impl Fortress {
-    /// Get the unit type associated with a building type
-    #[must_use]
-    pub fn fortress_building_unit_mapping(building_type: FortressBuildingType) -> Option<FortressUnitType> {
-        match building_type {
-            FortressBuildingType::Barracks => Some(FortressUnitType::Soldier),
-            FortressBuildingType::MagesTower => Some(FortressUnitType::Magician),
-            FortressBuildingType::ArcheryGuild => Some(FortressUnitType::Archer),
-            _ => None,
-        }
-    }
-
     /// Check if units are being trained in the building (soldiers in barracks, magicians in mages' tower, archers in archery guild), or gem mining is in progress
     #[must_use]
     pub fn in_use(&self, building_type: FortressBuildingType) -> bool {
         // Check if associated units are training
-        if let Some(unit_type) = Self::fortress_building_unit_mapping(building_type) {
+        if let Some(unit_type) = building_type.unit_produced() {
             if let Some(finish) = self.units.get(unit_type).training.finish {
                 if finish > Local::now() {
                     return true;
@@ -292,7 +292,6 @@ impl Fortress {
                 }
             }
         }
-
         false
     }
 
@@ -301,8 +300,7 @@ impl Fortress {
     pub fn can_build(
         &self,
         building_type: FortressBuildingType,
-        available_silver: u64,
-        character_level: u16
+        available_silver: u64
     ) -> bool {
         let building_info = self.buildings.get(building_type);
         let fortress_level =
@@ -313,11 +311,6 @@ impl Fortress {
             FortressBuildingType::MagesTower,
             FortressBuildingType::Wall,
         ];
-
-        // Fortress unlocks at level 25
-        if character_level < 25 {
-            return false;
-        }
 
         // Checks whether a building is in use, in such a way that it prevents upgrading (for example, if a unit is being trained, or gem mining is in progress)
         if self.in_use(building_type) {
