@@ -261,12 +261,48 @@ pub struct FortressBuilding {
 }
 
 impl Fortress {
+    /// Get the unit type associated with a building type
+    #[must_use]
+    pub fn fortress_building_unit_mapping(building_type: FortressBuildingType) -> Option<FortressUnitType> {
+        match building_type {
+            FortressBuildingType::Barracks => Some(FortressUnitType::Soldier),
+            FortressBuildingType::MagesTower => Some(FortressUnitType::Magician),
+            FortressBuildingType::ArcheryGuild => Some(FortressUnitType::Archer),
+            _ => None,
+        }
+    }
+
+    /// Check if units are being trained in the building (soldiers in barracks, magicians in mages' tower, archers in archery guild), or gem mining is in progress
+    #[must_use]
+    pub fn in_use(&self, building_type: FortressBuildingType) -> bool {
+        // Check if associated units are training
+        if let Some(unit_type) = Self::fortress_building_unit_mapping(building_type) {
+            if let Some(finish) = self.units.get(unit_type).training.finish {
+                if finish > Local::now() {
+                    return true;
+                }
+            }
+        }
+
+        // Check if gem mining is in progress
+        if building_type == FortressBuildingType::GemMine {
+            if let Some(finish) = self.gem_search.finish {
+                if finish > Local::now() {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
     /// Checks whether or not it is possible to build/upgrade a building
     #[must_use]
     pub fn can_build(
         &self,
         building_type: FortressBuildingType,
         available_silver: u64,
+        character_level: u16
     ) -> bool {
         let building_info = self.buildings.get(building_type);
         let fortress_level =
@@ -278,38 +314,15 @@ impl Fortress {
             FortressBuildingType::Wall,
         ];
 
-        // Check if units are being trained in the building (soldiers in barracks, magicians in mages' tower, archers in archery guild), or gem mining is in progress
-        match building_type {
-            FortressBuildingType::Barracks => {
-                if let Some(finish) = self.units.get(FortressUnitType::Soldier).training.finish {
-                    if finish > Local::now() {
-                        return false;
-                    }
-                }
-            },
-            FortressBuildingType::MagesTower => {
-                if let Some(finish) = self.units.get(FortressUnitType::Magician).training.finish {
-                    if finish > Local::now() {
-                        return false;
-                    }
-                }
-            },
-            FortressBuildingType::ArcheryGuild => {
-                if let Some(finish) = self.units.get(FortressUnitType::Archer).training.finish {
-                    if finish > Local::now() {
-                        return false;
-                    }
-                }
-            },
-            FortressBuildingType::GemMine => {
-                if let Some(finish) = self.gem_search.finish {
-                    if finish > Local::now() {
-                        return false;
-                    }
-                }
-            },
-            _ => {}
-        };
+        // Fortress unlocks at level 25
+        if character_level < 25 {
+            return false;
+        }
+
+        // Checks whether a building is in use, in such a way that it prevents upgrading (for example, if a unit is being trained, or gem mining is in progress)
+        if self.in_use(building_type) {
+            return false;
+        }
         
         // Smithy can only be built if these buildings exist
         let can_smithy_be_built = smithy_required_buildings
