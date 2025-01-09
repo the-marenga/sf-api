@@ -477,10 +477,10 @@ impl Fortress {
         for (i, typ) in FortressUnitType::iter().enumerate() {
             self.units.get_mut(typ).upgrade_next_lvl =
                 data.csiget(i * 3, "unit next lvl", 0)?;
-            self.units.get_mut(typ).upgrade_cost.stone =
-                data.csiget(1 + i * 3, "stone price next unit lvl", 0)?;
             self.units.get_mut(typ).upgrade_cost.wood =
-                data.csiget(2 + i * 3, "wood price next unit lvl", 0)?;
+                data.csiget(1 + i * 3, "wood price next unit lvl", 0)?;
+            self.units.get_mut(typ).upgrade_cost.stone =
+                data.csiget(2 + i * 3, "stone price next unit lvl", 0)?;
         }
         Ok(())
     }
