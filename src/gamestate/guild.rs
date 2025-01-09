@@ -51,6 +51,8 @@ pub struct Guild {
     /// If the guild is attacking another guild, this will contain
     /// information about the upcoming battle
     pub attacking: Option<PlanedBattle>,
+    /// The next time the guild can attack another guild.
+    pub next_attack_possible: Option<DateTime<Local>>,
 
     /// The id of the pet, that is currently selected as the guild pet
     pub pet_id: u32,
@@ -202,6 +204,9 @@ impl Guild {
             data.skip(366, "attacking guild")?,
             server_time,
         )?;
+
+        self.next_attack_possible =
+            data.cstget(365, "guild next attack time", server_time)?;
 
         self.pet_id = data.csiget(377, "gpet id", 0)?;
         self.pet_max_lvl = data.csiget(378, "gpet max lvl", 0)?;
