@@ -245,7 +245,7 @@ pub struct ResponseVal<'a> {
     sub_key: &'a str,
 }
 
-impl<'a> ResponseVal<'a> {
+impl ResponseVal<'_> {
     /// Converts the response value into the required type
     ///
     /// # Errors
@@ -306,7 +306,7 @@ impl<'a> ResponseVal<'a> {
     }
 }
 
-impl<'a> std::fmt::Display for ResponseVal<'a> {
+impl std::fmt::Display for ResponseVal<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.value)
     }
