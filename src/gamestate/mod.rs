@@ -1438,11 +1438,12 @@ impl GameState {
         if let Some(other_player) = other_player {
             self.lookup.insert_lookup(other_player);
         }
-        if let Some(t) = &self.dungeons.portal {
-            if t.finished == 0 {
-                self.dungeons.portal = None;
-            }
+
+        // Dungeon portal is unlocked with level 99
+        if self.dungeons.portal.is_some() && self.character.level < 99 {
+            self.dungeons.portal = None;
         }
+
         if let Some(pets) = &self.pets {
             if pets.rank == 0 {
                 self.pets = None;
