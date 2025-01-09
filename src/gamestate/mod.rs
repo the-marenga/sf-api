@@ -1461,6 +1461,12 @@ impl GameState {
                 self.underworld = None;
             }
         }
+
+        // Witch is automatically unlocked with level 66
+        if self.witch.is_some() && self.character.level < 66 {
+            self.witch = None;
+        }
+
         Ok(())
     }
 
