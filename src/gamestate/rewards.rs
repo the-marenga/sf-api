@@ -8,7 +8,7 @@ use strum::EnumIter;
 
 use super::{
     character::Class, items::*, tavern::Location, unlockables::HabitatType,
-    ArrSkip, CCGet, CGet, LightDungeon, Mount, ShopType,
+    ArrSkip, CCGet, CGet, IdleBuildingType, LightDungeon, Mount, ShopType,
 };
 use crate::{command::AttributeType, error::SFError};
 
@@ -479,6 +479,8 @@ pub enum TaskType {
     OpenLegendaryDungeonCrateChests,
     FeedPetType(HabitatType),
     SpendCardsHellevator,
+    OpenAdventCalendar,
+    UpgradeArenaManagerBuilding(IdleBuildingType),
 
     Unknown,
 }
@@ -605,8 +607,12 @@ impl TaskType {
             130 => TaskType::BuyWeaponInWeaponsShop,
             131 => TaskType::Upgrade(AttributeType::Constitution),
             132 => TaskType::WinFightsAgainst(Class::Paladin),
+            133 => {
+                TaskType::UpgradeArenaManagerBuilding(IdleBuildingType::Seat)
+            }
+            134 => TaskType::OpenAdventCalendar,
 
-            ..=0 | 133.. => TaskType::Unknown,
+            ..=0 | 135.. => TaskType::Unknown,
         }
     }
 }
