@@ -192,8 +192,12 @@ impl FortressBuildingType {
     pub fn unit_produced(self) -> Option<FortressUnitType> {
         match self {
             FortressBuildingType::Barracks => Some(FortressUnitType::Soldier),
-            FortressBuildingType::MagesTower => Some(FortressUnitType::Magician),
-            FortressBuildingType::ArcheryGuild => Some(FortressUnitType::Archer),
+            FortressBuildingType::MagesTower => {
+                Some(FortressUnitType::Magician)
+            }
+            FortressBuildingType::ArcheryGuild => {
+                Some(FortressUnitType::Archer)
+            }
             _ => None,
         }
     }
@@ -272,7 +276,9 @@ pub struct FortressBuilding {
 }
 
 impl Fortress {
-    /// Check if units are being trained in the building (soldiers in barracks, magicians in mages' tower, archers in archery guild), or gem mining is in progress
+    /// Check if units are being trained in the building (soldiers in barracks,
+    /// magicians in mages' tower, archers in archery guild), or gem mining is
+    /// in progress
     #[must_use]
     pub fn in_use(&self, building_type: FortressBuildingType) -> bool {
         // Check if associated units are training
@@ -300,7 +306,7 @@ impl Fortress {
     pub fn can_build(
         &self,
         building_type: FortressBuildingType,
-        available_silver: u64
+        available_silver: u64,
     ) -> bool {
         let building_info = self.buildings.get(building_type);
         let fortress_level =
@@ -312,11 +318,13 @@ impl Fortress {
             FortressBuildingType::Wall,
         ];
 
-        // Checks whether a building is in use, in such a way that it prevents upgrading (for example, if a unit is being trained, or gem mining is in progress)
+        // Checks whether a building is in use, in such a way that it prevents
+        // upgrading (for example, if a unit is being trained, or gem mining is
+        // in progress)
         if self.in_use(building_type) {
             return false;
         }
-        
+
         // Smithy can only be built if these buildings exist
         let can_smithy_be_built = smithy_required_buildings
             .map(|required_building| {

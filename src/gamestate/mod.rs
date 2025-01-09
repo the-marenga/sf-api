@@ -24,7 +24,8 @@ use crate::{
     error::*,
     gamestate::{
         arena::*, character::*, dungeons::*, fortress::*, guild::*, idle::*,
-        items::*, rewards::*, social::*, tavern::*, unlockables::*,underworld::*,
+        items::*, rewards::*, social::*, tavern::*, underworld::*,
+        unlockables::*,
     },
     misc::*,
     response::Response,

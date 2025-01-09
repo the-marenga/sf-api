@@ -141,8 +141,8 @@ fn pattern_replace<const FROM: bool>(str: &str) -> String {
     }
 }
 
-/// This function is designed for reverse engineering encrypted commands from the
-/// S&F web client. It expects a login response, which is the ~3KB string
+/// This function is designed for reverse engineering encrypted commands from
+/// the S&F web client. It expects a login response, which is the ~3KB string
 /// response you can see in the network tab of your browser, that starts with
 /// `serverversion` after a login. After that, you can take any URL the client
 /// sends to the server and have it decoded into the actual string command, that

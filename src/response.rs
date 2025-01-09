@@ -150,8 +150,8 @@ impl Response {
     ///
     /// # Errors
     /// - `ServerError`: If the server responsed with an error
-    /// - `ParsingError`: If the response does not follow the standard S&F server
-    ///   response schema
+    /// - `ParsingError`: If the response does not follow the standard S&F
+    ///   server response schema
     pub fn parse(
         og_body: String,
         received_at: NaiveDateTime,
