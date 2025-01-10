@@ -258,8 +258,8 @@ pub enum CurrentAction {
         /// The time at which the guard job will be over
         busy_until: DateTime<Local>,
     },
-    /// The character is doing a quest right now. If `busy_until < Local::now()`
-    /// you can send a `FinishQuest` command
+    /// The character is doing a quest right now. If `busy_until <
+    /// Local::now()` you can send a `FinishQuest` command
     Quest {
         /// 0-2 index into tavern quest array
         quest_idx: u8,
@@ -430,9 +430,9 @@ pub enum ExpeditionStage {
     /// The different encounters, that you can choose between. Should be <= 3
     Encounters(Vec<ExpeditionEncounter>),
     /// We have to wait until the specified time to continue in the expedition.
-    /// When this is `< Local::now()`, you can send the update command to update
-    /// the expedition stage, which will make `current_stage()` yield the new
-    /// encounters
+    /// When this is `< Local::now()`, you can send the update command to
+    /// update the expedition stage, which will make `current_stage()`
+    /// yield the new encounters
     Waiting(DateTime<Local>),
     /// The expedition has finished and you can choose another one
     Finished,

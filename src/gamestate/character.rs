@@ -215,10 +215,7 @@ impl Class {
 
     #[must_use]
     pub fn can_wear_shield(self) -> bool {
-        match self {
-            Self::Paladin | Self::Warrior => true,
-            _ => false,
-        }
+        matches!(self, Self::Paladin | Self::Warrior)
     }
 
     #[must_use]

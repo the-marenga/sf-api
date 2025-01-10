@@ -482,9 +482,10 @@ pub enum Command {
         f_type: FortressBuildingType,
     },
     /// Finish building/upgrading a Building
-    /// When mushrooms != 0, mushrooms will be used to "skip" the upgrade timer.
-    /// However, this command also needs to be sent when not skipping the wait,
-    /// with mushrooms = 0, after the build/upgrade timer has finished.
+    /// When mushrooms != 0, mushrooms will be used to "skip" the upgrade
+    /// timer. However, this command also needs to be sent when not
+    /// skipping the wait, with mushrooms = 0, after the build/upgrade
+    /// timer has finished.
     FortressBuildFinish {
         f_type: FortressBuildingType,
         mushrooms: u32,

@@ -44,7 +44,7 @@ impl Error for SFError {
         None
     }
 
-    fn description(&self) -> &str {
+    fn description(&self) -> &'static str {
         "description() is deprecated; use Display"
     }
 
