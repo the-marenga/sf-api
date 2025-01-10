@@ -236,6 +236,8 @@ pub enum Command {
     GuildRaid,
     /// Battles the enemy in the guildportal
     GuildPortalBattle,
+    /// Fetch the fightable guilds
+    GuildGetFightableTargets,
     /// Flushes the toilet
     ToiletFlush,
     /// Opens the toilet door for the first time.
@@ -999,6 +1001,9 @@ impl Command {
                 format!("PlayerToilettLoad:{}/{}", *inventory as usize, pos + 1)
             }
             Command::GuildPortalBattle => format!("GroupPortalBattle:"),
+            Command::GuildGetFightableTargets => {
+                format!("GroupFightableTargets:")
+            }
             Command::FightPortal => format!("PlayerPortalBattle:"),
             Command::MessageOpen { pos: index } => {
                 format!("PlayerMessageView:{}", *index + 1)

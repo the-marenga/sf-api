@@ -72,6 +72,10 @@ pub struct Guild {
     pub chat: Vec<ChatMessage>,
     /// The whisper messages, that a player can receive
     pub whispers: Vec<ChatMessage>,
+
+    /// A list of guilds which can be fought, must first be fetched by sending
+    /// `Command::GuildGetFightableTargets`
+    pub fightable_guilds: Vec<FightableGuild>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -93,6 +97,31 @@ pub struct GuildHydra {
     pub max_life: u64,
     /// The attributes the hydra has
     pub attributes: EnumMap<AttributeType, u32>,
+}
+
+/// Contains information about another guild which can be fought.
+/// Must first be fetched by sending `Command::GuildGetFightableTargets`
+#[derive(Debug, Clone, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FightableGuild {
+    /// Id of the guild
+    pub id: u32,
+    /// Name of the guild
+    pub name: String,
+    /// Emblem of the guild
+    pub emblem: Emblem,
+    /// Number of members the guild currently has
+    pub number_of_members: u8,
+    /// The lowest level a member of the guild has
+    pub members_min_level: u32,
+    /// The highest level a member of the guild has
+    pub members_max_level: u32,
+    /// The average level of the guild members
+    pub members_average_level: u32,
+    /// The rank of the guild in the hall of fame
+    pub rank: u32,
+    /// The amount of honor the guild currently has
+    pub honor: u32,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -315,6 +344,61 @@ impl Guild {
             data.csiget(2, "instr upgr. silver", 0)?;
         self.own_instructor_upgrade.mushrooms =
             data.csiget(3, "instr upgr. mush", 0)?;
+        Ok(())
+    }
+
+    #[allow(clippy::indexing_slicing)]
+    pub(crate) fn update_fightable_targets(
+        &mut self,
+        data: &str,
+    ) -> Result<(), SFError> {
+        const SIZE: usize = 9;
+
+        // Delete any old data
+        self.fightable_guilds.clear();
+
+        let entries = data.trim_end_matches('/').split('/').collect::<Vec<_>>();
+
+        let target_counts = entries.len() / SIZE;
+
+        // Check if the data is valid
+        if target_counts * SIZE != entries.len() {
+            warn!("Invalid fightable targets len");
+            return Err(SFError::ParsingError(
+                "Fightable targets invalid length",
+                data.to_string(),
+            ));
+        }
+
+        // Reserve space for the new data
+        self.fightable_guilds.reserve(entries.len() / SIZE);
+
+        for i in 0..entries.len() / SIZE {
+            let offset = i * SIZE;
+
+            self.fightable_guilds.push(FightableGuild {
+                id: entries[offset].parse().unwrap_or_default(),
+                name: from_sf_string(entries[offset + 1]),
+                emblem: Emblem {
+                    raw: entries[offset + 2].to_string(),
+                },
+                number_of_members: entries[offset + 3]
+                    .parse()
+                    .unwrap_or_default(),
+                members_min_level: entries[offset + 4]
+                    .parse()
+                    .unwrap_or_default(),
+                members_max_level: entries[offset + 5]
+                    .parse()
+                    .unwrap_or_default(),
+                members_average_level: entries[offset + 6]
+                    .parse()
+                    .unwrap_or_default(),
+                rank: entries[offset + 7].parse().unwrap_or_default(),
+                honor: entries[offset + 8].parse().unwrap_or_default(),
+            });
+        }
+
         Ok(())
     }
 }

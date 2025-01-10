@@ -1415,6 +1415,11 @@ impl GameState {
                         .flatten()
                         .collect();
                 }
+                "fightablegroups" => {
+                    self.guild
+                        .get_or_insert_default()
+                        .update_fightable_targets(val.as_str())?;
+                }
                 // This is the extra bonus effect all treats get that day
                 x if x.contains("dungeonenemies") => {
                     // I `think` we do not need this
