@@ -242,6 +242,12 @@ impl Item {
         }
     }
 
+    /// Checks, if this item can be enchanted
+    #[must_use]
+    pub fn is_enchantable(&self) -> bool {
+        self.typ.is_enchantable()
+    }
+
     /// Checks if a companion of the given class can equip this item.
     ///
     /// Returns `true` if the item itself is equipment and this class has the
@@ -668,6 +674,13 @@ impl ItemType {
         })
     }
 
+    /// Checks, if this item type can be enchanted
+    #[must_use]
+    pub fn is_enchantable(&self) -> bool {
+        self.equipment_slot()
+            .is_some_and(|e| e.enchantment().is_some())
+    }
+
     pub(crate) fn parse_active_potions(
         data: &[i64],
         server_time: ServerTime,
@@ -988,6 +1001,26 @@ impl EquipmentSlot {
             EquipmentSlot::Amulet => 8,
             EquipmentSlot::Ring => 9,
             EquipmentSlot::Talisman => 10,
+        }
+    }
+
+    /// Returns the corresponding enchantment for this equipment slot, if it
+    /// can be enchanted
+    #[must_use]
+    pub const fn enchantment(&self) -> Option<Enchantment> {
+        match self {
+            EquipmentSlot::Hat => {
+                Some(Enchantment::AdventurersArchaeologicalAura)
+            }
+            EquipmentSlot::BreastPlate => Some(Enchantment::MariosBeard),
+            EquipmentSlot::Gloves => Some(Enchantment::ShadowOfTheCowboy),
+            EquipmentSlot::FootWear => Some(Enchantment::ManyFeetBoots),
+            EquipmentSlot::Amulet => Some(Enchantment::UnholyAcquisitiveness),
+            EquipmentSlot::Belt => Some(Enchantment::ThirstyWanderer),
+            EquipmentSlot::Ring => Some(Enchantment::TheGraveRobbersPrayer),
+            EquipmentSlot::Talisman => Some(Enchantment::RobberBaronRitual),
+            EquipmentSlot::Weapon => Some(Enchantment::SwordOfVengeance),
+            EquipmentSlot::Shield => None,
         }
     }
 }
