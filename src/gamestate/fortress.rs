@@ -72,6 +72,11 @@ pub struct Fortress {
     pub attack_free_reroll: Option<DateTime<Local>>,
     /// The price in silver re-rolling costs
     pub opponent_reroll_price: u64,
+
+    /// The amount of stone currently in your secret storage
+    pub secret_storage_stone: u64,
+    /// The amount of wood currently in your secret storage
+    pub secret_storage_wood: u64,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -464,6 +469,13 @@ impl Fortress {
         self.attack_target = data.cwiget(587, "fortress enemy")?;
         self.attack_free_reroll =
             data.cstget(586, "fortress attack reroll", server_time)?;
+
+        // Secret storage
+        self.secret_storage_wood =
+            data.csiget(698, "secret storage wood", 0)?;
+        self.secret_storage_stone =
+            data.csiget(700, "secret storage stone", 0)?;
+
         Ok(())
     }
 

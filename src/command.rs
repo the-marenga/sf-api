@@ -470,6 +470,15 @@ pub enum Command {
         /// The type of resource you want to collect
         resource: FortressResourceType,
     },
+    /// Collects resources from the fortress secret storage
+    /// Note that the official client only ever collect either stone or wood
+    /// but not both at the same time
+    FortressGatherSecretStorage {
+        /// The amount of stone you want to collect
+        stone: u64,
+        /// The amount of wood you want to collect
+        wood: u64,
+    },
     /// Builds, or upgrades a building in the fortress
     FortressBuild {
         /// The building you want to upgrade, or build
@@ -1137,6 +1146,9 @@ impl Command {
             }
             Command::FortressGather { resource } => {
                 format!("FortressGather:{}", *resource as usize + 1)
+            }
+            Command::FortressGatherSecretStorage { stone, wood } => {
+                format!("FortressGatherTreasure:{wood}/{stone}")
             }
             Command::EquipCompanion {
                 from_inventory,
