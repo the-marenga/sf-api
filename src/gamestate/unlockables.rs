@@ -1,3 +1,5 @@
+use std::num::{NonZero, NonZeroU8};
+
 use chrono::{DateTime, Local};
 use enum_map::Enum;
 use log::error;
@@ -346,9 +348,16 @@ pub struct Witch {
     pub cauldron_bubbling: bool,
     /// The enchant role collection progress from 0-100
     pub progress: u32,
-    /// Whether or not each enchantment has been unlocked yet
-    pub enchantments: EnumMap<Enchantment, bool>,
+    /// Contains the ident to use when you want to apply the enchantment. If
+    /// this is `None`, the enchantment has not been unlocked yet
+    pub enchantments: EnumMap<Enchantment, Option<EnchantmentIdent>>,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// The S&F server needs a character specific value for enchanting items. This
+/// is that value
+pub struct EnchantmentIdent(pub(crate) NonZeroU8);
 
 impl Witch {
     pub(crate) fn update(
@@ -379,9 +388,9 @@ impl Witch {
             }
         }
 
-        let e_count: usize = data.ciget(7, "enchant count")?;
+        let e_count: u8 = data.ciget(7, "enchant count")?;
         for i in 0..e_count {
-            let iid = data.cget(9 + 3 * i, "iid")? - 1;
+            let iid = data.cget(9 + 3 * i as usize, "iid")? - 1;
             let key = match iid {
                 0 => continue,
                 10 => Enchantment::SwordOfVengeance,
@@ -398,7 +407,9 @@ impl Witch {
                     continue;
                 }
             };
-            *self.enchantments.get_mut(key) = true;
+            if let Some(val) = NonZeroU8::new(i + 1) {
+                *self.enchantments.get_mut(key) = Some(EnchantmentIdent(val));
+            }
         }
         Ok(())
     }

@@ -14,7 +14,9 @@ use crate::{
         items::*,
         social::Relationship,
         underworld::*,
-        unlockables::{HabitatType, HellevatorTreatType, Unlockable},
+        unlockables::{
+            EnchantmentIdent, HabitatType, HellevatorTreatType, Unlockable,
+        },
     },
     PlayerId,
 };
@@ -436,7 +438,7 @@ pub enum Command {
     /// with the enchantment
     WitchEnchant {
         /// The enchantment to apply
-        enchantment: Enchantment,
+        enchantment: EnchantmentIdent,
     },
     /// Spins the wheel. All information about when you can spin, or what you
     /// won are in `game_state.specials.wheel`
@@ -1137,7 +1139,7 @@ impl Command {
                 *action as usize
             ),
             Command::WitchEnchant { enchantment } => {
-                format!("PlayerWitchEnchantItem:{}/1", enchantment.enchant_id())
+                format!("PlayerWitchEnchantItem:{}/1", enchantment.0)
             }
             Command::SpinWheelOfFortune {
                 payment: fortune_payment,
