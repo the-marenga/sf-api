@@ -35,8 +35,6 @@ pub struct Fight {
     /// Either the player or guild id depending on pet/guild fight
     pub group_defender_id: Option<u32>,
 
-    /// My guess is as good as yours as to what this is
-    pub fight_version: u8,
     /// The 1on1 fights within a larger fight, that end with one of the
     /// contestants defeated
     pub fights: Vec<SingleFight>,
@@ -135,8 +133,17 @@ impl SingleFight {
         self.fighter_b = Fighter::parse(fighter_b);
     }
 
-    pub(crate) fn update_rounds(&mut self, data: &str) -> Result<(), SFError> {
+    pub(crate) fn update_rounds(
+        &mut self,
+        data: &str,
+        fight_version: u32,
+    ) -> Result<(), SFError> {
         self.actions.clear();
+
+        if fight_version > 1 {
+            // TODO: Actually parse this
+            return Ok(());
+        }
         let mut iter = data.split(',');
         while let (Some(player_id), Some(damage_typ), Some(new_life)) =
             (iter.next(), iter.next(), iter.next())
