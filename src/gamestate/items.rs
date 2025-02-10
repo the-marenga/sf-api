@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
 use log::{error, warn};
@@ -879,6 +881,12 @@ pub enum PotionSize {
     Small,
     Medium,
     Large,
+}
+
+impl PartialOrd for PotionSize {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.effect().partial_cmp(&other.effect())
+    }
 }
 
 impl PotionSize {
