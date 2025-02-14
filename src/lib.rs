@@ -9,6 +9,7 @@
     // missing_docs
 )]
 #![allow(
+    clippy::redundant_closure_for_method_calls,
     clippy::wildcard_imports,
     clippy::too_many_lines,
     clippy::field_reassign_with_default,

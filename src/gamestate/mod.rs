@@ -1024,7 +1024,17 @@ impl GameState {
                     // Should be irrelevant
                 }
                 x if x.starts_with("winnerid") => {
-                    self.get_fight(x).winner_id = val.into("winner id")?;
+                    // For all winnerid's, except the last one, the winnerid
+                    // value contains the fightversion as well
+                    let raw_winner_id = val
+                        .as_str()
+                        .split_once(|a: char| !a.is_ascii_digit())
+                        .map_or(val.as_str(), |a| a.0);
+                    if let Ok(winner_id) = raw_winner_id.parse() {
+                        self.get_fight(x).winner_id = winner_id;
+                    } else {
+                        error!("Invalid winner id: {raw_winner_id}");
+                    }
                 }
                 "fightresult" => {
                     let data: Vec<i64> = val.into_list("fight result")?;
@@ -1046,12 +1056,34 @@ impl GameState {
                     // participapted. I dont think this matters
                 }
                 "fightversion" => {
-                    self.last_fight
-                        .get_or_insert_with(Default::default)
-                        .fight_version = val.into("fight version")?;
+                    // This key is unreliable and partially merged into
+                    // winnerid, so I just parse this in the fight response
+                    // below, where it is actually used
                 }
                 x if x.starts_with("fight") && x.len() <= 7 => {
-                    self.get_fight(x).update_rounds(val.as_str())?;
+                    let fight_no = fight_no_from_header(x);
+                    let wkey = format!("winnerid{fight_no}");
+                    let version =
+                        if let Some(winner_id) = new_vals.get(wkey.as_str()) {
+                            // For unknown reasons, the fightversion is merged
+                            // into the winnerid for all fights, except the last
+                            // one
+                            winner_id
+                                .as_str()
+                                .split_once("fightversion:")
+                                .map(|a| a.1)
+                        } else {
+                            // The last fight uses the normal fightversion
+                            // header
+                            new_vals.get("fightversion").map(|a| a.as_str())
+                        };
+                    let fight = self.get_fight(x);
+                    if let Some(version) = version.and_then(|a| a.parse().ok())
+                    {
+                        fight.update_rounds(val.as_str(), version)?;
+                    } else {
+                        fight.actions.clear();
+                    }
                 }
                 "othergroupname" => {
                     other_guild
@@ -1713,11 +1745,7 @@ impl GameState {
     /// w/ the default
     #[must_use]
     fn get_fight(&mut self, header_name: &str) -> &mut SingleFight {
-        let number_str =
-            header_name.trim_start_matches(|a: char| !a.is_ascii_digit());
-        let id: usize = number_str.parse().unwrap_or(1);
-        let id = id.max(1);
-
+        let id = fight_no_from_header(header_name);
         let fights =
             &mut self.last_fight.get_or_insert_with(Default::default).fights;
 
@@ -1727,6 +1755,15 @@ impl GameState {
         #[allow(clippy::unwrap_used)]
         fights.get_mut(id - 1).unwrap()
     }
+}
+
+/// Gets the number if the fight header, so for `fight4` it would return 4 and
+/// for fight it would return 1
+fn fight_no_from_header(header_name: &str) -> usize {
+    let number_str =
+        header_name.trim_start_matches(|a: char| !a.is_ascii_digit());
+    let id: usize = number_str.parse().unwrap_or(1);
+    id.max(1)
 }
 
 /// Stores the time difference between the server and the client to parse the
