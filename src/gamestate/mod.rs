@@ -1325,12 +1325,12 @@ impl GameState {
                     );
                 }
                 "gtdailyrewardyesterday" => {
-                    // self.hellevator
-                    //     .active
-                    //     .get_or_insert_with(Default::default)
-                    //     .rewards_yesterday = HellevatorDailyReward::parse(
-                    //     &val.into_list("hdryd").unwrap_or_default(),
-                    // );
+                    self.hellevator
+                        .active
+                        .get_or_insert_with(Default::default)
+                        .rewards_yesterday = HellevatorDailyReward::parse(
+                        &val.into_list("hdryd").unwrap_or_default(),
+                    );
                 }
                 "gtranking" => {
                     self.hall_of_fames.hellevator = val
