@@ -40,6 +40,61 @@ pub struct UpgradeableFighter {
 }
 
 impl UpgradeableFighter {
+    /// Uses a potion in the provided slot and returns the old potion, if any
+    pub fn use_potion(
+        &mut self,
+        potion: Potion,
+        slot: usize,
+    ) -> Option<Potion> {
+        self.active_potions
+            .get_mut(slot)
+            .and_then(|a| a.replace(potion))
+    }
+
+    /// Removed the potion at the provided slot and returns the old potion, if
+    /// any
+    pub fn remove_potion(&mut self, slot: usize) -> Option<Potion> {
+        self.active_potions.get_mut(slot).and_then(|a| a.take())
+    }
+
+    /// Equip the provided item.
+    /// If the item could be equiped, the previous item will be returned
+    /// # Errors
+    ///
+    /// Will return `Err` if the item could not be equipped. It will contain
+    /// the item you tried to insert
+    pub fn equip(
+        &mut self,
+        item: Item,
+        slot: EquipmentSlot,
+    ) -> Result<Option<Item>, Item> {
+        let Some(item_slot) = item.typ.equipment_slot() else {
+            return Err(item);
+        };
+
+        if item_slot != slot {
+            let is_offhand = slot == EquipmentSlot::Shield
+                && item_slot == EquipmentSlot::Weapon;
+            if !(is_offhand && self.class != Class::Assassin) {
+                return Err(item);
+            }
+        }
+        if slot == EquipmentSlot::Shield
+            && (!self.class.can_wear_shield() || self.is_companion)
+        {
+            return Err(item);
+        }
+
+        let res = self.unequip(slot);
+        *self.equipment.0.get_mut(slot) = Some(item);
+        Ok(res)
+    }
+
+    /// Unequips the item at the provided slot and returns the old item, if any
+    pub fn unequip(&mut self, slot: EquipmentSlot) -> Option<Item> {
+        self.equipment.0.get_mut(slot).take()
+    }
+
     #[must_use]
     pub fn from_other(other: &OtherPlayer) -> Self {
         UpgradeableFighter {
@@ -75,6 +130,9 @@ pub struct BattleFighter {
     pub current_hp: i64,
     pub equip: EquipmentEffects,
     pub portal_dmg_bonus: f64,
+    /// The amount of combat turns this character has started. Note that this
+    /// only updates when the character has the initiative (starts attack
+    /// turn)
     pub rounds_in_battle: u32,
     pub class_effect: ClassEffect,
 }
@@ -425,8 +483,6 @@ impl<'a> Battle<'a> {
         };
 
         self.round += 1;
-        left.rounds_in_battle += 1;
-        right.rounds_in_battle += 1;
 
         let attacking_side = if let Some(started) = self.started {
             let one_vs_one_round =
@@ -435,7 +491,7 @@ impl<'a> Battle<'a> {
             // If We are at the same cycle, as the first turn, the one that
             // started on the first turn starts here. Otherwise the other one
             match started {
-                _ if one_vs_one_round % 2 == 1 => started,
+                _ if one_vs_one_round % 2 == 0 => started,
                 Left => Right,
                 Right => Left,
             }
@@ -456,6 +512,7 @@ impl<'a> Battle<'a> {
             Right => (right, left),
         };
 
+        attacker.rounds_in_battle += 1;
         let turn = self.round;
         let rng = &mut self.rng;
         match attacker.class {
