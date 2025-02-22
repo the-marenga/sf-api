@@ -102,6 +102,10 @@ pub struct Hellevator {
     pub next_reset: Option<DateTime<Local>>,
     pub start_contrib_date: Option<DateTime<Local>>,
 
+    /// This field is only updated during login. After claiming the reward
+    /// using `Command::HellevatorClaimDailyYesterday`, you must manually
+    /// reset this field.
+    pub rewards_yesterday: Option<HellevatorDailyReward>,
     pub rewards_today: Option<HellevatorDailyReward>,
     pub rewards_nest: Option<HellevatorDailyReward>,
 
@@ -259,7 +263,7 @@ impl HellevatorDailyReward {
     }
 
     pub(crate) fn parse(data: &[i64]) -> Option<HellevatorDailyReward> {
-        if data.len() != 10 {
+        if data.len() < 10 {
             return None;
         }
 
