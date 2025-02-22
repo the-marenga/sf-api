@@ -250,6 +250,14 @@ pub struct HellevatorDailyReward {
 }
 
 impl HellevatorDailyReward {
+    /// Returns `true` if the daily reward can be claimed
+    #[must_use]
+    pub fn claimable(&self) -> bool {
+        self.gold_chests > 0
+            || self.fortress_chests > 0
+            || self.blacksmith_chests > 0
+    }
+
     pub(crate) fn parse(data: &[i64]) -> Option<HellevatorDailyReward> {
         if data.len() != 10 {
             return None;
