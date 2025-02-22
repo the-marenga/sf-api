@@ -58,7 +58,7 @@ pub async fn main() {
         }
     };
 
-    let mut gd = GameState::new(login_data).unwrap();
+    let mut gs = GameState::new(login_data).unwrap();
 
     if let Some(resp) = custom_resp {
         let bruh = Response::parse(
@@ -66,18 +66,18 @@ pub async fn main() {
             chrono::Local::now().naive_local(),
         )
         .unwrap();
-        gd.update(bruh).unwrap();
+        gs.update(bruh).unwrap();
     }
 
     let Some(command) = command else {
-        let js = serde_json::to_string_pretty(&gd).unwrap();
+        let js = serde_json::to_string_pretty(&gs).unwrap();
         std::fs::write("character.json", js).unwrap();
 
-        let squad = PlayerFighterSquad::new(&gd);
+        let squad = PlayerFighterSquad::new(&gs);
         let player = BattleFighter::from_upgradeable(&squad.character);
         let mut player_squad = [player];
         for dungeon in LightDungeon::iter() {
-            let Some(monster) = gd.dungeons.current_enemy(dungeon) else {
+            let Some(monster) = gs.dungeons.current_enemy(dungeon) else {
                 continue;
             };
             let monster = BattleFighter::from_monster(monster);
@@ -116,7 +116,7 @@ pub async fn main() {
         }
     };
 
-    gd.update(&resp).unwrap();
-    let js = serde_json::to_string_pretty(&gd).unwrap();
+    gs.update(&resp).unwrap();
+    let js = serde_json::to_string_pretty(&gs).unwrap();
     std::fs::write("character.json", js).unwrap();
 }
