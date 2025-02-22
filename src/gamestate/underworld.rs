@@ -19,7 +19,7 @@ pub struct Underworld {
     pub units: EnumMap<UnderworldUnitType, UnderworldUnit>,
     /// All information about the production of resources in the underworld
     pub production: EnumMap<UnderWorldResourceType, UnderworldProduction>,
-    /// The `last_collectable` value in `UnderWorldResource` is always out of
+    /// The `last_collectable` value in `UnderworldProduction` is always out of
     /// date. Refer to the `Fortress.last_collectable_updated` for more
     /// information
     pub last_collectable_update: Option<DateTime<Local>>,
