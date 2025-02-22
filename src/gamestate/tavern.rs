@@ -271,7 +271,7 @@ pub enum CurrentAction {
     Expedition,
     /// The character is not able to do something, but we do not know what.
     /// Most likely something from a new update
-    Unkown(Option<DateTime<Local>>),
+    Unknown(Option<DateTime<Local>>),
 }
 
 impl CurrentAction {
@@ -293,7 +293,7 @@ impl CurrentAction {
             (4, None) => CurrentAction::Expedition,
             _ => {
                 error!("Unknown action id combination: {id}, {busy:?}");
-                CurrentAction::Unkown(busy)
+                CurrentAction::Unknown(busy)
             }
         }
     }
