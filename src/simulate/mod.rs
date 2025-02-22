@@ -11,7 +11,8 @@ use strum::{EnumIter, IntoEnumIterator};
 use crate::{
     command::AttributeType,
     gamestate::{
-        character::Class, dungeons::CompanionClass, items::*, GameState,
+        character::Class, dungeons::CompanionClass, items::*,
+        social::OtherPlayer, GameState,
     },
     misc::EnumMapGet,
 };
@@ -27,7 +28,6 @@ pub struct UpgradeableFighter {
     class: Class,
     /// The base attributes without any equipment, or other boosts
     pub attribute_basis: EnumMap<AttributeType, u32>,
-    _attributes_bought: EnumMap<AttributeType, u32>,
     pet_attribute_bonus_perc: EnumMap<AttributeType, f64>,
 
     equipment: Equipment,
@@ -37,6 +37,25 @@ pub struct UpgradeableFighter {
     portal_hp_bonus: u32,
     /// The damage bonus in percent this player has from the guild demon portal
     portal_dmg_bonus: u32,
+}
+
+impl UpgradeableFighter {
+    #[must_use]
+    pub fn from_other(other: &OtherPlayer) -> Self {
+        UpgradeableFighter {
+            is_companion: false,
+            level: other.level,
+            class: other.class,
+            attribute_basis: other.base_attributes,
+            equipment: other.equipment.clone(),
+            active_potions: other.active_potions,
+            pet_attribute_bonus_perc: other
+                .pet_attribute_bonus_perc
+                .map(|_, a| f64::from(a) / 100.0),
+            portal_hp_bonus: other.portal_hp_bonus,
+            portal_dmg_bonus: other.portal_dmg_bonus,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -836,7 +855,6 @@ impl PlayerFighterSquad {
             level: char.level,
             class: char.class,
             attribute_basis: char.attribute_basis,
-            _attributes_bought: char.attribute_times_bought,
             equipment: char.equipment.clone(),
             active_potions: char.active_potions,
             pet_attribute_bonus_perc,
@@ -858,7 +876,6 @@ impl PlayerFighterSquad {
                     level: comp.level.try_into().unwrap_or(1),
                     class: class.into(),
                     attribute_basis: comp.attributes,
-                    _attributes_bought: EnumMap::default(),
                     equipment: comp.equipment.clone(),
                     active_potions: char.active_potions,
                     pet_attribute_bonus_perc,
