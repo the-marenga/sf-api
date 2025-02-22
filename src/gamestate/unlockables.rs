@@ -68,13 +68,12 @@ impl HellevatorEvent {
         }
     }
 
-    // /// If the Hellevator event is active, this returns a mutable reference
-    // to /// the Information about it
-    // #[must_use]
-    // pub fn active_mut(&mut self) -> Option<&mut Hellevator> {
-    //     let is_active = self.is_event_ongoing();
-    //     self.active.as_mut().filter(|_| is_active)
-    // }
+    /// If the Hellevator event is active, this returns a mutable reference
+    #[must_use]
+    pub fn active_mut(&mut self) -> Option<&mut Hellevator> {
+        let is_active = self.is_event_ongoing();
+        self.active.as_mut().filter(|_| is_active)
+    }
 }
 
 #[derive(Debug, Default, Clone)]
