@@ -103,7 +103,7 @@ pub struct Hellevator {
     pub start_contrib_date: Option<DateTime<Local>>,
 
     pub rewards_today: Option<HellevatorDailyReward>,
-    pub rewards_nest: Option<HellevatorDailyReward>,
+    pub rewards_next: Option<HellevatorDailyReward>,
 
     pub daily_treat_bonus: Option<HellevatorTreatBonus>,
 
