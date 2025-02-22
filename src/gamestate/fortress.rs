@@ -296,12 +296,10 @@ impl Fortress {
         }
 
         // Check if gem mining is in progress
-        if building_type == FortressBuildingType::GemMine {
-            if let Some(finish) = self.gem_search.finish {
-                if finish > Local::now() {
-                    return true;
-                }
-            }
+        if building_type == FortressBuildingType::GemMine
+            && self.gem_search.finish.is_some()
+        {
+            return true;
         }
         false
     }
