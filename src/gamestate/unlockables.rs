@@ -187,7 +187,7 @@ pub enum HellevatorMonsterRewardTyp {
     Wood = 6,
     Stone = 7,
     #[default]
-    Unkown = 99,
+    Unknown = 99,
 }
 
 #[derive(Debug, Default, Clone)]
