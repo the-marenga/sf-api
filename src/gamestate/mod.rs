@@ -1683,6 +1683,9 @@ impl GameState {
         self.tavern.dice_game.remaining =
             data.csiget(651, "rem dice games", 0)?;
 
+        self.witch.get_or_insert_default().enchantment_price =
+            data.csiget(519, "enchantment price", u64::MAX)?;
+
         Ok(())
     }
 

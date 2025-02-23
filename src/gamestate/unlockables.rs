@@ -356,6 +356,8 @@ pub struct Witch {
     pub cauldron_bubbling: bool,
     /// The enchant role collection progress from 0-100
     pub progress: u32,
+    /// The price in silver to enchant an item
+    pub enchantment_price: u64,
     /// Contains the ident to use when you want to apply the enchantment. If
     /// this is `None`, the enchantment has not been unlocked yet
     pub enchantments: EnumMap<Enchantment, Option<EnchantmentIdent>>,
