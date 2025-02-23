@@ -113,7 +113,7 @@ impl UpgradeableFighter {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Minion {
     Skeleton { revived: u8 },
     Hound,
@@ -138,7 +138,26 @@ pub struct BattleFighter {
     pub class_effect: ClassEffect,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+impl std::hash::Hash for BattleFighter {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        (
+            self.is_companion,
+            self.level,
+            self.class,
+            &self.attributes,
+            self.max_hp,
+            self.current_hp,
+            &self.equip,
+            (self.portal_dmg_bonus * 100.0) as u32,
+            self.rounds_started,
+            self.rounds_in_1v1,
+            &self.class_effect,
+        )
+            .hash(state);
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum HarpQuality {
     Bad,
     Medium,
@@ -168,7 +187,7 @@ fn calc_unarmed_base_dmg(
     (min as u32, max as u32)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ClassEffect {
     Druid {
         /// Has the druid just dodged an attack?
@@ -374,6 +393,21 @@ pub struct EquipmentEffects {
     extra_crit_dmg: bool,
 
     armor: u32,
+}
+
+impl std::hash::Hash for EquipmentEffects {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        (
+            self.element_res.map(|_, r| (r * 100.0) as u32),
+            self.element_dmg.map(|_, r| (r * 100.0) as u32),
+            self.armor,
+            self.weapon,
+            self.offhand,
+            self.reaction_boost,
+            self.extra_crit_dmg,
+        )
+            .hash(state);
+    }
 }
 
 #[derive(Debug, Clone, Copy, Enum, EnumIter)]
