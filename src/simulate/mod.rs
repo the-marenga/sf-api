@@ -495,12 +495,10 @@ impl<'a> Battle<'a> {
         right.rounds_in_1v1 += 1;
 
         let attacking_side = if let Some(started) = self.started {
-            let one_vs_one_round = left.rounds_in_1v1.min(right.rounds_in_1v1);
-
             // If We are at the same cycle, as the first turn, the one that
             // started on the first turn starts here. Otherwise the other one
             match started {
-                _ if one_vs_one_round % 2 == 0 => started,
+                _ if left.rounds_in_1v1 % 2 == 1 => started,
                 Left => Right,
                 Right => Left,
             }
