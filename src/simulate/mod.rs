@@ -130,10 +130,11 @@ pub struct BattleFighter {
     pub current_hp: i64,
     pub equip: EquipmentEffects,
     pub portal_dmg_bonus: f64,
-    /// The amount of combat turns this character has started. Note that this
-    /// only updates when the character has the initiative (starts attack
-    /// turn)
-    pub rounds_in_battle: u32,
+    /// The total amount of rounds this fighter has started (tried to do an
+    /// attack)
+    pub rounds_started: u32,
+    /// The amount of turns this player has been in the current 1v1 fight
+    pub rounds_in_1v1: u32,
     pub class_effect: ClassEffect,
 }
 
@@ -233,7 +234,8 @@ impl BattleFighter {
                 armor: 0,
             },
             portal_dmg_bonus: 1.0,
-            rounds_in_battle: 0,
+            rounds_started: 0,
+            rounds_in_1v1: 0,
             class_effect: ClassEffect::Normal,
         }
     }
@@ -327,10 +329,11 @@ impl BattleFighter {
             max_hp: hp,
             current_hp: hp,
             equip,
-            rounds_in_battle: 0,
+            rounds_started: 0,
             class_effect: ClassEffect::Normal,
             portal_dmg_bonus,
             level: char.level,
+            rounds_in_1v1: 0,
         }
     }
 
@@ -352,7 +355,7 @@ impl BattleFighter {
     pub fn reset(&mut self) {
         self.class_effect = ClassEffect::Normal;
         self.current_hp = self.max_hp;
-        self.rounds_in_battle = 0;
+        self.rounds_started = 0;
     }
 }
 
@@ -484,9 +487,15 @@ impl<'a> Battle<'a> {
 
         self.round += 1;
 
+        if left.rounds_in_1v1 != right.rounds_in_1v1 {
+            left.rounds_in_1v1 = 0;
+            right.rounds_in_1v1 = 0;
+        }
+        left.rounds_in_1v1 += 1;
+        right.rounds_in_1v1 += 1;
+
         let attacking_side = if let Some(started) = self.started {
-            let one_vs_one_round =
-                left.rounds_in_battle.min(right.rounds_in_battle);
+            let one_vs_one_round = left.rounds_in_1v1.min(right.rounds_in_1v1);
 
             // If We are at the same cycle, as the first turn, the one that
             // started on the first turn starts here. Otherwise the other one
@@ -512,7 +521,7 @@ impl<'a> Battle<'a> {
             Right => (right, left),
         };
 
-        attacker.rounds_in_battle += 1;
+        attacker.rounds_started += 1;
         let turn = self.round;
         let rng = &mut self.rng;
         match attacker.class {
@@ -536,7 +545,7 @@ impl<'a> Battle<'a> {
                 }
             }
             BattleMage => {
-                if attacker.rounds_in_battle == 1 {
+                if attacker.rounds_started == 1 {
                     if defender.class == Mage {
                         logger.log(BE::CometRepelled(attacker, defender));
                     } else {
@@ -589,7 +598,7 @@ impl<'a> Battle<'a> {
             }
             Bard => {
                 // Start a new melody every 4 turns
-                if attacker.rounds_in_battle % 4 == 0 {
+                if attacker.rounds_started % 4 == 1 {
                     let quality = rng.u8(0..4);
                     let (quality, remaining) = match quality {
                         0 => (HarpQuality::Bad, 3),
