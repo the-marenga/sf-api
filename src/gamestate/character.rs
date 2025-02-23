@@ -222,8 +222,6 @@ impl Class {
     pub(crate) fn damage_factor(self, against: Class) -> f64 {
         use Class::*;
         match self {
-            // TODO: Are these right, or should this be a * 1.XX somewhere else
-            // instead?
             Druid if against == Class::DemonHunter => 0.33 + 0.15,
             Druid if against == Class::Mage => 0.33 + 0.33,
             Druid => 0.33,

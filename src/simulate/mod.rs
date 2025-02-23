@@ -11,7 +11,8 @@ use strum::{EnumIter, IntoEnumIterator};
 use crate::{
     command::AttributeType,
     gamestate::{
-        character::Class, dungeons::CompanionClass, items::*, GameState,
+        character::Class, dungeons::CompanionClass, items::*,
+        social::OtherPlayer, GameState,
     },
     misc::EnumMapGet,
 };
@@ -27,7 +28,6 @@ pub struct UpgradeableFighter {
     class: Class,
     /// The base attributes without any equipment, or other boosts
     pub attribute_basis: EnumMap<AttributeType, u32>,
-    _attributes_bought: EnumMap<AttributeType, u32>,
     pet_attribute_bonus_perc: EnumMap<AttributeType, f64>,
 
     equipment: Equipment,
@@ -37,6 +37,80 @@ pub struct UpgradeableFighter {
     portal_hp_bonus: u32,
     /// The damage bonus in percent this player has from the guild demon portal
     portal_dmg_bonus: u32,
+}
+
+impl UpgradeableFighter {
+    /// Uses a potion in the provided slot and returns the old potion, if any
+    pub fn use_potion(
+        &mut self,
+        potion: Potion,
+        slot: usize,
+    ) -> Option<Potion> {
+        self.active_potions
+            .get_mut(slot)
+            .and_then(|a| a.replace(potion))
+    }
+
+    /// Removed the potion at the provided slot and returns the old potion, if
+    /// any
+    pub fn remove_potion(&mut self, slot: usize) -> Option<Potion> {
+        self.active_potions.get_mut(slot).and_then(|a| a.take())
+    }
+
+    /// Equip the provided item.
+    /// If the item could be equiped, the previous item will be returned
+    /// # Errors
+    ///
+    /// Will return `Err` if the item could not be equipped. It will contain
+    /// the item you tried to insert
+    pub fn equip(
+        &mut self,
+        item: Item,
+        slot: EquipmentSlot,
+    ) -> Result<Option<Item>, Item> {
+        let Some(item_slot) = item.typ.equipment_slot() else {
+            return Err(item);
+        };
+
+        if item_slot != slot {
+            let is_offhand = slot == EquipmentSlot::Shield
+                && item_slot == EquipmentSlot::Weapon;
+            if !(is_offhand && self.class != Class::Assassin) {
+                return Err(item);
+            }
+        }
+        if slot == EquipmentSlot::Shield
+            && (!self.class.can_wear_shield() || self.is_companion)
+        {
+            return Err(item);
+        }
+
+        let res = self.unequip(slot);
+        *self.equipment.0.get_mut(slot) = Some(item);
+        Ok(res)
+    }
+
+    /// Unequips the item at the provided slot and returns the old item, if any
+    pub fn unequip(&mut self, slot: EquipmentSlot) -> Option<Item> {
+        self.equipment.0.get_mut(slot).take()
+    }
+
+    #[must_use]
+    pub fn from_other(other: &OtherPlayer) -> Self {
+        UpgradeableFighter {
+            is_companion: false,
+            level: other.level,
+            class: other.class,
+            attribute_basis: other.base_attributes,
+            equipment: other.equipment.clone(),
+            active_potions: other.active_potions,
+            pet_attribute_bonus_perc: other
+                .pet_attribute_bonus_perc
+                .map(|_, a| f64::from(a) / 100.0),
+            portal_hp_bonus: other.portal_hp_bonus,
+            portal_dmg_bonus: other.portal_dmg_bonus,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,7 +130,11 @@ pub struct BattleFighter {
     pub current_hp: i64,
     pub equip: EquipmentEffects,
     pub portal_dmg_bonus: f64,
-    pub rounds_in_battle: u32,
+    /// The total amount of rounds this fighter has started (tried to do an
+    /// attack)
+    pub rounds_started: u32,
+    /// The amount of turns this player has been in the current 1v1 fight
+    pub rounds_in_1v1: u32,
     pub class_effect: ClassEffect,
 }
 
@@ -156,7 +234,8 @@ impl BattleFighter {
                 armor: 0,
             },
             portal_dmg_bonus: 1.0,
-            rounds_in_battle: 0,
+            rounds_started: 0,
+            rounds_in_1v1: 0,
             class_effect: ClassEffect::Normal,
         }
     }
@@ -250,10 +329,11 @@ impl BattleFighter {
             max_hp: hp,
             current_hp: hp,
             equip,
-            rounds_in_battle: 0,
+            rounds_started: 0,
             class_effect: ClassEffect::Normal,
             portal_dmg_bonus,
             level: char.level,
+            rounds_in_1v1: 0,
         }
     }
 
@@ -275,7 +355,7 @@ impl BattleFighter {
     pub fn reset(&mut self) {
         self.class_effect = ClassEffect::Normal;
         self.current_hp = self.max_hp;
-        self.rounds_in_battle = 0;
+        self.rounds_started = 0;
     }
 }
 
@@ -406,17 +486,19 @@ impl<'a> Battle<'a> {
         };
 
         self.round += 1;
-        left.rounds_in_battle += 1;
-        right.rounds_in_battle += 1;
+
+        if left.rounds_in_1v1 != right.rounds_in_1v1 {
+            left.rounds_in_1v1 = 0;
+            right.rounds_in_1v1 = 0;
+        }
+        left.rounds_in_1v1 += 1;
+        right.rounds_in_1v1 += 1;
 
         let attacking_side = if let Some(started) = self.started {
-            let one_vs_one_round =
-                left.rounds_in_battle.min(right.rounds_in_battle);
-
             // If We are at the same cycle, as the first turn, the one that
             // started on the first turn starts here. Otherwise the other one
             match started {
-                _ if one_vs_one_round % 2 == 1 => started,
+                _ if left.rounds_in_1v1 % 2 == 1 => started,
                 Left => Right,
                 Right => Left,
             }
@@ -437,6 +519,7 @@ impl<'a> Battle<'a> {
             Right => (right, left),
         };
 
+        attacker.rounds_started += 1;
         let turn = self.round;
         let rng = &mut self.rng;
         match attacker.class {
@@ -460,7 +543,7 @@ impl<'a> Battle<'a> {
                 }
             }
             BattleMage => {
-                if attacker.rounds_in_battle == 1 {
+                if attacker.rounds_started == 1 {
                     if defender.class == Mage {
                         logger.log(BE::CometRepelled(attacker, defender));
                     } else {
@@ -513,7 +596,7 @@ impl<'a> Battle<'a> {
             }
             Bard => {
                 // Start a new melody every 4 turns
-                if attacker.rounds_in_battle % 4 == 0 {
+                if attacker.rounds_started % 4 == 1 {
                     let quality = rng.u8(0..4);
                     let (quality, remaining) = match quality {
                         0 => (HarpQuality::Bad, 3),
@@ -836,7 +919,6 @@ impl PlayerFighterSquad {
             level: char.level,
             class: char.class,
             attribute_basis: char.attribute_basis,
-            _attributes_bought: char.attribute_times_bought,
             equipment: char.equipment.clone(),
             active_potions: char.active_potions,
             pet_attribute_bonus_perc,
@@ -858,7 +940,6 @@ impl PlayerFighterSquad {
                     level: comp.level.try_into().unwrap_or(1),
                     class: class.into(),
                     attribute_basis: comp.attributes,
-                    _attributes_bought: EnumMap::default(),
                     equipment: comp.equipment.clone(),
                     active_potions: char.active_potions,
                     pet_attribute_bonus_perc,
