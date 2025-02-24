@@ -538,7 +538,7 @@ pub enum Command {
     },
     /// Collects the resources of the selected type in the underworld
     UnderworldCollect {
-        resource: UnderWorldResourceType,
+        resource: UnderworldResourceType,
     },
     /// Upgrades the selected underworld unit by one level
     UnderworldUnitUpgrade {

@@ -1320,7 +1320,7 @@ impl GameState {
                     self.hellevator
                         .active
                         .get_or_insert_with(Default::default)
-                        .rewards_nest = HellevatorDailyReward::parse(
+                        .rewards_next = HellevatorDailyReward::parse(
                         &val.into_list("hdrnd").unwrap_or_default(),
                     );
                 }
