@@ -112,7 +112,9 @@ impl UpgradeableFighter {
             return Err(item);
         };
 
-        if item.class.is_some_and(|class| class != self.class) {
+        if (self.is_companion && !item.can_be_equipped_by_companion(self.class))
+            || (!self.is_companion && !item.can_be_equipped_by(self.class))
+        {
             return Err(item);
         }
 
