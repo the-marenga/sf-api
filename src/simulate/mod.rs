@@ -40,6 +40,46 @@ pub struct UpgradeableFighter {
 }
 
 impl UpgradeableFighter {
+    /// Inserts a gem on the item in the specified slot
+    /// If the gem could be inserted the old gem (if any) will be returned
+    /// # Errors
+    ///
+    /// Will return `Err` if the gem could not be inserted. It will contain
+    /// the gem you tried to insert
+    pub fn insert_gem(
+        &mut self,
+        gem: Gem,
+        slot: EquipmentSlot,
+    ) -> Result<Option<Gem>, Gem> {
+        let Some(item) = self.equipment.0.get_mut(slot).as_mut() else {
+            return Err(gem);
+        };
+        let Some(gem_slot) = &mut item.gem_slot else {
+            return Err(gem);
+        };
+
+        let old_gem = match *gem_slot {
+            GemSlot::Filled(gem) => Some(gem),
+            GemSlot::Empty => None,
+        };
+        *gem_slot = GemSlot::Filled(gem);
+        Ok(old_gem)
+    }
+
+    /// Removes the gem at the provided slot and returns the old gem, if
+    /// any
+    pub fn extract_gem(&mut self, slot: EquipmentSlot) -> Option<Gem> {
+        let item = self.equipment.0.get_mut(slot).as_mut()?;
+        let gem_slot = &mut item.gem_slot?;
+
+        let old_gem = match *gem_slot {
+            GemSlot::Filled(gem) => Some(gem),
+            GemSlot::Empty => None,
+        };
+        *gem_slot = GemSlot::Empty;
+        old_gem
+    }
+
     /// Uses a potion in the provided slot and returns the old potion, if any
     pub fn use_potion(
         &mut self,
@@ -51,7 +91,7 @@ impl UpgradeableFighter {
             .and_then(|a| a.replace(potion))
     }
 
-    /// Removed the potion at the provided slot and returns the old potion, if
+    /// Removes the potion at the provided slot and returns the old potion, if
     /// any
     pub fn remove_potion(&mut self, slot: usize) -> Option<Potion> {
         self.active_potions.get_mut(slot).and_then(|a| a.take())
