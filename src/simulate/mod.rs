@@ -112,6 +112,12 @@ impl UpgradeableFighter {
             return Err(item);
         };
 
+        if (self.is_companion && !item.can_be_equipped_by_companion(self.class))
+            || (!self.is_companion && !item.can_be_equipped_by(self.class))
+        {
+            return Err(item);
+        }
+
         if item_slot != slot {
             let is_offhand = slot == EquipmentSlot::Shield
                 && item_slot == EquipmentSlot::Weapon;
