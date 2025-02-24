@@ -238,6 +238,10 @@ pub struct HellevatorShopTreat {
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorDailyReward {
+    // TODO: What is the purpose of these fields?
+    pub(crate) start_level: u16,
+    pub(crate) end_level: u16,
+
     pub gold_chests: u16,
     pub silver: u64,
 
@@ -265,6 +269,8 @@ impl HellevatorDailyReward {
         }
 
         Some(HellevatorDailyReward {
+            start_level: data.csiget(0, "start level", 0).unwrap_or(0),
+            end_level: data.csiget(1, "end level", 0).unwrap_or(0),
             gold_chests: data.csiget(2, "gold chests", 0).unwrap_or(0),
             silver: data.csiget(5, "silver reward", 0).unwrap_or(0),
             fortress_chests: data.csiget(3, "ft chests", 0).unwrap_or(0),
