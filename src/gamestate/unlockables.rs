@@ -68,13 +68,12 @@ impl HellevatorEvent {
         }
     }
 
-    // /// If the Hellevator event is active, this returns a mutable reference
-    // to /// the Information about it
-    // #[must_use]
-    // pub fn active_mut(&mut self) -> Option<&mut Hellevator> {
-    //     let is_active = self.is_event_ongoing();
-    //     self.active.as_mut().filter(|_| is_active)
-    // }
+    /// If the Hellevator event is active, this returns a mutable reference
+    #[must_use]
+    pub fn active_mut(&mut self) -> Option<&mut Hellevator> {
+        let is_active = self.is_event_ongoing();
+        self.active.as_mut().filter(|_| is_active)
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -102,6 +101,10 @@ pub struct Hellevator {
     pub next_reset: Option<DateTime<Local>>,
     pub start_contrib_date: Option<DateTime<Local>>,
 
+    /// This field is only updated during login. After claiming the reward
+    /// using `Command::HellevatorClaimDailyYesterday`, you must manually
+    /// reset this field.
+    pub rewards_yesterday: Option<HellevatorDailyReward>,
     pub rewards_today: Option<HellevatorDailyReward>,
     pub rewards_nest: Option<HellevatorDailyReward>,
 
@@ -259,7 +262,7 @@ impl HellevatorDailyReward {
     }
 
     pub(crate) fn parse(data: &[i64]) -> Option<HellevatorDailyReward> {
-        if data.len() != 10 {
+        if data.len() < 10 {
             return None;
         }
 
