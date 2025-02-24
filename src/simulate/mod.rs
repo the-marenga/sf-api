@@ -112,6 +112,10 @@ impl UpgradeableFighter {
             return Err(item);
         };
 
+        if item.class.is_some_and(|class| class != self.class) {
+            return Err(item);
+        }
+
         if item_slot != slot {
             let is_offhand = slot == EquipmentSlot::Shield
                 && item_slot == EquipmentSlot::Weapon;
