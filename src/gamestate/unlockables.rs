@@ -235,7 +235,7 @@ pub struct HellevatorShopTreat {
     pub effect_strength: u32,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorDailyReward {
     // TODO: What is the purpose of these fields?
