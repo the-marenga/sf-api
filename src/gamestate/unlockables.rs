@@ -102,6 +102,7 @@ pub struct Hellevator {
     pub next_reset: Option<DateTime<Local>>,
     pub start_contrib_date: Option<DateTime<Local>>,
 
+    pub rewards_yesterday: Option<HellevatorDailyReward>,
     pub rewards_today: Option<HellevatorDailyReward>,
     pub rewards_nest: Option<HellevatorDailyReward>,
 
@@ -234,9 +235,13 @@ pub struct HellevatorShopTreat {
     pub effect_strength: u32,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorDailyReward {
+    // TODO: What is the purpose of these fields?
+    pub(crate) start_level: u16,
+    pub(crate) end_level: u16,
+
     pub gold_chests: u16,
     pub silver: u64,
 
@@ -259,11 +264,13 @@ impl HellevatorDailyReward {
     }
 
     pub(crate) fn parse(data: &[i64]) -> Option<HellevatorDailyReward> {
-        if data.len() != 10 {
+        if data.len() < 10 {
             return None;
         }
 
         Some(HellevatorDailyReward {
+            start_level: data.csiget(0, "start level", 0).unwrap_or(0),
+            end_level: data.csiget(1, "end level", 0).unwrap_or(0),
             gold_chests: data.csiget(2, "gold chests", 0).unwrap_or(0),
             silver: data.csiget(5, "silver reward", 0).unwrap_or(0),
             fortress_chests: data.csiget(3, "ft chests", 0).unwrap_or(0),

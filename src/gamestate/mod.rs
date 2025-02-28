@@ -1325,12 +1325,45 @@ impl GameState {
                     );
                 }
                 "gtdailyrewardyesterday" => {
-                    // self.hellevator
-                    //     .active
-                    //     .get_or_insert_with(Default::default)
-                    //     .rewards_yesterday = HellevatorDailyReward::parse(
-                    //     &val.into_list("hdryd").unwrap_or_default(),
-                    // );
+                    self.hellevator
+                        .active
+                        .get_or_insert_with(Default::default)
+                        .rewards_yesterday = HellevatorDailyReward::parse(
+                        &val.into_list("hdryd").unwrap_or_default(),
+                    );
+                }
+                "gtdailyrewardclaimed" => {
+                    if let Some(hellevator) = self.hellevator.active.as_mut() {
+                        let rewards_yesterday =
+                            hellevator.rewards_yesterday.clone();
+                        let rewards_claimed = HellevatorDailyReward::parse(
+                            &val.into_list("hdrc").unwrap_or_default(),
+                        );
+
+                        if let (
+                            Some(rewards_yesterday),
+                            Some(rewards_claimed),
+                        ) = (rewards_yesterday, rewards_claimed)
+                        {
+                            // This response is sent when either yesterday's
+                            // or today's daily reward was claimed. The
+                            // response value is the claimed reward. By
+                            // comparing it, we can determine which kind of
+                            // reward was claimed.
+                            if rewards_yesterday == rewards_claimed {
+                                // The game doesn't update this value itself, so
+                                // we do it manually.
+                                //
+                                // NOTE: In practice this should be good enough,
+                                // but theoretically it is possible that both
+                                // kind of rewards have the same value. In this
+                                // case, it could happen that yesterday's daily
+                                // reward is reset even though today's daily
+                                // reward was claimed.
+                                hellevator.rewards_yesterday = None;
+                            }
+                        }
+                    }
                 }
                 "gtranking" => {
                     self.hall_of_fames.hellevator = val
