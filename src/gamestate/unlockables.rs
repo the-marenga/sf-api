@@ -177,18 +177,47 @@ pub struct HellevatorMonsterReward {
     pub amount: u64,
 }
 
-#[derive(Debug, Clone, Default, Copy, PartialEq, Eq, Hash, FromPrimitive)]
+#[derive(Debug, Clone, Default, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HellevatorMonsterRewardTyp {
-    Points = 1,
-    Tickets = 2,
-    Mushrooms = 3,
-    Silver = 4,
-    LuckyCoin = 5,
-    Wood = 6,
-    Stone = 7,
+    Points,
+    Tickets,
+    Mushrooms,
+    Silver,
+    LuckyCoin,
+    Wood,
+    Stone,
+    Arcane,
+    Metal,
+    Souls,
+    Fruit(HabitatType),
+
     #[default]
-    Unkown = 99,
+    Unknown,
+}
+
+impl HellevatorMonsterRewardTyp {
+    pub(crate) fn parse(data: i64) -> HellevatorMonsterRewardTyp {
+        match data {
+            1 => HellevatorMonsterRewardTyp::Points,
+            2 => HellevatorMonsterRewardTyp::Tickets,
+            3 => HellevatorMonsterRewardTyp::Mushrooms,
+            4 => HellevatorMonsterRewardTyp::Silver,
+            5 => HellevatorMonsterRewardTyp::LuckyCoin,
+            6 => HellevatorMonsterRewardTyp::Wood,
+            7 => HellevatorMonsterRewardTyp::Stone,
+            8 => HellevatorMonsterRewardTyp::Arcane,
+            9 => HellevatorMonsterRewardTyp::Metal,
+            10 => HellevatorMonsterRewardTyp::Souls,
+            11 => HellevatorMonsterRewardTyp::Fruit(HabitatType::Shadow),
+            12 => HellevatorMonsterRewardTyp::Fruit(HabitatType::Light),
+            13 => HellevatorMonsterRewardTyp::Fruit(HabitatType::Earth),
+            14 => HellevatorMonsterRewardTyp::Fruit(HabitatType::Fire),
+            15 => HellevatorMonsterRewardTyp::Fruit(HabitatType::Water),
+
+            _ => HellevatorMonsterRewardTyp::Unknown,
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone)]
