@@ -481,6 +481,7 @@ pub enum TaskType {
     SpendCardsHellevator,
     OpenAdventCalendar,
     UpgradeArenaManagerBuilding(IdleBuildingType),
+    EarnMoneyFromExpeditions,
 
     Unknown,
 }
@@ -611,8 +612,9 @@ impl TaskType {
                 TaskType::UpgradeArenaManagerBuilding(IdleBuildingType::Seat)
             }
             134 => TaskType::OpenAdventCalendar,
+            135 => TaskType::EarnMoneyFromExpeditions,
 
-            ..=0 | 135.. => TaskType::Unknown,
+            ..=0 | 136.. => TaskType::Unknown,
         }
     }
 }
