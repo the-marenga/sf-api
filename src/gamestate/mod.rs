@@ -1299,8 +1299,7 @@ impl GameState {
                         if one != 0 {
                             warn!("hellevator monster t: {one}");
                         }
-                        let typ = FromPrimitive::from_i64(raw_typ)
-                            .unwrap_or_default();
+                        let typ = HellevatorMonsterRewardTyp::parse(raw_typ);
                         let amount: u64 =
                             chunk.csiget(2, "gt monster reward amount", 0)?;
                         hellevator
