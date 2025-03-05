@@ -36,11 +36,15 @@ pub struct Guild {
     pub own_treasure_skill: u16,
     /// The price to pay to upgrade your treasure by one rank
     pub own_treasure_upgrade: NormalCost,
+    /// The total amount of treasure skill the guild has
+    pub total_treasure_skill: u16,
 
     /// The skill you yourself contribute to the guild
     pub own_instructor_skill: u16,
     /// The price to pay to upgrade your instructor by one rank
     pub own_instructor_upgrade: NormalCost,
+    /// The total amount of instructor skill the guild has
+    pub total_instructor_skill: u16,
 
     /// How many raids this guild has completed already
     pub finished_raids: u16,
@@ -253,10 +257,16 @@ impl Guild {
             data.skip(385, "hydra attributes")?,
         );
 
+        self.total_treasure_skill =
+            data.csimget(6, "guild total treasure skill", 0, |x| x & 0xFFFF)?;
+        self.total_instructor_skill =
+            data.csimget(7, "guild total instructor skill", 0, |x| x & 0xFFFF)?;
+
         self.portal.life_percentage =
             data.csimget(6, "guild portal life p", 100, |x| x >> 16)?;
         self.portal.defeated_count =
             data.csimget(7, "guild portal progress", 0, |x| x >> 16)?;
+
         Ok(())
     }
 
