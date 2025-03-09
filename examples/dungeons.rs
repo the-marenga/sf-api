@@ -54,7 +54,7 @@ pub async fn main() {
             };
             // You should make a better heuristic to find these, but for now we
             // just find the lowest level
-            if best.map_or(true, |old| old.1.level > current.level) {
+            if best.is_none_or(|old| old.1.level > current.level) {
                 best = Some((l.into(), current))
             }
         }
