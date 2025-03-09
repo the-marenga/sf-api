@@ -165,8 +165,8 @@ impl Underworld {
 #[allow(missing_docs)]
 /// The type of a producible resource in the underworld
 pub enum UnderWorldResourceType {
-    Souls = 0,
-    Silver = 1,
+    Silver = 0,
+    Souls = 1,
     #[doc(alias = "ALU")]
     ThirstForAdventure = 2,
 }
