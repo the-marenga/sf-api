@@ -530,3 +530,38 @@ impl<T: Copy + Debug + Into<i64>> CSTGet<T> for [T] {
         Ok(server_time.convert_to_local(val, name))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_from_sf_string() {
+        let input = "$bHello$cWorld$PThis$sis a test!";
+        let expected_output = "\nHello:World%This/is a test!";
+        let result = from_sf_string(input);
+        assert_eq!(result, expected_output);
+
+        let input = "$$$$$$$$$$$";
+        let expected_output = "";
+        let result = from_sf_string(input);
+        assert_eq!(result, expected_output);
+
+        let input = "$$b$c$P$s$p$+$q$r$C$S$d";
+        let expected_output = "\n:%/|&\"#,;$";
+        let result = from_sf_string(input);
+        assert_eq!(result, expected_output);
+    }
+    #[test]
+    fn test_to_sf_string() {
+        let input = "\nHello:World%This/is a test!";
+        let expected_output = "$bHello$cWorld$PThis$sis a test!";
+        let result = to_sf_string(input);
+        assert_eq!(result, expected_output);
+
+        let input = "\n:%/|&\"#,;$";
+        let expected_output = "$b$c$P$s$p$+$q$r$C$S$d";
+        let result = to_sf_string(input);
+        assert_eq!(result, expected_output);
+    }
+}
