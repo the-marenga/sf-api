@@ -3,13 +3,11 @@ use std::{
     str::FromStr,
 };
 
-use aho_corasick::AhoCorasick;
 use base64::Engine;
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumArray, EnumMap};
-use log::{error, warn};
+use log::warn;
 use num_traits::FromPrimitive;
-use once_cell::sync::Lazy;
 
 use crate::{error::SFError, gamestate::ServerTime};
 
@@ -91,54 +89,59 @@ pub(crate) fn warning_from_str<T: FromStr>(val: &str, name: &str) -> Option<T> {
 /// representation
 #[must_use]
 pub fn from_sf_string(val: &str) -> String {
-    pattern_replace::<true>(val)
+    let mut new = String::with_capacity(val.len());
+    let mut is_escaped = false;
+    for char in val.chars() {
+        if char == '$' {
+            is_escaped = true;
+            continue;
+        }
+        let escaped_char = match char {
+            x if !is_escaped => x,
+            'b' => '\n',
+            'c' => ':',
+            'P' => '%',
+            's' => '/',
+            'p' => '|',
+            '+' => '&',
+            'q' => '"',
+            'r' => '#',
+            'C' => ',',
+            'S' => ';',
+            'd' => '$',
+            x => {
+                warn!("Unkown escape sequence: ${x}");
+                x
+            }
+        };
+        new.push(escaped_char);
+        is_escaped = false;
+    }
+    new
 }
 
-/// Makes a user controlled string, like the character description safe to use
+/// Makes a user controlled string, like a new character description safe to use
 /// in a request
 #[must_use]
 pub fn to_sf_string(val: &str) -> String {
-    pattern_replace::<false>(val)
-}
-
-/// Calling `.replace()` a bunch of times is bad, as that generates a bunch of
-/// strings. regex!() -> `replace_all()`  would be better, as that uses cow<>
-/// irrc, but we can replace pattern with a linear search an one string, using
-/// this extra crate. We call this function a bunch, so optimizing this is
-/// probably worth it
-#[allow(clippy::expect_used)]
-fn pattern_replace<const FROM: bool>(str: &str) -> String {
-    static A: Lazy<(AhoCorasick, &'static [&'static str; 11])> =
-        Lazy::new(|| {
-            let l = sf_str_lookups();
-            (
-                aho_corasick::AhoCorasick::new(l.0)
-                    .expect("const pattern a wrong"),
-                l.1,
-            )
-        });
-
-    static B: Lazy<(AhoCorasick, &'static [&'static str; 11])> =
-        Lazy::new(|| {
-            let l = sf_str_lookups();
-            (
-                aho_corasick::AhoCorasick::new(l.1)
-                    .expect("const pattern b wrong"),
-                l.0,
-            )
-        });
-
-    let (from, to) = if FROM { A.clone() } else { B.clone() };
-    let mut wtr = vec![];
-    from.try_stream_replace_all(str.as_bytes(), &mut wtr, to)
-        .expect("stream_replace_all failed");
-
-    if let Ok(res) = String::from_utf8(wtr) {
-        res
-    } else {
-        error!("replace generated invalid utf8");
-        String::new()
+    let mut new = String::with_capacity(val.len());
+    for char in val.chars() {
+        match char {
+            '\n' => new.push_str("$b"),
+            ':' => new.push_str("$c"),
+            '%' => new.push_str("$P"),
+            '/' => new.push_str("$s"),
+            '|' => new.push_str("$p"),
+            '&' => new.push_str("$+"),
+            '"' => new.push_str("$q"),
+            '#' => new.push_str("$r"),
+            ',' => new.push_str("$C"),
+            ';' => new.push_str("$S"),
+            '$' => new.push_str("$d"),
+            _ => new.push(char),
+        };
     }
+    new
 }
 
 /// This function is designed for reverse engineering encrypted commands from
@@ -269,17 +272,6 @@ where
                 .ok_or_else(|| SFError::ParsingError(name, format!("{data:?}")))
         })
         .collect()
-}
-
-/// The mappings to convert between a normal and an sf string
-const fn sf_str_lookups(
-) -> (&'static [&'static str; 11], &'static [&'static str; 11]) {
-    (
-        &[
-            "$b", "$c", "$P", "$s", "$p", "$+", "$q", "$r", "$C", "$S", "$d",
-        ],
-        &["\n", ":", "%", "/", "|", "&", "\"", "#", ",", ";", "$"],
-    )
 }
 
 fn raw_cget<T: Copy + std::fmt::Debug>(
@@ -536,5 +528,40 @@ impl<T: Copy + Debug + Into<i64>> CSTGet<T> for [T] {
         let val = raw_cget(self, pos, name)?;
         let val = val.into();
         Ok(server_time.convert_to_local(val, name))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_from_sf_string() {
+        let input = "$bHello$cWorld$PThis$sis a test!";
+        let expected_output = "\nHello:World%This/is a test!";
+        let result = from_sf_string(input);
+        assert_eq!(result, expected_output);
+
+        let input = "$$$$$$$$$$$";
+        let expected_output = "";
+        let result = from_sf_string(input);
+        assert_eq!(result, expected_output);
+
+        let input = "$$b$c$P$s$p$+$q$r$C$S$d";
+        let expected_output = "\n:%/|&\"#,;$";
+        let result = from_sf_string(input);
+        assert_eq!(result, expected_output);
+    }
+    #[test]
+    fn test_to_sf_string() {
+        let input = "\nHello:World%This/is a test!";
+        let expected_output = "$bHello$cWorld$PThis$sis a test!";
+        let result = to_sf_string(input);
+        assert_eq!(result, expected_output);
+
+        let input = "\n:%/|&\"#,;$";
+        let expected_output = "$b$c$P$s$p$+$q$r$C$S$d";
+        let result = to_sf_string(input);
+        assert_eq!(result, expected_output);
     }
 }
