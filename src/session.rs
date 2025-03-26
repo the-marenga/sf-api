@@ -593,6 +593,28 @@ impl SimpleSession {
             .collect())
     }
 
+    /// Returns a reference to the server URL, that this session is sending
+    /// requests to
+    #[must_use]
+    pub fn server_url(&self) -> &url::Url {
+        self.session.server_url()
+    }
+
+    /// The username of the character, that this session is responsible for
+    #[must_use]
+    pub fn username(&self) -> &str {
+        self.session.username()
+    }
+
+    /// Checks if this session has ever been able to successfully login to the
+    /// server to establish a session id. You should not need to check this, as
+    /// `login()` should return error on unsuccessful logins, but if you want
+    /// to make sure, you can make sure here
+    #[must_use]
+    pub fn has_session_id(&self) -> bool {
+        self.session.has_session_id()
+    }
+
     /// Returns a reference to the game state, if this `SimpleSession` is
     /// currently logged in
     #[must_use]
