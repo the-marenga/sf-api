@@ -173,7 +173,7 @@ impl HallOfFamePlayer {
         let honor = data.cfsuget(4, "hof player fame")?;
         let class: i64 = data.cfsuget(5, "hof player class")?;
         let Some(class) = FromPrimitive::from_i64(class - 1) else {
-            warn!("Invalid hof class: {class} - {:?}", data);
+            warn!("Invalid hof class: {class} - {data:?}");
             return Err(SFError::ParsingError(
                 "hof player class",
                 class.to_string(),
