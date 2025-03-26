@@ -600,8 +600,7 @@ impl SimpleSession {
         self.session.server_url()
     }
 
-    /// Returns a reference to the server URL, that this session is sending
-    /// requests to
+    /// The username of the character, that this session is responsible for
     #[must_use]
     pub fn username(&self) -> &str {
         self.session.username()
