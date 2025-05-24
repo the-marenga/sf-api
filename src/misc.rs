@@ -1,5 +1,5 @@
 use std::{
-    fmt::{Debug, Display},
+    fmt::{Debug, Display, Write},
     str::FromStr,
 };
 
@@ -25,7 +25,7 @@ pub fn sha1_hash(val: &str) -> String {
     let hash = hasher.finalize();
     let mut result = String::with_capacity(hash.len() * 2);
     for byte in &hash {
-        result.push_str(&format!("{byte:02x}"));
+        _ = result.write_fmt(format_args!("{byte:02x}"));
     }
     result
 }
@@ -139,7 +139,7 @@ pub fn to_sf_string(val: &str) -> String {
             ';' => new.push_str("$S"),
             '$' => new.push_str("$d"),
             _ => new.push(char),
-        };
+        }
     }
     new
 }
