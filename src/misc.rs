@@ -159,6 +159,13 @@ pub fn to_sf_string(val: &str) -> String {
 /// values, an `InvalidRequest` error will be returned, that mentions the part,
 /// that is missing or malformed. The same goes for the necessary parts of the
 /// decrypted command
+#[allow(clippy::missing_errors_doc, deprecated)]
+#[deprecated(
+    since = "0.2.2",
+    note = "S&F requests are no longer encrypted, so this function will be \
+            removed in a future update. If you need to decode the arguments \
+            to a command yourself, you can just base64 decode them"
+)]
 pub fn decrypt_url(
     encrypted_url: &str,
     login_resp: Option<&str>,
@@ -207,6 +214,12 @@ pub fn decrypt_url(
 }
 
 #[allow(clippy::missing_errors_doc)]
+#[deprecated(
+    since = "0.2.2",
+    note = "S&F requests are no longer encrypted, so this function will be \
+            removed in a future update. If you need to decode the arguments \
+            to a command yourself, you can just base64 decode them"
+)]
 pub fn decrypt_server_request(
     to_decrypt: &str,
     key: &str,

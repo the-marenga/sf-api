@@ -17,6 +17,7 @@ use crate::{
         HASH_CONST,
     },
 };
+#[allow(deprecated)]
 pub use crate::{misc::decrypt_url, response::*};
 
 #[derive(Debug, Clone)]
