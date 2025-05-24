@@ -20,6 +20,7 @@ use crate::{
 pub use crate::{misc::decrypt_url, response::*};
 
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_field_names)]
 /// The session, that manages the server communication for a character
 pub struct Session {
     /// The information necessary to log in
@@ -280,9 +281,8 @@ impl Session {
         }
         req = req.header(
             HeaderName::from_str("PG-Player").unwrap(),
-            HeaderValue::from_str(&self.player_id.to_string()).map_err(
-                |_| SFError::InvalidRequest("Invalid player id"),
-            )?,
+            HeaderValue::from_str(&self.player_id.to_string())
+                .map_err(|_| SFError::InvalidRequest("Invalid player id"))?,
         );
 
         let resp = req.send().await.map_err(|_| SFError::ConnectionError)?;
