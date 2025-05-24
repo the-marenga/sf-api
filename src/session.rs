@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, fmt::Debug, time::Duration};
+use std::{borrow::Borrow, fmt::Debug, str::FromStr, time::Duration};
 
 use base64::Engine;
 use log::{error, trace, warn};
@@ -232,6 +232,7 @@ impl Session {
     /// # Errors
     /// Look at `send_command()` to get a full overview of all the
     /// possible errors
+    #[allow(clippy::unwrap_used, clippy::missing_panics_doc)]
     pub async fn send_command_raw<T: Borrow<Command>>(
         &self,
         command: T,
@@ -271,16 +272,17 @@ impl Session {
         }
         if self.has_session_id() {
             req = req.header(
-                HeaderName::from_static("PG-Session"),
+                HeaderName::from_str("PG-Session").unwrap(),
                 HeaderValue::from_str(&self.session_id).map_err(|_| {
                     SFError::InvalidRequest("Invalid session id")
                 })?,
             );
         }
         req = req.header(
-            HeaderName::from_static("PG-Player"),
-            HeaderValue::from_str(&self.player_id.to_string())
-                .map_err(|_| SFError::InvalidRequest("Invalid player id"))?,
+            HeaderName::from_str("PG-Player").unwrap(),
+            HeaderValue::from_str(&self.player_id.to_string()).map_err(
+                |_| SFError::InvalidRequest("Invalid player id"),
+            )?,
         );
 
         let resp = req.send().await.map_err(|_| SFError::ConnectionError)?;
