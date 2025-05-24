@@ -232,32 +232,6 @@ pub fn decrypt_server_request(
         .map_err(|_| SFError::InvalidRequest("Decrypted value is not UTF8"))
 }
 
-#[cfg(feature = "session")]
-pub(crate) fn encrypt_server_request(
-    to_encrypt: String,
-    key: &str,
-) -> Result<String, SFError> {
-    let mut my_key = [0; 16];
-    my_key.copy_from_slice(
-        key.as_bytes()
-            .get(..16)
-            .ok_or(SFError::InvalidRequest("Invalid crypto key"))?,
-    );
-
-    let mut cipher = libaes::Cipher::new_128(&my_key);
-    cipher.set_auto_padding(false);
-
-    // This feels wrong, but the normal padding does not work. No idea what the
-    // default padding strategy is
-    let mut to_encrypt = to_encrypt.into_bytes();
-    while to_encrypt.len() % 16 != 0 {
-        to_encrypt.push(0);
-    }
-    let encrypted = cipher.cbc_encrypt(CRYPTO_IV.as_bytes(), &to_encrypt);
-
-    Ok(base64::engine::general_purpose::URL_SAFE.encode(encrypted))
-}
-
 pub(crate) fn parse_vec<B: Display + Copy + std::fmt::Debug, T, F>(
     data: &[B],
     name: &'static str,
