@@ -460,7 +460,7 @@ impl OtherPlayer {
         Ok(())
     }
 
-    pub(crate) fn parse(
+    pub fn parse(
         data: &[i64],
         server_time: ServerTime,
     ) -> Result<OtherPlayer, SFError> {
