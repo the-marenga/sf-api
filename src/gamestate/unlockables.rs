@@ -831,7 +831,7 @@ pub struct ScrapBook {
 impl ScrapBook {
     // 99% based on Hubert Lipińskis Code
     // https://github.com/HubertLipinski/sfgame-scrapbook-helper
-    pub(crate) fn parse(val: &str) -> Option<ScrapBook> {
+    pub fn parse(val: &str) -> Option<ScrapBook> {
         let text = base64::Engine::decode(
             &base64::engine::general_purpose::URL_SAFE,
             val,

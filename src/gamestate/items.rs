@@ -696,7 +696,7 @@ impl ItemType {
         })
     }
 
-    pub fn parse(
+    pub(crate) fn parse(
         data: &[i64],
         server_time: ServerTime,
     ) -> Result<Option<Self>, SFError> {
