@@ -163,7 +163,7 @@ pub struct HallOfFamePlayer {
 }
 
 impl HallOfFamePlayer {
-    pub(crate) fn parse(val: &str) -> Result<Self, SFError> {
+    pub fn parse(val: &str) -> Result<Self, SFError> {
         let data: Vec<_> = val.split(',').collect();
         let rank = data.cfsuget(0, "hof player rank")?;
         let name = data.cget(1, "hof player name")?.to_string();
