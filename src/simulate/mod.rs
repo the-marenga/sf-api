@@ -344,7 +344,7 @@ impl BattleFighter {
                     equip.reaction_boost = true;
                 }
                 _ => {}
-            };
+            }
             if let Some(rune) = item.rune {
                 use RuneType as RT;
 
@@ -945,7 +945,7 @@ fn attack(
     if rng.f64() <= crit_chance {
         if attacker.equip.extra_crit_dmg {
             crit_dmg_factor += 0.05;
-        };
+        }
         logger.log(BE::Crit(attacker, defender));
         damage = (damage as f64 * crit_dmg_factor) as i64;
     }
@@ -978,7 +978,7 @@ impl PlayerFighterSquad {
                 *pet_attribute_bonus_perc.get_mut(typ.into()) =
                     f64::from(total_bonus / 100) / 100.0;
             }
-        };
+        }
         let portal_hp_bonus = gs
             .dungeons
             .portal

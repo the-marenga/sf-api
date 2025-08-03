@@ -1,5 +1,5 @@
 use std::{
-    fmt::{Debug, Display},
+    fmt::{Debug, Display, Write},
     str::FromStr,
 };
 
@@ -25,7 +25,7 @@ pub fn sha1_hash(val: &str) -> String {
     let hash = hasher.finalize();
     let mut result = String::with_capacity(hash.len() * 2);
     for byte in &hash {
-        result.push_str(&format!("{byte:02x}"));
+        _ = result.write_fmt(format_args!("{byte:02x}"));
     }
     result
 }
@@ -139,7 +139,7 @@ pub fn to_sf_string(val: &str) -> String {
             ';' => new.push_str("$S"),
             '$' => new.push_str("$d"),
             _ => new.push(char),
-        };
+        }
     }
     new
 }
@@ -159,6 +159,13 @@ pub fn to_sf_string(val: &str) -> String {
 /// values, an `InvalidRequest` error will be returned, that mentions the part,
 /// that is missing or malformed. The same goes for the necessary parts of the
 /// decrypted command
+#[allow(clippy::missing_errors_doc, deprecated)]
+#[deprecated(
+    since = "0.2.2",
+    note = "S&F requests are no longer encrypted, so this function will be \
+            removed in a future update. If you need to decode the arguments \
+            to a command yourself, you can just base64 decode them"
+)]
 pub fn decrypt_url(
     encrypted_url: &str,
     login_resp: Option<&str>,
@@ -207,6 +214,12 @@ pub fn decrypt_url(
 }
 
 #[allow(clippy::missing_errors_doc)]
+#[deprecated(
+    since = "0.2.2",
+    note = "S&F requests are no longer encrypted, so this function will be \
+            removed in a future update. If you need to decode the arguments \
+            to a command yourself, you can just base64 decode them"
+)]
 pub fn decrypt_server_request(
     to_decrypt: &str,
     key: &str,
@@ -230,32 +243,6 @@ pub fn decrypt_server_request(
 
     String::from_utf8(decrypted)
         .map_err(|_| SFError::InvalidRequest("Decrypted value is not UTF8"))
-}
-
-#[cfg(feature = "session")]
-pub(crate) fn encrypt_server_request(
-    to_encrypt: String,
-    key: &str,
-) -> Result<String, SFError> {
-    let mut my_key = [0; 16];
-    my_key.copy_from_slice(
-        key.as_bytes()
-            .get(..16)
-            .ok_or(SFError::InvalidRequest("Invalid crypto key"))?,
-    );
-
-    let mut cipher = libaes::Cipher::new_128(&my_key);
-    cipher.set_auto_padding(false);
-
-    // This feels wrong, but the normal padding does not work. No idea what the
-    // default padding strategy is
-    let mut to_encrypt = to_encrypt.into_bytes();
-    while to_encrypt.len() % 16 != 0 {
-        to_encrypt.push(0);
-    }
-    let encrypted = cipher.cbc_encrypt(CRYPTO_IV.as_bytes(), &to_encrypt);
-
-    Ok(base64::engine::general_purpose::URL_SAFE.encode(encrypted))
 }
 
 pub(crate) fn parse_vec<B: Display + Copy + std::fmt::Debug, T, F>(
