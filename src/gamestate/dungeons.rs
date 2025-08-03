@@ -177,6 +177,11 @@ pub enum LightDungeon {
     PlayaGamesHQ = 29,
     TrainingCamp = 30,
     Sandstorm = 31,
+    ArcadeOfTheOldPixelIcons = 32,
+    TheServerRoom = 33,
+    WorkshopOfTheHunters = 34,
+    RetroTVLegends = 35,
+    MeetingRoom = 36,
 }
 
 impl From<LightDungeon> for Dungeon {
@@ -232,6 +237,12 @@ pub enum ShadowDungeon {
     SchoolOfMagicExpress = 27,
     AshMountain = 28,
     PlayaGamesHQ = 29,
+    // TrainingDungeon & Sandstorm do not have a shadow version
+    ArcadeOfTheOldPixelIcons = 32,
+    TheServerRoom = 33,
+    WorkshopOfTheHunters = 34,
+    RetroTVLegends = 35,
+    MeetingRoom = 36,
 }
 
 impl From<ShadowDungeon> for Dungeon {
