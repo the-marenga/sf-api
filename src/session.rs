@@ -2,19 +2,19 @@ use std::{borrow::Borrow, fmt::Debug, str::FromStr, time::Duration};
 
 use base64::Engine;
 use log::{error, trace, warn};
-use reqwest::{header::*, Client};
+use reqwest::{Client, header::*};
 use url::Url;
 
 use crate::{
     command::Command,
     error::SFError,
     gamestate::{
-        character::{Class, Gender, Race},
         GameState,
+        character::{Class, Gender, Race},
     },
     misc::{
-        sha1_hash, DEFAULT_CRYPTO_ID, DEFAULT_CRYPTO_KEY, DEFAULT_SESSION_ID,
-        HASH_CONST,
+        DEFAULT_CRYPTO_ID, DEFAULT_CRYPTO_KEY, DEFAULT_SESSION_ID, HASH_CONST,
+        sha1_hash,
     },
 };
 #[allow(deprecated)]
@@ -678,11 +678,11 @@ impl SimpleSession {
             }
         };
 
-        if let Some(gs) = &mut self.gamestate {
-            if let Err(e) = gs.update(resp) {
-                self.gamestate = None;
-                return Err(e);
-            }
+        if let Some(gs) = &mut self.gamestate
+            && let Err(e) = gs.update(resp)
+        {
+            self.gamestate = None;
+            return Err(e);
         }
 
         Ok(self.gamestate.as_mut().unwrap())

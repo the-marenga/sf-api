@@ -7,8 +7,8 @@ use num_traits::FromPrimitive;
 use strum::EnumIter;
 
 use super::{
-    character::Class, items::*, tavern::Location, unlockables::HabitatType,
     ArrSkip, CCGet, CGet, IdleBuildingType, LightDungeon, Mount, ShopType,
+    character::Class, items::*, tavern::Location, unlockables::HabitatType,
 };
 use crate::{command::AttributeType, error::SFError};
 

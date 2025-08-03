@@ -6,7 +6,7 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
 use super::{Mirror, NormalCost, RelationEntry, SFError, ScrapBook};
-use crate::{command::*, gamestate::items::*, misc::*, PlayerId};
+use crate::{PlayerId, command::*, gamestate::items::*, misc::*};
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

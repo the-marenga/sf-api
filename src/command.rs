@@ -5,6 +5,7 @@ use num_derive::FromPrimitive;
 use strum::EnumIter;
 
 use crate::{
+    PlayerId,
     gamestate::{
         character::*,
         dungeons::{CompanionClass, Dungeon},
@@ -18,7 +19,6 @@ use crate::{
             EnchantmentIdent, HabitatType, HellevatorTreatType, Unlockable,
         },
     },
-    PlayerId,
 };
 
 #[non_exhaustive]
@@ -851,7 +851,7 @@ impl Command {
         use crate::{
             error::SFError,
             gamestate::dungeons::{LightDungeon, ShadowDungeon},
-            misc::{sha1_hash, to_sf_string, HASH_CONST},
+            misc::{HASH_CONST, sha1_hash, to_sf_string},
         };
 
         Ok(match self {
@@ -1228,10 +1228,12 @@ impl Command {
             Command::UnderworldUpgradeFinish {
                 building,
                 mushrooms,
-            } => format!(
-                "UnderworldBuildFinished:{}/{mushrooms}",
-                *building as usize + 1
-            ),
+            } => {
+                format!(
+                    "UnderworldBuildFinished:{}/{mushrooms}",
+                    *building as usize + 1
+                )
+            }
             Command::UnderworldAttack { player_id } => {
                 format!("UnderworldAttack:{player_id}")
             }
@@ -1300,7 +1302,9 @@ impl Command {
             Command::SetPlayerRelation {
                 player_id,
                 relation,
-            } => format!("PlayerFriendSet:{player_id}/{}", *relation as i32),
+            } => {
+                format!("PlayerFriendSet:{player_id}/{}", *relation as i32)
+            }
             Command::SetPortraitFrame { portrait_id } => {
                 format!("PlayerSetActiveFrame:{portrait_id}")
             }
@@ -1419,11 +1423,13 @@ impl Command {
                 typ,
                 price,
                 use_mushroom,
-            } => format!(
-                "GroupTournamentMerchantBuy:{position}/{}/{price}/{}",
-                *typ as u32,
-                if *use_mushroom { 2 } else { 1 }
-            ),
+            } => {
+                format!(
+                    "GroupTournamentMerchantBuy:{position}/{}/{price}/{}",
+                    *typ as u32,
+                    if *use_mushroom { 2 } else { 1 }
+                )
+            }
             Command::HellevatorRefreshShop => {
                 format!("GroupTournamentMerchantReroll:")
             }
@@ -1435,11 +1441,13 @@ impl Command {
             Command::HellevatorJoinHellAttack {
                 use_mushroom,
                 plain: pos,
-            } => format!(
-                "GroupTournamentRaidParticipant:{}/{}",
-                u8::from(*use_mushroom),
-                *pos + 1
-            ),
+            } => {
+                format!(
+                    "GroupTournamentRaidParticipant:{}/{}",
+                    u8::from(*use_mushroom),
+                    *pos + 1
+                )
+            }
             Command::HellevatorClaimDaily => {
                 format!("GroupTournamentClaimDaily:")
             }

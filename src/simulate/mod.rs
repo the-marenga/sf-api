@@ -11,8 +11,8 @@ use strum::{EnumIter, IntoEnumIterator};
 use crate::{
     command::AttributeType,
     gamestate::{
-        character::Class, dungeons::CompanionClass, items::*,
-        social::OtherPlayer, GameState,
+        GameState, character::Class, dungeons::CompanionClass, items::*,
+        social::OtherPlayer,
     },
     misc::EnumMapGet,
 };
@@ -733,24 +733,23 @@ impl<'a> Battle<'a> {
                 }
                 if let ClassEffect::Necromancer { remaining, typ } =
                     &mut attacker.class_effect
+                    && *remaining > 0
                 {
-                    if *remaining > 0 {
-                        let mut has_revived = false;
-                        if let Minion::Skeleton { revived } = typ {
-                            if *revived < 2 && self.rng.bool() {
-                                *revived += 1;
-                                has_revived = true;
-                            }
-                        }
-                        if has_revived {
-                            // TODO: this revives for one turn, right?
-                            *remaining = 1;
-                            logger.log(BE::MinionSkeletonRevived(
-                                attacker, defender,
-                            ));
-                        } else {
-                            *remaining -= 1;
-                        }
+                    let mut has_revived = false;
+                    if let Minion::Skeleton { revived } = typ
+                        && *revived < 2
+                        && self.rng.bool()
+                    {
+                        *revived += 1;
+                        has_revived = true;
+                    }
+                    if has_revived {
+                        // TODO: this revives for one turn, right?
+                        *remaining = 1;
+                        logger
+                            .log(BE::MinionSkeletonRevived(attacker, defender));
+                    } else {
+                        *remaining -= 1;
                     }
                 }
             }
