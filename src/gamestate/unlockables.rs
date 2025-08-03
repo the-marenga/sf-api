@@ -52,7 +52,7 @@ impl HellevatorEvent {
     /// Information about it. Note that you still need to check the level >= 10
     /// requirement yourself
     #[must_use]
-    pub fn status(&self) -> HellevatorStatus {
+    pub fn status(&self) -> HellevatorStatus<'_> {
         match self.active.as_ref() {
             None => HellevatorStatus::NotAvailable,
             Some(h) if !self.is_event_ongoing() => {
@@ -783,7 +783,7 @@ impl Achievements {
     pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
         self.0.clear();
         let total_count = data.len() / 2;
-        if data.len() % 2 != 0 {
+        if !data.len().is_multiple_of(2) {
             warn!("achievement data has the wrong length: {}", data.len());
             return Ok(());
         }

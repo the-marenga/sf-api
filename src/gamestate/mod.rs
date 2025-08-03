@@ -711,7 +711,7 @@ impl GameState {
                 "expeditions" => {
                     let data: Vec<i64> = val.into_list("exp event")?;
 
-                    if data.len() % 8 != 0 {
+                    if !data.len().is_multiple_of(8) {
                         warn!(
                             "Available expeditions have weird size: {data:?} \
                              {}",
