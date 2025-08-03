@@ -794,6 +794,9 @@ pub enum Event {
     LuckyDay,
     CrazyMushroomHarvest,
     HolidaySale,
+    ValentinesBlessing,
+    BlackGemRush,
+    RumbleForRiches,
 }
 
 pub(crate) fn parse_rewards(vals: &[i64]) -> [RewardChest; 3] {
