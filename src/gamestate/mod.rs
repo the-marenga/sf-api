@@ -717,7 +717,7 @@ impl GameState {
                              {}",
                             data.len()
                         );
-                    };
+                    }
                     self.tavern.expeditions.available = data
                         .chunks_exact(8)
                         .map(|data| {
@@ -883,7 +883,7 @@ impl GameState {
                         match InboxEntry::parse(msg, server_time) {
                             Ok(msg) => self.mail.inbox.push(msg),
                             Err(e) => warn!("Invalid msg: {msg} {e}"),
-                        };
+                        }
                     }
                 }
                 "messagetext" => {
