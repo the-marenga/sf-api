@@ -7,7 +7,7 @@ use num_derive::FromPrimitive;
 use strum::EnumIter;
 
 use super::*;
-use crate::{gamestate::items::*, misc::*, PlayerId};
+use crate::{PlayerId, gamestate::items::*, misc::*};
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -56,10 +56,11 @@ impl HellevatorEvent {
         match self.active.as_ref() {
             None => HellevatorStatus::NotAvailable,
             Some(h) if !self.is_event_ongoing() => {
-                if let Some(cend) = self.collect_time_end {
-                    if !h.has_final_reward && Local::now() < cend {
-                        return HellevatorStatus::RewardClaimable;
-                    }
+                if let Some(cend) = self.collect_time_end
+                    && !h.has_final_reward
+                    && Local::now() < cend
+                {
+                    return HellevatorStatus::RewardClaimable;
                 }
                 HellevatorStatus::NotAvailable
             }

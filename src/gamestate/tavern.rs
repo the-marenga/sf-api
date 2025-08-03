@@ -4,8 +4,8 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
 use super::{
-    items::Item, ArrSkip, CCGet, CFPGet, CGet, CSTGet, ExpeditionSetting,
-    SFError, ServerTime,
+    ArrSkip, CCGet, CFPGet, CGet, CSTGet, ExpeditionSetting, SFError,
+    ServerTime, items::Item,
 };
 use crate::{
     command::{DiceReward, DiceType},
@@ -362,10 +362,10 @@ impl Expedition {
         }
 
         for ExpeditionEncounter { typ, heroism } in &mut self.encounters {
-            if let Some(possible_bounty) = typ.required_bounty() {
-                if self.items.iter().flatten().any(|a| a == &possible_bounty) {
-                    *heroism += 10;
-                }
+            if let Some(possible_bounty) = typ.required_bounty()
+                && self.items.iter().flatten().any(|a| a == &possible_bounty)
+            {
+                *heroism += 10;
             }
         }
         self.adjusted_bounty_heroism = true;

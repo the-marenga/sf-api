@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use enum_map::EnumMap;
 use sf_api::{
-    gamestate::{dungeons::LightDungeon, GameState},
+    gamestate::{GameState, dungeons::LightDungeon},
     misc::EnumMapGet,
     session::*,
     simulate::{Battle, BattleFighter, BattleSide, PlayerFighterSquad},

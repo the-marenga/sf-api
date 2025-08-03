@@ -4,7 +4,7 @@ use std::{
 };
 
 use chrono::{Local, NaiveDateTime};
-use reqwest::{header::*, Client};
+use reqwest::{Client, header::*};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::Mutex;
@@ -13,7 +13,7 @@ use url::Url;
 use crate::{
     error::SFError,
     misc::sha1_hash,
-    session::{reqwest_client, ConnectionOptions, PWHash, Session},
+    session::{ConnectionOptions, PWHash, Session, reqwest_client},
 };
 
 #[derive(Debug)]

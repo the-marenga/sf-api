@@ -5,14 +5,14 @@ use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
 use super::{
-    items::Equipment, AttributeType, CCGet, Class, EnumMapGet, Item, SFError,
-    ServerTime,
+    AttributeType, CCGet, Class, EnumMapGet, Item, SFError, ServerTime,
+    items::Equipment,
 };
 use crate::{
     misc::soft_into,
     simulate::{
-        constants::{LIGHT_ENEMIES, SHADOW_ENEMIES},
         Monster,
+        constants::{LIGHT_ENEMIES, SHADOW_ENEMIES},
     },
 };
 
@@ -303,10 +303,10 @@ impl Dungeons {
                     (ShadowDungeon::Twister, 1000),
                 ] {
                     let d = self.shadow.get_mut(dungeon);
-                    if let DungeonProgress::Open { finished, .. } = d {
-                        if *finished >= limit {
-                            *d = DungeonProgress::Finished;
-                        }
+                    if let DungeonProgress::Open { finished, .. } = d
+                        && *finished >= limit
+                    {
+                        *d = DungeonProgress::Finished;
                     }
                 }
             }
