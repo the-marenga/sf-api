@@ -490,6 +490,16 @@ pub const LIGHT_ENEMIES: EnumMap<LightDungeon, &'static [Monster]> = EnumMap::fr
         Monster::new(10, Class::Mage, [40, 40, 80, 100, 50], 2200, 1287),
     ],
     // Sandstorm
+    &[],
+    // ArcadeOfTheOldPixelIcons
+    &[],
+    // TheServerRoom
+    &[],
+    // WorkshopOfTheHunters
+    &[],
+    // RetroTVLegends
+    &[],
+    // MeetingRoom
     &[]
 ]);
 
@@ -1872,4 +1882,14 @@ pub const SHADOW_ENEMIES: EnumMap<ShadowDungeon, &'static [Monster]> = EnumMap::
     &[],
     // PlayaGamesHQ
     &[],
+    // ArcadeOfTheOldPixelIcons
+    &[],
+    // TheServerRoom
+    &[],
+    // WorkshopOfTheHunters
+    &[],
+    // RetroTVLegends
+    &[],
+    // MeetingRoom
+    &[]
 ]);

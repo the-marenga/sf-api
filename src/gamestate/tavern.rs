@@ -131,7 +131,7 @@ impl Tavern {
     /// the `questing_preference`, they will be shown. Otherwise you will get
     /// quests
     #[must_use]
-    pub fn available_tasks(&self) -> AvailableTasks {
+    pub fn available_tasks(&self) -> AvailableTasks<'_> {
         if self.questing_preference == ExpeditionSetting::PreferExpeditions
             && self.expeditions.is_event_ongoing()
         {
@@ -372,7 +372,7 @@ impl Expedition {
     }
 
     pub(crate) fn update_encounters(&mut self, data: &[i64]) {
-        if data.len() % 2 != 0 {
+        if !data.len().is_multiple_of(2) {
             warn!("weird encounters: {data:?}");
         }
         let default_ecp = |ci| {

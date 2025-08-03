@@ -63,7 +63,7 @@ impl Inventory {
         if data.is_empty() {
             return Ok(());
         }
-        if data.len() % 12 != 0 {
+        if !data.len().is_multiple_of(12) {
             error!("Wrong fortess chest response size:  {data:?}");
         }
         self.fortress_chest = Some(
@@ -412,7 +412,7 @@ impl Item {
             }
         }
         let model_id: u16 =
-            data.cimget(1, "item model id", |x| ((x & 0xFFFF) % 1000))?;
+            data.cimget(1, "item model id", |x| (x & 0xFFFF) % 1000)?;
 
         let color = match model_id {
             ..=49 if typ != ItemType::Talisman => data
