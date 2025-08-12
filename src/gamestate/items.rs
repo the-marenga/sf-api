@@ -25,7 +25,7 @@ pub struct Inventory {
 
 /// The game keeps track between 5 slot bag and the extended inventory.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Copy)]
-pub struct BagPosition(pub (crate) usize);
+pub struct BagPosition(pub(crate) usize);
 
 impl BagPosition {
     /// The 0 based index into the backpack vec, where the item is parsed into
@@ -140,7 +140,29 @@ pub enum ItemPlace {
 /// All the equipment a player is wearing
 pub struct Equipment(pub EnumMap<EquipmentSlot, Option<Item>>);
 
+#[derive(Debug, Default, Clone, PartialEq, Eq, Copy)]
+pub struct EquipmentPosition(pub(crate) usize);
+
+impl EquipmentPosition {
+    /// The 0 based index into the Equipment enum map
+    #[must_use]
+    pub fn position(&self) -> usize {
+        self.0
+    }
+}
+
 impl Equipment {
+    /// Creates an iterator over the inventory slots.
+    pub fn iter(
+        &self,
+    ) -> impl Iterator<Item = (EquipmentPosition, Option<&Item>)> {
+        self.0
+            .as_slice()
+            .iter()
+            .enumerate()
+            .map(|(pos, item)| (EquipmentPosition(pos), item.as_ref()))
+    }
+
     #[must_use]
     /// Checks if the character has an item with the enchantment equipped
     pub fn has_enchantment(&self, enchantment: Enchantment) -> bool {
