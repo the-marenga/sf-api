@@ -8,15 +8,15 @@ use num_traits::FromPrimitive;
 use strum::IntoEnumIterator;
 
 use super::{
+    AttributeType, Class, Emblem, Flag, Item, Potion, Race, Reward, SFError,
+    ServerTime,
     character::{Mount, Portrait},
     fortress::FortressBuildingType,
     guild::GuildRank,
     items::{Equipment, ItemType},
     unlockables::Mirror,
-    AttributeType, Class, Emblem, Flag, Item, Potion, Race, Reward, SFError,
-    ServerTime,
 };
-use crate::{misc::*, PlayerId};
+use crate::{PlayerId, misc::*};
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
