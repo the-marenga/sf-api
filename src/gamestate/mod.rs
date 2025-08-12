@@ -15,9 +15,9 @@ use std::{borrow::Borrow, collections::HashSet};
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use enum_map::EnumMap;
-use log::{error, warn};
+use log::{error, info, warn};
 use num_traits::FromPrimitive;
-use strum::IntoEnumIterator;
+use strum::{EnumCount, IntoEnumIterator};
 
 use crate::{
     command::*,
@@ -47,6 +47,7 @@ pub struct GameState {
     /// Both shops. You can access a specific one either with `get()`,
     /// `get_mut()`, or `[]` and the `ShopType` as the key.
     pub shops: EnumMap<ShopType, Shop>,
+    pub shop_item_lvl: u32,
     /// If the player is in a guild, this will contain information about it
     pub guild: Option<Guild>,
     /// Everything, that is time sensitive, like events, calendar, etc.
@@ -107,6 +108,9 @@ impl Default for Shop {
             rune: None,
             enchantment: None,
             color: 0,
+            upgrade_count: 0,
+            item_quality: 0,
+            is_washed: false,
         });
 
         Self { items }
@@ -120,7 +124,7 @@ impl Shop {
     ) -> Result<Shop, SFError> {
         let mut shop = Shop::default();
         for (idx, item) in shop.items.iter_mut().enumerate() {
-            let d = data.skip(idx * 12, "shop item")?;
+            let d = data.skip(idx * 19, "shop item")?;
             let Some(p_item) = Item::parse(d, server_time)? else {
                 return Err(SFError::ParsingError(
                     "shop item",
@@ -221,6 +225,9 @@ impl GameState {
                     self.tavern.guard_wage = val.into("tavern wage")?;
                 }
                 "toilettfull" => {
+                    // TODO: check if this is still available and check with
+                    // toiletstate
+
                     let used = val.into::<i32>("toilet full status")? != 0;
 
                     // This response is sent, even if the toilet is locked. A
@@ -255,11 +262,71 @@ impl GameState {
                         }
                     }
                 }
-                "fortresschest" => {
-                    self.character.inventory.update_fortress_chest(
-                        &val.into_list("fortress chest")?,
-                        server_time,
-                    )?;
+                "sfhomeid" => {}
+                "backpack" => {
+                    let data: Vec<i64> = val.into_list("backpack")?;
+                    self.character.inventory.backpack = data
+                        .chunks_exact(19)
+                        .map(|a| Item::parse(a, server_time))
+                        .collect::<Result<Vec<_>, _>>()?;
+                }
+                "itemlevelshop" => {
+                    self.shop_item_lvl = val.into("shop lvl")?;
+                }
+                "storeitemsshakes" => {
+                    let data: Vec<i64> = val.into_list("weapon store")?;
+                    *self.shops.get_mut(ShopType::Weapon) =
+                        Shop::parse(&data, server_time)?;
+                }
+                "questofferitems" => {
+                    for (chunk, quest) in val
+                        .into_list("quest items")?
+                        .chunks_exact(19)
+                        .zip(&mut self.tavern.quests)
+                    {
+                        quest.item = Item::parse(chunk, server_time)?;
+                    }
+                }
+                "toiletstate" => {
+                    let vals:Vec<i64> = val.into_list("toilet state")?;
+                    if vals.len() < 3 {
+                        continue;
+                    }
+                    let toilet = self.tavern.toilet.get_or_insert_default();
+                    toilet.sacrificed_today = vals[2] as u32;
+                }
+                "companionequipment" => {
+                    let data: Vec<i64> = val.into_list("quest items")?;
+                    for (idx, cmp) in self
+                        .dungeons
+                        .companions
+                        .get_or_insert_with(Default::default)
+                        .values_mut()
+                        .enumerate()
+                    {
+                        let data = data.skip(
+                            (19 * EquipmentSlot::COUNT) * idx,
+                            "companion item",
+                        )?;
+                        cmp.equipment = Equipment::parse(data, server_time)?;
+                    }
+                }
+                "storeitemsfidget" => {
+                    let data: Vec<i64> = val.into_list("magic store")?;
+                    *self.shops.get_mut(ShopType::Magic) =
+                        Shop::parse(&data, server_time)?;
+                }
+                "ownplayersaveequipment" => {
+                    let data: Vec<i64> = val.into_list("player equipment")?;
+                    self.character.equipment =
+                        Equipment::parse(&data, server_time)?;
+                }
+                "systemmessagelist" => {}
+                "newslist" => {}
+                "dummieequipment" => {
+                    let m: Vec<i64> = val.into_list("manequin")?;
+                    self.character.manequin =
+                        Some(Equipment::parse(&m, server_time)?);
                 }
                 "owntower" => {
                     let data = val.into_list("tower")?;
@@ -272,10 +339,6 @@ impl GameState {
                         let comp_start = 3 + i * 148;
                         companions.get_mut(class).level =
                             data.cget(comp_start, "comp level")?;
-                        companions.get_mut(class).equipment = Equipment::parse(
-                            data.skip(comp_start + 22, "comp equip")?,
-                            server_time,
-                        )?;
                         update_enum_map(
                             &mut companions.get_mut(class).attributes,
                             data.skip(comp_start + 4, "comp attrs")?,
@@ -1124,12 +1187,6 @@ impl GameState {
                         .get_or_insert_with(Default::default)
                         .update(val.as_str(), server_time)?;
                 }
-                "dummies" => {
-                    self.character.manequin = Some(Equipment::parse(
-                        &val.into_list("manequin")?,
-                        server_time,
-                    )?);
-                }
                 "reward" => {
                     // This is the task reward, which you should already know
                     // from collecting
@@ -1573,8 +1630,6 @@ impl GameState {
         self.character.player_id = data.csiget(1, "player id", 0)?;
         self.character.portrait =
             Portrait::parse(data.skip(17, "TODO")?).unwrap_or_default();
-        self.character.equipment =
-            Equipment::parse(data.skip(48, "TODO")?, server_time)?;
 
         self.character.armor = data.csiget(447, "total armor", 0)?;
         self.character.min_damage = data.csiget(448, "min damage", 0)?;
@@ -1613,10 +1668,11 @@ impl GameState {
         self.character.mount_end =
             data.cstget(451, "mount end", server_time)?;
 
-        for (idx, item) in self.character.inventory.bag.iter_mut().enumerate() {
-            let item_start = data.skip(168 + idx * 12, "inventory item")?;
-            *item = Item::parse(item_start, server_time)?;
-        }
+        // for (idx, item) in
+        // self.character.inventory.bag.iter_mut().enumerate() {     let
+        // item_start = data.skip(168 + idx * 12, "inventory item")?;
+        //     *item = Item::parse(item_start, server_time)?;
+        // }
 
         if self.character.level >= 25 {
             let fortress = self.fortress.get_or_insert_with(Default::default);
@@ -1631,17 +1687,13 @@ impl GameState {
         self.specials.wheel.next_free_spin =
             data.cstget(580, "next lucky turn", server_time)?;
 
-        *self.shops.get_mut(ShopType::Weapon) =
-            Shop::parse(data.skip(288, "TODO")?, server_time)?;
-        *self.shops.get_mut(ShopType::Magic) =
-            Shop::parse(data.skip(361, "TODO")?, server_time)?;
-
         self.character.mirror = Mirror::parse(data.cget(28, "mirror start")?);
         self.arena.next_free_fight =
             data.cstget(460, "next battle time", server_time)?;
 
         // Toilet remains none as long as its level is 0
         let toilet_lvl = data.cget(491, "toilet lvl")?;
+        info!("Toilet lvl: {toilet_lvl}");
         if toilet_lvl > 0 {
             self.tavern
                 .toilet

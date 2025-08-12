@@ -847,7 +847,7 @@ impl Command {
     pub(crate) fn request_string(
         &self,
     ) -> Result<String, crate::error::SFError> {
-        const APP_VERSION: &str = "2100000000000";
+        const APP_VERSION: &str = "2700000000000";
         use crate::{
             error::SFError,
             gamestate::dungeons::{LightDungeon, ShadowDungeon},
