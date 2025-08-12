@@ -284,7 +284,7 @@ impl Equipment {
 
     /// Expects the input `data` to have items directly at data[0]
     #[allow(clippy::indexing_slicing)]
-    pub(crate) fn parse(
+    pub fn parse(
         data: &[i64],
         server_time: ServerTime,
     ) -> Result<Equipment, SFError> {
