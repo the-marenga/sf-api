@@ -596,6 +596,13 @@ impl GameState {
                         .name
                         .set(val.as_str());
                 }
+                "otherplayersaveequipment" => {
+                    let data: Vec<i64> =
+                        val.into_list("other player equipment")?;
+                    other_player
+                        .get_or_insert_with(Default::default)
+                        .equipment = Equipment::parse(&data, server_time)?;
+                }
                 "fortresspricereroll" => {
                     self.fortress
                         .get_or_insert_with(Default::default)
@@ -1594,23 +1601,23 @@ impl GameState {
             self.dungeons.portal = None;
         }
 
-        if let Some(pets) = &self.pets {
-            if pets.rank == 0 {
-                self.pets = None;
-            }
+        if let Some(pets) = &self.pets
+            && pets.rank == 0
+        {
+            self.pets = None;
         }
-        if let Some(t) = &self.guild {
-            if t.name.is_empty() {
-                self.guild = None;
-            }
+        if let Some(t) = &self.guild
+            && t.name.is_empty()
+        {
+            self.guild = None;
         }
         if self.fortress.is_some() && self.character.level < 25 {
             self.fortress = None;
         }
-        if let Some(t) = &self.underworld {
-            if t.buildings[UnderworldBuildingType::HeartOfDarkness].level < 1 {
-                self.underworld = None;
-            }
+        if let Some(t) = &self.underworld
+            && t.buildings[UnderworldBuildingType::HeartOfDarkness].level < 1
+        {
+            self.underworld = None;
         }
 
         // Witch is automatically unlocked with level 66

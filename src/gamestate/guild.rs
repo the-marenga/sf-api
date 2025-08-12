@@ -5,9 +5,10 @@ use log::warn;
 use num_derive::FromPrimitive;
 
 use super::{
+    ArrSkip, AttributeType, CCGet, CFPGet, CGet, CSTGet, NormalCost, Potion,
+    SFError, ServerTime,
     items::{ItemType, PotionSize, PotionType},
-    update_enum_map, ArrSkip, AttributeType, CCGet, CFPGet, CGet, CSTGet,
-    NormalCost, Potion, SFError, ServerTime,
+    update_enum_map,
 };
 use crate::misc::{from_sf_string, soft_into, warning_parse};
 

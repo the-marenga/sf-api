@@ -7,12 +7,12 @@ use num_derive::FromPrimitive;
 use strum::{EnumCount, EnumIter, IntoEnumIterator};
 
 use super::{
-    items::GemType, ArrSkip, CCGet, CFPGet, CSTGet, SFError, ServerTime,
+    ArrSkip, CCGet, CFPGet, CSTGet, SFError, ServerTime, items::GemType,
 };
 use crate::{
+    PlayerId,
     gamestate::{CGet, EnumMapGet},
     misc::soft_into,
-    PlayerId,
 };
 
 #[derive(Debug, Default, Clone)]
@@ -287,12 +287,11 @@ impl Fortress {
     #[must_use]
     pub fn in_use(&self, building_type: FortressBuildingType) -> bool {
         // Check if associated units are training
-        if let Some(unit_type) = building_type.unit_produced() {
-            if let Some(finish) = self.units.get(unit_type).training.finish {
-                if finish > Local::now() {
-                    return true;
-                }
-            }
+        if let Some(unit_type) = building_type.unit_produced()
+            && let Some(finish) = self.units.get(unit_type).training.finish
+            && finish > Local::now()
+        {
+            return true;
         }
 
         // Check if gem mining is in progress
