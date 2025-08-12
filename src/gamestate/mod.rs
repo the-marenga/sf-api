@@ -596,6 +596,13 @@ impl GameState {
                         .name
                         .set(val.as_str());
                 }
+                "otherplayersaveequipment" => {
+                    let data: Vec<i64> =
+                        val.into_list("other player equipment")?;
+                    other_player
+                        .get_or_insert_with(Default::default)
+                        .equipment = Equipment::parse(&data, server_time)?;
+                }
                 "fortresspricereroll" => {
                     self.fortress
                         .get_or_insert_with(Default::default)
