@@ -48,6 +48,32 @@ impl BagPosition {
 }
 
 impl Inventory {
+    // Splits the backpack, as if it was the old bag/fortress chest layout.
+    // The first slice will be the bag, the second the fortress chest.
+    // If the backback if empty for unknown reasons, or is shorter than 5
+    // elements, both slices will be empty
+    #[must_use]
+    pub fn as_split(&self) -> (&[Option<Item>], &[Option<Item>]) {
+        if self.backpack.len() < 5 {
+            return (&[], &[]);
+        }
+        self.backpack.split_at(5)
+    }
+
+    #[must_use]
+    // Splits the backpack, as if it was the old bag/fortress chest layout.
+    // The first slice will be the bag, the second the fortress chest
+    // If the backback if empty for unknown reasons, or is shorter than 5
+    // elements, both slices will be emptys
+    pub fn as_split_mut(
+        &mut self,
+    ) -> (&mut [Option<Item>], &mut [Option<Item>]) {
+        if self.backpack.len() < 5 {
+            return (&mut [], &mut []);
+        }
+        self.backpack.split_at_mut(5)
+    }
+
     /// Returns a place in the inventory, that can store a new item.
     /// This is only useful, when you are dealing with commands, that require
     /// a free slot position. The index will be 0 based per inventory
