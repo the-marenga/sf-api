@@ -21,24 +21,20 @@ use crate::{
 /// The basic inventory, that every player has
 pub struct Inventory {
     pub backpack: Vec<Option<Item>>,
-
 }
 
 impl Inventory {
-    /// Returns a place in the inventory, that can store a new item
+    /// Returns a place in the inventory, that can store a new item.
+    /// This is only useful, when you are dealing with commands, that require
+    /// a free slot position. The index will be 0 based per inventory
     #[must_use]
     pub fn free_slot(&self) -> Option<(InventoryType, usize)> {
-        // if let Some(bag_pos) = self.bag.iter().position(Option::is_none) {
-        //     return Some((InventoryType::MainInventory, bag_pos));
-        // } else if let Some(e_bag_pos) = self
-        //     .backpack
-        //     .as_ref()
-        //     .and_then(|a| a.iter().position(Option::is_none))
-        // {
-        //     return Some((InventoryType::ExtendedInventory, e_bag_pos));
-        // }
-        // None
-        todo!("No idea, if they merged these")
+        let pos = self.backpack.iter().position(|a| a.is_none())?;
+        if pos <= 4 {
+            Some((InventoryType::MainInventory, pos))
+        } else {
+            Some((InventoryType::ExtendedInventory, pos - 5))
+        }
     }
 
     #[must_use]
@@ -131,7 +127,10 @@ impl Equipment {
     ) -> Result<Equipment, SFError> {
         let mut res = Equipment::default();
         if !data.len().is_multiple_of(19) {
-            return Err(SFError::ParsingError("Invalid Equipment", format!("{data:?}")))
+            return Err(SFError::ParsingError(
+                "Invalid Equipment",
+                format!("{data:?}"),
+            ));
         }
         for (idx, map_val) in res.0.as_mut_slice().iter_mut().enumerate() {
             let slice = &data[idx * 19..(idx * 19) + 19];
@@ -961,7 +960,9 @@ impl GemType {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Enum, EnumIter, EnumCount)]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, Hash, Enum, EnumIter, EnumCount,
+)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 /// Denotes the place, where an item is equipped
