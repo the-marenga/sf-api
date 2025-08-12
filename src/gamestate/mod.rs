@@ -17,7 +17,7 @@ use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use enum_map::EnumMap;
 use log::{error, warn};
 use num_traits::FromPrimitive;
-use strum::IntoEnumIterator;
+use strum::{EnumCount, IntoEnumIterator};
 
 use crate::{
     command::*,
@@ -47,6 +47,7 @@ pub struct GameState {
     /// Both shops. You can access a specific one either with `get()`,
     /// `get_mut()`, or `[]` and the `ShopType` as the key.
     pub shops: EnumMap<ShopType, Shop>,
+    pub shop_item_lvl: u32,
     /// If the player is in a guild, this will contain information about it
     pub guild: Option<Guild>,
     /// Everything, that is time sensitive, like events, calendar, etc.
@@ -89,6 +90,7 @@ const SHOP_N: usize = 6;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A shop, that you can buy items from
 pub struct Shop {
+    pub typ: ShopType,
     /// The items this shop has for sale
     pub items: [Item; SHOP_N],
 }
@@ -107,20 +109,57 @@ impl Default for Shop {
             rune: None,
             enchantment: None,
             color: 0,
+            upgrade_count: 0,
+            item_quality: 0,
+            is_washed: false,
         });
 
-        Self { items }
+        Self {
+            items,
+            typ: ShopType::Magic,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, Copy)]
+pub struct ShopPosition {
+    pub(crate) typ: ShopType,
+    pub(crate) pos: usize,
+}
+
+impl ShopPosition {
+    /// The 0 based index into the backpack vec, where the item is parsed into
+    #[must_use]
+    pub fn shop(&self) -> ShopType {
+        self.typ
+    }
+    /// The inventory type and position within it, where the item is stored
+    /// according to previous inventory management logic. This is what you use
+    /// for commands
+    #[must_use]
+    pub fn position(&self) -> usize {
+        self.pos
     }
 }
 
 impl Shop {
+    /// Creates an iterator over the inventory slots.
+    pub fn iter(&self) -> impl Iterator<Item = (ShopPosition, &Item)> {
+        self.items
+            .iter()
+            .enumerate()
+            .map(|(pos, item)| (ShopPosition { typ: self.typ, pos }, item))
+    }
+
     pub(crate) fn parse(
         data: &[i64],
         server_time: ServerTime,
+        typ: ShopType,
     ) -> Result<Shop, SFError> {
         let mut shop = Shop::default();
+        shop.typ = typ;
         for (idx, item) in shop.items.iter_mut().enumerate() {
-            let d = data.skip(idx * 12, "shop item")?;
+            let d = data.skip(idx * ITEM_PARSE_LEN, "shop item")?;
             let Some(p_item) = Item::parse(d, server_time)? else {
                 return Err(SFError::ParsingError(
                     "shop item",
@@ -221,6 +260,9 @@ impl GameState {
                     self.tavern.guard_wage = val.into("tavern wage")?;
                 }
                 "toilettfull" => {
+                    // TODO: check if this is still available and check with
+                    // toiletstate
+
                     let used = val.into::<i32>("toilet full status")? != 0;
 
                     // This response is sent, even if the toilet is locked. A
@@ -255,11 +297,76 @@ impl GameState {
                         }
                     }
                 }
-                "fortresschest" => {
-                    self.character.inventory.update_fortress_chest(
-                        &val.into_list("fortress chest")?,
-                        server_time,
-                    )?;
+                "sfhomeid" => {}
+                "backpack" => {
+                    let data: Vec<i64> = val.into_list("backpack")?;
+                    self.character.inventory.backpack = data
+                        .chunks_exact(ITEM_PARSE_LEN)
+                        .map(|a| Item::parse(a, server_time))
+                        .collect::<Result<Vec<_>, _>>()?;
+                }
+                "itemlevelshop" => {
+                    self.shop_item_lvl = val.into("shop lvl")?;
+                }
+                "storeitemsshakes" => {
+                    let data: Vec<i64> = val.into_list("weapon store")?;
+                    *self.shops.get_mut(ShopType::Weapon) =
+                        Shop::parse(&data, server_time, ShopType::Weapon)?;
+                }
+                "questofferitems" => {
+                    for (chunk, quest) in val
+                        .into_list("quest items")?
+                        .chunks_exact(19)
+                        .zip(&mut self.tavern.quests)
+                    {
+                        quest.item = Item::parse(chunk, server_time)?;
+                    }
+                }
+                #[allow(
+                    clippy::indexing_slicing,
+                    clippy::cast_sign_loss,
+                    clippy::cast_possible_truncation
+                )]
+                "toiletstate" => {
+                    let vals: Vec<i64> = val.into_list("toilet state")?;
+                    if vals.len() < 3 {
+                        continue;
+                    }
+                    let toilet = self.tavern.toilet.get_or_insert_default();
+                    toilet.sacrificed_today = vals[2] as u32;
+                }
+                "companionequipment" => {
+                    let data: Vec<i64> = val.into_list("quest items")?;
+                    for (idx, cmp) in self
+                        .dungeons
+                        .companions
+                        .get_or_insert_with(Default::default)
+                        .values_mut()
+                        .enumerate()
+                    {
+                        let data = data.skip(
+                            (19 * EquipmentSlot::COUNT) * idx,
+                            "companion item",
+                        )?;
+                        cmp.equipment = Equipment::parse(data, server_time)?;
+                    }
+                }
+                "storeitemsfidget" => {
+                    let data: Vec<i64> = val.into_list("magic store")?;
+                    *self.shops.get_mut(ShopType::Magic) =
+                        Shop::parse(&data, server_time, ShopType::Magic)?;
+                }
+                "ownplayersaveequipment" => {
+                    let data: Vec<i64> = val.into_list("player equipment")?;
+                    self.character.equipment =
+                        Equipment::parse(&data, server_time)?;
+                }
+                "systemmessagelist" => {}
+                "newslist" => {}
+                "dummieequipment" => {
+                    let m: Vec<i64> = val.into_list("manequin")?;
+                    self.character.manequin =
+                        Some(Equipment::parse(&m, server_time)?);
                 }
                 "owntower" => {
                     let data = val.into_list("tower")?;
@@ -272,10 +379,6 @@ impl GameState {
                         let comp_start = 3 + i * 148;
                         companions.get_mut(class).level =
                             data.cget(comp_start, "comp level")?;
-                        companions.get_mut(class).equipment = Equipment::parse(
-                            data.skip(comp_start + 22, "comp equip")?,
-                            server_time,
-                        )?;
                         update_enum_map(
                             &mut companions.get_mut(class).attributes,
                             data.skip(comp_start + 4, "comp attrs")?,
@@ -745,7 +848,7 @@ impl GameState {
                     // This works, but I dont think anyone cares about that. It
                     // will just be in the inv. anyways
                     // let data:Vec<i64> = val.into_list("expedition reward")?;
-                    // for chunk in data.chunks_exact(12){
+                    // for chunk in data.chunks_exact(ITEM_PARSE_LEN){
                     //     let item = Item::parse(chunk, server_time);
                     //     println!("{item:#?}");
                     // }
@@ -1124,12 +1227,6 @@ impl GameState {
                         .get_or_insert_with(Default::default)
                         .update(val.as_str(), server_time)?;
                 }
-                "dummies" => {
-                    self.character.manequin = Some(Equipment::parse(
-                        &val.into_list("manequin")?,
-                        server_time,
-                    )?);
-                }
                 "reward" => {
                     // This is the task reward, which you should already know
                     // from collecting
@@ -1456,8 +1553,10 @@ impl GameState {
                         .open_claimable
                         .get_or_insert_with(Default::default)
                         .items = vals
-                        .chunks_exact(12)
-                        .flat_map(|a| Item::parse(a, server_time))
+                        .chunks_exact(ITEM_PARSE_LEN)
+                        .flat_map(|a|
+                            // Might be broken
+                            Item::parse(a, server_time))
                         .flatten()
                         .collect();
                 }
@@ -1573,8 +1672,6 @@ impl GameState {
         self.character.player_id = data.csiget(1, "player id", 0)?;
         self.character.portrait =
             Portrait::parse(data.skip(17, "TODO")?).unwrap_or_default();
-        self.character.equipment =
-            Equipment::parse(data.skip(48, "TODO")?, server_time)?;
 
         self.character.armor = data.csiget(447, "total armor", 0)?;
         self.character.min_damage = data.csiget(448, "min damage", 0)?;
@@ -1613,11 +1710,6 @@ impl GameState {
         self.character.mount_end =
             data.cstget(451, "mount end", server_time)?;
 
-        for (idx, item) in self.character.inventory.bag.iter_mut().enumerate() {
-            let item_start = data.skip(168 + idx * 12, "inventory item")?;
-            *item = Item::parse(item_start, server_time)?;
-        }
-
         if self.character.level >= 25 {
             let fortress = self.fortress.get_or_insert_with(Default::default);
             fortress.update(data, server_time)?;
@@ -1630,11 +1722,6 @@ impl GameState {
         self.specials.wheel.spins_today = data.csiget(579, "lucky turns", 0)?;
         self.specials.wheel.next_free_spin =
             data.cstget(580, "next lucky turn", server_time)?;
-
-        *self.shops.get_mut(ShopType::Weapon) =
-            Shop::parse(data.skip(288, "TODO")?, server_time)?;
-        *self.shops.get_mut(ShopType::Magic) =
-            Shop::parse(data.skip(361, "TODO")?, server_time)?;
 
         self.character.mirror = Mirror::parse(data.cget(28, "mirror start")?);
         self.arena.next_free_fight =
@@ -1797,8 +1884,8 @@ impl ServerTime {
         timestamp: i64,
         name: &str,
     ) -> Option<DateTime<Local>> {
-        if timestamp == 0 || timestamp == -1 || timestamp == 11 {
-            // For some reason potions have 11 in the timestamp. No idea why
+        if matches!(timestamp, 0 | -1 | 1 | 11) {
+            // For some reason these can be bad
             return None;
         }
 
