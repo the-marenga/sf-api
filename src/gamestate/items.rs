@@ -23,23 +23,51 @@ pub struct Inventory {
     pub backpack: Vec<Option<Item>>,
 }
 
+/// The game keeps track between 5 slot bag and the extended inventory.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Copy)]
+pub struct BagPosition(usize);
+
+impl BagPosition {
+    #[must_use]
+    pub fn raw_position(&self) -> usize {
+        self.0
+    }
+    #[must_use]
+    pub fn inventory_pos(&self) -> (InventoryType, usize) {
+        let pos = self.0;
+        if pos <= 4 {
+            (InventoryType::MainInventory, pos)
+        } else {
+            (InventoryType::ExtendedInventory, pos - 5)
+        }
+    }
+}
+
 impl Inventory {
     /// Returns a place in the inventory, that can store a new item.
     /// This is only useful, when you are dealing with commands, that require
     /// a free slot position. The index will be 0 based per inventory
     #[must_use]
-    pub fn free_slot(&self) -> Option<(InventoryType, usize)> {
-        let pos = self.backpack.iter().position(|a| a.is_none())?;
-        if pos <= 4 {
-            Some((InventoryType::MainInventory, pos))
-        } else {
-            Some((InventoryType::ExtendedInventory, pos - 5))
+    pub fn free_slot(&self) -> Option<BagPosition> {
+        for (pos, item) in self.iter() {
+            if item.is_none() {
+                return Some(pos);
+            }
         }
+        None
     }
 
     #[must_use]
     pub fn count_free_slots(&self) -> usize {
         self.backpack.iter().filter(|slot| slot.is_none()).count()
+    }
+
+    /// Creates an iterator over the inventory slots.
+    pub fn iter(&self) -> impl Iterator<Item = (BagPosition, Option<&Item>)> {
+        self.backpack
+            .iter()
+            .enumerate()
+            .map(|(pos, item)| (BagPosition(pos), item.as_ref()))
     }
 }
 
