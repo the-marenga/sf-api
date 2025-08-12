@@ -12,8 +12,8 @@ use super::{
     HabitatType, SFError, ServerTime,
 };
 use crate::{
-    command::AttributeType,
-    gamestate::{CCGet, CGet, CSTGet},
+    command::{AttributeType, ShopType},
+    gamestate::{CCGet, CGet, CSTGet, ShopPosition},
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -85,6 +85,78 @@ pub enum PlayerItemPlace {
     ExtendedInventory = 5,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ItemPosition {
+    pub place: ItemPlace,
+    pub position: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlayerItemPosition {
+    pub place: PlayerItemPlace,
+    pub position: usize,
+}
+
+impl From<PlayerItemPosition> for ItemPosition {
+    fn from(value: PlayerItemPosition) -> Self {
+        Self {
+            place: value.place.item_position(),
+            position: value.position,
+        }
+    }
+}
+
+impl From<BagPosition> for ItemPosition {
+    fn from(value: BagPosition) -> Self {
+        let player: PlayerItemPosition = value.into();
+        player.into()
+    }
+}
+
+impl From<EquipmentPosition> for ItemPosition {
+    fn from(value: EquipmentPosition) -> Self {
+        let player: PlayerItemPosition = value.into();
+        player.into()
+    }
+}
+
+impl From<ShopPosition> for ItemPosition {
+    fn from(value: ShopPosition) -> Self {
+        Self {
+            place: value.typ.into(),
+            position: value.pos,
+        }
+    }
+}
+
+impl From<ShopType> for ItemPlace {
+    fn from(value: ShopType) -> Self {
+        match value {
+            ShopType::Weapon => ItemPlace::WeaponShop,
+            ShopType::Magic => ItemPlace::MageShop,
+        }
+    }
+}
+
+impl From<BagPosition> for PlayerItemPosition {
+    fn from(value: BagPosition) -> Self {
+        let p = value.inventory_pos();
+        Self {
+            place: p.0.player_item_position(),
+            position: p.1,
+        }
+    }
+}
+
+impl From<EquipmentPosition> for PlayerItemPosition {
+    fn from(value: EquipmentPosition) -> Self {
+        Self {
+            place: PlayerItemPlace::Equipment,
+            position: value.0,
+        }
+    }
+}
+
 impl PlayerItemPlace {
     /// `InventoryType` is a subset of `ItemPlace`. This is a convenient
     /// function to convert between them
@@ -115,6 +187,17 @@ impl InventoryType {
         match self {
             InventoryType::MainInventory => ItemPlace::MainInventory,
             InventoryType::ExtendedInventory => ItemPlace::FortressChest,
+        }
+    }
+    /// `InventoryType` is a subset of `ItemPlace`. This is a convenient
+    /// function to convert between them
+    #[must_use]
+    pub fn player_item_position(&self) -> PlayerItemPlace {
+        match self {
+            InventoryType::MainInventory => PlayerItemPlace::MainInventory,
+            InventoryType::ExtendedInventory => {
+                PlayerItemPlace::ExtendedInventory
+            }
         }
     }
 }
