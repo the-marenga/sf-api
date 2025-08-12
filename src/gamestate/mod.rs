@@ -15,7 +15,7 @@ use std::{borrow::Borrow, collections::HashSet};
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use enum_map::EnumMap;
-use log::{error, info, warn};
+use log::{error, warn};
 use num_traits::FromPrimitive;
 use strum::{EnumCount, IntoEnumIterator};
 
@@ -322,6 +322,7 @@ impl GameState {
                         quest.item = Item::parse(chunk, server_time)?;
                     }
                 }
+                #[allow(clippy::indexing_slicing, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
                 "toiletstate" => {
                     let vals: Vec<i64> = val.into_list("toilet state")?;
                     if vals.len() < 3 {

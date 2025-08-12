@@ -2,18 +2,18 @@ use std::cmp::Ordering;
 
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
-use log::{error, warn};
+use log::warn;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
 use super::{
-    unlockables::EquipmentIdent, ArrSkip, CFPGet, Class, EnumMapGet,
+    unlockables::EquipmentIdent, CFPGet, Class, EnumMapGet,
     HabitatType, SFError, ServerTime,
 };
 use crate::{
     command::{AttributeType, ShopType},
-    gamestate::{CCGet, CGet, CSTGet, ShopPosition},
+    gamestate::{CCGet, CGet, ShopPosition},
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
