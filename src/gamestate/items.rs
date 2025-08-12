@@ -126,19 +126,22 @@ impl Equipment {
         server_time: ServerTime,
     ) -> Result<Equipment, SFError> {
         let mut res = Equipment::default();
-        if !data.len().is_multiple_of(19) {
+        if !data.len().is_multiple_of(ITEM_PARSE_LEN) {
             return Err(SFError::ParsingError(
                 "Invalid Equipment",
                 format!("{data:?}"),
             ));
         }
-        for (idx, map_val) in res.0.as_mut_slice().iter_mut().enumerate() {
-            let slice = &data[idx * 19..(idx * 19) + 19];
-            *map_val = Item::parse(slice, server_time)?;
+        for (chunk, slot) in
+            data.chunks_exact(ITEM_PARSE_LEN).zip(res.0.as_mut_slice())
+        {
+            *slot = Item::parse(chunk, server_time)?;
         }
         Ok(res)
     }
 }
+
+pub(crate) const ITEM_PARSE_LEN: usize = 19;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

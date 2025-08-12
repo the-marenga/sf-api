@@ -124,7 +124,7 @@ impl Shop {
     ) -> Result<Shop, SFError> {
         let mut shop = Shop::default();
         for (idx, item) in shop.items.iter_mut().enumerate() {
-            let d = data.skip(idx * 19, "shop item")?;
+            let d = data.skip(idx * ITEM_PARSE_LEN, "shop item")?;
             let Some(p_item) = Item::parse(d, server_time)? else {
                 return Err(SFError::ParsingError(
                     "shop item",
@@ -266,7 +266,7 @@ impl GameState {
                 "backpack" => {
                     let data: Vec<i64> = val.into_list("backpack")?;
                     self.character.inventory.backpack = data
-                        .chunks_exact(19)
+                        .chunks_exact(ITEM_PARSE_LEN)
                         .map(|a| Item::parse(a, server_time))
                         .collect::<Result<Vec<_>, _>>()?;
                 }
@@ -288,7 +288,7 @@ impl GameState {
                     }
                 }
                 "toiletstate" => {
-                    let vals:Vec<i64> = val.into_list("toilet state")?;
+                    let vals: Vec<i64> = val.into_list("toilet state")?;
                     if vals.len() < 3 {
                         continue;
                     }
@@ -808,7 +808,7 @@ impl GameState {
                     // This works, but I dont think anyone cares about that. It
                     // will just be in the inv. anyways
                     // let data:Vec<i64> = val.into_list("expedition reward")?;
-                    // for chunk in data.chunks_exact(12){
+                    // for chunk in data.chunks_exact(ITEM_PARSE_LEN){
                     //     let item = Item::parse(chunk, server_time);
                     //     println!("{item:#?}");
                     // }
@@ -1513,8 +1513,11 @@ impl GameState {
                         .open_claimable
                         .get_or_insert_with(Default::default)
                         .items = vals
-                        .chunks_exact(12)
-                        .flat_map(|a| Item::parse(a, server_time))
+                        .chunks_exact(ITEM_PARSE_LEN)
+                        .flat_map(|a|
+                            // Might be broken
+                            Item::parse(a, server_time)
+                        )
                         .flatten()
                         .collect();
                 }
@@ -1668,12 +1671,6 @@ impl GameState {
         self.character.mount_end =
             data.cstget(451, "mount end", server_time)?;
 
-        // for (idx, item) in
-        // self.character.inventory.bag.iter_mut().enumerate() {     let
-        // item_start = data.skip(168 + idx * 12, "inventory item")?;
-        //     *item = Item::parse(item_start, server_time)?;
-        // }
-
         if self.character.level >= 25 {
             let fortress = self.fortress.get_or_insert_with(Default::default);
             fortress.update(data, server_time)?;
@@ -1693,7 +1690,6 @@ impl GameState {
 
         // Toilet remains none as long as its level is 0
         let toilet_lvl = data.cget(491, "toilet lvl")?;
-        info!("Toilet lvl: {toilet_lvl}");
         if toilet_lvl > 0 {
             self.tavern
                 .toilet
@@ -1849,8 +1845,8 @@ impl ServerTime {
         timestamp: i64,
         name: &str,
     ) -> Option<DateTime<Local>> {
-        if timestamp == 0 || timestamp == -1 || timestamp == 11 {
-            // For some reason potions have 11 in the timestamp. No idea why
+        if matches!(timestamp, 0 | -1 | 1 | 11) {
+            // For some reason these can be bad
             return None;
         }
 
