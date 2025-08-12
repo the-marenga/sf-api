@@ -2,76 +2,102 @@ use std::cmp::Ordering;
 
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
-use log::{error, warn};
+use log::warn;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use strum::EnumIter;
+use strum::{EnumCount, EnumIter};
 
 use super::{
-    unlockables::EquipmentIdent, ArrSkip, CFPGet, Class, EnumMapGet,
-    HabitatType, SFError, ServerTime,
+    unlockables::EquipmentIdent, CFPGet, Class, EnumMapGet, HabitatType,
+    SFError, ServerTime,
 };
 use crate::{
-    command::AttributeType,
-    gamestate::{CCGet, CGet, CSTGet},
+    command::{AttributeType, ShopType},
+    gamestate::{CCGet, CGet, ShopPosition},
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The basic inventory, that every player has
 pub struct Inventory {
-    /// The basic 5 item slots, that everybody has
-    pub bag: [Option<Item>; 5],
-    /// Item slots obtained from the fortress. None means not unlocked, and
-    /// `len()` is the amount of slots unlocked
-    pub fortress_chest: Option<Vec<Option<Item>>>,
+    pub backpack: Vec<Option<Item>>,
+}
+
+/// The game keeps track between 5 slot bag and the extended inventory.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Copy)]
+pub struct BagPosition(pub(crate) usize);
+
+impl BagPosition {
+    /// The 0 based index into the backpack vec, where the item is parsed into
+    #[must_use]
+    pub fn backpack_pos(&self) -> usize {
+        self.0
+    }
+    /// The inventory type and position within it, where the item is stored
+    /// according to previous inventory management logic. This is what you use
+    /// for commands
+    #[must_use]
+    pub fn inventory_pos(&self) -> (InventoryType, usize) {
+        let pos = self.0;
+        if pos <= 4 {
+            (InventoryType::MainInventory, pos)
+        } else {
+            (InventoryType::ExtendedInventory, pos - 5)
+        }
+    }
 }
 
 impl Inventory {
-    /// Returns a place in the inventory, that can store a new item
+    // Splits the backpack, as if it was the old bag/fortress chest layout.
+    // The first slice will be the bag, the second the fortress chest.
+    // If the backback if empty for unknown reasons, or is shorter than 5
+    // elements, both slices will be empty
     #[must_use]
-    pub fn free_slot(&self) -> Option<(InventoryType, usize)> {
-        if let Some(bag_pos) = self.bag.iter().position(Option::is_none) {
-            return Some((InventoryType::MainInventory, bag_pos));
-        } else if let Some(e_bag_pos) = self
-            .fortress_chest
-            .as_ref()
-            .and_then(|a| a.iter().position(Option::is_none))
-        {
-            return Some((InventoryType::ExtendedInventory, e_bag_pos));
+    pub fn as_split(&self) -> (&[Option<Item>], &[Option<Item>]) {
+        if self.backpack.len() < 5 {
+            return (&[], &[]);
+        }
+        self.backpack.split_at(5)
+    }
+
+    #[must_use]
+    // Splits the backpack, as if it was the old bag/fortress chest layout.
+    // The first slice will be the bag, the second the fortress chest
+    // If the backback if empty for unknown reasons, or is shorter than 5
+    // elements, both slices will be emptys
+    pub fn as_split_mut(
+        &mut self,
+    ) -> (&mut [Option<Item>], &mut [Option<Item>]) {
+        if self.backpack.len() < 5 {
+            return (&mut [], &mut []);
+        }
+        self.backpack.split_at_mut(5)
+    }
+
+    /// Returns a place in the inventory, that can store a new item.
+    /// This is only useful, when you are dealing with commands, that require
+    /// a free slot position. The index will be 0 based per inventory
+    #[must_use]
+    pub fn free_slot(&self) -> Option<BagPosition> {
+        for (pos, item) in self.iter() {
+            if item.is_none() {
+                return Some(pos);
+            }
         }
         None
     }
 
     #[must_use]
     pub fn count_free_slots(&self) -> usize {
-        let bag_free_slots =
-            self.bag.iter().filter(|slot| slot.is_none()).count();
-        let fortress_chest_free_slots =
-            self.fortress_chest.as_ref().map_or(0, |chest| {
-                chest.iter().filter(|slot| slot.is_none()).count()
-            });
-        bag_free_slots + fortress_chest_free_slots
+        self.backpack.iter().filter(|slot| slot.is_none()).count()
     }
 
-    pub(crate) fn update_fortress_chest(
-        &mut self,
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<(), SFError> {
-        self.fortress_chest = None;
-        if data.is_empty() {
-            return Ok(());
-        }
-        if data.len() % 12 != 0 {
-            error!("Wrong fortess chest response size:  {data:?}");
-        }
-        self.fortress_chest = Some(
-            data.chunks_exact(12)
-                .map(|a| Item::parse(a, server_time))
-                .collect::<Result<Vec<_>, SFError>>()?,
-        );
-        Ok(())
+    /// Creates an iterator over the inventory slots.
+    pub fn iter(&self) -> impl Iterator<Item = (BagPosition, Option<&Item>)> {
+        self.backpack
+            .iter()
+            .enumerate()
+            .map(|(pos, item)| (BagPosition(pos), item.as_ref()))
     }
 }
 
@@ -83,6 +109,78 @@ pub enum PlayerItemPlace {
     Equipment = 1,
     MainInventory = 2,
     ExtendedInventory = 5,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ItemPosition {
+    pub place: ItemPlace,
+    pub position: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlayerItemPosition {
+    pub place: PlayerItemPlace,
+    pub position: usize,
+}
+
+impl From<PlayerItemPosition> for ItemPosition {
+    fn from(value: PlayerItemPosition) -> Self {
+        Self {
+            place: value.place.item_position(),
+            position: value.position,
+        }
+    }
+}
+
+impl From<BagPosition> for ItemPosition {
+    fn from(value: BagPosition) -> Self {
+        let player: PlayerItemPosition = value.into();
+        player.into()
+    }
+}
+
+impl From<EquipmentPosition> for ItemPosition {
+    fn from(value: EquipmentPosition) -> Self {
+        let player: PlayerItemPosition = value.into();
+        player.into()
+    }
+}
+
+impl From<ShopPosition> for ItemPosition {
+    fn from(value: ShopPosition) -> Self {
+        Self {
+            place: value.typ.into(),
+            position: value.pos,
+        }
+    }
+}
+
+impl From<ShopType> for ItemPlace {
+    fn from(value: ShopType) -> Self {
+        match value {
+            ShopType::Weapon => ItemPlace::WeaponShop,
+            ShopType::Magic => ItemPlace::MageShop,
+        }
+    }
+}
+
+impl From<BagPosition> for PlayerItemPosition {
+    fn from(value: BagPosition) -> Self {
+        let p = value.inventory_pos();
+        Self {
+            place: p.0.player_item_position(),
+            position: p.1,
+        }
+    }
+}
+
+impl From<EquipmentPosition> for PlayerItemPosition {
+    fn from(value: EquipmentPosition) -> Self {
+        Self {
+            place: PlayerItemPlace::Equipment,
+            position: value.0,
+        }
+    }
 }
 
 impl PlayerItemPlace {
@@ -117,6 +215,17 @@ impl InventoryType {
             InventoryType::ExtendedInventory => ItemPlace::FortressChest,
         }
     }
+    /// `InventoryType` is a subset of `ItemPlace`. This is a convenient
+    /// function to convert between them
+    #[must_use]
+    pub fn player_item_position(&self) -> PlayerItemPlace {
+        match self {
+            InventoryType::MainInventory => PlayerItemPlace::MainInventory,
+            InventoryType::ExtendedInventory => {
+                PlayerItemPlace::ExtendedInventory
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash)]
@@ -140,7 +249,29 @@ pub enum ItemPlace {
 /// All the equipment a player is wearing
 pub struct Equipment(pub EnumMap<EquipmentSlot, Option<Item>>);
 
+#[derive(Debug, Default, Clone, PartialEq, Eq, Copy)]
+pub struct EquipmentPosition(pub(crate) usize);
+
+impl EquipmentPosition {
+    /// The 0 based index into the Equipment enum map
+    #[must_use]
+    pub fn position(&self) -> usize {
+        self.0
+    }
+}
+
 impl Equipment {
+    /// Creates an iterator over the inventory slots.
+    pub fn iter(
+        &self,
+    ) -> impl Iterator<Item = (EquipmentPosition, Option<&Item>)> {
+        self.0
+            .as_slice()
+            .iter()
+            .enumerate()
+            .map(|(pos, item)| (EquipmentPosition(pos), item.as_ref()))
+    }
+
     #[must_use]
     /// Checks if the character has an item with the enchantment equipped
     pub fn has_enchantment(&self, enchantment: Enchantment) -> bool {
@@ -152,18 +283,28 @@ impl Equipment {
     }
 
     /// Expects the input `data` to have items directly at data[0]
+    #[allow(clippy::indexing_slicing)]
     pub(crate) fn parse(
         data: &[i64],
         server_time: ServerTime,
     ) -> Result<Equipment, SFError> {
         let mut res = Equipment::default();
-        for (idx, map_val) in res.0.as_mut_slice().iter_mut().enumerate() {
-            *map_val =
-                Item::parse(data.skip(idx * 12, "equipment")?, server_time)?;
+        if !data.len().is_multiple_of(ITEM_PARSE_LEN) {
+            return Err(SFError::ParsingError(
+                "Invalid Equipment",
+                format!("{data:?}"),
+            ));
+        }
+        for (chunk, slot) in
+            data.chunks_exact(ITEM_PARSE_LEN).zip(res.0.as_mut_slice())
+        {
+            *slot = Item::parse(chunk, server_time)?;
         }
         Ok(res)
     }
 }
+
+pub(crate) const ITEM_PARSE_LEN: usize = 19;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -198,6 +339,10 @@ pub struct Item {
     /// This is the color, or other cosmetic variation of an item. There is no
     /// clear 1 => red mapping, so only the raw value here
     pub color: u8,
+
+    pub upgrade_count: u8,
+    pub item_quality: u32,
+    pub is_washed: bool,
 }
 
 impl Item {
@@ -328,14 +473,14 @@ impl Item {
             return Ok(None);
         };
 
-        let enchantment = data.cfpget(0, "item enchantment", |a| a >> 24)?;
-        let gem_slot_val =
-            data.cimget(0, "gem slot val", |a| (a >> 16) & 0xFF)?;
-        let gem_pwr = data.cimget(11, "gem pwr", |a| a >> 16)?;
+        let enchantment = data.cfpget(2, "item enchantment", |a| a)?;
+        let gem_slot_val = data.cimget(1, "gem slot val", |a| a)?;
+        let gem_pwr = data.cimget(16, "gem pwr", |a| a)?;
+
         let gem_slot = GemSlot::parse(gem_slot_val, gem_pwr);
 
         let class = if typ.is_class_item() {
-            data.cfpget(1, "item class", |x| (x & 0xFFFF) / 1000)?
+            data.cfpget(3, "item class", |x| (x & 0xFFFF) / 1000)?
         } else {
             None
         };
@@ -343,12 +488,12 @@ impl Item {
         let mut attributes: EnumMap<AttributeType, u32> = EnumMap::default();
         if typ.equipment_slot().is_some() {
             for i in 0..3 {
-                let atr_typ = data.cget(i + 4, "item atr typ")?;
+                let atr_typ = data.cget(i + 7, "item atr typ")?;
                 let Ok(atr_typ) = atr_typ.try_into() else {
                     warn!("Invalid attribute typ: {atr_typ}, {typ:?}");
                     continue;
                 };
-                let atr_val = data.cget(i + 7, "item atr val")?;
+                let atr_val = data.cget(i + 10, "item atr val")?;
                 let Ok(atr_val): Result<u32, _> = atr_val.try_into() else {
                     warn!("Invalid attribute value: {atr_val}, {typ:?}");
                     continue;
@@ -412,11 +557,11 @@ impl Item {
             }
         }
         let model_id: u16 =
-            data.cimget(1, "item model id", |x| ((x & 0xFFFF) % 1000))?;
+            data.cimget(3, "item model id", |x| (x & 0xFFFF) % 1000)?;
 
         let color = match model_id {
             ..=49 if typ != ItemType::Talisman => data
-                .get(2..=9)
+                .get(5..=12)
                 .map(|a| a.iter().sum::<i64>())
                 .map(|a| (a % 5) + 1)
                 .and_then(|a| a.try_into().ok())
@@ -427,15 +572,18 @@ impl Item {
         let item = Item {
             typ,
             model_id,
-            price: data.csiget(10, "item price", u32::MAX)?,
-            mushroom_price: data.csiget(11, "mushroom price", u32::MAX)?,
             rune,
-            type_specific_val: data.csiget(2, "effect value", 0)?,
+            type_specific_val: data.csiget(5, "effect value", 0)?,
             gem_slot,
             enchantment,
             class,
             attributes,
             color,
+            price: data.csiget(13, "item price", u32::MAX)?,
+            mushroom_price: data.csiget(14, "mushroom price", u32::MAX)?,
+            upgrade_count: data.csiget(15, "upgrade count", u8::MAX)?,
+            item_quality: data.csiget(17, "upgrade count", 0)?,
+            is_washed: data.csiget(18, "is washed", 0)? != 0,
         };
         Ok(Some(item))
     }
@@ -698,23 +846,24 @@ impl ItemType {
 
     pub(crate) fn parse(
         data: &[i64],
-        server_time: ServerTime,
+        _server_time: ServerTime,
     ) -> Result<Option<Self>, SFError> {
         let raw_typ: u8 = data.csimget(0, "item type", 255, |a| a & 0xFF)?;
         let unknown_item = |name: &'static str| {
             warn!("Could no parse item of type: {raw_typ}. {name} is faulty");
             Ok(Some(ItemType::Unknown(raw_typ)))
         };
-        let sub_ident = data.cget(1, "item sub type")?;
+
+        let sub_ident = data.cget(3, "item sub type")?;
 
         Ok(Some(match raw_typ {
             0 => return Ok(None),
             1 => ItemType::Weapon {
-                min_dmg: data.csiget(2, "weapon min dmg", 0)?,
-                max_dmg: data.csiget(3, "weapon min dmg", 0)?,
+                min_dmg: data.csiget(5, "weapon min dmg", 0)?,
+                max_dmg: data.csiget(6, "weapon min dmg", 0)?,
             },
             2 => ItemType::Shield {
-                block_chance: data.csiget(2, "shield block chance", 0)?,
+                block_chance: data.csiget(5, "shield block chance", 0)?,
             },
             3 => ItemType::BreastPlate,
             4 => ItemType::FootWear,
@@ -745,13 +894,14 @@ impl ItemType {
             }
             12 => {
                 let id = sub_ident & 0xFF;
-
                 if id > 16 {
                     let Some(typ) = FromPrimitive::from_i64(id) else {
                         return unknown_item("resource type");
                     };
                     ItemType::Resource {
-                        amount: data.csiget(7, "resource amount", 0)?,
+                        // TODO:
+                        // data.csiget(7, "resource amount", 0)?,
+                        amount: 0,
                         typ,
                     }
                 } else {
@@ -764,21 +914,26 @@ impl ItemType {
                     ItemType::Potion(Potion {
                         typ,
                         size,
-                        expires: data.cstget(
-                            4,
-                            "potion expires",
-                            server_time,
-                        )?,
+                        // TODO:
+                        expires: None,
+                        // expires: data.cstget(
+                        //     4,
+                        //     "potion expires",
+                        //     server_time,
+                        // )?,
                     })
                 }
             }
             13 => ItemType::Scrapbook,
             15 => {
-                let pwr = data.csimget(11, "gem pwr", 0, |a| a >> 16)?;
-                let Some(typ) = GemType::parse(sub_ident, pwr) else {
+                let gem_value = data.csiget(16, "gem pwr", 0)?;
+                let Some(typ) = GemType::parse(sub_ident, gem_value) else {
                     return unknown_item("gem type");
                 };
-                let gem = Gem { typ, value: pwr };
+                let gem = Gem {
+                    typ,
+                    value: gem_value,
+                };
                 ItemType::Gem(gem)
             }
             16 => {
@@ -971,7 +1126,9 @@ impl GemType {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Enum, EnumIter)]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, Hash, Enum, EnumIter, EnumCount,
+)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 /// Denotes the place, where an item is equipped

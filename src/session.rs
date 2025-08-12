@@ -1,10 +1,6 @@
-use std::{
-    borrow::Borrow,
-    fmt::Debug,
-    sync::{atomic::AtomicU32, Arc},
-    time::Duration,
-};
+use std::{borrow::Borrow, fmt::Debug, str::FromStr, time::Duration};
 
+use base64::Engine;
 use log::{error, trace, warn};
 use reqwest::{header::*, Client};
 use url::Url;
@@ -17,13 +13,15 @@ use crate::{
         GameState,
     },
     misc::{
-        encrypt_server_request, sha1_hash, DEFAULT_CRYPTO_ID,
-        DEFAULT_CRYPTO_KEY, DEFAULT_SESSION_ID, HASH_CONST,
+        sha1_hash, DEFAULT_CRYPTO_ID, DEFAULT_CRYPTO_KEY, DEFAULT_SESSION_ID,
+        HASH_CONST,
     },
 };
+#[allow(deprecated)]
 pub use crate::{misc::decrypt_url, response::*};
 
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_field_names)]
 /// The session, that manages the server communication for a character
 pub struct Session {
     /// The information necessary to log in
@@ -34,7 +32,7 @@ pub struct Session {
     /// is valid and nobody else logs in
     session_id: String,
     /// The amount of commands we have send
-    command_count: Arc<AtomicU32>,
+    player_id: u32,
     login_count: u32,
     crypto_id: String,
     crypto_key: String,
@@ -112,9 +110,9 @@ impl Session {
             session_id: DEFAULT_SESSION_ID.to_string(),
             crypto_id: DEFAULT_CRYPTO_ID.to_string(),
             crypto_key: DEFAULT_CRYPTO_KEY.to_string(),
-            command_count: Arc::new(AtomicU32::new(0)),
             login_count: 1,
             options,
+            player_id: 0,
         }
     }
 
@@ -125,8 +123,8 @@ impl Session {
         self.crypto_key = DEFAULT_CRYPTO_KEY.to_string();
         self.crypto_id = DEFAULT_CRYPTO_ID.to_string();
         self.login_count = 1;
-        self.command_count = Arc::new(AtomicU32::new(0));
         self.session_id = DEFAULT_SESSION_ID.to_string();
+        self.player_id = 0;
     }
 
     /// Returns a reference to the server URL, that this session is sending
@@ -236,6 +234,7 @@ impl Session {
     /// # Errors
     /// Look at `send_command()` to get a full overview of all the
     /// possible errors
+    #[allow(clippy::unwrap_used, clippy::missing_panics_doc)]
     pub async fn send_command_raw<T: Borrow<Command>>(
         &self,
         command: T,
@@ -243,23 +242,19 @@ impl Session {
         let command = command.borrow();
         trace!("Sending a {command:?} command");
 
-        let mut command_str =
-            format!("{}|{}", self.session_id, command.request_string()?);
+        let old_cmd = command.request_string()?;
+        trace!("Command string: {old_cmd}");
 
-        while command_str.len() % 16 > 0 {
-            command_str.push('|');
-        }
+        let (cmd_name, cmd_args) =
+            old_cmd.split_once(':').unwrap_or((old_cmd.as_str(), ""));
 
-        trace!("Command string: {command_str}");
         let url = format!(
-            "{}req.php?req={}{}&rnd={:.7}&c={}",
+            "{}cmd.php?req={cmd_name}&params={}&sid={}",
             self.server_url,
+            base64::engine::general_purpose::URL_SAFE.encode(cmd_args),
             &self.crypto_id,
-            encrypt_server_request(command_str, &self.crypto_key)?,
-            fastrand::f64(), // Pretty sure this is just cache busting
-            self.command_count
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst)
         );
+
         trace!("Full request url: {url}");
 
         // Make sure we dont have any weird stuff in our URL
@@ -277,6 +272,19 @@ impl Session {
         if let LoginData::SSO { session, .. } = &self.login_data {
             req = req.bearer_auth(&session.bearer_token);
         }
+        if self.has_session_id() {
+            req = req.header(
+                HeaderName::from_str("PG-Session").unwrap(),
+                HeaderValue::from_str(&self.session_id).map_err(|_| {
+                    SFError::InvalidRequest("Invalid session id")
+                })?,
+            );
+        }
+        req = req.header(
+            HeaderName::from_str("PG-Player").unwrap(),
+            HeaderValue::from_str(&self.player_id.to_string())
+                .map_err(|_| SFError::InvalidRequest("Invalid player id"))?,
+        );
 
         let resp = req.send().await.map_err(|_| SFError::ConnectionError)?;
 
@@ -342,9 +350,12 @@ impl Session {
             self.session_id.clear();
             self.session_id.push_str(lc.as_str());
         }
-        if let Some(lc) = data.get("cryptokey") {
-            self.crypto_key.clear();
-            self.crypto_key.push_str(lc.as_str());
+        if let Some(player_id) = data
+            .get("ownplayersave")
+            .and_then(|a| a.as_str().split('/').nth(1))
+            .and_then(|a| a.parse::<u32>().ok())
+        {
+            self.player_id = player_id;
         }
         if let Some(lc) = data.get("cryptoid") {
             self.crypto_id.clear();
@@ -525,7 +536,7 @@ impl Default for ConnectionOptions {
                  (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
                     .to_string(),
             ),
-            expected_server_version: 2005,
+            expected_server_version: 2014,
             error_on_unsupported_version: false,
         }
     }

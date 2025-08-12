@@ -131,7 +131,7 @@ impl Tavern {
     /// the `questing_preference`, they will be shown. Otherwise you will get
     /// quests
     #[must_use]
-    pub fn available_tasks(&self) -> AvailableTasks {
+    pub fn available_tasks(&self) -> AvailableTasks<'_> {
         if self.questing_preference == ExpeditionSetting::PreferExpeditions
             && self.expeditions.is_event_ongoing()
         {
@@ -163,7 +163,7 @@ impl Tavern {
 
         for (qidx, quest) in self.quests.iter_mut().enumerate() {
             let quest_start = data.skip(235 + qidx, "tavern quest")?;
-            *quest = Quest::parse(quest_start, qidx, server_time)?;
+            quest.update(quest_start)?;
         }
         Ok(())
     }
@@ -224,22 +224,15 @@ impl Quest {
         matches!(self.monster_id, 139 | 145 | 148 | 152 | 155 | 157)
     }
 
-    pub(crate) fn parse(
-        data: &[i64],
-        quest_index: usize,
-        server_time: ServerTime,
-    ) -> Result<Quest, SFError> {
-        let item_start = data.skip(9 + quest_index * 11, "quest item")?;
-        Ok(Quest {
-            base_length: data.csiget(6, "quest length", 100_000)?,
-            base_silver: data.csiget(48, "quest silver", 0)?,
-            base_experience: data.csiget(45, "quest xp", 0)?,
-            item: Item::parse(item_start, server_time)?,
-            location_id: data
-                .cfpget(3, "quest location id", |a| a)?
-                .unwrap_or_default(),
-            monster_id: data.csimget(0, "quest monster id", 0, |a| -a)?,
-        })
+    pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
+        self.base_length = data.csiget(6, "quest length", 100_000)?;
+        self.base_silver = data.csiget(48, "quest silver", 0)?;
+        self.base_experience = data.csiget(45, "quest xp", 0)?;
+        self.location_id = data
+            .cfpget(3, "quest location id", |a| a)?
+            .unwrap_or_default();
+        self.monster_id = data.csimget(0, "quest monster id", 0, |a| -a)?;
+        Ok(())
     }
 }
 
@@ -311,6 +304,8 @@ pub struct Toilet {
     pub mana_currently: u32,
     /// The total amount of mana you have to collect to flush the toilet
     pub mana_total: u32,
+    // The amount of items can be trown into the toilet
+    pub sacrificed_today: u32,
 }
 
 impl Toilet {
@@ -372,7 +367,7 @@ impl Expedition {
     }
 
     pub(crate) fn update_encounters(&mut self, data: &[i64]) {
-        if data.len() % 2 != 0 {
+        if !data.len().is_multiple_of(2) {
             warn!("weird encounters: {data:?}");
         }
         let default_ecp = |ci| {
