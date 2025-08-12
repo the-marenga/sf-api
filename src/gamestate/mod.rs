@@ -90,6 +90,7 @@ const SHOP_N: usize = 6;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A shop, that you can buy items from
 pub struct Shop {
+    pub typ: ShopType,
     /// The items this shop has for sale
     pub items: [Item; SHOP_N],
 }
@@ -113,16 +114,50 @@ impl Default for Shop {
             is_washed: false,
         });
 
-        Self { items }
+        Self {
+            items,
+            typ: ShopType::Magic,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq, Copy)]
+pub struct ShopPosition {
+    pub(crate) typ: ShopType,
+    pub(crate) pos: usize,
+}
+
+impl ShopPosition {
+    /// The 0 based index into the backpack vec, where the item is parsed into
+    #[must_use]
+    pub fn shop(&self) -> ShopType {
+        self.typ
+    }
+    /// The inventory type and position within it, where the item is stored
+    /// according to previous inventory management logic. This is what you use
+    /// for commands
+    #[must_use]
+    pub fn position(&self) -> usize {
+        self.pos
     }
 }
 
 impl Shop {
+    /// Creates an iterator over the inventory slots.
+    pub fn iter(&self) -> impl Iterator<Item = (ShopPosition, &Item)> {
+        self.items
+            .iter()
+            .enumerate()
+            .map(|(pos, item)| (ShopPosition { typ: self.typ, pos }, item))
+    }
+
     pub(crate) fn parse(
         data: &[i64],
         server_time: ServerTime,
+        typ: ShopType,
     ) -> Result<Shop, SFError> {
         let mut shop = Shop::default();
+        shop.typ = typ;
         for (idx, item) in shop.items.iter_mut().enumerate() {
             let d = data.skip(idx * ITEM_PARSE_LEN, "shop item")?;
             let Some(p_item) = Item::parse(d, server_time)? else {
@@ -276,7 +311,7 @@ impl GameState {
                 "storeitemsshakes" => {
                     let data: Vec<i64> = val.into_list("weapon store")?;
                     *self.shops.get_mut(ShopType::Weapon) =
-                        Shop::parse(&data, server_time)?;
+                        Shop::parse(&data, server_time, ShopType::Weapon)?;
                 }
                 "questofferitems" => {
                     for (chunk, quest) in val
@@ -314,7 +349,7 @@ impl GameState {
                 "storeitemsfidget" => {
                     let data: Vec<i64> = val.into_list("magic store")?;
                     *self.shops.get_mut(ShopType::Magic) =
-                        Shop::parse(&data, server_time)?;
+                        Shop::parse(&data, server_time, ShopType::Magic)?;
                 }
                 "ownplayersaveequipment" => {
                     let data: Vec<i64> = val.into_list("player equipment")?;
@@ -1516,8 +1551,7 @@ impl GameState {
                         .chunks_exact(ITEM_PARSE_LEN)
                         .flat_map(|a|
                             // Might be broken
-                            Item::parse(a, server_time)
-                        )
+                            Item::parse(a, server_time))
                         .flatten()
                         .collect();
                 }

@@ -25,13 +25,17 @@ pub struct Inventory {
 
 /// The game keeps track between 5 slot bag and the extended inventory.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Copy)]
-pub struct BagPosition(usize);
+pub struct BagPosition(pub (crate) usize);
 
 impl BagPosition {
+    /// The 0 based index into the backpack vec, where the item is parsed into
     #[must_use]
-    pub fn raw_position(&self) -> usize {
+    pub fn backpack_pos(&self) -> usize {
         self.0
     }
+    /// The inventory type and position within it, where the item is stored
+    /// according to previous inventory management logic. This is what you use
+    /// for commands
     #[must_use]
     pub fn inventory_pos(&self) -> (InventoryType, usize) {
         let pos = self.0;

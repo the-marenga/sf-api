@@ -821,11 +821,12 @@ pub enum AttributeType {
     Luck = 5,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Enum, EnumIter, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Enum, EnumIter, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 /// A type of shop. This is a subset of `ItemPlace`
 pub enum ShopType {
+    #[default]
     Weapon = 3,
     Magic = 4,
 }
