@@ -8,8 +8,8 @@ use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
 use super::{
-    unlockables::EquipmentIdent, CFPGet, Class, EnumMapGet,
-    HabitatType, SFError, ServerTime,
+    unlockables::EquipmentIdent, CFPGet, Class, EnumMapGet, HabitatType,
+    SFError, ServerTime,
 };
 use crate::{
     command::{AttributeType, ShopType},

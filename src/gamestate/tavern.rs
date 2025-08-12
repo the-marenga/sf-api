@@ -224,17 +224,14 @@ impl Quest {
         matches!(self.monster_id, 139 | 145 | 148 | 152 | 155 | 157)
     }
 
-    pub(crate) fn update(
-        &mut self,
-        data: &[i64],
-    ) -> Result<(), SFError> {
-        self.base_length =  data.csiget(6, "quest length", 100_000)?;
+    pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
+        self.base_length = data.csiget(6, "quest length", 100_000)?;
         self.base_silver = data.csiget(48, "quest silver", 0)?;
         self.base_experience = data.csiget(45, "quest xp", 0)?;
         self.location_id = data
             .cfpget(3, "quest location id", |a| a)?
             .unwrap_or_default();
-        self.monster_id =  data.csimget(0, "quest monster id", 0, |a| -a)?;
+        self.monster_id = data.csimget(0, "quest monster id", 0, |a| -a)?;
         Ok(())
     }
 }

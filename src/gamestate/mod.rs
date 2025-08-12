@@ -322,7 +322,11 @@ impl GameState {
                         quest.item = Item::parse(chunk, server_time)?;
                     }
                 }
-                #[allow(clippy::indexing_slicing, clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                #[allow(
+                    clippy::indexing_slicing,
+                    clippy::cast_sign_loss,
+                    clippy::cast_possible_truncation
+                )]
                 "toiletstate" => {
                     let vals: Vec<i64> = val.into_list("toilet state")?;
                     if vals.len() < 3 {
