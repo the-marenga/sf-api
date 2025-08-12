@@ -821,11 +821,12 @@ pub enum AttributeType {
     Luck = 5,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Enum, EnumIter, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Enum, EnumIter, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 /// A type of shop. This is a subset of `ItemPlace`
 pub enum ShopType {
+    #[default]
     Weapon = 3,
     Magic = 4,
 }
@@ -847,7 +848,7 @@ impl Command {
     pub(crate) fn request_string(
         &self,
     ) -> Result<String, crate::error::SFError> {
-        const APP_VERSION: &str = "2100000000000";
+        const APP_VERSION: &str = "2700000000000";
         use crate::{
             error::SFError,
             gamestate::dungeons::{LightDungeon, ShadowDungeon},
