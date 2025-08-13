@@ -296,7 +296,8 @@ impl CurrentAction {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The unlocked toilet, that you can throw items into
 pub struct Toilet {
-    /// Has the toilet been used today?
+    // Checks if all sacrifices today have been used up
+    #[deprecated(note = "You should use sacrifices_left instead")]
     pub used: bool,
     /// The level the aura is at currently
     pub aura: u32,
@@ -304,8 +305,8 @@ pub struct Toilet {
     pub mana_currently: u32,
     /// The total amount of mana you have to collect to flush the toilet
     pub mana_total: u32,
-    // The amount of items can be trown into the toilet
-    pub sacrificed_today: u32,
+    // The amount of sacrifices you have left today
+    pub sacrifices_left: u32,
 }
 
 impl Toilet {
