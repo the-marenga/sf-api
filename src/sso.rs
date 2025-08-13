@@ -371,7 +371,7 @@ impl ServerLookup {
         }
 
         let resp: ServerResp = serde_json::from_str(&res).map_err(|_| {
-            SFError::ParsingError("server response", res.to_string())
+            SFError::ParsingError("server response", res.clone())
         })?;
 
         let servers: HashMap<i32, Url> = resp
