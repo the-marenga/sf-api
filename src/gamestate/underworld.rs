@@ -18,8 +18,8 @@ pub struct Underworld {
     /// Information about all the buildable units in the underworld
     pub units: EnumMap<UnderworldUnitType, UnderworldUnit>,
     /// All information about the production of resources in the underworld
-    pub production: EnumMap<UnderWorldResourceType, UnderworldProduction>,
-    /// The `last_collectable` value in `UnderWorldResource` is always out of
+    pub production: EnumMap<UnderworldResourceType, UnderworldProduction>,
+    /// The `last_collectable` value in `UnderworldProduction` is always out of
     /// date. Refer to the `Fortress.last_collectable_updated` for more
     /// information
     pub last_collectable_update: Option<DateTime<Local>>,
@@ -123,7 +123,7 @@ impl Underworld {
 
         #[allow(clippy::enum_glob_use)]
         {
-            use UnderWorldResourceType::*;
+            use UnderworldResourceType::*;
             self.production.get_mut(Souls).last_collectable =
                 data.csiget(459, "uu souls in building", 0)?;
             self.production.get_mut(Souls).limit =
@@ -164,9 +164,9 @@ impl Underworld {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 /// The type of a producible resource in the underworld
-pub enum UnderWorldResourceType {
-    Silver = 0,
-    Souls = 1,
+pub enum UnderworldResourceType {
+    Souls = 0,
+    Silver = 1,
     #[doc(alias = "ALU")]
     ThirstForAdventure = 2,
 }
