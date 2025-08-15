@@ -4,6 +4,8 @@
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation
 )]
+use std::ops::Sub;
+
 use enum_map::{Enum, EnumMap};
 use fastrand::Rng;
 use strum::{EnumIter, IntoEnumIterator};
@@ -421,6 +423,7 @@ impl BattleFighter {
         self.class_effect = ClassEffect::Normal;
         self.current_hp = self.max_hp;
         self.rounds_started = 0;
+        self.rounds_in_1v1 = 0;
     }
 }
 
@@ -831,6 +834,7 @@ fn attack(
                 swoops: defender.class_effect.druid_swoops(),
             };
             logger.log(BE::Dodged(attacker, defender));
+            return;
         }
         // Scout and assassin have 50% dodge chance
         if (defender.class == Class::Scout || defender.class == Class::Assassin)
@@ -851,20 +855,27 @@ fn attack(
 
     // TODO: Most of this can be reused, as long as the opponent does not
     // change. Should make sure this is correct first though
-    let char_damage_modifier = 1.0
-        + f64::from(*attacker.attributes.get(attacker.class.main_attribute()))
-            / 10.0;
+    let main_atr = attacker.class.main_attribute();
+
+    let attacker_skill = *attacker.attributes.get(main_atr);
+    let defender_skill = *defender.attributes.get(main_atr);
+
+    let effective_attacker_skill = (attacker_skill / 2)
+        .max(attacker_skill.saturating_sub(defender_skill / 2));
+
+    let char_damage_modifier = 1.0 + f64::from(effective_attacker_skill) / 10.0;
 
     let mut elemental_bonus = 1.0;
     for element in Element::iter() {
         let plus = attacker.equip.element_dmg.get(element);
-        let minus = defender.equip.element_dmg.get(element);
+        let minus = defender.equip.element_res.get(element);
 
         if plus > minus {
             elemental_bonus += plus - minus;
         }
     }
 
+    // NOTE: Why is armor not already precomputed? The armor should not change
     let armor = f64::from(defender.equip.armor) * defender.class.armor_factor();
     let max_dr = defender.class.max_damage_reduction();
     // TODO: Is this how mage armor negate works?
@@ -921,9 +932,9 @@ fn attack(
     let mut damage = rng.i64(min_base_damage..=max_base_damage);
 
     // Crits
-
     let luck_mod = attacker.attributes.get(AttributeType::Luck) * 5;
-    let raw_crit_chance = f64::from(luck_mod) / f64::from(defender.level);
+    let raw_crit_chance =
+        (f64::from(luck_mod) / (f64::from(defender.level * 2))) / 100.0;
     let mut crit_chance = raw_crit_chance.min(0.5);
     let mut crit_dmg_factor = 2.0;
 
