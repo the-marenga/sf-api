@@ -10,7 +10,7 @@ use crate::{
         dungeons::{Dungeon, LightDungeon, ShadowDungeon},
     },
     misc::EnumMapGet,
-    simulate::Monster,
+    simulate::{Element, Monster, MonsterRunes},
 };
 
 static DUNGEONS_MONSTER: LazyLock<DungeonMonsters> =
@@ -31,6 +31,14 @@ struct DungeonData<'a> {
     monsters: Vec<MonsterData<'a>>,
 }
 
+#[derive(serde::Deserialize, Debug, Default)]
+pub struct RawMonsterRunes {
+    #[serde(rename = "type")]
+    typ: u32,
+    res: [i32; 3],
+    damage: i32,
+}
+
 #[derive(serde::Deserialize)]
 struct MonsterData<'a> {
     #[serde(borrow)]
@@ -46,6 +54,7 @@ struct MonsterData<'a> {
     min_dmg: Option<u32>,
     max_dmg: Option<u32>,
     armor: Option<u32>,
+    runes: Option<RawMonsterRunes>,
 }
 
 #[derive(Debug)]
@@ -114,6 +123,23 @@ fn read_dungeon_data(
             u32::from(level) * class.monster_armor_multiplier()
         });
 
+        let runes = match &monster.runes {
+            Some(runes) => {
+                let typ = match runes.typ {
+                    40 => Element::Fire,
+                    41 => Element::Cold,
+                    42 => Element::Lightning,
+                    _ => todo!(),
+                };
+                Some(MonsterRunes {
+                    damage_type: typ,
+                    damage: runes.damage,
+                    resistences: EnumMap::from_array(runes.res),
+                })
+            }
+            None => None,
+        };
+
         let monster = Monster {
             name: monster
                 .name
@@ -133,6 +159,7 @@ fn read_dungeon_data(
             min_dmg: monster.min_dmg.unwrap_or(u32::MAX),
             max_dmg: monster.max_dmg.unwrap_or(u32::MAX),
             armor,
+            runes,
         };
         monsters.push(monster);
     }
@@ -146,6 +173,7 @@ fn read_dungeon_data(
             min_dmg: u32::MAX,
             max_dmg: u32::MAX,
             armor: u32::MAX,
+            runes: None,
         });
     }
 }

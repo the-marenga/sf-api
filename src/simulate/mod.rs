@@ -285,6 +285,14 @@ impl ClassEffect {
 impl BattleFighter {
     #[must_use]
     pub fn from_monster(monster: &Monster) -> Self {
+        let mut rune_atk_bonus = None;
+        let mut element_res = EnumMap::default();
+
+        if let Some(runes) = &monster.runes {
+            rune_atk_bonus = Some((runes.damage_type, runes.damage));
+            element_res = runes.resistences;
+        }
+
         Self {
             name: monster.name.clone(),
             is_companion: false,
@@ -294,11 +302,11 @@ impl BattleFighter {
             max_hp: monster.hp as i64,
             current_hp: monster.hp as i64,
             equip: EquipmentEffects {
-                element_res: EnumMap::default(),
+                element_res,
                 weapon: Some(Weapon {
                     min_dmg: monster.min_dmg,
                     max_dmg: monster.max_dmg,
-                    rune_atk_bonus: None,
+                    rune_atk_bonus,
                 }),
                 offhand: None,
                 has_shield: monster.class.can_wear_shield(),
@@ -479,11 +487,11 @@ struct Weapon {
     rune_atk_bonus: Option<(Element, i32)>,
 }
 
-#[derive(Debug, Clone, Copy, Enum, EnumIter, Hash)]
+#[derive(Debug, Clone, Copy, Enum, EnumIter, Hash, PartialEq, Eq)]
 pub enum Element {
+    Fire,
     Lightning,
     Cold,
-    Fire,
 }
 
 #[derive(Debug)]
@@ -886,7 +894,6 @@ fn attack(
         }
     }
 
-    // TODO: Is this how mage armor negate works?
     let armor_damage_effect = if attacker.class == Class::Mage {
         1.0
     } else {
@@ -934,13 +941,13 @@ fn attack(
     let attribute_bonus = 1.0 + f64::from(effective_attacker_skill) / 10.0;
 
     let damage_bonus = 1.0
-        * attribute_bonus // 1076.8
-        * attacker.portal_dmg_bonus // 1.25
-        * elemental_bonus // 1.3
-        * armor_damage_effect // 0.9
-        * attacker.class.damage_factor(defender.class) // 0.625
-        * rage_bonus // 1.0
-        * class_effect_dmg_bonus; // 1.0
+        * attribute_bonus
+        * attacker.portal_dmg_bonus
+        * elemental_bonus
+        * armor_damage_effect
+        * attacker.class.damage_factor(defender.class)
+        * rage_bonus
+        * class_effect_dmg_bonus;
 
     let calc_damage =
         |weapon_dmg| (f64::from(weapon_dmg) * damage_bonus).trunc() as i64;
@@ -971,16 +978,16 @@ fn attack(
         _ => {}
     }
 
+    if attacker.equip.extra_crit_dmg {
+        crit_dmg_factor += 0.05;
+    }
+    let gladiator_lvl_diff = attacker
+        .gladiator_lvl
+        .saturating_sub(defender.gladiator_lvl);
+
+    crit_dmg_factor += 0.11 * f64::from(gladiator_lvl_diff);
+
     if rng.f64() <= crit_chance {
-        if attacker.equip.extra_crit_dmg {
-            crit_dmg_factor += 0.05;
-        }
-        let gladiator_lvl_diff = attacker
-            .gladiator_lvl
-            .saturating_sub(defender.gladiator_lvl);
-
-        crit_dmg_factor += 0.11 * f64::from(gladiator_lvl_diff);
-
         logger.log(BE::Crit(attacker, defender, crit_chance, crit_dmg_factor));
         damage = (damage as f64 * crit_dmg_factor) as i64;
     }
@@ -1196,6 +1203,14 @@ pub struct Monster {
     pub min_dmg: u32,
     pub max_dmg: u32,
     pub armor: u32,
+    pub runes: Option<MonsterRunes>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MonsterRunes {
+    pub damage_type: Element,
+    pub damage: i32,
+    pub resistences: EnumMap<Element, i32>,
 }
 
 #[derive(Debug)]
