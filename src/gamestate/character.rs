@@ -162,6 +162,7 @@ pub enum Class {
     Bard,
     Necromancer,
     Paladin,
+    PlagueDoctor,
 }
 
 #[allow(clippy::enum_glob_use)]
@@ -174,7 +175,9 @@ impl Class {
             Paladin | BattleMage | Berserker | Warrior => {
                 AttributeType::Strength
             }
-            Assassin | DemonHunter | Scout => AttributeType::Dexterity,
+            Assassin | DemonHunter | Scout | PlagueDoctor => {
+                AttributeType::Dexterity
+            }
             Druid | Bard | Necromancer | Mage => AttributeType::Intelligence,
         }
     }
@@ -183,9 +186,24 @@ impl Class {
     pub(crate) fn weapon_multiplier(self) -> f64 {
         use Class::*;
         match self {
-            Paladin | Warrior | Assassin | BattleMage | Berserker => 2.0,
+            PlagueDoctor | Paladin | Warrior | Assassin | BattleMage
+            | Berserker => 2.0,
             Scout => 2.5,
             Mage | DemonHunter | Druid | Bard | Necromancer => 4.5,
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn life_multiplier(self, is_companion: bool) -> f64 {
+        use Class::*;
+
+        match self {
+            Warrior if is_companion => 6.1,
+            Paladin => 6.0,
+            Warrior | BattleMage | Druid => 5.0,
+            PlagueDoctor | Scout | Assassin | Berserker | DemonHunter
+            | Necromancer => 4.0,
+            Mage | Bard => 2.0,
         }
     }
 
@@ -197,6 +215,7 @@ impl Class {
             Paladin | Warrior | Mage | Scout | DemonHunter | Druid
             | Assassin => 1.0,
             Bard | Necromancer => 2.0,
+            PlagueDoctor => 2.5,
             BattleMage => 5.0,
         }
     }
@@ -207,7 +226,7 @@ impl Class {
         match self {
             Bard | BattleMage | DemonHunter | Warrior => 0.5,
             Paladin => 0.45,
-            Druid | Assassin | Berserker | Scout => 0.25,
+            PlagueDoctor | Druid | Assassin | Berserker | Scout => 0.25,
             Necromancer => 0.2,
             Mage => 0.1,
         }
@@ -231,7 +250,7 @@ impl Class {
             Paladin => 0.83,
             Warrior | Mage | Scout | BattleMage | DemonHunter => 1.0,
             Bard => 1.125,
-            Berserker => 1.25,
+            Berserker | PlagueDoctor => 1.25,
         }
     }
 }
