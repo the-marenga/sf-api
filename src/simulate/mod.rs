@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use enum_map::{Enum, EnumMap};
 use fastrand::Rng;
+use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 
 use crate::{
@@ -285,27 +286,6 @@ impl ClassEffect {
 impl BattleFighter {
     #[must_use]
     pub fn from_monster(monster: &Monster) -> Self {
-        // TODO: I assume this is unarmed damage, but I should check
-        let weapon = HandItem::Weapon(Weapon {
-            min_dmg: 1752,
-            max_dmg: 2959,
-            rune_atk_bonus: None,
-        });
-
-        // TODO: Take existing armor value
-        let armor = u32::from(monster.level)
-            * match monster.class {
-                Class::Warrior | Class::Berserker | Class::DemonHunter => 50,
-                Class::Paladin => 45,
-                // TODO: Plague doctor
-                Class::Scout
-                | Class::Assassin
-                | Class::Druid
-                | Class::Bard
-                | Class::PlagueDoctor => 25,
-                Class::Mage | Class::BattleMage | Class::Necromancer => 10,
-            };
-
         Self {
             name: "monster".into(),
             is_companion: false,
@@ -316,11 +296,15 @@ impl BattleFighter {
             current_hp: monster.hp as i64,
             equip: EquipmentEffects {
                 element_res: EnumMap::default(),
-                weapon,
+                weapon: HandItem::Weapon(Weapon {
+                    min_dmg: monster.min_dmg,
+                    max_dmg: monster.max_dmg,
+                    rune_atk_bonus: None,
+                }),
                 offhand: HandItem::None,
                 reaction_boost: false,
                 extra_crit_dmg: false,
-                armor,
+                armor: monster.armor,
             },
             portal_dmg_bonus: 1.0,
             rounds_started: 0,
@@ -354,7 +338,7 @@ impl BattleFighter {
                             min_dmg: min,
                             max_dmg: max,
                             rune_atk_bonus: None,
-                        })
+                        });
                     }
                     EquipmentSlot::Shield if char.class == Class::Assassin => {
                         let (min, max) =
@@ -363,7 +347,7 @@ impl BattleFighter {
                             min_dmg: min,
                             max_dmg: max,
                             rune_atk_bonus: None,
-                        })
+                        });
                     }
                     _ => {}
                 }
@@ -916,13 +900,12 @@ fn attack(
     let armor_damage_effect = if attacker.class == Class::Mage {
         1.0
     } else {
-        // NOTE: Why is armor not already precomputed? The armor should not
-        // change
+        let max_dr = defender.class.max_damage_reduction();
         let armor =
             f64::from(defender.equip.armor) * defender.class.armor_factor();
-        let max_dr = defender.class.max_damage_reduction();
-
-        1.0 - (armor / f64::from(attacker.level)).min(max_dr)
+        let raw_dr = armor / f64::from(attacker.level);
+        let dr = (raw_dr / 100.0).min(max_dr);
+        1.0 - dr
     };
 
     // The damage bonus you get from some class specific gimmic
@@ -1215,30 +1198,14 @@ impl UpgradeableFighter {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Monster {
+    pub name: Arc<str>,
     pub level: u16,
     pub class: Class,
     pub attributes: EnumMap<AttributeType, u32>,
     pub hp: u64,
-    pub xp: u32,
-}
-
-impl Monster {
-    #[must_use]
-    pub const fn new(
-        level: u16,
-        class: Class,
-        attribs: [u32; 5],
-        hp: u64,
-        xp: u32,
-    ) -> Self {
-        Monster {
-            level,
-            class,
-            attributes: EnumMap::from_array(attribs),
-            hp,
-            xp,
-        }
-    }
+    pub min_dmg: u32,
+    pub max_dmg: u32,
+    pub armor: u32,
 }
 
 #[derive(Debug)]

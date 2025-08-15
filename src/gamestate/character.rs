@@ -194,6 +194,21 @@ impl Class {
     }
 
     #[must_use]
+    pub(crate) fn monster_armor_multiplier(self) -> u32 {
+        match self {
+            Class::Warrior | Class::Berserker | Class::DemonHunter => 50,
+            Class::Paladin => 45,
+            // TODO: Plague doctor
+            Class::Scout
+            | Class::Assassin
+            | Class::Druid
+            | Class::Bard
+            | Class::PlagueDoctor => 25,
+            Class::Mage | Class::BattleMage | Class::Necromancer => 10,
+        }
+    }
+
+    #[must_use]
     pub(crate) fn life_multiplier(self, is_companion: bool) -> f64 {
         use Class::*;
 

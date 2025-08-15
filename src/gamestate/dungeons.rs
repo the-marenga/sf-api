@@ -8,13 +8,7 @@ use super::{
     AttributeType, CCGet, Class, EnumMapGet, Item, SFError, ServerTime,
     items::Equipment,
 };
-use crate::{
-    misc::soft_into,
-    simulate::{
-        Monster,
-        constants::{LIGHT_ENEMIES, SHADOW_ENEMIES},
-    },
-};
+use crate::{misc::soft_into, simulate::{constants::get_dungeon_enemies, Monster}};
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -361,14 +355,5 @@ pub fn dungeon_enemy(
         DungeonProgress::Open { finished } => finished,
         DungeonProgress::Locked | DungeonProgress::Finished => return None,
     };
-
-    let dungeon: Dungeon = dungeon.into();
-    match dungeon {
-        Dungeon::Light(dungeon) => {
-            LIGHT_ENEMIES.get(dungeon).get(stage as usize)
-        }
-        Dungeon::Shadow(dungeon) => {
-            SHADOW_ENEMIES.get(dungeon).get(stage as usize)
-        }
-    }
+    get_dungeon_enemies(dungeon.into()).get(stage as usize)
 }
