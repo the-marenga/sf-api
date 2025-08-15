@@ -3,6 +3,7 @@
     "levels": 10,
     "monsters": [
       {
+        "armor": 26880,
         "class": "Scout",
         "constitution": 307125,
         "dexterity": 106820,
@@ -17,6 +18,7 @@
         "strength": 52850
       },
       {
+        "armor": 27300,
         "class": "Warrior",
         "constitution": 315000,
         "dexterity": 56000,
@@ -31,6 +33,7 @@
         "strength": 112000
       },
       {
+        "armor": 27384,
         "class": "Scout",
         "constitution": 316418,
         "dexterity": 113435,
@@ -45,6 +48,7 @@
         "strength": 56455
       },
       {
+        "armor": 27636,
         "class": "Mage",
         "constitution": 320670,
         "dexterity": 57820,
@@ -59,6 +63,7 @@
         "strength": 57820
       },
       {
+        "armor": 27804,
         "class": "Mage",
         "constitution": 323505,
         "dexterity": 58730,
@@ -73,6 +78,7 @@
         "strength": 58730
       },
       {
+        "armor": 28308,
         "class": "Scout",
         "constitution": 332010,
         "dexterity": 129220,
@@ -87,6 +93,7 @@
         "strength": 61460
       },
       {
+        "armor": 28644,
         "class": "Mage",
         "constitution": 337680,
         "dexterity": 63280,
@@ -101,6 +108,7 @@
         "strength": 63280
       },
       {
+        "armor": 29064,
         "class": "Warrior",
         "constitution": 344768,
         "dexterity": 65555,
@@ -115,6 +123,7 @@
         "strength": 142135
       },
       {
+        "armor": 29484,
         "class": "Mage",
         "constitution": 351855,
         "dexterity": 67830,
@@ -129,6 +138,7 @@
         "strength": 67830
       },
       {
+        "armor": 30324,
         "class": "Warrior",
         "constitution": 366030,
         "dexterity": 72380,
@@ -730,6 +740,7 @@
     "levels": 30,
     "monsters": [
       {
+        "armor": 11150,
         "class": "Warrior",
         "constitution": 71749,
         "dexterity": 2000,
@@ -744,6 +755,7 @@
         "strength": 90000
       },
       {
+        "armor": 12250,
         "class": "Warrior",
         "constitution": 81633,
         "dexterity": 2500,
@@ -758,6 +770,7 @@
         "strength": 100000
       },
       {
+        "armor": 13300,
         "class": "Mage",
         "constitution": 224719,
         "dexterity": 3000,
@@ -772,6 +785,7 @@
         "strength": 3000
       },
       {
+        "armor": 14400,
         "class": "Scout",
         "constitution": 124567,
         "dexterity": 140000,
@@ -786,6 +800,7 @@
         "strength": 3500
       },
       {
+        "armor": 16650,
         "class": "Mage",
         "constitution": 257485,
         "dexterity": 4000,
@@ -800,6 +815,7 @@
         "strength": 4000
       },
       {
+        "armor": 18300,
         "class": "Mage",
         "constitution": 280654,
         "dexterity": 4500,
@@ -814,6 +830,7 @@
         "strength": 4500
       },
       {
+        "armor": 19950,
         "class": "Mage",
         "constitution": 310000,
         "dexterity": 5000,
@@ -828,6 +845,7 @@
         "strength": 5000
       },
       {
+        "armor": 22200,
         "class": "WarMage",
         "constitution": 168539,
         "dexterity": 6000,
@@ -842,6 +860,7 @@
         "strength": 290000
       },
       {
+        "armor": 24400,
         "class": "Berserker",
         "constitution": 184049,
         "dexterity": 7000,
@@ -856,6 +875,7 @@
         "strength": 350000
       },
       {
+        "armor": 27750,
         "class": "Assassin",
         "constitution": 193345,
         "dexterity": 400000,
@@ -870,6 +890,7 @@
         "strength": 10000
       },
       {
+        "armor": 5570,
         "class": "Mage",
         "constitution": 361800,
         "dexterity": 10100,
@@ -884,6 +905,7 @@
         "strength": 10100
       },
       {
+        "armor": 13975,
         "class": "Scout",
         "constitution": 363600,
         "dexterity": 408040,
@@ -898,6 +920,7 @@
         "strength": 10200
       },
       {
+        "armor": 5610,
         "class": "WarMage",
         "constitution": 456763,
         "dexterity": 10300,
@@ -912,6 +935,7 @@
         "strength": 412120
       },
       {
+        "armor": 28150,
         "class": "Warrior",
         "constitution": 367230,
         "dexterity": 10400,
@@ -926,6 +950,7 @@
         "strength": 416240
       },
       {
+        "armor": 14125,
         "class": "Berserker",
         "constitution": 369060,
         "dexterity": 10500,
@@ -940,6 +965,7 @@
         "strength": 420400
       },
       {
+        "armor": 5670,
         "class": "Mage",
         "constitution": 370900,
         "dexterity": 10600,
@@ -954,6 +980,7 @@
         "strength": 10600
       },
       {
+        "armor": 28450,
         "class": "Warrior",
         "constitution": 372750,
         "dexterity": 10700,
@@ -968,6 +995,7 @@
         "strength": 428840
       },
       {
+        "armor": 5710,
         "class": "Mage",
         "constitution": 374610,
         "dexterity": 10800,
@@ -982,6 +1010,7 @@
         "strength": 10800
       },
       {
+        "armor": 28650,
         "class": "DemonHunter",
         "constitution": 376480,
         "dexterity": 437450,
@@ -996,6 +1025,7 @@
         "strength": 10900
       },
       {
+        "armor": 14375,
         "class": "Berserker",
         "constitution": 378360,
         "dexterity": 11000,
@@ -1010,7 +1040,7 @@
         "strength": 441820
       },
       {
-        "armor": 30000,
+        "armor": 6000,
         "class": "Mage",
         "constitution": 387263,
         "dexterity": 12000,
@@ -1025,7 +1055,7 @@
         "strength": 12000
       },
       {
-        "armor": 40000,
+        "armor": 59490,
         "class": "Scout",
         "constitution": 396166,
         "dexterity": 458180,
@@ -1040,7 +1070,7 @@
         "strength": 12000
       },
       {
-        "armor": 45000,
+        "armor": 36900,
         "class": "Warrior",
         "constitution": 405069,
         "dexterity": 13000,
@@ -1055,7 +1085,7 @@
         "strength": 466360
       },
       {
-        "armor": 50000,
+        "armor": 37350,
         "class": "Mage",
         "constitution": 413972,
         "dexterity": 14000,
@@ -1070,7 +1100,7 @@
         "strength": 14000
       },
       {
-        "armor": 55000,
+        "armor": 37800,
         "class": "Scout",
         "constitution": 422875,
         "dexterity": 482720,
@@ -1085,7 +1115,7 @@
         "strength": 15000
       },
       {
-        "armor": 60000,
+        "armor": 38250,
         "class": "Warrior",
         "constitution": 431778,
         "dexterity": 16000,
@@ -1100,7 +1130,7 @@
         "strength": 490900
       },
       {
-        "armor": 65000,
+        "armor": 38700,
         "class": "Scout",
         "constitution": 440681,
         "dexterity": 499080,
@@ -1115,7 +1145,7 @@
         "strength": 17000
       },
       {
-        "armor": 70000,
+        "armor": 39150,
         "class": "Warrior",
         "constitution": 449584,
         "dexterity": 18000,
@@ -1130,7 +1160,7 @@
         "strength": 507260
       },
       {
-        "armor": 75000,
+        "armor": 39600,
         "class": "Warrior",
         "constitution": 458487,
         "dexterity": 19000,
@@ -1145,7 +1175,7 @@
         "strength": 515440
       },
       {
-        "armor": 80000,
+        "armor": 40050,
         "class": "Scout",
         "constitution": 467390,
         "dexterity": 523620,
@@ -4353,6 +4383,7 @@
     "levels": 10,
     "monsters": [
       {
+        "armor": 30793,
         "class": "Scout",
         "constitution": 394664,
         "dexterity": 189543,
@@ -4367,6 +4398,7 @@
         "strength": 84219
       },
       {
+        "armor": 30954,
         "class": "Scout",
         "constitution": 400995,
         "dexterity": 192960,
@@ -4381,6 +4413,7 @@
         "strength": 86430
       },
       {
+        "armor": 31276,
         "class": "Mage",
         "constitution": 413658,
         "dexterity": 90852,
@@ -4395,6 +4428,7 @@
         "strength": 90852
       },
       {
+        "armor": 31758,
         "class": "Mage",
         "constitution": 432653,
         "dexterity": 97485,
@@ -4409,6 +4443,7 @@
         "strength": 97485
       },
       {
+        "armor": 32240,
         "class": "Warrior",
         "constitution": 451647,
         "dexterity": 104118,
@@ -4423,6 +4458,7 @@
         "strength": 220296
       },
       {
+        "armor": 32803,
         "class": "Warrior",
         "constitution": 473808,
         "dexterity": 111857,
@@ -4437,6 +4473,7 @@
         "strength": 232256
       },
       {
+        "armor": 33286,
         "class": "Warrior",
         "constitution": 492803,
         "dexterity": 118490,
@@ -4451,6 +4488,7 @@
         "strength": 242507
       },
       {
+        "armor": 33768,
         "class": "Scout",
         "constitution": 511797,
         "dexterity": 252758,
@@ -4465,6 +4503,7 @@
         "strength": 125123
       },
       {
+        "armor": 33929,
         "class": "Mage",
         "constitution": 518129,
         "dexterity": 127334,
@@ -4479,6 +4518,7 @@
         "strength": 127334
       },
       {
+        "armor": 34492,
         "class": "Scout",
         "constitution": 534861,
         "dexterity": 270144,
@@ -15841,6 +15881,1406 @@
         "max_dmg": 9230,
         "min_dmg": 8980,
         "strength": 1077600
+      },
+      {
+        "armor": 70920,
+        "class": "Scout",
+        "constitution": 1791450,
+        "dexterity": 1077600,
+        "id": 801,
+        "intelligence": 487800,
+        "level": 766,
+        "life": 5496168600,
+        "luck": 107500,
+        "max_dmg": 11538,
+        "min_dmg": 11225,
+        "strength": 487800
+      },
+      {
+        "armor": 71040,
+        "class": "Scout",
+        "constitution": 1804275,
+        "dexterity": 1081200,
+        "id": 802,
+        "intelligence": 491100,
+        "level": 767,
+        "life": 5542732800,
+        "luck": 107750,
+        "max_dmg": 11575,
+        "min_dmg": 11263,
+        "strength": 491100
+      },
+      {
+        "armor": 71040,
+        "class": "Warrior",
+        "constitution": 1804275,
+        "dexterity": 491100,
+        "id": 803,
+        "intelligence": 491100,
+        "level": 767,
+        "life": 6928416000,
+        "luck": 107750,
+        "max_dmg": 9260,
+        "min_dmg": 9010,
+        "strength": 1081200
+      },
+      {
+        "armor": 71040,
+        "class": "Mage",
+        "constitution": 1804275,
+        "dexterity": 491100,
+        "id": 804,
+        "intelligence": 1081200,
+        "level": 767,
+        "life": 2771366400,
+        "luck": 107750,
+        "max_dmg": 20835,
+        "min_dmg": 20273,
+        "strength": 491100
+      },
+      {
+        "armor": 71160,
+        "class": "Scout",
+        "constitution": 1817100,
+        "dexterity": 1084800,
+        "id": 805,
+        "intelligence": 494400,
+        "level": 768,
+        "life": 5589399600,
+        "luck": 108000,
+        "max_dmg": 11613,
+        "min_dmg": 11300,
+        "strength": 494400
+      },
+      {
+        "armor": 71160,
+        "class": "Mage",
+        "constitution": 1817100,
+        "dexterity": 494400,
+        "id": 806,
+        "intelligence": 1084800,
+        "level": 768,
+        "life": 2794699800,
+        "luck": 108000,
+        "max_dmg": 20903,
+        "min_dmg": 20340,
+        "strength": 494400
+      },
+      {
+        "armor": 71160,
+        "class": "Warrior",
+        "constitution": 1817100,
+        "dexterity": 494400,
+        "id": 807,
+        "intelligence": 494400,
+        "level": 768,
+        "life": 6986749500,
+        "luck": 108000,
+        "max_dmg": 9290,
+        "min_dmg": 9040,
+        "strength": 1084800
+      },
+      {
+        "armor": 71280,
+        "class": "Scout",
+        "constitution": 1829925,
+        "dexterity": 1088400,
+        "id": 808,
+        "intelligence": 497700,
+        "level": 769,
+        "life": 5636169000,
+        "luck": 108250,
+        "max_dmg": 11650,
+        "min_dmg": 11338,
+        "strength": 497700
+      },
+      {
+        "armor": 71280,
+        "class": "Mage",
+        "constitution": 1829925,
+        "dexterity": 497700,
+        "id": 809,
+        "intelligence": 1088400,
+        "level": 769,
+        "life": 2818084500,
+        "luck": 108250,
+        "max_dmg": 20970,
+        "min_dmg": 20408,
+        "strength": 497700
+      },
+      {
+        "armor": 71280,
+        "class": "Warrior",
+        "constitution": 1829925,
+        "dexterity": 497700,
+        "id": 810,
+        "intelligence": 497700,
+        "level": 769,
+        "life": 7045211250,
+        "luck": 108250,
+        "max_dmg": 9320,
+        "min_dmg": 9070,
+        "strength": 1088400
+      },
+      {
+        "armor": 71400,
+        "class": "Scout",
+        "constitution": 1842750,
+        "dexterity": 1092000,
+        "id": 811,
+        "intelligence": 501000,
+        "level": 770,
+        "life": 5683041000,
+        "luck": 108500,
+        "max_dmg": 11688,
+        "min_dmg": 11375,
+        "strength": 501000
+      },
+      {
+        "armor": 71400,
+        "class": "Warrior",
+        "constitution": 1842750,
+        "dexterity": 501000,
+        "id": 812,
+        "intelligence": 501000,
+        "level": 770,
+        "life": 7103801250,
+        "luck": 108500,
+        "max_dmg": 9350,
+        "min_dmg": 9100,
+        "strength": 1092000
+      },
+      {
+        "armor": 71400,
+        "class": "Mage",
+        "constitution": 1842750,
+        "dexterity": 501000,
+        "id": 813,
+        "intelligence": 1092000,
+        "level": 770,
+        "life": 2841520500,
+        "luck": 108500,
+        "max_dmg": 21038,
+        "min_dmg": 20475,
+        "strength": 501000
+      },
+      {
+        "armor": 71520,
+        "class": "Warrior",
+        "constitution": 1855575,
+        "dexterity": 504300,
+        "id": 814,
+        "intelligence": 504300,
+        "level": 771,
+        "life": 7162519500,
+        "luck": 108750,
+        "max_dmg": 9380,
+        "min_dmg": 9130,
+        "strength": 1095600
+      },
+      {
+        "armor": 71520,
+        "class": "Scout",
+        "constitution": 1855575,
+        "dexterity": 1095600,
+        "id": 815,
+        "intelligence": 504300,
+        "level": 771,
+        "life": 5730015600,
+        "luck": 108750,
+        "max_dmg": 11725,
+        "min_dmg": 11413,
+        "strength": 504300
+      },
+      {
+        "armor": 71520,
+        "class": "Mage",
+        "constitution": 1855575,
+        "dexterity": 504300,
+        "id": 816,
+        "intelligence": 1095600,
+        "level": 771,
+        "life": 2865007800,
+        "luck": 108750,
+        "max_dmg": 21105,
+        "min_dmg": 20543,
+        "strength": 504300
+      },
+      {
+        "armor": 71640,
+        "class": "Mage",
+        "constitution": 1868400,
+        "dexterity": 507600,
+        "id": 817,
+        "intelligence": 1099200,
+        "level": 772,
+        "life": 2888546400,
+        "luck": 109000,
+        "max_dmg": 21173,
+        "min_dmg": 20610,
+        "strength": 507600
+      },
+      {
+        "armor": 71640,
+        "class": "Warrior",
+        "constitution": 1868400,
+        "dexterity": 507600,
+        "id": 818,
+        "intelligence": 507600,
+        "level": 772,
+        "life": 7221366000,
+        "luck": 109000,
+        "max_dmg": 9410,
+        "min_dmg": 9160,
+        "strength": 1099200
+      },
+      {
+        "armor": 71640,
+        "class": "Scout",
+        "constitution": 1868400,
+        "dexterity": 1099200,
+        "id": 819,
+        "intelligence": 507600,
+        "level": 772,
+        "life": 5777092800,
+        "luck": 109000,
+        "max_dmg": 11763,
+        "min_dmg": 11450,
+        "strength": 507600
+      },
+      {
+        "armor": 71760,
+        "class": "Mage",
+        "constitution": 1881225,
+        "dexterity": 510900,
+        "id": 820,
+        "intelligence": 1102800,
+        "level": 773,
+        "life": 2912136300,
+        "luck": 109250,
+        "max_dmg": 21240,
+        "min_dmg": 20678,
+        "strength": 510900
+      },
+      {
+        "armor": 71760,
+        "class": "Warrior",
+        "constitution": 1881225,
+        "dexterity": 510900,
+        "id": 821,
+        "intelligence": 510900,
+        "level": 773,
+        "life": 7280340750,
+        "luck": 109250,
+        "max_dmg": 9440,
+        "min_dmg": 9190,
+        "strength": 1102800
+      },
+      {
+        "armor": 71760,
+        "class": "Scout",
+        "constitution": 1881225,
+        "dexterity": 1102800,
+        "id": 822,
+        "intelligence": 510900,
+        "level": 773,
+        "life": 5824272600,
+        "luck": 109250,
+        "max_dmg": 11800,
+        "min_dmg": 11488,
+        "strength": 510900
+      },
+      {
+        "armor": 71880,
+        "class": "Warrior",
+        "constitution": 1894050,
+        "dexterity": 514200,
+        "id": 823,
+        "intelligence": 514200,
+        "level": 774,
+        "life": 7339443750,
+        "luck": 109500,
+        "max_dmg": 9470,
+        "min_dmg": 9220,
+        "strength": 1106400
+      },
+      {
+        "armor": 71880,
+        "class": "Mage",
+        "constitution": 1894050,
+        "dexterity": 514200,
+        "id": 824,
+        "intelligence": 1106400,
+        "level": 774,
+        "life": 2935777500,
+        "luck": 109500,
+        "max_dmg": 21308,
+        "min_dmg": 20745,
+        "strength": 514200
+      },
+      {
+        "armor": 71880,
+        "class": "Scout",
+        "constitution": 1894050,
+        "dexterity": 1106400,
+        "id": 825,
+        "intelligence": 514200,
+        "level": 774,
+        "life": 5871555000,
+        "luck": 109500,
+        "max_dmg": 11838,
+        "min_dmg": 11525,
+        "strength": 514200
+      },
+      {
+        "armor": 72000,
+        "class": "Scout",
+        "constitution": 1906875,
+        "dexterity": 1110000,
+        "id": 826,
+        "intelligence": 517500,
+        "level": 775,
+        "life": 5918940000,
+        "luck": 109750,
+        "max_dmg": 11875,
+        "min_dmg": 11563,
+        "strength": 517500
+      },
+      {
+        "armor": 72000,
+        "class": "Mage",
+        "constitution": 1906875,
+        "dexterity": 517500,
+        "id": 827,
+        "intelligence": 1110000,
+        "level": 775,
+        "life": 2959470000,
+        "luck": 109750,
+        "max_dmg": 21375,
+        "min_dmg": 20813,
+        "strength": 517500
+      },
+      {
+        "armor": 72000,
+        "class": "Warrior",
+        "constitution": 1906875,
+        "dexterity": 517500,
+        "id": 828,
+        "intelligence": 517500,
+        "level": 775,
+        "life": 7398675000,
+        "luck": 109750,
+        "max_dmg": 9500,
+        "min_dmg": 9250,
+        "strength": 1110000
+      },
+      {
+        "armor": 72120,
+        "class": "Scout",
+        "constitution": 1919700,
+        "dexterity": 1113600,
+        "id": 829,
+        "intelligence": 520800,
+        "level": 776,
+        "life": 5966427600,
+        "luck": 110000,
+        "max_dmg": 11913,
+        "min_dmg": 11600,
+        "strength": 520800
+      },
+      {
+        "armor": 72120,
+        "class": "Mage",
+        "constitution": 1919700,
+        "dexterity": 520800,
+        "id": 830,
+        "intelligence": 1113600,
+        "level": 776,
+        "life": 2983213800,
+        "luck": 110000,
+        "max_dmg": 21443,
+        "min_dmg": 20880,
+        "strength": 520800
+      },
+      {
+        "armor": 72120,
+        "class": "Warrior",
+        "constitution": 1919700,
+        "dexterity": 520800,
+        "id": 831,
+        "intelligence": 520800,
+        "level": 776,
+        "life": 7458034500,
+        "luck": 110000,
+        "max_dmg": 9530,
+        "min_dmg": 9280,
+        "strength": 1113600
+      },
+      {
+        "armor": 72240,
+        "class": "Scout",
+        "constitution": 1932525,
+        "dexterity": 1117200,
+        "id": 832,
+        "intelligence": 524100,
+        "level": 777,
+        "life": 6014017800,
+        "luck": 110250,
+        "max_dmg": 11950,
+        "min_dmg": 11638,
+        "strength": 524100
+      },
+      {
+        "armor": 72240,
+        "class": "Mage",
+        "constitution": 1932525,
+        "dexterity": 524100,
+        "id": 833,
+        "intelligence": 1117200,
+        "level": 777,
+        "life": 3007008900,
+        "luck": 110250,
+        "max_dmg": 21510,
+        "min_dmg": 20948,
+        "strength": 524100
+      },
+      {
+        "armor": 72240,
+        "class": "Warrior",
+        "constitution": 1932525,
+        "dexterity": 524100,
+        "id": 834,
+        "intelligence": 524100,
+        "level": 777,
+        "life": 7517522250,
+        "luck": 110250,
+        "max_dmg": 9560,
+        "min_dmg": 9310,
+        "strength": 1117200
+      },
+      {
+        "armor": 72360,
+        "class": "Warrior",
+        "constitution": 1945350,
+        "dexterity": 527400,
+        "id": 835,
+        "intelligence": 527400,
+        "level": 778,
+        "life": 7577138250,
+        "luck": 110500,
+        "max_dmg": 9590,
+        "min_dmg": 9340,
+        "strength": 1120800
+      },
+      {
+        "armor": 72360,
+        "class": "Mage",
+        "constitution": 1945350,
+        "dexterity": 527400,
+        "id": 836,
+        "intelligence": 1120800,
+        "level": 778,
+        "life": 3030855300,
+        "luck": 110500,
+        "max_dmg": 21578,
+        "min_dmg": 21015,
+        "strength": 527400
+      },
+      {
+        "armor": 72360,
+        "class": "Scout",
+        "constitution": 1945350,
+        "dexterity": 1120800,
+        "id": 837,
+        "intelligence": 527400,
+        "level": 778,
+        "life": 6061710600,
+        "luck": 110500,
+        "max_dmg": 11988,
+        "min_dmg": 11675,
+        "strength": 527400
+      },
+      {
+        "armor": 72480,
+        "class": "Warrior",
+        "constitution": 1958175,
+        "dexterity": 530700,
+        "id": 838,
+        "intelligence": 530700,
+        "level": 779,
+        "life": 7636882500,
+        "luck": 110750,
+        "max_dmg": 9620,
+        "min_dmg": 9370,
+        "strength": 1124400
+      },
+      {
+        "armor": 72480,
+        "class": "Scout",
+        "constitution": 1958175,
+        "dexterity": 1124400,
+        "id": 839,
+        "intelligence": 530700,
+        "level": 779,
+        "life": 6109506000,
+        "luck": 110750,
+        "max_dmg": 12025,
+        "min_dmg": 11713,
+        "strength": 530700
+      },
+      {
+        "armor": 72480,
+        "class": "Mage",
+        "constitution": 1958175,
+        "dexterity": 530700,
+        "id": 840,
+        "intelligence": 1124400,
+        "level": 779,
+        "life": 3054753000,
+        "luck": 110750,
+        "max_dmg": 21645,
+        "min_dmg": 21083,
+        "strength": 530700
+      },
+      {
+        "armor": 72600,
+        "class": "Mage",
+        "constitution": 1971000,
+        "dexterity": 534000,
+        "id": 841,
+        "intelligence": 1128000,
+        "level": 780,
+        "life": 3078702000,
+        "luck": 111000,
+        "max_dmg": 21713,
+        "min_dmg": 21150,
+        "strength": 534000
+      },
+      {
+        "armor": 72600,
+        "class": "Scout",
+        "constitution": 1971000,
+        "dexterity": 1128000,
+        "id": 842,
+        "intelligence": 534000,
+        "level": 780,
+        "life": 6157404000,
+        "luck": 111000,
+        "max_dmg": 12063,
+        "min_dmg": 11750,
+        "strength": 534000
+      },
+      {
+        "armor": 72600,
+        "class": "Warrior",
+        "constitution": 1971000,
+        "dexterity": 534000,
+        "id": 843,
+        "intelligence": 534000,
+        "level": 780,
+        "life": 7696755000,
+        "luck": 111000,
+        "max_dmg": 9650,
+        "min_dmg": 9400,
+        "strength": 1128000
+      },
+      {
+        "armor": 72720,
+        "class": "Scout",
+        "constitution": 1983825,
+        "dexterity": 1131600,
+        "id": 844,
+        "intelligence": 537300,
+        "level": 781,
+        "life": 6205404600,
+        "luck": 111250,
+        "max_dmg": 12100,
+        "min_dmg": 11788,
+        "strength": 537300
+      },
+      {
+        "armor": 72720,
+        "class": "Mage",
+        "constitution": 1983825,
+        "dexterity": 537300,
+        "id": 845,
+        "intelligence": 1131600,
+        "level": 781,
+        "life": 3102702300,
+        "luck": 111250,
+        "max_dmg": 21780,
+        "min_dmg": 21218,
+        "strength": 537300
+      },
+      {
+        "armor": 72720,
+        "class": "Warrior",
+        "constitution": 1983825,
+        "dexterity": 537300,
+        "id": 846,
+        "intelligence": 537300,
+        "level": 781,
+        "life": 7756755750,
+        "luck": 111250,
+        "max_dmg": 9680,
+        "min_dmg": 9430,
+        "strength": 1131600
+      },
+      {
+        "armor": 72840,
+        "class": "Mage",
+        "constitution": 1996650,
+        "dexterity": 540600,
+        "id": 847,
+        "intelligence": 1135200,
+        "level": 782,
+        "life": 3126753900,
+        "luck": 111500,
+        "max_dmg": 21848,
+        "min_dmg": 21285,
+        "strength": 540600
+      },
+      {
+        "armor": 72840,
+        "class": "Warrior",
+        "constitution": 1996650,
+        "dexterity": 540600,
+        "id": 848,
+        "intelligence": 540600,
+        "level": 782,
+        "life": 7816884750,
+        "luck": 111500,
+        "max_dmg": 9710,
+        "min_dmg": 9460,
+        "strength": 1135200
+      },
+      {
+        "armor": 72840,
+        "class": "Scout",
+        "constitution": 1996650,
+        "dexterity": 1135200,
+        "id": 849,
+        "intelligence": 540600,
+        "level": 782,
+        "life": 6253507800,
+        "luck": 111500,
+        "max_dmg": 12138,
+        "min_dmg": 11825,
+        "strength": 540600
+      },
+      {
+        "armor": 72960,
+        "class": "Warrior",
+        "constitution": 2009475,
+        "dexterity": 543900,
+        "id": 850,
+        "intelligence": 543900,
+        "level": 783,
+        "life": 7877142000,
+        "luck": 111750,
+        "max_dmg": 9740,
+        "min_dmg": 9490,
+        "strength": 1138800
+      },
+      {
+        "armor": 72960,
+        "class": "Scout",
+        "constitution": 2009475,
+        "dexterity": 1138800,
+        "id": 851,
+        "intelligence": 543900,
+        "level": 783,
+        "life": 6301713600,
+        "luck": 111750,
+        "max_dmg": 12175,
+        "min_dmg": 11863,
+        "strength": 543900
+      },
+      {
+        "armor": 72960,
+        "class": "Mage",
+        "constitution": 2009475,
+        "dexterity": 543900,
+        "id": 852,
+        "intelligence": 1138800,
+        "level": 783,
+        "life": 3150856800,
+        "luck": 111750,
+        "max_dmg": 21915,
+        "min_dmg": 21353,
+        "strength": 543900
+      },
+      {
+        "armor": 73080,
+        "class": "Warrior",
+        "constitution": 2022300,
+        "dexterity": 547200,
+        "id": 853,
+        "intelligence": 547200,
+        "level": 784,
+        "life": 7937527500,
+        "luck": 112000,
+        "max_dmg": 9770,
+        "min_dmg": 9520,
+        "strength": 1142400
+      },
+      {
+        "armor": 73080,
+        "class": "Scout",
+        "constitution": 2022300,
+        "dexterity": 1142400,
+        "id": 854,
+        "intelligence": 547200,
+        "level": 784,
+        "life": 6350022000,
+        "luck": 112000,
+        "max_dmg": 12213,
+        "min_dmg": 11900,
+        "strength": 547200
+      },
+      {
+        "armor": 73080,
+        "class": "Mage",
+        "constitution": 2022300,
+        "dexterity": 547200,
+        "id": 855,
+        "intelligence": 1142400,
+        "level": 784,
+        "life": 3175011000,
+        "luck": 112000,
+        "max_dmg": 21983,
+        "min_dmg": 21420,
+        "strength": 547200
+      },
+      {
+        "armor": 73200,
+        "class": "Mage",
+        "constitution": 2035125,
+        "dexterity": 550500,
+        "id": 856,
+        "intelligence": 1146000,
+        "level": 785,
+        "life": 3199216500,
+        "luck": 112250,
+        "max_dmg": 22050,
+        "min_dmg": 21488,
+        "strength": 550500
+      },
+      {
+        "armor": 73200,
+        "class": "Warrior",
+        "constitution": 2035125,
+        "dexterity": 550500,
+        "id": 857,
+        "intelligence": 550500,
+        "level": 785,
+        "life": 7998041250,
+        "luck": 112250,
+        "max_dmg": 9800,
+        "min_dmg": 9550,
+        "strength": 1146000
+      },
+      {
+        "armor": 73200,
+        "class": "Scout",
+        "constitution": 2035125,
+        "dexterity": 1146000,
+        "id": 858,
+        "intelligence": 550500,
+        "level": 785,
+        "life": 6398433000,
+        "luck": 112250,
+        "max_dmg": 12250,
+        "min_dmg": 11938,
+        "strength": 550500
+      },
+      {
+        "armor": 73320,
+        "class": "Mage",
+        "constitution": 2047950,
+        "dexterity": 553800,
+        "id": 859,
+        "intelligence": 1149600,
+        "level": 786,
+        "life": 3223473300,
+        "luck": 112500,
+        "max_dmg": 22118,
+        "min_dmg": 21555,
+        "strength": 553800
+      },
+      {
+        "armor": 73320,
+        "class": "Scout",
+        "constitution": 2047950,
+        "dexterity": 1149600,
+        "id": 860,
+        "intelligence": 553800,
+        "level": 786,
+        "life": 6446946600,
+        "luck": 112500,
+        "max_dmg": 12288,
+        "min_dmg": 11975,
+        "strength": 553800
+      },
+      {
+        "armor": 73320,
+        "class": "Warrior",
+        "constitution": 2047950,
+        "dexterity": 553800,
+        "id": 861,
+        "intelligence": 553800,
+        "level": 786,
+        "life": 8058683250,
+        "luck": 112500,
+        "max_dmg": 9830,
+        "min_dmg": 9580,
+        "strength": 1149600
+      },
+      {
+        "armor": 73440,
+        "class": "Scout",
+        "constitution": 2060775,
+        "dexterity": 1153200,
+        "id": 862,
+        "intelligence": 557100,
+        "level": 787,
+        "life": 6495562800,
+        "luck": 112750,
+        "max_dmg": 12325,
+        "min_dmg": 12013,
+        "strength": 557100
+      },
+      {
+        "armor": 73440,
+        "class": "Mage",
+        "constitution": 2060775,
+        "dexterity": 557100,
+        "id": 863,
+        "intelligence": 1153200,
+        "level": 787,
+        "life": 3247781400,
+        "luck": 112750,
+        "max_dmg": 22185,
+        "min_dmg": 21623,
+        "strength": 557100
+      },
+      {
+        "armor": 73440,
+        "class": "Warrior",
+        "constitution": 2060775,
+        "dexterity": 557100,
+        "id": 864,
+        "intelligence": 557100,
+        "level": 787,
+        "life": 8119453500,
+        "luck": 112750,
+        "max_dmg": 9860,
+        "min_dmg": 9610,
+        "strength": 1153200
+      },
+      {
+        "armor": 73560,
+        "class": "Scout",
+        "constitution": 2073600,
+        "dexterity": 1156800,
+        "id": 865,
+        "intelligence": 560400,
+        "level": 788,
+        "life": 6544281600,
+        "luck": 113000,
+        "max_dmg": 12363,
+        "min_dmg": 12050,
+        "strength": 560400
+      },
+      {
+        "armor": 73560,
+        "class": "Mage",
+        "constitution": 2073600,
+        "dexterity": 560400,
+        "id": 866,
+        "intelligence": 1156800,
+        "level": 788,
+        "life": 3272140800,
+        "luck": 113000,
+        "max_dmg": 22253,
+        "min_dmg": 21690,
+        "strength": 560400
+      },
+      {
+        "armor": 73560,
+        "class": "Warrior",
+        "constitution": 2073600,
+        "dexterity": 560400,
+        "id": 867,
+        "intelligence": 560400,
+        "level": 788,
+        "life": 8180352000,
+        "luck": 113000,
+        "max_dmg": 9890,
+        "min_dmg": 9640,
+        "strength": 1156800
+      },
+      {
+        "armor": 73680,
+        "class": "Warrior",
+        "constitution": 2086425,
+        "dexterity": 563700,
+        "id": 868,
+        "intelligence": 563700,
+        "level": 789,
+        "life": 8241378750,
+        "luck": 113250,
+        "max_dmg": 9920,
+        "min_dmg": 9670,
+        "strength": 1160400
+      },
+      {
+        "armor": 73680,
+        "class": "Mage",
+        "constitution": 2086425,
+        "dexterity": 563700,
+        "id": 869,
+        "intelligence": 1160400,
+        "level": 789,
+        "life": 3296551500,
+        "luck": 113250,
+        "max_dmg": 22320,
+        "min_dmg": 21758,
+        "strength": 563700
+      },
+      {
+        "armor": 73680,
+        "class": "Scout",
+        "constitution": 2086425,
+        "dexterity": 1160400,
+        "id": 870,
+        "intelligence": 563700,
+        "level": 789,
+        "life": 6593103000,
+        "luck": 113250,
+        "max_dmg": 12400,
+        "min_dmg": 12088,
+        "strength": 563700
+      },
+      {
+        "armor": 73800,
+        "class": "Warrior",
+        "constitution": 2099250,
+        "dexterity": 567000,
+        "id": 871,
+        "intelligence": 567000,
+        "level": 790,
+        "life": 8302533750,
+        "luck": 113500,
+        "max_dmg": 9950,
+        "min_dmg": 9700,
+        "strength": 1164000
+      },
+      {
+        "armor": 73800,
+        "class": "Mage",
+        "constitution": 2099250,
+        "dexterity": 567000,
+        "id": 872,
+        "intelligence": 1164000,
+        "level": 790,
+        "life": 3321013500,
+        "luck": 113500,
+        "max_dmg": 22388,
+        "min_dmg": 21825,
+        "strength": 567000
+      },
+      {
+        "armor": 73800,
+        "class": "Scout",
+        "constitution": 2099250,
+        "dexterity": 1164000,
+        "id": 873,
+        "intelligence": 567000,
+        "level": 790,
+        "life": 6642027000,
+        "luck": 113500,
+        "max_dmg": 12438,
+        "min_dmg": 12125,
+        "strength": 567000
+      },
+      {
+        "armor": 73920,
+        "class": "Warrior",
+        "constitution": 2112075,
+        "dexterity": 570300,
+        "id": 874,
+        "intelligence": 570300,
+        "level": 791,
+        "life": 8363817000,
+        "luck": 113750,
+        "max_dmg": 9980,
+        "min_dmg": 9730,
+        "strength": 1167600
+      },
+      {
+        "armor": 73920,
+        "class": "Mage",
+        "constitution": 2112075,
+        "dexterity": 570300,
+        "id": 875,
+        "intelligence": 1167600,
+        "level": 791,
+        "life": 3345526800,
+        "luck": 113750,
+        "max_dmg": 22455,
+        "min_dmg": 21893,
+        "strength": 570300
+      },
+      {
+        "armor": 73920,
+        "class": "Scout",
+        "constitution": 2112075,
+        "dexterity": 1167600,
+        "id": 876,
+        "intelligence": 570300,
+        "level": 791,
+        "life": 6691053600,
+        "luck": 113750,
+        "max_dmg": 12475,
+        "min_dmg": 12163,
+        "strength": 570300
+      },
+      {
+        "armor": 74040,
+        "class": "Scout",
+        "constitution": 2124900,
+        "dexterity": 1171200,
+        "id": 877,
+        "intelligence": 573600,
+        "level": 792,
+        "life": 6740182800,
+        "luck": 114000,
+        "max_dmg": 12513,
+        "min_dmg": 12200,
+        "strength": 573600
+      },
+      {
+        "armor": 74040,
+        "class": "Warrior",
+        "constitution": 2124900,
+        "dexterity": 573600,
+        "id": 878,
+        "intelligence": 573600,
+        "level": 792,
+        "life": 8425228500,
+        "luck": 114000,
+        "max_dmg": 10010,
+        "min_dmg": 9760,
+        "strength": 1171200
+      },
+      {
+        "armor": 74040,
+        "class": "Mage",
+        "constitution": 2124900,
+        "dexterity": 573600,
+        "id": 879,
+        "intelligence": 1171200,
+        "level": 792,
+        "life": 3370091400,
+        "luck": 114000,
+        "max_dmg": 22523,
+        "min_dmg": 21960,
+        "strength": 573600
+      },
+      {
+        "armor": 74160,
+        "class": "Mage",
+        "constitution": 2137725,
+        "dexterity": 576900,
+        "id": 880,
+        "intelligence": 1174800,
+        "level": 793,
+        "life": 3394707300,
+        "luck": 114250,
+        "max_dmg": 22590,
+        "min_dmg": 22028,
+        "strength": 576900
+      },
+      {
+        "armor": 74160,
+        "class": "Scout",
+        "constitution": 2137725,
+        "dexterity": 1174800,
+        "id": 881,
+        "intelligence": 576900,
+        "level": 793,
+        "life": 6789414600,
+        "luck": 114250,
+        "max_dmg": 12550,
+        "min_dmg": 12238,
+        "strength": 576900
+      },
+      {
+        "armor": 74160,
+        "class": "Warrior",
+        "constitution": 2137725,
+        "dexterity": 576900,
+        "id": 882,
+        "intelligence": 576900,
+        "level": 793,
+        "life": 8486768250,
+        "luck": 114250,
+        "max_dmg": 10040,
+        "min_dmg": 9790,
+        "strength": 1174800
+      },
+      {
+        "armor": 74280,
+        "class": "Warrior",
+        "constitution": 2150550,
+        "dexterity": 580200,
+        "id": 883,
+        "intelligence": 580200,
+        "level": 794,
+        "life": 8548436250,
+        "luck": 114500,
+        "max_dmg": 10070,
+        "min_dmg": 9820,
+        "strength": 1178400
+      },
+      {
+        "armor": 74280,
+        "class": "Scout",
+        "constitution": 2150550,
+        "dexterity": 1178400,
+        "id": 884,
+        "intelligence": 580200,
+        "level": 794,
+        "life": 6838749000,
+        "luck": 114500,
+        "max_dmg": 12588,
+        "min_dmg": 12275,
+        "strength": 580200
+      },
+      {
+        "armor": 74280,
+        "class": "Mage",
+        "constitution": 2150550,
+        "dexterity": 580200,
+        "id": 885,
+        "intelligence": 1178400,
+        "level": 794,
+        "life": 3419374500,
+        "luck": 114500,
+        "max_dmg": 22658,
+        "min_dmg": 22095,
+        "strength": 580200
+      },
+      {
+        "armor": 74400,
+        "class": "Scout",
+        "constitution": 2163375,
+        "dexterity": 1182000,
+        "id": 886,
+        "intelligence": 583500,
+        "level": 795,
+        "life": 6888186000,
+        "luck": 114750,
+        "max_dmg": 12625,
+        "min_dmg": 12313,
+        "strength": 583500
+      },
+      {
+        "armor": 74400,
+        "class": "Mage",
+        "constitution": 2163375,
+        "dexterity": 583500,
+        "id": 887,
+        "intelligence": 1182000,
+        "level": 795,
+        "life": 3444093000,
+        "luck": 114750,
+        "max_dmg": 22725,
+        "min_dmg": 22163,
+        "strength": 583500
+      },
+      {
+        "armor": 74400,
+        "class": "Warrior",
+        "constitution": 2163375,
+        "dexterity": 583500,
+        "id": 888,
+        "intelligence": 583500,
+        "level": 795,
+        "life": 8610232500,
+        "luck": 114750,
+        "max_dmg": 10100,
+        "min_dmg": 9850,
+        "strength": 1182000
+      },
+      {
+        "armor": 74520,
+        "class": "Mage",
+        "constitution": 2176200,
+        "dexterity": 586800,
+        "id": 889,
+        "intelligence": 1185600,
+        "level": 796,
+        "life": 3468862800,
+        "luck": 115000,
+        "max_dmg": 22793,
+        "min_dmg": 22230,
+        "strength": 586800
+      },
+      {
+        "armor": 74520,
+        "class": "Scout",
+        "constitution": 2176200,
+        "dexterity": 1185600,
+        "id": 890,
+        "intelligence": 586800,
+        "level": 796,
+        "life": 6937725600,
+        "luck": 115000,
+        "max_dmg": 12663,
+        "min_dmg": 12350,
+        "strength": 586800
+      },
+      {
+        "armor": 74520,
+        "class": "Warrior",
+        "constitution": 2176200,
+        "dexterity": 586800,
+        "id": 891,
+        "intelligence": 586800,
+        "level": 796,
+        "life": 8672157000,
+        "luck": 115000,
+        "max_dmg": 10130,
+        "min_dmg": 9880,
+        "strength": 1185600
+      },
+      {
+        "armor": 74640,
+        "class": "Scout",
+        "constitution": 2189025,
+        "dexterity": 1189200,
+        "id": 892,
+        "intelligence": 590100,
+        "level": 797,
+        "life": 6987367800,
+        "luck": 115250,
+        "max_dmg": 12700,
+        "min_dmg": 12388,
+        "strength": 590100
+      },
+      {
+        "armor": 74640,
+        "class": "Mage",
+        "constitution": 2189025,
+        "dexterity": 590100,
+        "id": 893,
+        "intelligence": 1189200,
+        "level": 797,
+        "life": 3493683900,
+        "luck": 115250,
+        "max_dmg": 22860,
+        "min_dmg": 22298,
+        "strength": 590100
+      },
+      {
+        "armor": 74640,
+        "class": "Warrior",
+        "constitution": 2189025,
+        "dexterity": 590100,
+        "id": 894,
+        "intelligence": 590100,
+        "level": 797,
+        "life": 8734209750,
+        "luck": 115250,
+        "max_dmg": 10160,
+        "min_dmg": 9910,
+        "strength": 1189200
+      },
+      {
+        "armor": 74760,
+        "class": "Warrior",
+        "constitution": 2201850,
+        "dexterity": 593400,
+        "id": 895,
+        "intelligence": 593400,
+        "level": 798,
+        "life": 8796390750,
+        "luck": 115500,
+        "max_dmg": 10190,
+        "min_dmg": 9940,
+        "strength": 1192800
+      },
+      {
+        "armor": 74760,
+        "class": "Mage",
+        "constitution": 2201850,
+        "dexterity": 593400,
+        "id": 896,
+        "intelligence": 1192800,
+        "level": 798,
+        "life": 3518556300,
+        "luck": 115500,
+        "max_dmg": 22928,
+        "min_dmg": 22365,
+        "strength": 593400
+      },
+      {
+        "armor": 74760,
+        "class": "Scout",
+        "constitution": 2201850,
+        "dexterity": 1192800,
+        "id": 897,
+        "intelligence": 593400,
+        "level": 798,
+        "life": 7037112600,
+        "luck": 115500,
+        "max_dmg": 12738,
+        "min_dmg": 12425,
+        "strength": 593400
+      },
+      {
+        "armor": 74880,
+        "class": "Scout",
+        "constitution": 2214675,
+        "dexterity": 1196400,
+        "id": 898,
+        "intelligence": 596700,
+        "level": 799,
+        "life": 7086960000,
+        "luck": 115750,
+        "max_dmg": 12775,
+        "min_dmg": 12463,
+        "strength": 596700
+      },
+      {
+        "armor": 74880,
+        "class": "Mage",
+        "constitution": 2214675,
+        "dexterity": 596700,
+        "id": 899,
+        "intelligence": 1196400,
+        "level": 799,
+        "life": 3543480000,
+        "luck": 115750,
+        "max_dmg": 22995,
+        "min_dmg": 22433,
+        "strength": 596700
+      },
+      {
+        "armor": 74880,
+        "class": "Warrior",
+        "constitution": 2214675,
+        "dexterity": 596700,
+        "id": 900,
+        "intelligence": 596700,
+        "level": 799,
+        "life": 8858700000,
+        "luck": 115750,
+        "max_dmg": 10220,
+        "min_dmg": 9970,
+        "strength": 1196400
       }
     ]
   },
@@ -15993,6 +17433,7 @@
     "levels": 10,
     "monsters": [
       {
+        "armor": 38220,
         "class": "Scout",
         "constitution": 6079500,
         "dexterity": 342300,
@@ -16007,6 +17448,7 @@
         "strength": 155400
       },
       {
+        "armor": 38472,
         "class": "Warrior",
         "constitution": 6136200,
         "dexterity": 157290,
@@ -16021,6 +17463,7 @@
         "strength": 349230
       },
       {
+        "armor": 38892,
         "class": "Scout",
         "constitution": 6230700,
         "dexterity": 360780,
@@ -16035,6 +17478,7 @@
         "strength": 160440
       },
       {
+        "armor": 39480,
         "class": "Mage",
         "constitution": 6363000,
         "dexterity": 164850,
@@ -16049,6 +17493,7 @@
         "strength": 164850
       },
       {
+        "armor": 40320,
         "class": "Mage",
         "constitution": 6788250,
         "dexterity": 177450,
@@ -16063,6 +17508,7 @@
         "strength": 177450
       },
       {
+        "armor": 40908,
         "class": "Scout",
         "constitution": 7251300,
         "dexterity": 426300,
@@ -16077,6 +17523,7 @@
         "strength": 190680
       },
       {
+        "armor": 41328,
         "class": "Mage",
         "constitution": 7582050,
         "dexterity": 200130,
@@ -16091,6 +17538,7 @@
         "strength": 200130
       },
       {
+        "armor": 41916,
         "class": "Warrior",
         "constitution": 8045100,
         "dexterity": 213360,
@@ -16105,6 +17553,7 @@
         "strength": 464100
       },
       {
+        "armor": 42588,
         "class": "Mage",
         "constitution": 8574300,
         "dexterity": 228480,
@@ -16119,6 +17568,7 @@
         "strength": 228480
       },
       {
+        "armor": 43260,
         "class": "Warrior",
         "constitution": 9103500,
         "dexterity": 243600,
@@ -20357,6 +21807,7 @@
     "levels": 10,
     "monsters": [
       {
+        "armor": 37986,
         "class": "Scout",
         "constitution": 6733350,
         "dexterity": 395850,
@@ -20371,6 +21822,7 @@
         "strength": 177060
       },
       {
+        "armor": 38376,
         "class": "Mage",
         "constitution": 7040475,
         "dexterity": 185835,
@@ -20385,6 +21837,7 @@
         "strength": 185835
       },
       {
+        "armor": 38922,
         "class": "Warrior",
         "constitution": 7470450,
         "dexterity": 198120,
@@ -20399,6 +21852,7 @@
         "strength": 430950
       },
       {
+        "armor": 39156,
         "class": "Scout",
         "constitution": 7654725,
         "dexterity": 439725,
@@ -20413,6 +21867,7 @@
         "strength": 203385
       },
       {
+        "armor": 40170,
         "class": "Warrior",
         "constitution": 8453250,
         "dexterity": 226200,
@@ -20427,6 +21882,7 @@
         "strength": 477750
       },
       {
+        "armor": 40638,
         "class": "Mage",
         "constitution": 8821800,
         "dexterity": 236730,
@@ -20441,6 +21897,7 @@
         "strength": 236730
       },
       {
+        "armor": 41262,
         "class": "Warrior",
         "constitution": 9166950,
         "dexterity": 246870,
@@ -20455,6 +21912,7 @@
         "strength": 519480
       },
       {
+        "armor": 41808,
         "class": "Warrior",
         "constitution": 9340995,
         "dexterity": 252330,
@@ -20469,6 +21927,7 @@
         "strength": 541320
       },
       {
+        "armor": 42510,
         "class": "Scout",
         "constitution": 9564750,
         "dexterity": 569400,
@@ -20483,6 +21942,7 @@
         "strength": 259350
       },
       {
+        "armor": 43056,
         "class": "Mage",
         "constitution": 9738795,
         "dexterity": 264810,
@@ -20801,6 +22261,7 @@
     "levels": 10,
     "monsters": [
       {
+        "armor": 45187,
         "class": "Warrior",
         "constitution": 9907920,
         "dexterity": 266112,
@@ -20815,6 +22276,7 @@
         "strength": 555120
       },
       {
+        "armor": 46051,
         "class": "Warrior",
         "constitution": 10264320,
         "dexterity": 276912,
@@ -20829,6 +22291,7 @@
         "strength": 589248
       },
       {
+        "armor": 46656,
         "class": "Scout",
         "constitution": 10457100,
         "dexterity": 613440,
@@ -20843,6 +22306,7 @@
         "strength": 282960
       },
       {
+        "armor": 47175,
         "class": "Mage",
         "constitution": 10622340,
         "dexterity": 288144,
@@ -20857,6 +22321,7 @@
         "strength": 288144
       },
       {
+        "armor": 47779,
         "class": "Warrior",
         "constitution": 10815120,
         "dexterity": 294192,
@@ -20871,6 +22336,7 @@
         "strength": 658368
       },
       {
+        "armor": 48816,
         "class": "Scout",
         "constitution": 11145600,
         "dexterity": 699840,
@@ -20885,6 +22351,7 @@
         "strength": 304560
       },
       {
+        "armor": 49507,
         "class": "Warrior",
         "constitution": 11365920,
         "dexterity": 311472,
@@ -20899,6 +22366,7 @@
         "strength": 727488
       },
       {
+        "armor": 50112,
         "class": "Warrior",
         "constitution": 11882700,
         "dexterity": 325080,
@@ -20913,6 +22381,7 @@
         "strength": 747360
       },
       {
+        "armor": 50544,
         "class": "Scout",
         "constitution": 12344400,
         "dexterity": 760320,
@@ -20927,6 +22396,7 @@
         "strength": 336960
       },
       {
+        "armor": 51063,
         "class": "Mage",
         "constitution": 12898440,
         "dexterity": 351216,
@@ -21391,6 +22861,7 @@
     "levels": 10,
     "monsters": [
       {
+        "armor": 36360,
         "class": "Mage",
         "constitution": 516207,
         "dexterity": 120263,
@@ -21405,6 +22876,7 @@
         "strength": 120263
       },
       {
+        "armor": 36720,
         "class": "Warrior",
         "constitution": 530382,
         "dexterity": 125213,
@@ -21419,6 +22891,7 @@
         "strength": 259988
       },
       {
+        "armor": 37260,
         "class": "Warrior",
         "constitution": 551645,
         "dexterity": 132638,
@@ -21433,6 +22906,7 @@
         "strength": 271463
       },
       {
+        "armor": 37440,
         "class": "Mage",
         "constitution": 558732,
         "dexterity": 135113,
@@ -21447,6 +22921,7 @@
         "strength": 135113
       },
       {
+        "armor": 38430,
         "class": "Scout",
         "constitution": 594675,
         "dexterity": 297450,
@@ -21461,6 +22936,7 @@
         "strength": 147600
       },
       {
+        "armor": 38610,
         "class": "Warrior",
         "constitution": 598725,
         "dexterity": 148950,
@@ -21475,6 +22951,7 @@
         "strength": 302400
       },
       {
+        "armor": 39060,
         "class": "Mage",
         "constitution": 608850,
         "dexterity": 152325,
@@ -21489,6 +22966,7 @@
         "strength": 152325
       },
       {
+        "armor": 39510,
         "class": "Warrior",
         "constitution": 618975,
         "dexterity": 155700,
@@ -21503,6 +22981,7 @@
         "strength": 327150
       },
       {
+        "armor": 39780,
         "class": "Scout",
         "constitution": 625050,
         "dexterity": 334575,
@@ -21517,6 +22996,7 @@
         "strength": 157725
       },
       {
+        "armor": 40140,
         "class": "Mage",
         "constitution": 633150,
         "dexterity": 160425,
@@ -21536,6 +23016,7 @@
     "levels": 10,
     "monsters": [
       {
+        "armor": 26598,
         "class": "Scout",
         "constitution": 313560,
         "dexterity": 125320,
@@ -21550,6 +23031,7 @@
         "strength": 58760
       },
       {
+        "armor": 26988,
         "class": "Mage",
         "constitution": 320142,
         "dexterity": 60873,
@@ -21564,6 +23046,7 @@
         "strength": 60873
       },
       {
+        "armor": 27456,
         "class": "Warrior",
         "constitution": 328040,
         "dexterity": 63408,
@@ -21578,6 +23061,7 @@
         "strength": 139978
       },
       {
+        "armor": 27768,
         "class": "Scout",
         "constitution": 333305,
         "dexterity": 145308,
@@ -21592,6 +23076,7 @@
         "strength": 65098
       },
       {
+        "armor": 28314,
         "class": "Warrior",
         "constitution": 342518,
         "dexterity": 68055,
@@ -21606,6 +23091,7 @@
         "strength": 154635
       },
       {
+        "armor": 28470,
         "class": "Mage",
         "constitution": 345150,
         "dexterity": 68900,
@@ -21620,6 +23106,7 @@
         "strength": 68900
       },
       {
+        "armor": 28782,
         "class": "Warrior",
         "constitution": 350415,
         "dexterity": 70590,
@@ -21634,6 +23121,7 @@
         "strength": 162630
       },
       {
+        "armor": 29094,
         "class": "Warrior",
         "constitution": 355680,
         "dexterity": 72280,
@@ -21648,6 +23136,7 @@
         "strength": 167960
       },
       {
+        "armor": 29328,
         "class": "Scout",
         "constitution": 361385,
         "dexterity": 172283,
@@ -21662,6 +23151,7 @@
         "strength": 74198
       },
       {
+        "armor": 29874,
         "class": "Mage",
         "constitution": 382883,
         "dexterity": 81705,
@@ -37487,6 +38977,7 @@
     "levels": 10,
     "monsters": [
       {
+        "armor": 31277,
         "class": "Warrior",
         "constitution": 377946,
         "dexterity": 74916,
@@ -37501,6 +38992,7 @@
         "strength": 169812
       },
       {
+        "armor": 31450,
         "class": "Warrior",
         "constitution": 380862,
         "dexterity": 75852,
@@ -37515,6 +39007,7 @@
         "strength": 172764
       },
       {
+        "armor": 31882,
         "class": "Scout",
         "constitution": 388152,
         "dexterity": 180144,
@@ -37529,6 +39022,7 @@
         "strength": 78192
       },
       {
+        "armor": 32055,
         "class": "Mage",
         "constitution": 391068,
         "dexterity": 79128,
@@ -37543,6 +39037,7 @@
         "strength": 79128
       },
       {
+        "armor": 32400,
         "class": "Warrior",
         "constitution": 396900,
         "dexterity": 81000,
@@ -37557,6 +39052,7 @@
         "strength": 189000
       },
       {
+        "armor": 32918,
         "class": "Scout",
         "constitution": 417312,
         "dexterity": 200016,
@@ -37571,6 +39067,7 @@
         "strength": 88128
       },
       {
+        "armor": 33178,
         "class": "Warrior",
         "constitution": 427518,
         "dexterity": 91692,
@@ -37585,6 +39082,7 @@
         "strength": 205524
       },
       {
+        "armor": 33610,
         "class": "Warrior",
         "constitution": 444528,
         "dexterity": 97632,
@@ -37599,6 +39097,7 @@
         "strength": 214704
       },
       {
+        "armor": 34128,
         "class": "Scout",
         "constitution": 464940,
         "dexterity": 225720,
@@ -37613,6 +39112,7 @@
         "strength": 104760
       },
       {
+        "armor": 34733,
         "class": "Mage",
         "constitution": 488754,
         "dexterity": 113076,
