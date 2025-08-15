@@ -118,7 +118,7 @@ fn read_dungeon_data(
             name: monster
                 .name
                 .as_ref()
-                .map(|a| (*a).replace('_', "").into())
+                .map(|a| (*a).replace('_', " ").into())
                 .unwrap_or(default_name(idx)),
             level,
             class,

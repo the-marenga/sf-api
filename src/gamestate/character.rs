@@ -223,6 +223,15 @@ impl Class {
     }
 
     #[must_use]
+    pub(crate) fn block_chance(self) -> f32 {
+        match self {
+            Class::Warrior => 0.25,
+            Class::Paladin => 0.3,
+            _ => 0.0,
+        }
+    }
+
+    #[must_use]
     pub(crate) fn armor_factor(self) -> f64 {
         use Class::*;
         match self {

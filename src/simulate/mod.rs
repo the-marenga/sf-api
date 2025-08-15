@@ -8,7 +8,6 @@ use std::sync::Arc;
 
 use enum_map::{Enum, EnumMap};
 use fastrand::Rng;
-use serde::{Deserialize, Serialize};
 use strum::EnumIter;
 
 use crate::{
@@ -287,7 +286,7 @@ impl BattleFighter {
     #[must_use]
     pub fn from_monster(monster: &Monster) -> Self {
         Self {
-            name: "monster".into(),
+            name: monster.name.clone(),
             is_companion: false,
             level: monster.level,
             class: monster.class,
@@ -296,12 +295,13 @@ impl BattleFighter {
             current_hp: monster.hp as i64,
             equip: EquipmentEffects {
                 element_res: EnumMap::default(),
-                weapon: HandItem::Weapon(Weapon {
+                weapon: Some(Weapon {
                     min_dmg: monster.min_dmg,
                     max_dmg: monster.max_dmg,
                     rune_atk_bonus: None,
                 }),
-                offhand: HandItem::None,
+                offhand: None,
+                has_shield: monster.class.can_wear_shield(),
                 reaction_boost: false,
                 extra_crit_dmg: false,
                 armor: monster.armor,
@@ -324,8 +324,9 @@ impl BattleFighter {
             reaction_boost: false,
             extra_crit_dmg: false,
             armor: 0,
-            weapon: HandItem::None,
-            offhand: HandItem::None,
+            weapon: None,
+            offhand: None,
+            has_shield: false,
         };
 
         for (slot, item) in &char.equipment.0 {
@@ -334,7 +335,7 @@ impl BattleFighter {
                     EquipmentSlot::Weapon => {
                         let (min, max) =
                             calc_unarmed_base_dmg(slot, char.level, char.class);
-                        equip.weapon = HandItem::Weapon(Weapon {
+                        equip.weapon = Some(Weapon {
                             min_dmg: min,
                             max_dmg: max,
                             rune_atk_bonus: None,
@@ -343,7 +344,7 @@ impl BattleFighter {
                     EquipmentSlot::Shield if char.class == Class::Assassin => {
                         let (min, max) =
                             calc_unarmed_base_dmg(slot, char.level, char.class);
-                        equip.offhand = HandItem::Weapon(Weapon {
+                        equip.offhand = Some(Weapon {
                             min_dmg: min,
                             max_dmg: max,
                             rune_atk_bonus: None,
@@ -393,7 +394,7 @@ impl BattleFighter {
 
             match item.typ {
                 ItemType::Weapon { min_dmg, max_dmg } => {
-                    let weapon = HandItem::Weapon(Weapon {
+                    let weapon = Some(Weapon {
                         min_dmg,
                         max_dmg,
                         rune_atk_bonus,
@@ -404,8 +405,8 @@ impl BattleFighter {
                         _ => {}
                     }
                 }
-                ItemType::Shield { block_chance } => {
-                    equip.offhand = HandItem::Shield { block_chance };
+                ItemType::Shield { .. } => {
+                    equip.has_shield = true;
                 }
                 _ => (),
             }
@@ -457,9 +458,11 @@ impl BattleFighter {
 pub struct EquipmentEffects {
     element_res: EnumMap<Element, i32>,
 
-    weapon: HandItem,
+    weapon: Option<Weapon>,
     /// min,max for weapons | blockchange, 0 for shields
-    offhand: HandItem,
+    offhand: Option<Weapon>,
+
+    has_shield: bool,
 
     /// Shadow of the cowboy
     reaction_boost: bool,
@@ -467,13 +470,6 @@ pub struct EquipmentEffects {
     extra_crit_dmg: bool,
 
     armor: u32,
-}
-
-#[derive(Debug, Clone, Copy, Hash)]
-enum HandItem {
-    None,
-    Shield { block_chance: u32 },
-    Weapon(Weapon),
 }
 
 #[derive(Debug, Clone, Copy, Hash, Default)]
@@ -867,12 +863,9 @@ fn attack(
             logger.log(BE::Dodged(attacker, defender));
             return;
         }
-        if defender.class == Class::Warrior
-            && !defender.is_companion
-            && let HandItem::Shield { block_chance } = defender.equip.offhand
-            && block_chance as f32 / 100.0 > rng.f32()
+        if defender.equip.has_shield
+            && defender.class.block_chance() > rng.f32()
         {
-            // defender blocked
             logger.log(BE::Blocked(attacker, defender));
             return;
         }
@@ -882,11 +875,8 @@ fn attack(
     let weapon = match typ {
         AttackType::Offhand => attacker.equip.offhand,
         _ => attacker.equip.weapon,
-    };
-    let weapon = match weapon {
-        HandItem::Weapon(weapon) => weapon,
-        _ => Weapon::default(),
-    };
+    }
+    .unwrap_or_default();
 
     let mut elemental_bonus = 1.0;
     if let Some((element, atk_bonus)) = weapon.rune_atk_bonus {
