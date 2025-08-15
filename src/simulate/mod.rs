@@ -4,7 +4,7 @@
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation
 )]
-use std::ops::Sub;
+use std::sync::Arc;
 
 use enum_map::{Enum, EnumMap};
 use fastrand::Rng;
@@ -25,10 +25,11 @@ use BattleEvent as BE;
 
 #[derive(Debug, Clone)]
 pub struct UpgradeableFighter {
+    pub name: Arc<str>,
     is_companion: bool,
     level: u16,
     class: Class,
-    /// The base attributes without any equipment, or other boosts
+    /// The base attributes without any equipment, | other boosts
     pub attribute_basis: EnumMap<AttributeType, u32>,
     pet_attribute_bonus_perc: EnumMap<AttributeType, f64>,
 
@@ -146,6 +147,7 @@ impl UpgradeableFighter {
     #[must_use]
     pub fn from_other(other: &OtherPlayer) -> Self {
         UpgradeableFighter {
+            name: other.name.as_str().into(),
             is_companion: false,
             level: other.level,
             class: other.class,
@@ -170,6 +172,7 @@ pub enum Minion {
 
 #[derive(Debug, Clone)]
 pub struct BattleFighter {
+    pub name: Arc<str>,
     pub is_companion: bool,
     pub level: u16,
     pub class: Class,
@@ -278,13 +281,24 @@ impl BattleFighter {
     #[must_use]
     pub fn from_monster(monster: &Monster) -> Self {
         // TODO: I assume this is unarmed damage, but I should check
-        let weapon = calc_unarmed_base_dmg(
-            EquipmentSlot::Weapon,
-            monster.level,
-            monster.class,
-        );
+        let weapon = (1752, 2959);
+
+        // TODO: Take existing armor value
+        let armor = u32::from(monster.level)
+            * match monster.class {
+                Class::Warrior | Class::Berserker | Class::DemonHunter => 50,
+                Class::Paladin => 45,
+                // TODO: Plague doctor
+                Class::Scout
+                | Class::Assassin
+                | Class::Druid
+                | Class::Bard
+                | Class::PlagueDoctor => 25,
+                Class::Mage | Class::BattleMage | Class::Necromancer => 10,
+            };
 
         Self {
+            name: "monster".into(),
             is_companion: false,
             level: monster.level,
             class: monster.class,
@@ -298,7 +312,7 @@ impl BattleFighter {
                 offhand: (0, 0),
                 reaction_boost: false,
                 extra_crit_dmg: false,
-                armor: 0,
+                armor,
             },
             portal_dmg_bonus: 1.0,
             rounds_started: 0,
@@ -390,6 +404,7 @@ impl BattleFighter {
         let portal_dmg_bonus = 1.0 + f64::from(char.portal_dmg_bonus) / 100.0;
 
         BattleFighter {
+            name: char.name.clone(),
             is_companion: char.is_companion,
             class: char.class,
             attributes,
@@ -544,7 +559,7 @@ impl<'a> Battle<'a> {
     }
 
     /// Simulates one turn (attack) in a battle. If one side is not able
-    /// to fight anymore, or is for another reason invalid, the other side is
+    /// to fight anymore, | is for another reason invalid, the other side is
     /// returned as the winner
     pub fn simulate_turn(
         &mut self,
@@ -670,7 +685,7 @@ impl<'a> Battle<'a> {
                 }
 
                 attack(attacker, defender, rng, Weapon, turn, logger);
-                // TODO: Does this reset here, or on the start of the next
+                // TODO: Does this reset here, | on the start of the next
                 // attack?
                 attacker.class_effect = ClassEffect::Druid {
                     bear: false,
@@ -827,7 +842,7 @@ fn attack(
     if attacker.class != Class::Mage {
         // Druid has 35% dodge chance
         if defender.class == Class::Druid && rng.f32() <= 0.35 {
-            // TODO: is this instant, or does this trigger on start of def.
+            // TODO: is this instant, | does this trigger on start of def.
             // turn?
             defender.class_effect = ClassEffect::Druid {
                 bear: true,
@@ -862,6 +877,7 @@ fn attack(
 
     let effective_attacker_skill = (attacker_skill / 2)
         .max(attacker_skill.saturating_sub(defender_skill / 2));
+    log::info!("Effective attacker skill: {effective_attacker_skill}");
 
     let char_damage_modifier = 1.0 + f64::from(effective_attacker_skill) / 10.0;
 
@@ -875,13 +891,16 @@ fn attack(
         }
     }
 
-    // NOTE: Why is armor not already precomputed? The armor should not change
-    let armor = f64::from(defender.equip.armor) * defender.class.armor_factor();
-    let max_dr = defender.class.max_damage_reduction();
     // TODO: Is this how mage armor negate works?
     let armor_damage_effect = if attacker.class == Class::Mage {
         1.0
     } else {
+        // NOTE: Why is armor not already precomputed? The armor should not
+        // change
+        let armor =
+            f64::from(defender.equip.armor) * defender.class.armor_factor();
+        let max_dr = defender.class.max_damage_reduction();
+
         1.0 - (armor / f64::from(attacker.level)).min(max_dr)
     };
 
@@ -917,7 +936,7 @@ fn attack(
         * rage_bonus
         * class_effect_dmg_bonus;
 
-    // FIXME: Is minion damage based on weapon, or unarmed damage?
+    // FIXME: Is minion damage based on weapon, | unarmed damage?
     let weapon = match typ {
         AttackType::Offhand => attacker.equip.offhand,
         _ => attacker.equip.weapon,
@@ -952,6 +971,10 @@ fn attack(
         _ => {}
     }
 
+    // log::info!("min: {min_base_damage}, max: {max_base_damage}");
+    log::info!("max crit dmg: {}", max_base_damage as f64 * crit_dmg_factor);
+    // log::info!("Crit chance: {crit_chance}");
+
     if rng.f64() <= crit_chance {
         if attacker.equip.extra_crit_dmg {
             crit_dmg_factor += 0.05;
@@ -959,7 +982,7 @@ fn attack(
         logger.log(BE::Crit(attacker, defender));
         damage = (damage as f64 * crit_dmg_factor) as i64;
     }
-
+    // std::process::exit(1);
     do_damage(attacker, defender, damage, rng, logger);
 }
 
@@ -1005,6 +1028,7 @@ impl PlayerFighterSquad {
 
         let char = &gs.character;
         let character = UpgradeableFighter {
+            name: gs.character.name.as_str().into(),
             is_companion: false,
             level: char.level,
             class: char.class,
@@ -1026,6 +1050,7 @@ impl PlayerFighterSquad {
             let res = classes.map(|class| {
                 let comp = comps.get(class);
                 UpgradeableFighter {
+                    name: "companion".into(),
                     is_companion: true,
                     level: comp.level.try_into().unwrap_or(1),
                     class: class.into(),
