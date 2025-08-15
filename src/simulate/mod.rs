@@ -8,13 +8,13 @@ use std::sync::Arc;
 
 use enum_map::{Enum, EnumMap};
 use fastrand::Rng;
-use strum::{EnumIter, IntoEnumIterator};
+use strum::EnumIter;
 
 use crate::{
     command::AttributeType,
     gamestate::{
         GameState, character::Class, dungeons::CompanionClass, items::*,
-        social::OtherPlayer,
+        social::OtherPlayer, underworld::UnderworldBuildingType,
     },
     misc::EnumMapGet,
 };
@@ -40,6 +40,8 @@ pub struct UpgradeableFighter {
     portal_hp_bonus: u32,
     /// The damage bonus in percent this player has from the guild demon portal
     portal_dmg_bonus: u32,
+    /// The level of the gladiator in the underworld
+    gladiator_lvl: u8,
 }
 
 impl UpgradeableFighter {
@@ -159,6 +161,8 @@ impl UpgradeableFighter {
                 .map(|_, a| f64::from(a) / 100.0),
             portal_hp_bonus: other.portal_hp_bonus,
             portal_dmg_bonus: other.portal_dmg_bonus,
+            // TODO: actually parse and set this here
+            gladiator_lvl: 0,
         }
     }
 }
@@ -181,6 +185,7 @@ pub struct BattleFighter {
     pub current_hp: i64,
     pub equip: EquipmentEffects,
     pub portal_dmg_bonus: f64,
+    pub gladiator_lvl: u8,
     /// The total amount of rounds this fighter has started (tried to do an
     /// attack)
     pub rounds_started: u32,
@@ -281,7 +286,11 @@ impl BattleFighter {
     #[must_use]
     pub fn from_monster(monster: &Monster) -> Self {
         // TODO: I assume this is unarmed damage, but I should check
-        let weapon = (1752, 2959);
+        let weapon = HandItem::Weapon(Weapon {
+            min_dmg: 1752,
+            max_dmg: 2959,
+            rune_atk_bonus: None,
+        });
 
         // TODO: Take existing armor value
         let armor = u32::from(monster.level)
@@ -307,9 +316,8 @@ impl BattleFighter {
             current_hp: monster.hp as i64,
             equip: EquipmentEffects {
                 element_res: EnumMap::default(),
-                element_dmg: EnumMap::default(),
                 weapon,
-                offhand: (0, 0),
+                offhand: HandItem::None,
                 reaction_boost: false,
                 extra_crit_dmg: false,
                 armor,
@@ -318,6 +326,7 @@ impl BattleFighter {
             rounds_started: 0,
             rounds_in_1v1: 0,
             class_effect: ClassEffect::Normal,
+            gladiator_lvl: 0,
         }
     }
 
@@ -328,24 +337,33 @@ impl BattleFighter {
 
         let mut equip = EquipmentEffects {
             element_res: EnumMap::default(),
-            element_dmg: EnumMap::default(),
             reaction_boost: false,
             extra_crit_dmg: false,
             armor: 0,
-            weapon: (0, 0),
-            offhand: (0, 0),
+            weapon: HandItem::None,
+            offhand: HandItem::None,
         };
 
         for (slot, item) in &char.equipment.0 {
             let Some(item) = item else {
                 match slot {
                     EquipmentSlot::Weapon => {
-                        equip.weapon =
+                        let (min, max) =
                             calc_unarmed_base_dmg(slot, char.level, char.class);
+                        equip.weapon = HandItem::Weapon(Weapon {
+                            min_dmg: min,
+                            max_dmg: max,
+                            rune_atk_bonus: None,
+                        })
                     }
                     EquipmentSlot::Shield if char.class == Class::Assassin => {
-                        equip.offhand =
+                        let (min, max) =
                             calc_unarmed_base_dmg(slot, char.level, char.class);
+                        equip.offhand = HandItem::Weapon(Weapon {
+                            min_dmg: min,
+                            max_dmg: max,
+                            rune_atk_bonus: None,
+                        })
                     }
                     _ => {}
                 }
@@ -361,41 +379,49 @@ impl BattleFighter {
                 }
                 _ => {}
             }
+            let mut rune_atk_bonus = None;
             if let Some(rune) = item.rune {
                 use RuneType as RT;
 
-                let mut apply = |is_res, element| {
-                    let target = if is_res {
-                        &mut equip.element_res
-                    } else {
-                        &mut equip.element_dmg
-                    };
-                    *target.get_mut(element) += f64::from(rune.value) / 100.0;
+                let mut apply_res = |element| {
+                    *equip.element_res.get_mut(element) +=
+                        i32::from(rune.value);
                 };
+                let mut apply_dmg = |element| {
+                    rune_atk_bonus = Some((element, i32::from(rune.value)));
+                };
+
                 match rune.typ {
-                    RT::FireResistance => apply(true, Element::Fire),
-                    RT::ColdResistence => apply(true, Element::Cold),
-                    RT::LightningResistance => apply(true, Element::Lightning),
+                    RT::FireResistance => apply_res(Element::Fire),
+                    RT::ColdResistence => apply_res(Element::Cold),
+                    RT::LightningResistance => apply_res(Element::Lightning),
                     RT::TotalResistence => {
                         for (_, val) in &mut equip.element_res {
-                            *val += f64::from(rune.value) / 100.0;
+                            *val += i32::from(rune.value);
                         }
                     }
-                    RT::FireDamage => apply(false, Element::Fire),
-                    RT::ColdDamage => apply(false, Element::Cold),
-                    RT::LightningDamage => apply(false, Element::Lightning),
+                    RT::FireDamage => apply_dmg(Element::Fire),
+                    RT::ColdDamage => apply_dmg(Element::Cold),
+                    RT::LightningDamage => apply_dmg(Element::Lightning),
                     _ => {}
                 }
             }
 
             match item.typ {
-                ItemType::Weapon { min_dmg, max_dmg } => match slot {
-                    EquipmentSlot::Weapon => equip.weapon = (min_dmg, max_dmg),
-                    EquipmentSlot::Shield => equip.offhand = (min_dmg, max_dmg),
-                    _ => {}
-                },
+                ItemType::Weapon { min_dmg, max_dmg } => {
+                    let weapon = HandItem::Weapon(Weapon {
+                        min_dmg,
+                        max_dmg,
+                        rune_atk_bonus,
+                    });
+                    match slot {
+                        EquipmentSlot::Weapon => equip.weapon = weapon,
+                        EquipmentSlot::Shield => equip.offhand = weapon,
+                        _ => {}
+                    }
+                }
                 ItemType::Shield { block_chance } => {
-                    equip.offhand = (block_chance, 0);
+                    equip.offhand = HandItem::Shield { block_chance };
                 }
                 _ => (),
             }
@@ -416,6 +442,7 @@ impl BattleFighter {
             portal_dmg_bonus,
             level: char.level,
             rounds_in_1v1: 0,
+            gladiator_lvl: char.gladiator_lvl,
         }
     }
 
@@ -442,14 +469,13 @@ impl BattleFighter {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct EquipmentEffects {
-    element_res: EnumMap<Element, f64>,
-    element_dmg: EnumMap<Element, f64>,
+    element_res: EnumMap<Element, i32>,
 
-    weapon: (u32, u32),
+    weapon: HandItem,
     /// min,max for weapons | blockchange, 0 for shields
-    offhand: (u32, u32),
+    offhand: HandItem,
 
     /// Shadow of the cowboy
     reaction_boost: bool,
@@ -459,22 +485,21 @@ pub struct EquipmentEffects {
     armor: u32,
 }
 
-impl std::hash::Hash for EquipmentEffects {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        (
-            self.element_res.map(|_, r| (r * 100.0) as u32),
-            self.element_dmg.map(|_, r| (r * 100.0) as u32),
-            self.armor,
-            self.weapon,
-            self.offhand,
-            self.reaction_boost,
-            self.extra_crit_dmg,
-        )
-            .hash(state);
-    }
+#[derive(Debug, Clone, Copy, Hash)]
+enum HandItem {
+    None,
+    Shield { block_chance: u32 },
+    Weapon(Weapon),
 }
 
-#[derive(Debug, Clone, Copy, Enum, EnumIter)]
+#[derive(Debug, Clone, Copy, Hash, Default)]
+struct Weapon {
+    min_dmg: u32,
+    max_dmg: u32,
+    rune_atk_bonus: Option<(Element, i32)>,
+}
+
+#[derive(Debug, Clone, Copy, Enum, EnumIter, Hash)]
 pub enum Element {
     Lightning,
     Cold,
@@ -860,7 +885,8 @@ fn attack(
         }
         if defender.class == Class::Warrior
             && !defender.is_companion
-            && defender.equip.offhand.0 as f32 / 100.0 > rng.f32()
+            && let HandItem::Shield { block_chance } = defender.equip.offhand
+            && block_chance as f32 / 100.0 > rng.f32()
         {
             // defender blocked
             logger.log(BE::Blocked(attacker, defender));
@@ -868,26 +894,21 @@ fn attack(
         }
     }
 
-    // TODO: Most of this can be reused, as long as the opponent does not
-    // change. Should make sure this is correct first though
-    let main_atr = attacker.class.main_attribute();
-
-    let attacker_skill = *attacker.attributes.get(main_atr);
-    let defender_skill = *defender.attributes.get(main_atr);
-
-    let effective_attacker_skill = (attacker_skill / 2)
-        .max(attacker_skill.saturating_sub(defender_skill / 2));
-    log::info!("Effective attacker skill: {effective_attacker_skill}");
-
-    let char_damage_modifier = 1.0 + f64::from(effective_attacker_skill) / 10.0;
+    // FIXME: Is minion damage based on weapon, or unarmed damage?
+    let weapon = match typ {
+        AttackType::Offhand => attacker.equip.offhand,
+        _ => attacker.equip.weapon,
+    };
+    let weapon = match weapon {
+        HandItem::Weapon(weapon) => weapon,
+        _ => Weapon::default(),
+    };
 
     let mut elemental_bonus = 1.0;
-    for element in Element::iter() {
-        let plus = attacker.equip.element_dmg.get(element);
-        let minus = defender.equip.element_res.get(element);
-
-        if plus > minus {
-            elemental_bonus += plus - minus;
+    if let Some((element, atk_bonus)) = weapon.rune_atk_bonus {
+        let resistance = *defender.equip.element_res.get(element);
+        if atk_bonus > resistance {
+            elemental_bonus += f64::from(atk_bonus - resistance) / 100.0;
         }
     }
 
@@ -925,28 +946,34 @@ fn attack(
         _ => 1.0,
     };
 
-    // TODO: Is this the correct formula
     let rage_bonus = 1.0 + (f64::from(turn.saturating_sub(1)) / 6.0);
 
-    let damage_bonus = char_damage_modifier
-        * attacker.portal_dmg_bonus
-        * elemental_bonus
-        * armor_damage_effect
-        * attacker.class.damage_factor(defender.class)
-        * rage_bonus
-        * class_effect_dmg_bonus;
+    // TODO: Most of this can be reused, as long as the opponent does not
+    // change. Should make sure this is correct first though
+    let main_atr = attacker.class.main_attribute();
 
-    // FIXME: Is minion damage based on weapon, | unarmed damage?
-    let weapon = match typ {
-        AttackType::Offhand => attacker.equip.offhand,
-        _ => attacker.equip.weapon,
-    };
+    let attacker_skill = *attacker.attributes.get(main_atr);
+    let defender_skill = *defender.attributes.get(main_atr);
+
+    let effective_attacker_skill = (attacker_skill / 2)
+        .max(attacker_skill.saturating_sub(defender_skill / 2));
+
+    let attribute_bonus = 1.0 + f64::from(effective_attacker_skill) / 10.0;
+
+    let damage_bonus = 1.0
+        * attribute_bonus // 1076.8
+        * attacker.portal_dmg_bonus // 1.25
+        * elemental_bonus // 1.3
+        * armor_damage_effect // 0.9
+        * attacker.class.damage_factor(defender.class) // 0.625
+        * rage_bonus // 1.0
+        * class_effect_dmg_bonus; // 1.0
 
     let calc_damage =
         |weapon_dmg| (f64::from(weapon_dmg) * damage_bonus).trunc() as i64;
 
-    let min_base_damage = calc_damage(weapon.0);
-    let max_base_damage = calc_damage(weapon.1);
+    let min_base_damage = calc_damage(weapon.min_dmg);
+    let max_base_damage = calc_damage(weapon.max_dmg);
 
     let mut damage = rng.i64(min_base_damage..=max_base_damage);
 
@@ -971,18 +998,19 @@ fn attack(
         _ => {}
     }
 
-    // log::info!("min: {min_base_damage}, max: {max_base_damage}");
-    log::info!("max crit dmg: {}", max_base_damage as f64 * crit_dmg_factor);
-    // log::info!("Crit chance: {crit_chance}");
-
     if rng.f64() <= crit_chance {
         if attacker.equip.extra_crit_dmg {
             crit_dmg_factor += 0.05;
         }
-        logger.log(BE::Crit(attacker, defender));
+        let gladiator_lvl_diff = attacker
+            .gladiator_lvl
+            .saturating_sub(defender.gladiator_lvl);
+
+        crit_dmg_factor += 0.11 * f64::from(gladiator_lvl_diff);
+
+        logger.log(BE::Crit(attacker, defender, crit_chance, crit_dmg_factor));
         damage = (damage as f64 * crit_dmg_factor) as i64;
     }
-    // std::process::exit(1);
     do_damage(attacker, defender, damage, rng, logger);
 }
 
@@ -1026,6 +1054,10 @@ impl PlayerFighterSquad {
             .unwrap_or_default()
             .into();
 
+        let gladiator_lvl = gs.underworld.as_ref().map_or(0, |a| {
+            a.buildings[UnderworldBuildingType::GladiatorTrainer].level
+        });
+
         let char = &gs.character;
         let character = UpgradeableFighter {
             name: gs.character.name.as_str().into(),
@@ -1038,6 +1070,7 @@ impl PlayerFighterSquad {
             pet_attribute_bonus_perc,
             portal_hp_bonus,
             portal_dmg_bonus,
+            gladiator_lvl,
         };
         let mut companions = None;
         if let Some(comps) = &gs.dungeons.companions {
@@ -1060,6 +1093,7 @@ impl PlayerFighterSquad {
                     pet_attribute_bonus_perc,
                     portal_hp_bonus,
                     portal_dmg_bonus,
+                    gladiator_lvl,
                 }
             });
             companions = Some(EnumMap::from_array(res));
@@ -1215,7 +1249,7 @@ pub enum BattleEvent<'a, 'b> {
     Attack(&'b BattleFighter, &'b BattleFighter, AttackType),
     Dodged(&'b BattleFighter, &'b BattleFighter),
     Blocked(&'b BattleFighter, &'b BattleFighter),
-    Crit(&'b BattleFighter, &'b BattleFighter),
+    Crit(&'b BattleFighter, &'b BattleFighter, f64, f64),
     DamageReceived(&'b BattleFighter, &'b BattleFighter, i64),
     DemonHunterRevived(&'b BattleFighter, &'b BattleFighter),
     CometRepelled(&'b BattleFighter, &'b BattleFighter),
