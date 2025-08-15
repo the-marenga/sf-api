@@ -8,10 +8,7 @@ use super::{
     AttributeType, CCGet, Class, EnumMapGet, Item, SFError, ServerTime,
     items::Equipment,
 };
-use crate::{
-    misc::soft_into,
-    simulate::{Monster, constants::get_dungeon_enemies},
-};
+use crate::misc::soft_into;
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -81,10 +78,11 @@ impl Dungeons {
     /// "mirrorimage" enemy will be listed as a warrior with 0 stats/lvl/xp/hp.
     // If you care about the actual stats, you should map this to the player
     // stats yourself
+    #[cfg(feature = "simulation")]
     pub fn current_enemy(
         &self,
         dungeon: impl Into<Dungeon> + Copy,
-    ) -> Option<&'static Monster> {
+    ) -> Option<&'static crate::simulate::Monster> {
         dungeon_enemy(dungeon, self.progress(dungeon))
     }
 }
@@ -350,13 +348,15 @@ pub struct Companion {
     pub attributes: EnumMap<AttributeType, u32>,
 }
 
+#[cfg(feature = "simulation")]
 pub fn dungeon_enemy(
     dungeon: impl Into<Dungeon>,
     progress: DungeonProgress,
-) -> Option<&'static Monster> {
+) -> Option<&'static crate::simulate::Monster> {
     let stage = match progress {
         DungeonProgress::Open { finished } => finished,
         DungeonProgress::Locked | DungeonProgress::Finished => return None,
     };
-    get_dungeon_enemies(dungeon.into()).get(stage as usize)
+    crate::simulate::constants::get_dungeon_enemies(dungeon.into())
+        .get(stage as usize)
 }

@@ -80,6 +80,10 @@ pub async fn main() {
         let player = BattleFighter::from_upgradeable(&squad.character);
         let mut player_squad = [player];
         for dungeon in LightDungeon::iter() {
+            if dungeon != LightDungeon::NordicGods {
+                continue;
+            }
+
             let Some(monster) = gs.dungeons.current_enemy(dungeon) else {
                 continue;
             };
@@ -125,7 +129,7 @@ pub async fn main() {
     std::fs::write("character.json", js).unwrap();
 }
 
-struct Logger;
+pub struct Logger;
 
 impl BattleLogger for Logger {
     fn log(&mut self, event: BattleEvent<'_, '_>) {
