@@ -660,7 +660,10 @@ impl<'a> Battle<'a> {
             Berserker => {
                 for _ in 0..15 {
                     attack(attacker, defender, rng, Weapon, rage_lvl, logger);
-                    if defender.current_hp <= 0 || rng.bool() {
+                    if defender.current_hp <= 0
+                        || defender.class == Class::Mage
+                        || rng.bool()
+                    {
                         break;
                     }
                 }
@@ -928,12 +931,12 @@ fn attack(
     let armor_damage_effect = if attacker.class == Class::Mage {
         1.0
     } else {
-        let max_dr = defender.class.max_damage_reduction();
-        let armor =
-            f64::from(defender.equip.armor) * defender.class.armor_factor();
+        let max_dr = defender.class.max_damage_reduction_val();
+        let max_dr_multi = defender.class.max_damage_reduction_multiplier();
+        let armor = f64::from(defender.equip.armor);
         let raw_dr = armor / f64::from(attacker.level);
-        let dr = (raw_dr / 100.0).min(max_dr);
-        1.0 - dr
+        let dr = raw_dr.min(max_dr) * max_dr_multi;
+        1.0 - (dr / 100.0)
     };
 
     // The damage bonus you get from some class specific gimmic
@@ -964,13 +967,17 @@ fn attack(
     // change. Should make sure this is correct first though
     let main_atr = attacker.class.main_attribute();
 
-    let attacker_skill = *attacker.attributes.get(main_atr);
-    let defender_skill = *defender.attributes.get(main_atr);
+    // NOTE: It may not be necessary to do this in f64
+    let attacker_skill = f64::from(*attacker.attributes.get(main_atr));
+    let defender_skill = f64::from(*defender.attributes.get(main_atr));
 
-    let effective_attacker_skill = (attacker_skill / 2)
-        .max(attacker_skill.saturating_sub(defender_skill / 2));
+    // dbg!(attacker_skill);
+    // dbg!(defender_skill);
 
-    let attribute_bonus = 1.0 + f64::from(effective_attacker_skill) / 10.0;
+    let effective_attacker_skill =
+        (attacker_skill / 2.0).max(attacker_skill - defender_skill / 2.0);
+
+    let attribute_bonus = 1.0 + effective_attacker_skill / 10.0;
 
     let damage_bonus = 1.0
         * attribute_bonus
@@ -981,11 +988,26 @@ fn attack(
         * rage_bonus
         * class_effect_dmg_bonus;
 
+    // dbg!(attribute_bonus);
+    // dbg!(attacker.portal_dmg_bonus);
+    // dbg!(elemental_bonus);
+    // dbg!(armor_damage_effect);
+    // dbg!(attacker.class.damage_factor(defender.class));
+    // dbg!(rage_bonus);
+    // dbg!(class_effect_dmg_bonus);
+
     let calc_damage =
         |weapon_dmg| (f64::from(weapon_dmg) * damage_bonus).trunc() as i64;
 
     let min_base_damage = calc_damage(weapon.min_dmg);
     let max_base_damage = calc_damage(weapon.max_dmg);
+
+    // dbg!(min_base_damage);
+    // dbg!(max_base_damage);
+
+    // if attacker.name.as_ref() == "wolfgong" {
+    //     std::process::exit(1);
+    // }
 
     let mut damage = rng.i64(min_base_damage..=max_base_damage);
 
@@ -1123,11 +1145,24 @@ impl UpgradeableFighter {
     pub fn attributes(&self) -> EnumMap<AttributeType, u32> {
         let mut total = EnumMap::default();
 
-        for equip in self.equipment.0.iter().flat_map(|a| a.1) {
+        for equip in self.equipment.0.values().flatten() {
             for (k, v) in &equip.attributes {
-                *total.get_mut(k) += v;
+                *total.get_mut(k) += *v;
             }
+        }
 
+        let pre_gem_bonus = match self.class {
+            Class::Berserker => Some(1.1111),
+            _ => None,
+        };
+
+        if let Some(pre_gem_bonus) = pre_gem_bonus {
+            for val in total.values_mut() {
+                *val = (f64::from(*val) * pre_gem_bonus).trunc() as u32;
+            }
+        }
+
+        for equip in self.equipment.0.values().flatten() {
             if let Some(GemSlot::Filled(gem)) = &equip.gem_slot {
                 use AttributeType as AT;
                 let mut value = gem.value;
@@ -1154,8 +1189,7 @@ impl UpgradeableFighter {
                 }
             }
         }
-
-        let class_bonus: f64 = match self.class {
+        let post_gem_bonus: f64 = match self.class {
             Class::BattleMage => 0.1111,
             _ => 0.0,
         };
@@ -1163,7 +1197,7 @@ impl UpgradeableFighter {
         let pet_boni = self.pet_attribute_bonus_perc;
 
         for (k, v) in &mut total {
-            let class_bonus = (f64::from(*v) * class_bonus).trunc() as u32;
+            let class_bonus = (f64::from(*v) * post_gem_bonus).trunc() as u32;
             *v += class_bonus + self.attribute_basis.get(k);
             if let Some(potion) = self
                 .active_potions
