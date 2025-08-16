@@ -186,11 +186,6 @@ pub struct BattleFighter {
     pub equip: EquipmentEffects,
     pub portal_dmg_bonus: f64,
     pub gladiator_lvl: u8,
-    /// The total amount of rounds this fighter has started (tried to do an
-    /// attack)
-    pub rounds_started: u32,
-    /// The amount of turns this player has been in the current 1v1 fight
-    pub rounds_in_1v1: u32,
     pub class_effect: ClassEffect,
 }
 
@@ -205,8 +200,6 @@ impl std::hash::Hash for BattleFighter {
             self.current_hp,
             &self.equip,
             (self.portal_dmg_bonus * 100.0) as u32,
-            self.rounds_started,
-            self.rounds_in_1v1,
             &self.class_effect,
         )
             .hash(state);
@@ -315,8 +308,6 @@ impl BattleFighter {
                 armor: monster.armor,
             },
             portal_dmg_bonus: 1.0,
-            rounds_started: 0,
-            rounds_in_1v1: 0,
             class_effect: ClassEffect::Normal,
             gladiator_lvl: 0,
         }
@@ -430,11 +421,9 @@ impl BattleFighter {
             max_hp: hp,
             current_hp: hp,
             equip,
-            rounds_started: 0,
             class_effect: ClassEffect::Normal,
             portal_dmg_bonus,
             level: char.level,
-            rounds_in_1v1: 0,
             gladiator_lvl: char.gladiator_lvl,
         }
     }
@@ -457,8 +446,6 @@ impl BattleFighter {
     pub fn reset(&mut self) {
         self.class_effect = ClassEffect::Normal;
         self.current_hp = self.max_hp;
-        self.rounds_started = 0;
-        self.rounds_in_1v1 = 0;
     }
 }
 
@@ -490,8 +477,8 @@ struct Weapon {
 #[derive(Debug, Clone, Copy, Enum, EnumIter, Hash, PartialEq, Eq)]
 pub enum Element {
     Fire,
-    Lightning,
     Cold,
+    Lightning,
 }
 
 #[derive(Debug)]
@@ -503,12 +490,15 @@ pub struct BattleTeam<'a> {
 #[allow(clippy::extra_unused_lifetimes)]
 impl<'a> BattleTeam<'_> {
     #[must_use]
-    pub fn current(&self) -> Option<&BattleFighter> {
-        self.fighters.get(self.current_fighter)
+    pub fn current(&self) -> Option<(&BattleFighter, usize)> {
+        let idx = self.current_fighter;
+        self.fighters.get(idx).map(|a| (a, idx))
     }
+
     #[must_use]
-    pub fn current_mut(&mut self) -> Option<&mut BattleFighter> {
-        self.fighters.get_mut(self.current_fighter)
+    pub fn current_mut(&mut self) -> Option<(&mut BattleFighter, usize)> {
+        let idx = self.current_fighter;
+        self.fighters.get_mut(idx).map(|a| (a, idx))
     }
 
     fn reset(&mut self) {
@@ -527,11 +517,30 @@ pub enum BattleSide {
 
 #[derive(Debug)]
 pub struct Battle<'a> {
-    pub round: u32,
-    pub started: Option<BattleSide>,
+    /// Details about the combat between the two fighters currently fighting.
+    /// If they have not started yet, this will be None
+    pub current_fight: Option<FightDetails>,
     pub left: BattleTeam<'a>,
     pub right: BattleTeam<'a>,
     pub rng: Rng,
+}
+
+#[derive(Debug)]
+pub struct FightDetails {
+    /// The idx of the fighters in their respective teams. This is used to
+    /// invalidate the engagement, once they change
+    pub fighter_pos: EnumMap<BattleSide, usize>,
+    /// The side, that has started this engagement.
+    pub started: BattleSide,
+    /// The amount of time the side, that can start attacks have swapped
+    pub side_swaps: u32,
+    /// Mostly the amount of attacks, that have taken place. This is also
+    /// refered to as turns by the game, but turns may be confused with
+    /// swapping sides, or the both sides trading blows, depending on what
+    /// preconceived notions you have, In addition, stuff like summoning also
+    /// wastes "turns", but casting a meteor does not, so this is just called
+    /// `rage_lvl`, since it is too far removed from turns to be called that
+    pub rage_lvl: u32,
 }
 
 impl<'a> Battle<'a> {
@@ -540,8 +549,6 @@ impl<'a> Battle<'a> {
         right: &'a mut [BattleFighter],
     ) -> Self {
         Self {
-            round: 0,
-            started: None,
             left: BattleTeam {
                 current_fighter: 0,
                 fighters: left,
@@ -551,6 +558,7 @@ impl<'a> Battle<'a> {
                 fighters: right,
             },
             rng: fastrand::Rng::default(),
+            current_fight: None,
         }
     }
 
@@ -565,10 +573,9 @@ impl<'a> Battle<'a> {
     }
 
     pub fn reset(&mut self) {
-        self.round = 0;
+        self.current_fight = None;
         self.left.reset();
         self.right.reset();
-        self.started = None;
     }
 
     /// Simulates one turn (attack) in a battle. If one side is not able
@@ -587,42 +594,49 @@ impl<'a> Battle<'a> {
 
         logger.log(BE::TurnUpdate(self));
 
-        let Some(left) = self.left.current_mut() else {
+        let Some((left, left_idx)) = self.left.current_mut() else {
             logger.log(BE::BattleEnd(self, Right));
             return Some(Right);
         };
-        let Some(right) = self.right.current_mut() else {
+        let Some((right, right_idx)) = self.right.current_mut() else {
             logger.log(BE::BattleEnd(self, Left));
             return Some(Left);
         };
 
-        self.round += 1;
-
-        if left.rounds_in_1v1 != right.rounds_in_1v1 {
-            left.rounds_in_1v1 = 0;
-            right.rounds_in_1v1 = 0;
-        }
-        left.rounds_in_1v1 += 1;
-        right.rounds_in_1v1 += 1;
-
-        let attacking_side = if let Some(started) = self.started {
-            // If We are at the same cycle, as the first turn, the one that
-            // started on the first turn starts here. Otherwise the other one
-            match started {
-                _ if left.rounds_in_1v1 % 2 == 1 => started,
-                Left => Right,
-                Right => Left,
-            }
-        } else {
+        let mut start_fight = || {
             // The battle has not yet started. Figure out who side starts
-            let attacking_side =
+            let starting_side =
                 match (right.equip.reaction_boost, left.equip.reaction_boost) {
-                    (true, true) | (false, false) if self.rng.bool() => Right,
                     (true, false) => Right,
+                    (true, true) | (false, false) if self.rng.bool() => Right,
                     _ => Left,
                 };
-            self.started = Some(attacking_side);
-            attacking_side
+
+            FightDetails {
+                fighter_pos: EnumMap::from_array([left_idx, right_idx]),
+                started: starting_side,
+                side_swaps: 0,
+                rage_lvl: 0,
+            }
+        };
+
+        let fight = match &mut self.current_fight {
+            Some(fight)
+                if fight.fighter_pos.as_slice() == [left_idx, right_idx] =>
+            {
+                fight.side_swaps += 1;
+                fight
+            }
+            _ => self.current_fight.insert(start_fight()),
+        };
+
+        // If We are at the same cycle, as the first turn, the one that
+        // started on the first turn starts here. Otherwise the other
+        // one
+        let attacking_side = match fight.started {
+            x if fight.side_swaps % 2 == 0 => x,
+            Left => Right,
+            Right => Left,
         };
 
         let (attacker, defender) = match attacking_side {
@@ -630,31 +644,30 @@ impl<'a> Battle<'a> {
             Right => (right, left),
         };
 
-        attacker.rounds_started += 1;
-        let turn = self.round;
+        let rage_lvl = &mut fight.rage_lvl;
         let rng = &mut self.rng;
         match attacker.class {
             Paladin | PlagueDoctor => {
                 // TODO: Actually implement stances and stuff
-                attack(attacker, defender, rng, Weapon, turn, logger);
+                attack(attacker, defender, rng, Weapon, rage_lvl, logger);
             }
             Warrior | Scout | Mage | DemonHunter => {
-                attack(attacker, defender, rng, Weapon, turn, logger);
+                attack(attacker, defender, rng, Weapon, rage_lvl, logger);
             }
             Assassin => {
-                attack(attacker, defender, rng, Weapon, turn, logger);
-                attack(attacker, defender, rng, Offhand, turn, logger);
+                attack(attacker, defender, rng, Weapon, rage_lvl, logger);
+                attack(attacker, defender, rng, Offhand, rage_lvl, logger);
             }
             Berserker => {
                 for _ in 0..15 {
-                    attack(attacker, defender, rng, Weapon, turn, logger);
+                    attack(attacker, defender, rng, Weapon, rage_lvl, logger);
                     if defender.current_hp <= 0 || rng.bool() {
                         break;
                     }
                 }
             }
             BattleMage => {
-                if attacker.rounds_started == 1 {
+                if fight.side_swaps <= 1 {
                     if defender.class == Mage {
                         logger.log(BE::CometRepelled(attacker, defender));
                     } else {
@@ -674,7 +687,7 @@ impl<'a> Battle<'a> {
                         do_damage(attacker, defender, dmg, rng, logger);
                     }
                 }
-                attack(attacker, defender, rng, Weapon, turn, logger);
+                attack(attacker, defender, rng, Weapon, rage_lvl, logger);
             }
             Druid => {
                 // Check if we do a sweep attack
@@ -688,7 +701,9 @@ impl<'a> Battle<'a> {
                     if defender.class != Class::Mage
                         && rng.f32() <= swoop_chance
                     {
-                        attack(attacker, defender, rng, Swoop, turn, logger);
+                        attack(
+                            attacker, defender, rng, Swoop, rage_lvl, logger,
+                        );
                         attacker.class_effect = ClassEffect::Druid {
                             bear: false,
                             // max 7 to limit chance to 50%
@@ -697,7 +712,7 @@ impl<'a> Battle<'a> {
                     }
                 }
 
-                attack(attacker, defender, rng, Weapon, turn, logger);
+                attack(attacker, defender, rng, Weapon, rage_lvl, logger);
                 // TODO: Does this reset here, | on the start of the next
                 // attack?
                 attacker.class_effect = ClassEffect::Druid {
@@ -707,7 +722,7 @@ impl<'a> Battle<'a> {
             }
             Bard => {
                 // Start a new melody every 4 turns
-                if attacker.rounds_started % 4 == 1 {
+                if (fight.side_swaps / 2) % 4 == 0 {
                     let quality = rng.u8(0..4);
                     let (quality, remaining) = match quality {
                         0 => (HarpQuality::Bad, 3),
@@ -718,7 +733,7 @@ impl<'a> Battle<'a> {
                         ClassEffect::Bard { quality, remaining };
                     logger.log(BE::BardPlay(attacker, defender, quality));
                 }
-                attack(attacker, defender, rng, Weapon, turn, logger);
+                attack(attacker, defender, rng, Weapon, rage_lvl, logger);
                 if let ClassEffect::Bard { remaining, .. } =
                     &mut attacker.class_effect
                 {
@@ -746,7 +761,7 @@ impl<'a> Battle<'a> {
                         defender,
                         rng,
                         AttackType::Minion,
-                        turn,
+                        rage_lvl,
                         logger,
                     );
                 } else {
@@ -756,11 +771,11 @@ impl<'a> Battle<'a> {
                             defender,
                             rng,
                             AttackType::Minion,
-                            turn,
+                            rage_lvl,
                             logger,
                         );
                     }
-                    attack(attacker, defender, rng, Weapon, turn, logger);
+                    attack(attacker, defender, rng, Weapon, rage_lvl, logger);
                 }
                 if let ClassEffect::Necromancer { remaining, typ } =
                     &mut attacker.class_effect
@@ -842,9 +857,11 @@ fn attack(
     defender: &mut BattleFighter,
     rng: &mut Rng,
     typ: AttackType,
-    turn: u32,
+    rage_lvl: &mut u32,
     logger: &mut impl BattleLogger,
 ) {
+    *rage_lvl += 1;
+
     if defender.current_hp <= 0 {
         // Skip pointless attacks
         return;
@@ -888,10 +905,10 @@ fn attack(
 
     let mut elemental_bonus = 1.0;
     if let Some((element, atk_bonus)) = weapon.rune_atk_bonus {
-        let resistance = *defender.equip.element_res.get(element);
-        if atk_bonus > resistance {
-            elemental_bonus += f64::from(atk_bonus - resistance) / 100.0;
-        }
+        let resistance = f64::from(*defender.equip.element_res.get(element));
+        let resistance = 1.0 - resistance.min(70.0) / 100.0;
+        let atk_bonus = f64::from(atk_bonus.min(60)) / 100.0;
+        elemental_bonus += resistance * atk_bonus;
     }
 
     let armor_damage_effect = if attacker.class == Class::Mage {
@@ -926,7 +943,7 @@ fn attack(
         _ => 1.0,
     };
 
-    let rage_bonus = 1.0 + (f64::from(turn.saturating_sub(1)) / 6.0);
+    let rage_bonus = 1.0 + (f64::from(rage_lvl.saturating_sub(1)) / 6.0);
 
     // TODO: Most of this can be reused, as long as the opponent does not
     // change. Should make sure this is correct first though
