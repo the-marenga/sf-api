@@ -725,11 +725,24 @@ impl<'a> Battle<'a> {
                 // Start a new melody every 4 turns
                 if (fight.side_swaps / 2) % 4 == 0 {
                     let quality = rng.u8(0..4);
-                    let (quality, remaining) = match quality {
-                        0 => (HarpQuality::Bad, 3),
-                        1 | 2 => (HarpQuality::Medium, 3),
-                        _ => (HarpQuality::Good, 4),
+                    let (quality, mut remaining) = match quality {
+                        0 => (HarpQuality::Bad, 1),
+                        1 | 2 => (HarpQuality::Medium, 1),
+                        _ => (HarpQuality::Good, 2),
                     };
+
+                    let inteligence =
+                        *attacker.attributes.get(AttributeType::Intelligence);
+                    let constitution =
+                        *attacker.attributes.get(AttributeType::Constitution);
+
+                    if constitution >= inteligence / 2 {
+                        remaining += 1;
+                    }
+                    if constitution >= 3 * inteligence / 4 {
+                        remaining += 1;
+                    }
+
                     attacker.class_effect =
                         ClassEffect::Bard { quality, remaining };
                     logger.log(BE::BardPlay(attacker, defender, quality));
@@ -925,13 +938,14 @@ fn attack(
 
     // The damage bonus you get from some class specific gimmic
     let class_effect_dmg_bonus = match attacker.class_effect {
-        ClassEffect::Bard { quality, .. } if defender.class != Class::Mage => {
-            match quality {
-                HarpQuality::Bad => 1.2,
-                HarpQuality::Medium => 1.4,
-                HarpQuality::Good => 1.6,
-            }
-        }
+        ClassEffect::Bard {
+            quality,
+            remaining: 1..,
+        } if defender.class != Class::Mage => match quality {
+            HarpQuality::Bad => 1.2,
+            HarpQuality::Medium => 1.4,
+            HarpQuality::Good => 1.6,
+        },
         ClassEffect::Necromancer {
             typ: minion_type,
             remaining: 1..,
