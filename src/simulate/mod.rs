@@ -255,6 +255,7 @@ pub enum ClassEffect {
     DemonHunter {
         revived: u8,
     },
+    BattleMage,
     Normal,
 }
 
@@ -454,9 +455,7 @@ pub struct EquipmentEffects {
     element_res: EnumMap<Element, i32>,
 
     weapon: Option<Weapon>,
-    /// min,max for weapons | blockchange, 0 for shields
     offhand: Option<Weapon>,
-
     has_shield: bool,
 
     /// Shadow of the cowboy
@@ -667,7 +666,9 @@ impl<'a> Battle<'a> {
                 }
             }
             BattleMage => {
-                if fight.side_swaps <= 1 {
+                if attacker.class_effect == ClassEffect::Normal {
+                    attacker.class_effect = ClassEffect::BattleMage;
+
                     if defender.class == Mage {
                         logger.log(BE::CometRepelled(attacker, defender));
                     } else {
