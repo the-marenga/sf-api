@@ -265,9 +265,9 @@ impl Class {
     pub(crate) fn damage_factor(self, against: Class) -> f64 {
         use Class::*;
         match self {
-            Druid if against == Class::DemonHunter => 0.33 + 0.15,
-            Druid if against == Class::Mage => 0.33 + 0.33,
-            Druid => 0.33,
+            Druid if against == Class::DemonHunter => (1.0 / 3.0) * 1.15,
+            Druid if against == Class::Mage => (1.0 / 3.0) * (4.0 / 3.0),
+            Druid => 1.0 / 3.0,
             Necromancer if against == Class::DemonHunter => 0.56 + 0.1,
             Necromancer => 0.56,
             Assassin => 0.625,
@@ -277,23 +277,6 @@ impl Class {
             Berserker | PlagueDoctor => 1.25,
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
-pub enum DruidMask {
-    Cat = 4,
-    Bear = 5,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
-pub enum BardInstrument {
-    Harp = 1,
-    Lute,
-    Flute,
 }
 
 #[derive(Debug, PartialEq, Eq, Default, Clone, Copy, FromPrimitive, Hash)]
@@ -312,6 +295,10 @@ pub enum Race {
 }
 
 impl Race {
+    /// These are the boni the game claims to give to certain races. As far as I
+    /// can tell though, these are actually irrellevant. Changing the race mid
+    /// game does nothing and the calcs without it are linig up perfectly. That
+    /// means these values here have no reason to exist
     #[must_use]
     pub fn stat_modifiers(self) -> EnumMap<AttributeType, i32> {
         let raw = match self {

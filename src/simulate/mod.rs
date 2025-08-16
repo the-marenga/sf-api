@@ -13,8 +13,12 @@ use strum::EnumIter;
 use crate::{
     command::AttributeType,
     gamestate::{
-        GameState, character::Class, dungeons::CompanionClass, items::*,
-        social::OtherPlayer, underworld::UnderworldBuildingType,
+        GameState,
+        character::{Class, Race},
+        dungeons::CompanionClass,
+        items::*,
+        social::OtherPlayer,
+        underworld::UnderworldBuildingType,
     },
     misc::EnumMapGet,
 };
@@ -699,26 +703,24 @@ impl<'a> Battle<'a> {
                     attacker.class_effect,
                     ClassEffect::Druid { bear: true, .. }
                 ) {
+                    // As long as we are not in bear form, we have a chance to
+                    // do a sweep attack
                     let swoops = attacker.class_effect.druid_swoops();
-                    let swoop_chance =
-                        0.15 + ((f32::from(swoops) * 5.0) / 100.0);
+                    let swoop_chance = 0.15 + (f32::from(swoops) * 0.05);
                     if defender.class != Class::Mage
-                        && rng.f32() <= swoop_chance
+                        && (rng.f32() <= swoop_chance.min(0.5))
                     {
+                        attacker.class_effect = ClassEffect::Druid {
+                            bear: false,
+                            swoops: swoops.saturating_add(1),
+                        };
                         attack(
                             attacker, defender, rng, Swoop, rage_lvl, logger,
                         );
-                        attacker.class_effect = ClassEffect::Druid {
-                            bear: false,
-                            // max 7 to limit chance to 50%
-                            swoops: (swoops + 1).min(7),
-                        }
                     }
                 }
 
                 attack(attacker, defender, rng, Weapon, rage_lvl, logger);
-                // TODO: Does this reset here, | on the start of the next
-                // attack?
                 attacker.class_effect = ClassEffect::Druid {
                     bear: false,
                     swoops: attacker.class_effect.druid_swoops(),
@@ -889,8 +891,6 @@ fn attack(
     if attacker.class != Class::Mage {
         // Druid has 35% dodge chance
         if defender.class == Class::Druid && rng.f32() <= 0.35 {
-            // TODO: is this instant, | does this trigger on start of def.
-            // turn?
             defender.class_effect = ClassEffect::Druid {
                 bear: true,
                 swoops: defender.class_effect.druid_swoops(),
@@ -957,7 +957,15 @@ fn attack(
             Minion::Hound => 2.0,
             Minion::Golem => 1.0,
         },
-        ClassEffect::Druid { .. } if typ == AttackType::Swoop => 1.8,
+        ClassEffect::Druid { .. } if typ == AttackType::Swoop => {
+            // This is not what the game tells you. Like at all. The game says
+            // 80% extra, but this here evaluates to x3.4. Even if let's say
+            // this here is supposed to cancel out the normal damage factor
+            // (0.3), that would come out to 0.3*3.4=1.02. I also have no idea,
+            // why this uses the hardcoded (low) damage factor here. Whatever.
+            // This is what sf-tools does, so this is what I do
+            (0.8 + (1.0 / 3.0)) / (1.0 / 3.0)
+        }
         _ => 1.0,
     };
 
@@ -971,28 +979,25 @@ fn attack(
     let attacker_skill = f64::from(*attacker.attributes.get(main_atr));
     let defender_skill = f64::from(*defender.attributes.get(main_atr));
 
-    // dbg!(attacker_skill);
-    // dbg!(defender_skill);
-
     let effective_attacker_skill =
         (attacker_skill / 2.0).max(attacker_skill - defender_skill / 2.0);
 
     let attribute_bonus = 1.0 + effective_attacker_skill / 10.0;
+
+    let damage_factor = attacker.class.damage_factor(defender.class);
 
     let damage_bonus = 1.0
         * attribute_bonus
         * attacker.portal_dmg_bonus
         * elemental_bonus
         * armor_damage_effect
-        * attacker.class.damage_factor(defender.class)
+        * damage_factor
         * rage_bonus
         * class_effect_dmg_bonus;
 
     // dbg!(attribute_bonus);
-    // dbg!(attacker.portal_dmg_bonus);
-    // dbg!(elemental_bonus);
     // dbg!(armor_damage_effect);
-    // dbg!(attacker.class.damage_factor(defender.class));
+    // dbg!(damage_factor);
     // dbg!(rage_bonus);
     // dbg!(class_effect_dmg_bonus);
 
@@ -1002,12 +1007,13 @@ fn attack(
     let min_base_damage = calc_damage(weapon.min_dmg);
     let max_base_damage = calc_damage(weapon.max_dmg);
 
-    // dbg!(min_base_damage);
-    // dbg!(max_base_damage);
+    dbg!(typ);
+    dbg!(min_base_damage);
+    dbg!(max_base_damage);
 
-    // if attacker.name.as_ref() == "wolfgong" {
-    //     std::process::exit(1);
-    // }
+    if attacker.name.as_ref() == std::env::var("USERNAME").unwrap() {
+        std::process::exit(1);
+    }
 
     let mut damage = rng.i64(min_base_damage..=max_base_damage);
 
@@ -1117,7 +1123,11 @@ impl PlayerFighterSquad {
             let res = classes.map(|class| {
                 let comp = comps.get(class);
                 UpgradeableFighter {
-                    name: "companion".into(),
+                    name: match class {
+                        CompanionClass::Scout => "Kunigunde".into(),
+                        CompanionClass::Warrior => "Bert".into(),
+                        CompanionClass::Mage => "Mark".into(),
+                    },
                     is_companion: true,
                     level: comp.level.try_into().unwrap_or(1),
                     class: class.into(),
@@ -1211,6 +1221,7 @@ impl UpgradeableFighter {
             let pet_bonus = (f64::from(*v) * (*pet_boni.get(k))).trunc() as u32;
             *v += pet_bonus;
         }
+
         total
     }
 
