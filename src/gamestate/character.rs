@@ -194,6 +194,21 @@ impl Class {
     }
 
     #[must_use]
+    pub(crate) fn monster_armor_multiplier(self) -> u32 {
+        match self {
+            Class::Warrior | Class::Berserker | Class::DemonHunter => 50,
+            Class::Paladin => 45,
+            // TODO: Plague doctor
+            Class::Scout
+            | Class::Assassin
+            | Class::Druid
+            | Class::Bard
+            | Class::PlagueDoctor => 25,
+            Class::Mage | Class::BattleMage | Class::Necromancer => 10,
+        }
+    }
+
+    #[must_use]
     pub(crate) fn life_multiplier(self, is_companion: bool) -> f64 {
         use Class::*;
 
@@ -208,27 +223,36 @@ impl Class {
     }
 
     #[must_use]
-    pub(crate) fn armor_factor(self) -> f64 {
-        use Class::*;
+    pub(crate) fn block_chance(self) -> f32 {
         match self {
-            Berserker => 0.5,
-            Paladin | Warrior | Mage | Scout | DemonHunter | Druid
-            | Assassin => 1.0,
-            Bard | Necromancer => 2.0,
-            PlagueDoctor => 2.5,
-            BattleMage => 5.0,
+            Class::Warrior => 0.25,
+            Class::Paladin => 0.3,
+            _ => 0.0,
+        }
+    }
+
+    pub(crate) fn max_damage_reduction_val(self) -> f64 {
+        match self {
+            Class::Mage | Class::BattleMage | Class::Necromancer => 10.0,
+            Class::Scout
+            | Class::Assassin
+            | Class::Druid
+            | Class::Bard
+            | Class::PlagueDoctor => 25.0,
+            Class::Paladin => 45.0,
+            Class::DemonHunter | Class::Berserker | Class::Warrior => 50.0,
         }
     }
 
     #[must_use]
-    pub(crate) fn max_damage_reduction(self) -> f64 {
+    pub(crate) fn max_damage_reduction_multiplier(self) -> f64 {
         use Class::*;
         match self {
-            Bard | BattleMage | DemonHunter | Warrior => 0.5,
-            Paladin => 0.45,
-            PlagueDoctor | Druid | Assassin | Berserker | Scout => 0.25,
-            Necromancer => 0.2,
-            Mage => 0.1,
+            Berserker => 0.5,
+            Warrior | Mage | Scout | Assassin | DemonHunter | Druid
+            | Paladin | PlagueDoctor => 1.0,
+            Bard | Necromancer => 2.0,
+            BattleMage => 5.0,
         }
     }
 
