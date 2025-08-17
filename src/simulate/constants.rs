@@ -120,7 +120,16 @@ fn read_dungeon_data(
         };
         let level = monster.level.unwrap_or(u16::MAX);
         let armor = monster.armor.unwrap_or_else(|| {
-            u32::from(level) * class.monster_armor_multiplier()
+            let res = u32::from(level) * class.max_damage_reduction_val();
+            match dungeon {
+                Dungeon::Light(LightDungeon::TavernoftheDarkDoppelgangers) => {
+                    res / 2
+                }
+                Dungeon::Light(LightDungeon::Tower) => {
+                    (f64::from(res) * 1.5) as u32
+                }
+                _ => res,
+            }
         });
 
         let runes = match &monster.runes {
