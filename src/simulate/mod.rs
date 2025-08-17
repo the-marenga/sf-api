@@ -13,12 +13,8 @@ use strum::EnumIter;
 use crate::{
     command::AttributeType,
     gamestate::{
-        GameState,
-        character::{Class, Race},
-        dungeons::CompanionClass,
-        items::*,
-        social::OtherPlayer,
-        underworld::UnderworldBuildingType,
+        GameState, character::Class, dungeons::CompanionClass, items::*,
+        social::OtherPlayer, underworld::UnderworldBuildingType,
     },
     misc::EnumMapGet,
 };
@@ -675,23 +671,16 @@ impl<'a> Battle<'a> {
             BattleMage => {
                 if attacker.class_effect == ClassEffect::Normal {
                     attacker.class_effect = ClassEffect::BattleMage;
-
+                    *rage_lvl += 1;
                     if defender.class == Mage {
                         logger.log(BE::CometRepelled(attacker, defender));
                     } else {
-                        let dmg = match defender.class {
-                            Mage => 0,
-                            Bard => attacker.max_hp / 10,
-                            Scout | Assassin | Berserker | Necromancer
-                            | DemonHunter | PlagueDoctor => attacker.max_hp / 5,
-                            Warrior | BattleMage | Druid => attacker.max_hp / 4,
-                            Paladin => (attacker.max_hp as f64 / (10.0 / 3.0))
-                                .trunc()
-                                as i64,
-                        };
-                        let dmg = dmg.min(defender.max_hp / 3);
+                        let max_hp = defender.max_hp as f64;
+                        let multi =
+                            0.05 * defender.class.life_multiplier(false);
+                        let dmg =
+                            (multi * max_hp).min(max_hp / 3.0).ceil() as i64;
                         logger.log(BE::CometAttack(attacker, defender));
-                        // TODO: Can you dodge this?
                         do_damage(attacker, defender, dmg, rng, logger);
                     }
                 }
@@ -935,7 +924,7 @@ fn attack(
         let max_dr_multi = defender.class.max_damage_reduction_multiplier();
         let armor = f64::from(defender.equip.armor);
         let raw_dr = armor / f64::from(attacker.level);
-        let dr = raw_dr.min(max_dr) * max_dr_multi;
+        let dr = raw_dr.min(f64::from(max_dr)) * max_dr_multi;
         1.0 - (dr / 100.0)
     };
 
@@ -1007,13 +996,9 @@ fn attack(
     let min_base_damage = calc_damage(weapon.min_dmg);
     let max_base_damage = calc_damage(weapon.max_dmg);
 
-    dbg!(typ);
-    dbg!(min_base_damage);
-    dbg!(max_base_damage);
-
-    if attacker.name.as_ref() == std::env::var("USERNAME").unwrap() {
-        std::process::exit(1);
-    }
+    // dbg!(typ);
+    // dbg!(min_base_damage);
+    // dbg!(max_base_damage);
 
     let mut damage = rng.i64(min_base_damage..=max_base_damage);
 
@@ -1046,6 +1031,10 @@ fn attack(
         .saturating_sub(defender.gladiator_lvl);
 
     crit_dmg_factor += 0.11 * f64::from(gladiator_lvl_diff);
+
+    // if attacker.name.as_ref() != std::env::var("USERNAME").unwrap() {
+    //     std::process::exit(1);
+    // }
 
     if rng.f64() <= crit_chance {
         logger.log(BE::Crit(attacker, defender, crit_chance, crit_dmg_factor));
@@ -1199,6 +1188,7 @@ impl UpgradeableFighter {
                 }
             }
         }
+
         let post_gem_bonus: f64 = match self.class {
             Class::BattleMage => 0.1111,
             _ => 0.0,
