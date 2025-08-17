@@ -536,9 +536,9 @@ pub struct FightDetails {
     /// Mostly the amount of attacks, that have taken place. This is also
     /// refered to as turns by the game, but turns may be confused with
     /// swapping sides, or the both sides trading blows, depending on what
-    /// preconceived notions you have, In addition, stuff like summoning also
-    /// wastes "turns", but casting a meteor does not, so this is just called
-    /// `rage_lvl`, since it is too far removed from turns to be called that
+    /// preconceived notions you have, In addition, stuff like frenzy attacks
+    /// can cost two turns, so this is just called `rage_lvl`, since it is too
+    /// far removed from turns to be called that
     pub rage_lvl: u32,
 }
 
@@ -603,7 +603,7 @@ impl<'a> Battle<'a> {
         };
 
         let mut start_fight = || {
-            // The battle has not yet started. Figure out who side starts
+            // The battle has not yet started. Figure out which side starts
             let starting_side =
                 match (right.equip.reaction_boost, left.equip.reaction_boost) {
                     (true, false) => Right,
@@ -839,12 +839,15 @@ fn do_damage(
     to.current_hp -= damage;
     logger.log(BE::DamageReceived(from, to, damage));
 
-    if to.current_hp > 0 {
+    if to.current_hp > 0 || from.class == Class::Mage {
         return;
     }
-    let ClassEffect::DemonHunter { revived } = &mut to.class_effect else {
-        return;
+    let revived = match to.class_effect {
+        ClassEffect::DemonHunter { revived } => revived,
+        ClassEffect::Normal if to.class == Class::DemonHunter => 0,
+        _ => return,
     };
+
     let (chance, hp_restore) = match revived {
         0 => (0.44, 0.9),
         1 => (0.33, 0.8),
@@ -859,7 +862,9 @@ fn do_damage(
 
     // The demon hunter revived
     to.current_hp = (hp_restore * to.max_hp as f64) as i64;
-    *revived += 1;
+    to.class_effect = ClassEffect::DemonHunter {
+        revived: revived + 1,
+    };
     logger.log(BE::DemonHunterRevived(from, to));
 }
 
@@ -1041,7 +1046,7 @@ fn attack(
 
     crit_dmg_factor += 0.11 * f64::from(gladiator_lvl_diff);
 
-    // if attacker.name.as_ref() != std::env::var("USERNAME").unwrap() {
+    // if attacker.name.as_ref() == std::env::var("USERNAME").unwrap() {
     //     std::process::exit(1);
     // }
 
