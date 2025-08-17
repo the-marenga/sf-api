@@ -486,6 +486,8 @@ impl Item {
         };
         let mut rune = None;
         let mut attributes: EnumMap<AttributeType, u32> = EnumMap::default();
+        let price = data.csiget(13, "item price", u32::MAX)?;
+
         if typ.equipment_slot().is_some() {
             for i in 0..3 {
                 let atr_typ = data.cget(i + 7, "item atr typ")?;
@@ -498,7 +500,6 @@ impl Item {
                     warn!("Invalid attribute value: {atr_val}, {typ:?}");
                     continue;
                 };
-
                 match atr_typ {
                     0 => {}
                     1..=5 => {
@@ -506,10 +507,12 @@ impl Item {
                         else {
                             continue;
                         };
-                        *attributes.get_mut(atr_typ) = atr_val;
+                        *attributes.get_mut(atr_typ) += atr_val;
                     }
                     6 => {
-                        attributes.as_mut_array().fill(atr_val);
+                        for atr in attributes.values_mut() {
+                            *atr += atr_val;
+                        }
                     }
                     21 => {
                         for atr in [
@@ -517,7 +520,7 @@ impl Item {
                             AttributeType::Constitution,
                             AttributeType::Luck,
                         ] {
-                            *attributes.get_mut(atr) = atr_val;
+                            *attributes.get_mut(atr) += atr_val;
                         }
                     }
                     22 => {
@@ -526,7 +529,7 @@ impl Item {
                             AttributeType::Constitution,
                             AttributeType::Luck,
                         ] {
-                            *attributes.get_mut(atr) = atr_val;
+                            *attributes.get_mut(atr) += atr_val;
                         }
                     }
                     23 => {
@@ -535,7 +538,7 @@ impl Item {
                             AttributeType::Constitution,
                             AttributeType::Luck,
                         ] {
-                            *attributes.get_mut(atr) = atr_val;
+                            *attributes.get_mut(atr) += atr_val;
                         }
                     }
                     rune_typ => {
@@ -579,7 +582,7 @@ impl Item {
             class,
             attributes,
             color,
-            price: data.csiget(13, "item price", u32::MAX)?,
+            price,
             mushroom_price: data.csiget(14, "mushroom price", u32::MAX)?,
             upgrade_count: data.csiget(15, "upgrade count", u8::MAX)?,
             item_quality: data.csiget(17, "upgrade count", 0)?,
