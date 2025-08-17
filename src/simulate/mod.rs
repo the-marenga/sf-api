@@ -666,6 +666,9 @@ impl<'a> Battle<'a> {
                     {
                         break;
                     }
+                    // We rage both during the attack AND after successfully
+                    // frenzying for another attack
+                    *rage_lvl += 1;
                 }
             }
             BattleMage => {
@@ -968,8 +971,13 @@ fn attack(
     let attacker_skill = f64::from(*attacker.attributes.get(main_atr));
     let defender_skill = f64::from(*defender.attributes.get(main_atr));
 
+    // dbg!(attacker_skill);
+    // dbg!(defender_skill);
+
     let effective_attacker_skill =
         (attacker_skill / 2.0).max(attacker_skill - defender_skill / 2.0);
+
+    // dbg!(effective_attacker_skill);
 
     let attribute_bonus = 1.0 + effective_attacker_skill / 10.0;
 
@@ -997,6 +1005,7 @@ fn attack(
     let max_base_damage = calc_damage(weapon.max_dmg);
 
     // dbg!(typ);
+    // dbg!(weapon);
     // dbg!(min_base_damage);
     // dbg!(max_base_damage);
 
