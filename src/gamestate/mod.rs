@@ -259,22 +259,6 @@ impl GameState {
                 "wagesperhour" => {
                     self.tavern.guard_wage = val.into("tavern wage")?;
                 }
-                "toilettfull" => {
-                    // TODO: check if this is still available and check with
-                    // toiletstate
-
-                    let used = val.into::<i32>("toilet full status")? != 0;
-
-                    // This response is sent, even if the toilet is locked. A
-                    // default toilet should therefore only be inserted if the
-                    // toilet was actually used.
-                    if used {
-                        self.tavern
-                            .toilet
-                            .get_or_insert_with(Default::default)
-                            .used = used;
-                    }
-                }
                 "skipallow" => {
                     let raw_skip = val.into::<i32>("skip allow")?;
                     self.tavern.mushroom_skip_allowed = raw_skip != 0;
@@ -327,13 +311,15 @@ impl GameState {
                     clippy::cast_sign_loss,
                     clippy::cast_possible_truncation
                 )]
+                #[allow(deprecated)]
                 "toiletstate" => {
                     let vals: Vec<i64> = val.into_list("toilet state")?;
                     if vals.len() < 3 {
                         continue;
                     }
                     let toilet = self.tavern.toilet.get_or_insert_default();
-                    toilet.sacrificed_today = vals[2] as u32;
+                    toilet.sacrifices_left = vals[2] as u32;
+                    toilet.used = toilet.sacrifices_left == 0;
                 }
                 "companionequipment" => {
                     let data: Vec<i64> = val.into_list("quest items")?;
@@ -1080,6 +1066,7 @@ impl GameState {
                         op.wall_combat_lvl = oop.wall_combat_lvl;
                         op.fortress_rank = oop.fortress_rank;
                         op.soldier_advice = oop.soldier_advice;
+                        op.equipment = oop.equipment;
                     }
                     other_player = Some(op);
                 }
@@ -1423,7 +1410,7 @@ impl GameState {
                     self.hellevator
                         .active
                         .get_or_insert_with(Default::default)
-                        .rewards_nest = HellevatorDailyReward::parse(
+                        .rewards_next = HellevatorDailyReward::parse(
                         &val.into_list("hdrnd").unwrap_or_default(),
                     );
                 }

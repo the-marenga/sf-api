@@ -105,7 +105,7 @@ pub struct Hellevator {
 
     pub rewards_yesterday: Option<HellevatorDailyReward>,
     pub rewards_today: Option<HellevatorDailyReward>,
-    pub rewards_nest: Option<HellevatorDailyReward>,
+    pub rewards_next: Option<HellevatorDailyReward>,
 
     pub daily_treat_bonus: Option<HellevatorTreatBonus>,
 

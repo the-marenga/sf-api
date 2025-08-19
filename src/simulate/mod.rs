@@ -551,7 +551,7 @@ impl<'a> Battle<'a> {
         use BattleSide::{Left, Right};
         use Class::{
             Assassin, Bard, BattleMage, Berserker, DemonHunter, Druid, Mage,
-            Necromancer, Paladin, Scout, Warrior,
+            Necromancer, Paladin, PlagueDoctor, Scout, Warrior,
         };
 
         logger.log(BE::TurnUpdate(self));
@@ -603,7 +603,7 @@ impl<'a> Battle<'a> {
         let turn = self.round;
         let rng = &mut self.rng;
         match attacker.class {
-            Paladin => {
+            Paladin | PlagueDoctor => {
                 // TODO: Actually implement stances and stuff
                 attack(attacker, defender, rng, Weapon, turn, logger);
             }
@@ -631,7 +631,7 @@ impl<'a> Battle<'a> {
                             Mage => 0,
                             Bard => attacker.max_hp / 10,
                             Scout | Assassin | Berserker | Necromancer
-                            | DemonHunter => attacker.max_hp / 5,
+                            | DemonHunter | PlagueDoctor => attacker.max_hp / 5,
                             Warrior | BattleMage | Druid => attacker.max_hp / 4,
                             Paladin => (attacker.max_hp as f64 / (10.0 / 3.0))
                                 .trunc()
@@ -1101,18 +1101,9 @@ impl UpgradeableFighter {
     #[must_use]
     #[allow(clippy::enum_glob_use)]
     pub fn hit_points(&self, attributes: &EnumMap<AttributeType, u32>) -> i64 {
-        use Class::*;
-
         let mut total = i64::from(*attributes.get(AttributeType::Constitution));
-        total = (total as f64
-            * match self.class {
-                Warrior if self.is_companion => 6.1,
-                Paladin => 6.0,
-                Warrior | BattleMage | Druid => 5.0,
-                Scout | Assassin | Berserker | DemonHunter | Necromancer => 4.0,
-                Mage | Bard => 2.0,
-            })
-        .trunc() as i64;
+        total = (total as f64 * self.class.life_multiplier(self.is_companion))
+            .trunc() as i64;
 
         total *= i64::from(self.level) + 1;
 
