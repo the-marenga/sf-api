@@ -1066,6 +1066,7 @@ impl GameState {
                         op.wall_combat_lvl = oop.wall_combat_lvl;
                         op.fortress_rank = oop.fortress_rank;
                         op.soldier_advice = oop.soldier_advice;
+                        op.equipment = oop.equipment;
                     }
                     other_player = Some(op);
                 }
