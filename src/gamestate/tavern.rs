@@ -43,6 +43,8 @@ pub struct Tavern {
     pub questing_preference: ExpeditionSetting,
     /// The result of playing the shell game
     pub gamble_result: Option<GambleResult>,
+    /// Total amount of beers you can drink today
+    pub beer_max: u8,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -160,6 +162,7 @@ impl Tavern {
         );
         self.thirst_for_adventure_sec = data.csiget(456, "remaining ALU", 0)?;
         self.beer_drunk = data.csiget(457, "beer drunk count", 0)?;
+        self.beer_max = data.csiget(13, "beer total", 0)?;
 
         for (qidx, quest) in self.quests.iter_mut().enumerate() {
             let quest_start = data.skip(235 + qidx, "tavern quest")?;
