@@ -24,6 +24,7 @@ pub mod misc;
 pub mod response;
 #[cfg(feature = "session")]
 pub mod session;
+#[cfg(feature = "simulation")]
 pub mod simulate;
 #[cfg(feature = "sso")]
 pub mod sso;

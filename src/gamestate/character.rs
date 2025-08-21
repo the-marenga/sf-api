@@ -208,27 +208,36 @@ impl Class {
     }
 
     #[must_use]
-    pub(crate) fn armor_factor(self) -> f64 {
-        use Class::*;
+    pub(crate) fn block_chance(self) -> f32 {
         match self {
-            Berserker => 0.5,
-            Paladin | Warrior | Mage | Scout | DemonHunter | Druid
-            | Assassin => 1.0,
-            Bard | Necromancer => 2.0,
-            PlagueDoctor => 2.5,
-            BattleMage => 5.0,
+            Class::Warrior => 0.25,
+            Class::Paladin => 0.3,
+            _ => 0.0,
+        }
+    }
+
+    pub(crate) fn max_damage_reduction_val(self) -> u32 {
+        match self {
+            Class::Mage | Class::BattleMage | Class::Necromancer => 10,
+            Class::Scout
+            | Class::Assassin
+            | Class::Druid
+            | Class::Bard
+            | Class::PlagueDoctor => 25,
+            Class::Paladin => 45,
+            Class::DemonHunter | Class::Berserker | Class::Warrior => 50,
         }
     }
 
     #[must_use]
-    pub(crate) fn max_damage_reduction(self) -> f64 {
+    pub(crate) fn max_damage_reduction_multiplier(self) -> f64 {
         use Class::*;
         match self {
-            Bard | BattleMage | DemonHunter | Warrior => 0.5,
-            Paladin => 0.45,
-            PlagueDoctor | Druid | Assassin | Berserker | Scout => 0.25,
-            Necromancer => 0.2,
-            Mage => 0.1,
+            Berserker => 0.5,
+            Warrior | Mage | Scout | Assassin | DemonHunter | Druid
+            | Paladin | PlagueDoctor => 1.0,
+            Bard | Necromancer => 2.0,
+            BattleMage => 5.0,
         }
     }
 
@@ -241,9 +250,9 @@ impl Class {
     pub(crate) fn damage_factor(self, against: Class) -> f64 {
         use Class::*;
         match self {
-            Druid if against == Class::DemonHunter => 0.33 + 0.15,
-            Druid if against == Class::Mage => 0.33 + 0.33,
-            Druid => 0.33,
+            Druid if against == Class::DemonHunter => (1.0 / 3.0) * 1.15,
+            Druid if against == Class::Mage => (1.0 / 3.0) * (4.0 / 3.0),
+            Druid => 1.0 / 3.0,
             Necromancer if against == Class::DemonHunter => 0.56 + 0.1,
             Necromancer => 0.56,
             Assassin => 0.625,
@@ -253,23 +262,6 @@ impl Class {
             Berserker | PlagueDoctor => 1.25,
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
-pub enum DruidMask {
-    Cat = 4,
-    Bear = 5,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
-pub enum BardInstrument {
-    Harp = 1,
-    Lute,
-    Flute,
 }
 
 #[derive(Debug, PartialEq, Eq, Default, Clone, Copy, FromPrimitive, Hash)]
@@ -288,6 +280,10 @@ pub enum Race {
 }
 
 impl Race {
+    /// These are the boni the game claims to give to certain races. As far as I
+    /// can tell though, these are actually irrellevant. Changing the race mid
+    /// game does nothing and the calcs without it are linig up perfectly. That
+    /// means these values here have no reason to exist
     #[must_use]
     pub fn stat_modifiers(self) -> EnumMap<AttributeType, i32> {
         let raw = match self {
