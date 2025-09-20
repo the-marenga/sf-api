@@ -689,6 +689,11 @@ pub enum Command {
         /// The index of the expedition to start
         pos: usize,
     },
+    /// Starts the normal (not the ultimate) legendary dungeon
+    LegendaryDungeonStart,
+    LegendaryDungeonInteract {
+        val: usize,
+    },
     /// Skips the waiting period of the current expedition. Note that mushroom
     /// may not always be possible
     ExpeditionSkipWait {
@@ -1351,6 +1356,16 @@ impl Command {
             Command::ExpeditionStart { pos } => {
                 format!("ExpeditionStart:{}", pos + 1)
             }
+            Command::LegendaryDungeonStart => "IADungeonStart:1/0".into(),
+            Command::LegendaryDungeonInteract { val } => {
+                // Left door = 1
+                // Fight Monster => 20
+                // Open Chest => 40
+                // Finish Stage => 70
+                format!("IADungeonInteract:{val}")
+            }
+            // Take item reward: PlayerItemMove: 401/1/2/3/3/2009/133681367/0
+            // Buy merchant 1. item: IADungeonMerchantBuy: 2/0
             Command::FightDungeon {
                 dungeon,
                 use_mushroom,

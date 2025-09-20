@@ -5,6 +5,7 @@ pub mod fortress;
 pub mod guild;
 pub mod idle;
 pub mod items;
+pub mod legendary_dungeons;
 pub mod rewards;
 pub mod social;
 pub mod tavern;
@@ -1112,11 +1113,6 @@ impl GameState {
                             x => Some(x.try_into().unwrap_or(1)),
                         };
                 }
-                "iadungeontime" => {
-                    // No idea what this is measuring. Seems to just be a few
-                    // days in the past, or just 0s.
-                    // 1/1695394800/1696359600/1696446000
-                }
                 "workreward" => {
                     // Should be irrelevant
                 }
@@ -1559,6 +1555,151 @@ impl GameState {
                         .get_or_insert_default()
                         .update_fightable_targets(val.as_str())?;
                 }
+                // Legendary Dungeons
+                "iadungeontime" => {
+                    log::info!("iadungeontime => {val}");
+                    let vals: Vec<i64> = val.into_list("iadungeontime")?;
+                    let uk = vals[0];
+                    let start = server_time
+                        .convert_to_local(vals[1], "legendary dungeons start");
+                    let end = server_time
+                        .convert_to_local(vals[2], "legendary dungeons end");
+                    // Not sure, but this looks like some sort of "claim the
+                    // final price" type end
+                    let end_uk = server_time
+                        .convert_to_local(vals[3], "legendary dungeons end_uk");
+                }
+                "iadungeonstatstotal" => {
+                    // "0/0/0/0/0/0"
+                    // Most likely these stats:
+                    //  items looted
+                    //  attempts best run
+                    //  total enemies defeated
+                    //  total epic looted
+                    //  total gold colledted
+                    log::info!("iadungeonstatstotal: {val}");
+                }
+                "iadungeonstats" => {
+                    // "0/0/0/0/0"
+                    // [0] => ?
+                    // [1] => ?
+                    // [2] => keys found
+                    // [3] => ?
+                    // [4] => attempts of current run
+                    log::info!("iadungeonstats: {val}");
+                }
+                "iadungeon" => {
+                    log::info!("iadungeon: {val}");
+
+                    // [00] 718719374 <= Some sort of random id?
+                    // [01] 2
+                    // [02] 19721291 current hp
+                    // [03] 19721291 current hp pre escape
+                    // [04] 19721291 hp
+                    // [05] 1 => blessing1 type (raider?)
+                    // [06] 0 => blessing2
+                    // [07] 0 => blessing3
+                    // [08] 0 => curse1
+                    // [09] 0 => curse2
+                    // [10] 0 => curse3
+                    // [11] 0 blessing1 strength & duration
+                    // [12] 0 blessing2 strength & duration
+                    // [13] 0 blessing3 strength & duration
+                    // [14] 0                      // Curse 1 duration
+                    // [15] stage:
+                    //      0 => none,
+                    //      1 => select door,
+                    //      10 => enemy or item,
+                    //      11 => enemy stage 2
+                    //      100 => finished
+                    // [16] 0
+
+                    // [17] current floor
+                    // [18] max floors
+
+                    // [19] left door
+                    // [20] right door
+
+                    // [21] 0
+                    // [22] room encounter
+                    // [23] 0 -5001 ?? Popped up after skeleton interaction
+
+                    // [24] 0
+                    // [25] 0
+                    // [26] 0 // Most of this should be an unused (moved) item
+                    //        // I think
+                    // [27] 0
+                    // [28] 0
+                    // [29] 0
+                    // [30] 0
+                    // [31] 0
+                    // [32] 0
+                    // [33] 0
+                    // [34] 0
+                    // [35] 0
+                    // [36] 0
+                    // [37] 0
+                    // [38] 0
+                    // [39] - keys
+                    // [40] 0
+                    // [41] 0
+                    // [42] 0 // blessing 1 max duration
+                    // [43] 0 // blessing 2 max duration
+                    // [44] 0 // blessing 3 max duration
+                    // [45] 0 // curse 1 max duration
+                    // [46] 0 // curse 2 max duration
+                    // [47] 0 // curse 3 max duration
+                    // [48] 0
+                    // [49] 0
+
+                    log::info!("iadungeon");
+                    let list: Vec<i64> = val.into_list("iadungeon")?;
+                    for (pos, n) in list.iter().enumerate() {
+                        log::info!("[{pos}] {n}");
+                    }
+                }
+                "iapendingitems" => {
+                    let data: Vec<i64> = val.into_list("iapendingitems")?;
+
+                    let item = Item::parse(&data[1..], server_time)?;
+                    log::info!("Current item {}:  {item:?}", data[0]);
+                }
+                "iamerchant" => {
+                    //    "0/0/0/0/0/0"
+                    log::info!("iamerchant: {val}");
+
+                    // 2/40100/0/3/50080/0
+
+                    // [0] => type (2 => One Hit Wonder, 3 => Escape assistant)
+                    // [1] => effect duration / strength
+                    // [2] => price
+                }
+                "iadungeon20cost" => {
+                    //    "10"
+                    log::info!("iadungeon20cost: {val}");
+                }
+                "iadungeonsoulstones" => {
+                    // 0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/
+                    // 0/0/0/0/0/0/0/0"
+                    log::info!("iadungeonsoulstones: {val}");
+                }
+                "iamap" => {
+                    // Pre: 25/-5159/1/-315/25/-5160/1/-315/25/-5172/1/-315/25/
+                    // -5168/1/-315" 1:   25/-5159/1/-315/
+                    // 25/-5160/1/-315/25/-5172/1/-315/25/-5168/1/-315
+
+                    // [0] => Amount of levels
+                    // [1] => name of dungeon / effect?
+                    // [2] => max key master shops?
+                    // [3] => ?
+                    // 25/-5159/1/-315/
+                    // 25/-5160/1/-315/
+                    // 25/-5172/1/-315/
+                    // 25/-5168/1/-315
+
+                    log::info!("iamap: {val}");
+                }
+
                 // This is the extra bonus effect all treats get that day
                 x if x.contains("dungeonenemies") => {
                     // I `think` we do not need this
