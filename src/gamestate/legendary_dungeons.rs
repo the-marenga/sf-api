@@ -2,7 +2,7 @@ use std::num::NonZeroU16;
 
 use num_derive::FromPrimitive;
 
-use crate::error::SFError;
+use crate::{error::SFError, misc::CCGet};
 
 #[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -148,5 +148,27 @@ impl RoomEncounter {
                 RoomEncounter::Unknown
             }
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct DungeonStats {
+    pub items_found: u32,
+    pub epics_found: u32,
+    pub keys_found: u32,
+    pub silver_found: u64,
+    pub attempts: u32,
+}
+
+impl DungeonStats {
+    pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
+        Ok(DungeonStats {
+            items_found: data.csiget(0, "ldung item count", 0)?,
+            epics_found: data.csiget(1, "ldung item count", 0)?,
+            keys_found: data.csiget(2, "ldung item count", 0)?,
+            silver_found: data.csiget(3, "ldung item count", 0)?,
+            attempts: data.csiget(4, "ldung item count", 0)?,
+        })
     }
 }

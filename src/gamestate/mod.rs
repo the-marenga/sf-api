@@ -25,8 +25,8 @@ use crate::{
     error::*,
     gamestate::{
         arena::*, character::*, dungeons::*, fortress::*, guild::*, idle::*,
-        items::*, rewards::*, social::*, tavern::*, underworld::*,
-        unlockables::*,
+        items::*, legendary_dungeons::DungeonStats, rewards::*, social::*,
+        tavern::*, underworld::*, unlockables::*,
     },
     misc::*,
     response::Response,
@@ -1564,29 +1564,18 @@ impl GameState {
                         .convert_to_local(vals[1], "legendary dungeons start");
                     let end = server_time
                         .convert_to_local(vals[2], "legendary dungeons end");
-                    // Not sure, but this looks like some sort of "claim the
-                    // final price" type end
-                    let end_uk = server_time
-                        .convert_to_local(vals[3], "legendary dungeons end_uk");
+                    // The time until which you will still be able to clear your
+                    // current dungeon & view stats, but not start a new run
+                    let closes = server_time
+                        .convert_to_local(vals[3], "legendary dungeons closes");
                 }
                 "iadungeonstatstotal" => {
-                    // "0/0/0/0/0/0"
-                    // Most likely these stats:
-                    //  items looted
-                    //  attempts best run
-                    //  total enemies defeated
-                    //  total epic looted
-                    //  total gold colledted
-                    log::info!("iadungeonstatstotal: {val}");
+                    // TODO: Store this somewhere
+                    _ = DungeonStats::parse(&val.into_list("iadungeontime")?);
                 }
                 "iadungeonstats" => {
-                    // "0/0/0/0/0"
-                    // [0] => ?
-                    // [1] => ?
-                    // [2] => keys found
-                    // [3] => ?
-                    // [4] => attempts of current run
-                    log::info!("iadungeonstats: {val}");
+                    // TODO: Store this somewhere
+                    _ = DungeonStats::parse(&val.into_list("iadungeontime")?);
                 }
                 "iadungeon" => {
                     log::info!("iadungeon: {val}");
