@@ -24,9 +24,19 @@ use crate::{
     command::*,
     error::*,
     gamestate::{
-        arena::*, character::*, dungeons::*, fortress::*, guild::*, idle::*,
-        items::*, legendary_dungeons::DungeonStats, rewards::*, social::*,
-        tavern::*, underworld::*, unlockables::*,
+        arena::*,
+        character::*,
+        dungeons::*,
+        fortress::*,
+        guild::*,
+        idle::*,
+        items::*,
+        legendary_dungeons::{DungeonStats, LegendaryDungeonsEvent},
+        rewards::*,
+        social::*,
+        tavern::*,
+        underworld::*,
+        unlockables::*,
     },
     misc::*,
     response::Response,
@@ -63,6 +73,9 @@ pub struct GameState {
     pub pets: Option<Pets>,
     /// Contains information about the hellevator, if it is currently active
     pub hellevator: HellevatorEvent,
+    /// Contains information about the legendary dungeons event, if it is
+    /// currently active
+    pub legendary_dungeons: LegendaryDungeonsEvent,
     /// Contains information about the blacksmith, if it has been unlocked
     pub blacksmith: Option<Blacksmith>,
     /// Contains information about the witch, if it has been unlocked
@@ -1557,25 +1570,41 @@ impl GameState {
                 }
                 // Legendary Dungeons
                 "iadungeontime" => {
-                    log::info!("iadungeontime => {val}");
+                    let dungeons = &mut self.legendary_dungeons;
+
                     let vals: Vec<i64> = val.into_list("iadungeontime")?;
-                    let uk = vals[0];
-                    let start = server_time
-                        .convert_to_local(vals[1], "legendary dungeons start");
-                    let end = server_time
-                        .convert_to_local(vals[2], "legendary dungeons end");
-                    // The time until which you will still be able to clear your
-                    // current dungeon & view stats, but not start a new run
-                    let closes = server_time
-                        .convert_to_local(vals[3], "legendary dungeons closes");
+                    dungeons.theme =
+                        vals.cfpget(0, "leg. dungeons theme", |x| x)?;
+                    dungeons.start_time =
+                        vals.cstget(1, "leg. dungeons start", server_time)?;
+                    dungeons.end_time =
+                        vals.cstget(2, "legendary dungeons end", server_time)?;
+                    dungeons.close_time =
+                        vals.cstget(3, "leg. dungeons closes", server_time)?;
                 }
                 "iadungeonstatstotal" => {
-                    // TODO: Store this somewhere
-                    _ = DungeonStats::parse(&val.into_list("iadungeontime")?);
+                    let _dungeons =
+                        self.legendary_dungeons.active.get_or_insert_default();
+
+                    let data: Vec<i64> =
+                        val.into_list("iadungeonstatstotal")?;
+                    log::info!("iadungeonstatstotal: {data:?}");
+                    // TODO: Parse this
+
+                    // [0] => ?
+                    // [1] => ?
+                    // [2] => total keys
+                    // [3] => ?
+                    // [4] => total gold
+                    // [5] => ?
                 }
                 "iadungeonstats" => {
-                    // TODO: Store this somewhere
-                    _ = DungeonStats::parse(&val.into_list("iadungeontime")?);
+                    let dungeons =
+                        self.legendary_dungeons.active.get_or_insert_default();
+
+                    let data = val.into_list("iadungeonstats")?;
+                    dungeons.stats =
+                        DungeonStats::parse(&data).unwrap_or_default();
                 }
                 "iadungeon" => {
                     log::info!("iadungeon: {val}");

@@ -1,10 +1,9 @@
-use std::num::NonZeroU16;
-
+use chrono::{DateTime, Local};
 use num_derive::FromPrimitive;
 
 use crate::{error::SFError, misc::CCGet};
 
-#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A curse, that you can get in the legendary dungeon
 pub enum CurseType {
@@ -20,10 +19,11 @@ pub enum CurseType {
     HardLock = 105,
 
     /// A curse, that has not yet been implemented
+    #[default]
     Unknown = -1,
 }
 
-#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Blessing {
     /// More gold from chests
@@ -44,10 +44,11 @@ pub enum Blessing {
     RoadToRecovery = 8,
 
     /// A blessing, that has not yet been implemented
+    #[default]
     Unknown = -1,
 }
 
-#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DoorType {
     Monster1 = 1,
@@ -81,10 +82,11 @@ pub enum DoorType {
     TrialRoom5 = 1022,
     TrialRoomExit = 1023,
 
+    #[default]
     Unknown = -1,
 }
 
-#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DungeonStage {
     NotEntered = 0,
@@ -93,10 +95,11 @@ pub enum DungeonStage {
     RoomInteracted = 11,
     RoomFinished = 100,
 
+    #[default]
     Unknown = -1,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RoomEncounter {
     BronzeChest,
@@ -120,6 +123,7 @@ pub enum RoomEncounter {
     SatedChest,
 
     Monster(u16),
+    #[default]
     Unknown,
 }
 
@@ -151,7 +155,7 @@ impl RoomEncounter {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DungeonStats {
     pub items_found: u32,
@@ -171,4 +175,46 @@ impl DungeonStats {
             attempts: data.csiget(4, "ldung item count", 0)?,
         })
     }
+}
+
+#[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum LegendaryDungeonsEventTheme {
+    DiabolicalCompanyParty = 1,
+    LordOfTheThings = 2,
+    /// .. and where to find them
+    FantasticLegendaries = 3,
+    ShadyBirthdayBash = 4,
+    /// .. and Gingerbread Brawl
+    MassiveWinterSpectacle = 5,
+    AbyssOfMadness = 6,
+    HuntForBlazingEasterEgg = 7,
+    VileVacation = 8,
+
+    #[default]
+    Unknown = -1,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct LegendaryDungeonsEvent {
+    pub theme: Option<LegendaryDungeonsEventTheme>,
+    /// The time after which we are allowed to interact with the legendaty
+    /// dungeons
+    pub start_time: Option<DateTime<Local>>,
+    /// The time up until which we are allowed to start new runs
+    pub end_time: Option<DateTime<Local>>,
+    /// The time at which the dungeon is expected to completely close.
+    /// Interacting with the dungeon (at all) is not possible after this.
+    pub close_time: Option<DateTime<Local>>,
+
+    pub(crate) active: Option<LegendaryDungeons>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct LegendaryDungeons {
+    pub total_stats: DungeonStats,
+    pub stats: DungeonStats,
+
 }
