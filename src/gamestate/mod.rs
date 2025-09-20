@@ -31,7 +31,9 @@ use crate::{
         guild::*,
         idle::*,
         items::*,
-        legendary_dungeons::{DungeonStats, LegendaryDungeonsEvent},
+        legendary_dungeons::{
+            DungeonEffect, DungeonStats, LegendaryDungeonsEvent,
+        },
         rewards::*,
         social::*,
         tavern::*,
@@ -1573,14 +1575,13 @@ impl GameState {
                     let dungeons = &mut self.legendary_dungeons;
 
                     let vals: Vec<i64> = val.into_list("iadungeontime")?;
-                    dungeons.theme =
-                        vals.cfpget(0, "leg. dungeons theme", |x| x)?;
+                    dungeons.theme = vals.cfpget(0, "ld theme", |x| x)?;
                     dungeons.start_time =
-                        vals.cstget(1, "leg. dungeons start", server_time)?;
+                        vals.cstget(1, "ld start", server_time)?;
                     dungeons.end_time =
-                        vals.cstget(2, "legendary dungeons end", server_time)?;
+                        vals.cstget(2, "ld end", server_time)?;
                     dungeons.close_time =
-                        vals.cstget(3, "leg. dungeons closes", server_time)?;
+                        vals.cstget(3, "ld closes", server_time)?;
                 }
                 "iadungeonstatstotal" => {
                     let _dungeons =
@@ -1589,8 +1590,6 @@ impl GameState {
                     let data: Vec<i64> =
                         val.into_list("iadungeonstatstotal")?;
                     log::info!("iadungeonstatstotal: {data:?}");
-                    // TODO: Parse this
-
                     // [0] => ?
                     // [1] => ?
                     // [2] => total keys
@@ -1607,22 +1606,41 @@ impl GameState {
                         DungeonStats::parse(&data).unwrap_or_default();
                 }
                 "iadungeon" => {
-                    log::info!("iadungeon: {val}");
+                    let list: Vec<i64> = val.into_list("iadungeon")?;
+                    let dungeons =
+                        self.legendary_dungeons.active.get_or_insert_default();
 
                     // [00] 718719374 <= Some sort of random id?
-                    // [01] 2
-                    // [02] 19721291 current hp
-                    // [03] 19721291 current hp pre escape
-                    // [04] 19721291 hp
-                    // [05] 1 => blessing1 type (raider?)
-                    // [06] 0 => blessing2
-                    // [07] 0 => blessing3
-                    // [08] 0 => curse1
-                    // [09] 0 => curse2
-                    // [10] 0 => curse3
-                    // [11] 0 blessing1 strength & duration
-                    // [12] 0 blessing2 strength & duration
-                    // [13] 0 blessing3 strength & duration
+                    // [01] 2 <= ?
+                    dungeons.current_hp = list.csiget(2, "ld current hp", 0)?;
+                    dungeons.pre_battle_hp = list.csiget(3, "ld pre hp", 0)?;
+                    dungeons.max_hp = list.csiget(4, "ld max hp", 0)?;
+
+                    for (pos, v) in dungeons.blessings.iter_mut().enumerate() {
+                        let s = list.csiget(11 + pos, "ld blessing rem", 0)?;
+                        *v = DungeonEffect::parse(
+                            list.csiget(5 + pos, "ld blessing typ", 0)?,
+                            s / 10_000,
+                            list.csiget(42 + pos, "ld blessing max", 0)?,
+                            s % 10_000,
+                        );
+                    }
+                    for (pos, v) in dungeons.curses.iter_mut().enumerate() {
+                        let s_pos = match pos {
+                            0 => 14,
+                            1 => 40,
+                            _ => 41,
+                        };
+                        let s = list.csiget(s_pos, "ld blessing rem", 0)?;
+
+                        *v = DungeonEffect::parse(
+                            list.csiget(8 + pos, "ld blessing typ", 0)?,
+                            s / 10_000,
+                            list.csiget(45 + pos, "ld blessing max", 0)?,
+                            s % 10_000,
+                        );
+                    }
+
                     // [14] 0                      // Curse 1 duration
                     // [15] stage:
                     //      0 => none,
@@ -1661,17 +1679,14 @@ impl GameState {
                     // [39] - keys
                     // [40] 0
                     // [41] 0
-                    // [42] 0 // blessing 1 max duration
-                    // [43] 0 // blessing 2 max duration
-                    // [44] 0 // blessing 3 max duration
+
                     // [45] 0 // curse 1 max duration
                     // [46] 0 // curse 2 max duration
                     // [47] 0 // curse 3 max duration
+
                     // [48] 0
                     // [49] 0
 
-                    log::info!("iadungeon");
-                    let list: Vec<i64> = val.into_list("iadungeon")?;
                     for (pos, n) in list.iter().enumerate() {
                         log::info!("[{pos}] {n}");
                     }

@@ -1,12 +1,48 @@
 use chrono::{DateTime, Local};
 use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 
 use crate::{error::SFError, misc::CCGet};
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct DungeonEffect<T: FromPrimitive> {
+    /// The type this effect has
+    pub typ: T,
+    /// The amount of rooms, or uses this effect is still active for
+    pub remaining_uses: u32,
+    /// The amount of rooms, or uses this effect will be active for after you
+    /// get it (always >= remainign)
+    pub max_uses: u32,
+    /// The strength of this effect. I.e. 50 => chance to escape +50%
+    pub strength: u32,
+}
+
+impl<T: FromPrimitive> DungeonEffect<T> {
+    pub(crate) fn parse(
+        typ: i64,
+        remaining: i64,
+        max_uses: i64,
+        strength: i64,
+    ) -> Option<Self> {
+        let typ: T = FromPrimitive::from_i64(typ)?;
+        let remaining_uses: u32 = remaining.try_into().ok()?;
+        let max_uses: u32 = max_uses.try_into().ok()?;
+        let strength: u32 = strength.try_into().ok()?;
+
+        Some(DungeonEffect {
+            typ,
+            remaining_uses,
+            max_uses,
+            strength,
+        })
+    }
+}
 
 #[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A curse, that you can get in the legendary dungeon
-pub enum CurseType {
+pub enum Curse {
     /// Enemy deals more damage
     BrokenArmor = 101,
     /// Receive X% damage each room
@@ -214,7 +250,18 @@ pub struct LegendaryDungeonsEvent {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LegendaryDungeons {
-    pub total_stats: DungeonStats,
     pub stats: DungeonStats,
 
+    /// The hp you currently have
+    pub current_hp: u64,
+    // Any action, that reduces hp will immediately update `current_hp`. In
+    // order for the game to properly transition from your old hp to the
+    // current hp (visually), this here will contain your previous hp from
+    // befor you took the action
+    pub pre_battle_hp: u64,
+    /// The hp you started the dungeon with
+    pub max_hp: u64,
+
+    pub blessings: [Option<DungeonEffect<Blessing>>; 3],
+    pub curses: [Option<DungeonEffect<Curse>>; 3],
 }
