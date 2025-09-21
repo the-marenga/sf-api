@@ -1620,14 +1620,15 @@ impl GameState {
                     }
                 }
                 "iamerchant" => {
-                    //    "0/0/0/0/0/0"
-                    log::info!("iamerchant: {val}");
+                    let dungeons =
+                        self.legendary_dungeons.active.get_or_insert_default();
+                    let data: Vec<i64> = val.into_list("iamerchant")?;
 
-                    // 2/40100/0/3/50080/0
-
-                    // [0] => type (2 => One Hit Wonder, 3 => Escape assistant)
-                    // [1] => effect duration / strength
-                    // [2] => price
+                    dungeons.merchant_blessings = data
+                        .chunks_exact(3)
+                        .flat_map(MerchantBlessing::parse)
+                        .flatten()
+                        .collect();
                 }
                 "iadungeon20cost" => {
                     //    "10"

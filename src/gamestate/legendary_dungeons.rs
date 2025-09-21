@@ -1,3 +1,5 @@
+use std::u32;
+
 use chrono::{DateTime, Local};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
@@ -283,6 +285,37 @@ pub struct LegendaryDungeons {
     pub encounter: RoomEncounter,
     /// Items, that must be collected/chosen between before you can continue
     pub pending_items: Vec<Item>,
+    /// The blessings you can get from the merchant, if you enter it
+    pub merchant_blessings: Vec<MerchantBlessing>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MerchantBlessing {
+    pub typ: Blessing,
+    pub max_uses: u32,
+    pub strength: u32,
+    pub price: u32,
+}
+
+impl MerchantBlessing {
+    pub(crate) fn parse(data: &[i64]) -> Result<Option<Self>, SFError> {
+        if data.iter().all(|a| *a == 0) {
+            return Ok(None);
+        }
+        let typ: Blessing = data
+            .cfpget(0, "ld merchant blessing", |a| a)?
+            .unwrap_or_default();
+
+        let s: u32 = data.csiget(1, "ld merchant effect", 0)?;
+        let price = data.csiget(2, "ld merchant price", u32::MAX)?;
+        Ok(Some(Self {
+            typ,
+            max_uses: s / 10_000,
+            strength: s % 10_000,
+            price,
+        }))
+    }
 }
 
 impl LegendaryDungeons {
