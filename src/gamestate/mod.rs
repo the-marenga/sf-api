@@ -1695,10 +1695,21 @@ impl GameState {
                     }
                 }
                 "iapendingitems" => {
+                    let dungeons =
+                        self.legendary_dungeons.active.get_or_insert_default();
+                    dungeons.pending_items.clear();
                     let data: Vec<i64> = val.into_list("iapendingitems")?;
 
-                    let item = Item::parse(&data[1..], server_time)?;
-                    log::info!("Current item {}:  {item:?}", data[0]);
+                    for slice in
+                        data.skip(1, "ld items")?.chunks_exact(ITEM_PARSE_LEN)
+                    {
+                        let Some(item) = Item::parse(slice, server_time)?
+                        else {
+                            warn!("Could not parse pending ld item");
+                            continue;
+                        };
+                        dungeons.pending_items.push(item);
+                    }
                 }
                 "iamerchant" => {
                     //    "0/0/0/0/0/0"

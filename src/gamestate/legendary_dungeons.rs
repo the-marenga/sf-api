@@ -2,7 +2,7 @@ use chrono::{DateTime, Local};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use crate::{error::SFError, misc::CCGet};
+use crate::{error::SFError, gamestate::items::Item, misc::CCGet};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -166,7 +166,7 @@ pub enum RoomEncounter {
 }
 
 impl RoomEncounter {
-    pub (crate) fn parse(val: i64) -> RoomEncounter {
+    pub(crate) fn parse(val: i64) -> RoomEncounter {
         match val {
             0 => RoomEncounter::BronzeChest,
             1 => RoomEncounter::SilverChest,
@@ -233,7 +233,7 @@ pub enum LegendaryDungeonsEventTheme {
     Unknown = -1,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LegendaryDungeonsEvent {
     pub theme: Option<LegendaryDungeonsEventTheme>,
@@ -249,7 +249,7 @@ pub struct LegendaryDungeonsEvent {
     pub(crate) active: Option<LegendaryDungeons>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LegendaryDungeons {
     pub stats: DungeonStats,
@@ -277,4 +277,6 @@ pub struct LegendaryDungeons {
     pub keys: u32,
 
     pub encounter: RoomEncounter,
+    /// Items, that must be collected/chosen between before you can continue
+    pub pending_items: Vec<Item>,
 }

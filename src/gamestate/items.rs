@@ -13,7 +13,7 @@ use super::{
 };
 use crate::{
     command::{AttributeType, ShopType},
-    gamestate::{legendary_dungeons::RoomEncounter, CCGet, CGet, ShopPosition},
+    gamestate::{CCGet, CGet, ShopPosition},
 };
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -343,8 +343,6 @@ pub struct Item {
     pub upgrade_count: u8,
     pub item_quality: u32,
     pub is_washed: bool,
-
-    pub encounter: Option<RoomEncounter>,
 }
 
 impl Item {
