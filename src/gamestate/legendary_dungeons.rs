@@ -1,5 +1,3 @@
-use std::u32;
-
 use chrono::{DateTime, Local};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
@@ -212,11 +210,11 @@ pub struct DungeonStats {
 impl DungeonStats {
     pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
         Ok(DungeonStats {
-            items_found: data.csiget(0, "ldung item count", 0)?,
-            epics_found: data.csiget(1, "ldung item count", 0)?,
-            keys_found: data.csiget(2, "ldung item count", 0)?,
-            silver_found: data.csiget(3, "ldung item count", 0)?,
-            attempts: data.csiget(4, "ldung item count", 0)?,
+            items_found: data.csiget(0, "ld item count", 0)?,
+            epics_found: data.csiget(1, "ld item count", 0)?,
+            keys_found: data.csiget(2, "ld item count", 0)?,
+            silver_found: data.csiget(3, "ld item count", 0)?,
+            attempts: data.csiget(4, "ld item count", 0)?,
         })
     }
 }
@@ -259,6 +257,7 @@ pub struct LegendaryDungeonsEvent {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LegendaryDungeons {
     pub stats: DungeonStats,
+    pub total_stats: DungeonTotalStats,
 
     /// The hp you currently have
     pub current_hp: u64,
@@ -273,20 +272,21 @@ pub struct LegendaryDungeons {
     pub blessings: [Option<DungeonEffect<Blessing>>; 3],
     pub curses: [Option<DungeonEffect<Curse>>; 3],
 
-    pub stage: LegendaryDungeonStage,
+    pub(crate) stage: LegendaryDungeonStage,
 
     pub current_floor: u32,
     pub max_floor: u32,
-    /// The doors that you can pick between when in the `DoorSelect` stage
-    pub doors: [DoorType; 2],
     /// The amount of keys you have available to unlock doors
     pub keys: u32,
 
-    pub encounter: RoomEncounter,
+    /// The doors that you can pick between when in the `DoorSelect` stage
+    pub(crate) doors: [DoorType; 2],
+    /// The thing you currently have in the room with you
+    pub(crate) encounter: RoomEncounter,
     /// Items, that must be collected/chosen between before you can continue
-    pub pending_items: Vec<Item>,
+    pub(crate) pending_items: Vec<Item>,
     /// The blessings you can get from the merchant, if you enter it
-    pub merchant_blessings: Vec<MerchantBlessing>,
+    pub(crate) merchant_blessings: Vec<MerchantBlessing>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -404,5 +404,28 @@ impl LegendaryDungeons {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct DungeonTotalStats {
+    pub legendaries_found: u32,
+    pub attempts_best_run: u32,
+    pub enemies_defeated: u32,
+    pub epics_found: u32,
+    pub gold_found: u64,
+}
+
+impl DungeonTotalStats {
+    pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
+        // Note: There is another value (5), but I can not figure out what it is
+        Ok(DungeonTotalStats {
+            legendaries_found: data.csiget(0, "ld total legendaries", 0)?,
+            attempts_best_run: data.csiget(1, "ld best attempts", 0)?,
+            enemies_defeated: data.csiget(2, "ld enemies defeated", 0)?,
+            epics_found: data.csiget(3, "ld total epics", 0)?,
+            gold_found: data.csiget(4, "ld total gold", 0)?,
+        })
     }
 }

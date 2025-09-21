@@ -1572,18 +1572,12 @@ impl GameState {
                         vals.cstget(3, "ld closes", server_time)?;
                 }
                 "iadungeonstatstotal" => {
-                    let _dungeons =
+                    let dungeons =
                         self.legendary_dungeons.active.get_or_insert_default();
 
                     let data: Vec<i64> =
                         val.into_list("iadungeonstatstotal")?;
-                    log::info!("iadungeonstatstotal: {data:?}");
-                    // [0] => ?
-                    // [1] => ?
-                    // [2] => total keys
-                    // [3] => ?
-                    // [4] => total gold
-                    // [5] => ?
+                    dungeons.total_stats = DungeonTotalStats::parse(&data)?;
                 }
                 "iadungeonstats" => {
                     let dungeons =
@@ -1640,10 +1634,6 @@ impl GameState {
                     log::info!("iadungeonsoulstones: {val}");
                 }
                 "iamap" => {
-                    // Pre: 25/-5159/1/-315/25/-5160/1/-315/25/-5172/1/-315/25/
-                    // -5168/1/-315" 1:   25/-5159/1/-315/
-                    // 25/-5160/1/-315/25/-5172/1/-315/25/-5168/1/-315
-
                     // [0] => Amount of levels
                     // [1] => name of dungeon / effect?
                     // [2] => max key master shops?
