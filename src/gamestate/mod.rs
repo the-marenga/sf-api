@@ -24,21 +24,9 @@ use crate::{
     command::*,
     error::*,
     gamestate::{
-        arena::*,
-        character::*,
-        dungeons::*,
-        fortress::*,
-        guild::*,
-        idle::*,
-        items::*,
-        legendary_dungeons::{
-            DungeonEffect, DungeonStats, LegendaryDungeonsEvent, RoomEncounter,
-        },
-        rewards::*,
-        social::*,
-        tavern::*,
-        underworld::*,
-        unlockables::*,
+        arena::*, character::*, dungeons::*, fortress::*, guild::*, idle::*,
+        items::*, legendary_dungeons::*, rewards::*, social::*, tavern::*,
+        underworld::*, unlockables::*,
     },
     misc::*,
     response::Response,
@@ -1609,89 +1597,9 @@ impl GameState {
                     let data: Vec<i64> = val.into_list("iadungeon")?;
                     let dungeons =
                         self.legendary_dungeons.active.get_or_insert_default();
-
-                    // [00] 718719374 <= Some sort of random id?
-                    // [01] 2 <= ?
-
-                    dungeons.current_hp = data.csiget(2, "ld current hp", 0)?;
-                    dungeons.pre_battle_hp = data.csiget(3, "ld pre hp", 0)?;
-                    dungeons.max_hp = data.csiget(4, "ld max hp", 0)?;
-
-                    for (pos, v) in dungeons.blessings.iter_mut().enumerate() {
-                        let s = data.csiget(11 + pos, "ld blessing rem", 0)?;
-                        *v = DungeonEffect::parse(
-                            data.csiget(5 + pos, "ld blessing typ", 0)?,
-                            s / 10_000,
-                            data.csiget(42 + pos, "ld blessing max", 0)?,
-                            s % 10_000,
-                        );
-                    }
-                    for (pos, v) in dungeons.curses.iter_mut().enumerate() {
-                        let s_pos = match pos {
-                            0 => 14,
-                            1 => 40,
-                            _ => 41,
-                        };
-                        let s = data.csiget(s_pos, "ld blessing rem", 0)?;
-
-                        *v = DungeonEffect::parse(
-                            data.csiget(8 + pos, "ld blessing typ", 0)?,
-                            s / 10_000,
-                            data.csiget(45 + pos, "ld blessing max", 0)?,
-                            s % 10_000,
-                        );
-                    }
-
-                    dungeons.stage = data
-                        .cfpuget(15, "dungeon stage", |a| a)
-                        .unwrap_or_default();
-
-                    // [16] 0 // ?
-
-                    dungeons.current_floor = data.csiget(17, "ld floor", 0)?;
-                    dungeons.max_floor = data.csiget(18, "ld max floor", 0)?;
-
-                    for (pos, v) in dungeons.doors.iter_mut().enumerate() {
-                        *v = data
-                            .cfpuget(19 + pos, "dungeon stage", |a| a)
-                            .unwrap_or_default();
-                    }
-
-                    // [21] 0 // ?
-
-                    let raw_enc = data.csiget(22, "ld max floor", 999)?;
-                    dungeons.encounter = RoomEncounter::parse(raw_enc);
-
-                    // Most of this should be an unused (moved) item, but I
-                    // don't know where it starts and ends
-
-                    // [23] 0
-                    // [24] 0
-                    // [25] 0
-                    // [26] 0
-                    // [27] 0
-                    // [28] 0
-                    // [29] 0
-                    // [30] 0
-                    // [31] 0
-                    // [32] 0
-                    // [33] 0
-                    // [34] 0
-                    // [35] 0
-                    // [36] 0
-                    // [37] 0
-                    // [38] 0
-
-                    dungeons.keys = data.csiget(39, "ld keys", 0)?;
-
-                    // [40] 0
-                    // [41] 0
-
-                    // [48] 0
-                    // [49] 0
-
-                    for (pos, n) in data.iter().enumerate() {
-                        log::info!("[{pos}] {n}");
+                    dungeons.update(&data)?;
+                    if !new_vals.contains_key("iapendingitems") {
+                        dungeons.pending_items.clear();
                     }
                 }
                 "iapendingitems" => {
