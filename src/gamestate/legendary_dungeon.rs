@@ -193,7 +193,7 @@ impl RoomEncounter {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct DungeonStats {
+pub struct Stats {
     pub items_found: u32,
     pub epics_found: u32,
     pub keys_found: u32,
@@ -201,9 +201,9 @@ pub struct DungeonStats {
     pub attempts: u32,
 }
 
-impl DungeonStats {
+impl Stats {
     pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
-        Ok(DungeonStats {
+        Ok(Stats {
             items_found: data.csiget(0, "ld item count", 0)?,
             epics_found: data.csiget(1, "ld item count", 0)?,
             keys_found: data.csiget(2, "ld item count", 0)?,
@@ -215,7 +215,7 @@ impl DungeonStats {
 
 #[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum LegendaryDungeonsEventTheme {
+pub enum LegendaryDungeonEventTheme {
     DiabolicalCompanyParty = 1,
     LordOfTheThings = 2,
     /// .. and where to find them
@@ -233,8 +233,8 @@ pub enum LegendaryDungeonsEventTheme {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct LegendaryDungeonsEvent {
-    pub theme: Option<LegendaryDungeonsEventTheme>,
+pub struct LegendaryDungeonEvent {
+    pub theme: Option<LegendaryDungeonEventTheme>,
     /// The time after which we are allowed to interact with the legendaty
     /// dungeons
     pub start_time: Option<DateTime<Local>>,
@@ -244,14 +244,14 @@ pub struct LegendaryDungeonsEvent {
     /// Interacting with the dungeon (at all) is not possible after this.
     pub close_time: Option<DateTime<Local>>,
 
-    pub(crate) active: Option<LegendaryDungeons>,
+    pub(crate) active: Option<LegendaryDungeon>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct LegendaryDungeons {
-    pub stats: DungeonStats,
-    pub total_stats: LegendaryDungeonsTotalStats,
+pub struct LegendaryDungeon {
+    pub stats: Stats,
+    pub total_stats: TotalStats,
 
     /// The hp you currently have
     pub current_hp: i64,
@@ -444,7 +444,7 @@ impl MerchantOffer {
     }
 }
 
-impl LegendaryDungeons {
+impl LegendaryDungeon {
     pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
         // [00] 718719374 <= Some sort of random id?
         // [01] 2 <= ?
@@ -542,7 +542,7 @@ pub enum DoorTrap {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct LegendaryDungeonsTotalStats {
+pub struct TotalStats {
     pub legendaries_found: u32,
     pub attempts_best_run: u32,
     pub enemies_defeated: u32,
@@ -550,10 +550,10 @@ pub struct LegendaryDungeonsTotalStats {
     pub gold_found: u64,
 }
 
-impl LegendaryDungeonsTotalStats {
+impl TotalStats {
     pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
         // Note: There is another value (5), but I can not figure out what it is
-        Ok(LegendaryDungeonsTotalStats {
+        Ok(TotalStats {
             legendaries_found: data.csiget(0, "ld total legendaries", 0)?,
             attempts_best_run: data.csiget(1, "ld best attempts", 0)?,
             enemies_defeated: data.csiget(2, "ld enemies defeated", 0)?,

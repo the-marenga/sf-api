@@ -5,7 +5,7 @@ pub mod fortress;
 pub mod guild;
 pub mod idle;
 pub mod items;
-pub mod legendary_dungeons;
+pub mod legendary_dungeon;
 pub mod rewards;
 pub mod social;
 pub mod tavern;
@@ -25,7 +25,7 @@ use crate::{
     error::*,
     gamestate::{
         arena::*, character::*, dungeons::*, fortress::*, guild::*, idle::*,
-        items::*, legendary_dungeons::*, rewards::*, social::*, tavern::*,
+        items::*, legendary_dungeon::*, rewards::*, social::*, tavern::*,
         underworld::*, unlockables::*,
     },
     misc::*,
@@ -65,7 +65,7 @@ pub struct GameState {
     pub hellevator: HellevatorEvent,
     /// Contains information about the legendary dungeons event, if it is
     /// currently active
-    pub legendary_dungeons: LegendaryDungeonsEvent,
+    pub legendary_dungeon: LegendaryDungeonEvent,
     /// Contains information about the blacksmith, if it has been unlocked
     pub blacksmith: Option<Blacksmith>,
     /// Contains information about the witch, if it has been unlocked
@@ -1560,7 +1560,7 @@ impl GameState {
                 }
                 // Legendary Dungeons
                 "iadungeontime" => {
-                    let dungeons = &mut self.legendary_dungeons;
+                    let dungeons = &mut self.legendary_dungeon;
 
                     let vals: Vec<i64> = val.into_list("iadungeontime")?;
                     dungeons.theme = vals.cfpget(0, "ld theme", |x| x)?;
@@ -1573,25 +1573,23 @@ impl GameState {
                 }
                 "iadungeonstatstotal" => {
                     let dungeons =
-                        self.legendary_dungeons.active.get_or_insert_default();
+                        self.legendary_dungeon.active.get_or_insert_default();
 
                     let data: Vec<i64> =
                         val.into_list("iadungeonstatstotal")?;
-                    dungeons.total_stats =
-                        LegendaryDungeonsTotalStats::parse(&data)?;
+                    dungeons.total_stats = TotalStats::parse(&data)?;
                 }
                 "iadungeonstats" => {
                     let dungeons =
-                        self.legendary_dungeons.active.get_or_insert_default();
+                        self.legendary_dungeon.active.get_or_insert_default();
 
                     let data = val.into_list("iadungeonstats")?;
-                    dungeons.stats =
-                        DungeonStats::parse(&data).unwrap_or_default();
+                    dungeons.stats = Stats::parse(&data).unwrap_or_default();
                 }
                 "iadungeon" => {
                     let data: Vec<i64> = val.into_list("iadungeon")?;
                     let dungeons =
-                        self.legendary_dungeons.active.get_or_insert_default();
+                        self.legendary_dungeon.active.get_or_insert_default();
                     dungeons.update(&data)?;
                     if !new_vals.contains_key("iapendingitems") {
                         dungeons.pending_items.clear();
@@ -1599,7 +1597,7 @@ impl GameState {
                 }
                 "iapendingitems" => {
                     let dungeons =
-                        self.legendary_dungeons.active.get_or_insert_default();
+                        self.legendary_dungeon.active.get_or_insert_default();
                     dungeons.pending_items.clear();
                     let data: Vec<i64> = val.into_list("iapendingitems")?;
 
@@ -1617,7 +1615,7 @@ impl GameState {
                 "iamerchant" => {
                     let data: Vec<i64> = val.into_list("iamerchant")?;
 
-                    self.legendary_dungeons
+                    self.legendary_dungeon
                         .active
                         .get_or_insert_default()
                         .merchant_offer = data
@@ -1627,14 +1625,14 @@ impl GameState {
                         .collect();
                 }
                 "iadungeon20cost" => {
-                    self.legendary_dungeons
+                    self.legendary_dungeon
                         .active
                         .get_or_insert_default()
                         .heal_quarter_cost = val.into("iadungeon20cost")?;
                 }
                 "iadungeonsoulstones" => {
                     let dungeons =
-                        self.legendary_dungeons.active.get_or_insert_default();
+                        self.legendary_dungeon.active.get_or_insert_default();
 
                     let data: Vec<i64> = val.into_list("iamerchant")?;
                     let mut chunks = data.chunks_exact(6);
