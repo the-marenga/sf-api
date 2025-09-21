@@ -124,9 +124,11 @@ pub enum DoorType {
 
 #[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum DungeonStage {
+pub enum LegendaryDungeonStage {
     NotEntered = 0,
-    PickDoor = 1,
+
+    DoorSelect = 1,
+
     RoomEntered = 10,
     RoomInteracted = 11,
     RoomFinished = 100,
@@ -164,7 +166,7 @@ pub enum RoomEncounter {
 }
 
 impl RoomEncounter {
-    fn parse(val: i64) -> RoomEncounter {
+    pub (crate) fn parse(val: i64) -> RoomEncounter {
         match val {
             0 => RoomEncounter::BronzeChest,
             1 => RoomEncounter::SilverChest,
@@ -264,4 +266,15 @@ pub struct LegendaryDungeons {
 
     pub blessings: [Option<DungeonEffect<Blessing>>; 3],
     pub curses: [Option<DungeonEffect<Curse>>; 3],
+
+    pub stage: LegendaryDungeonStage,
+
+    pub current_floor: u32,
+    pub max_floor: u32,
+    /// The doors that you can pick between when in the `DoorSelect` stage
+    pub doors: [DoorType; 2],
+    /// The amount of keys you have available to unlock doors
+    pub keys: u32,
+
+    pub encounter: RoomEncounter,
 }
