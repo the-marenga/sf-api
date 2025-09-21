@@ -1615,19 +1615,22 @@ impl GameState {
                     }
                 }
                 "iamerchant" => {
-                    let dungeons =
-                        self.legendary_dungeons.active.get_or_insert_default();
                     let data: Vec<i64> = val.into_list("iamerchant")?;
 
-                    dungeons.merchant_blessings = data
+                    self.legendary_dungeons
+                        .active
+                        .get_or_insert_default()
+                        .merchant_offer = data
                         .chunks_exact(3)
-                        .flat_map(MerchantBlessing::parse)
+                        .flat_map(MerchantOffer::parse)
                         .flatten()
                         .collect();
                 }
                 "iadungeon20cost" => {
-                    //    "10"
-                    log::info!("iadungeon20cost: {val}");
+                    self.legendary_dungeons
+                        .active
+                        .get_or_insert_default()
+                        .heal_quarter_cost = val.into("iadungeon20cost")?;
                 }
                 "iadungeonsoulstones" => {
                     let data: Vec<i64> = val.into_list("iamerchant")?;

@@ -1361,6 +1361,9 @@ impl Command {
                 // Left door = 1
                 // Fight Monster => 20
                 // Open Chest => 40
+                // Interact Special => 50
+                // Run Special => 51
+                // FinishFight? => 60
                 // Finish Stage => 70
                 format!("IADungeonInteract:{val}")
             }
