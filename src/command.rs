@@ -693,7 +693,6 @@ pub enum Command {
     LegendaryDungeonStart,
 
     // TODO: IADungeonSelectSoulStone (type)
-
     LegendaryDungeonInteract {
         val: usize,
     },

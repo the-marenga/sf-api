@@ -1,5 +1,3 @@
-use std::default;
-
 use chrono::{DateTime, Local};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
@@ -281,7 +279,6 @@ pub struct LegendaryDungeons {
     /// The gems available to choose from after defeating the boss
     pub active_gems: Vec<GemOfFate>,
 
-
     /// The doors that you can pick between when in the `DoorSelect` stage
     pub(crate) doors: [Door; 2],
     pub(crate) room_type: RoomType,
@@ -484,6 +481,8 @@ impl LegendaryDungeons {
         self.stage =
             data.cfpget(15, "dungeon stage", |a| a)?.unwrap_or_default();
 
+        // 16 => gem count
+
         self.current_floor = data.csiget(17, "ld floor", 0)?;
         self.max_floor = data.csiget(18, "ld max floor", 0)?;
 
@@ -511,7 +510,7 @@ impl LegendaryDungeons {
 
         self.keys = data.csiget(39, "ld keys", 0)?;
 
-        let unknown_slots = [16, 21, 23, 24, 40, 41, 48];
+        let unknown_slots = [21, 23, 24, 40, 41, 48];
         #[allow(clippy::indexing_slicing)]
         for pos in unknown_slots {
             let val = data[pos];
@@ -602,7 +601,6 @@ pub enum GemOfFateType {
     PendantOfTheKeyMaster = 6,
 
     // TODO:
-
     #[default]
     Unknown = -1,
 }
@@ -610,9 +608,11 @@ pub enum GemOfFateType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum GemOfFateAdvantage {
+    // TODO:
     IncreasedChanceOfKeys = 1,
     IncreasedEscapeChance = 10,
     IncreasedDurationOfBlessings = 30,
+    ReduceDamageFromMonsters = 40,
     IncreasedBlessingsInBarrels = 50,
     ReducedDamageFromSacDoors = 70,
     ReducedDamageFromTraps = 90,
@@ -626,7 +626,8 @@ pub enum GemOfFateAdvantage {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum GemOfFateDisadvantage {
-    // TODO: More
+    // TODO:
+    ReduceEscapeChance = 10,
     ReduceBlessingDuration = 30,
     IncreaseCurseDuration = 31,
     IncreaseStrongCurseChance = 32,

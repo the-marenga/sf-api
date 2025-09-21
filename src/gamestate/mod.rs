@@ -1645,10 +1645,8 @@ impl GameState {
                         .flatten()
                         .collect();
 
-                    dungeons.available_gems = chunks
-                        .flat_map(GemOfFate::parse)
-                        .flatten()
-                        .collect();
+                    dungeons.available_gems =
+                        chunks.flat_map(GemOfFate::parse).flatten().collect();
                 }
                 "iamap" => {
                     // 25/-5159/1/-315/
