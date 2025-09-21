@@ -1577,7 +1577,8 @@ impl GameState {
 
                     let data: Vec<i64> =
                         val.into_list("iadungeonstatstotal")?;
-                    dungeons.total_stats = DungeonTotalStats::parse(&data)?;
+                    dungeons.total_stats =
+                        LegendaryDungeonsTotalStats::parse(&data)?;
                 }
                 "iadungeonstats" => {
                     let dungeons =
@@ -1629,21 +1630,28 @@ impl GameState {
                     log::info!("iadungeon20cost: {val}");
                 }
                 "iadungeonsoulstones" => {
-                    // 0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/
-                    // 0/0/0/0/0/0/0/0"
-                    log::info!("iadungeonsoulstones: {val}");
+                    let data: Vec<i64> = val.into_list("iamerchant")?;
+                    if data.iter().any(|a| *a != 0) {
+                        warn!("Non zero value for iadungeonsoulstones: {val}");
+                    }
                 }
                 "iamap" => {
-                    // [0] => Amount of levels
-                    // [1] => name of dungeon / effect?
-                    // [2] => max key master shops?
-                    // [3] => ?
                     // 25/-5159/1/-315/
                     // 25/-5160/1/-315/
                     // 25/-5172/1/-315/
                     // 25/-5168/1/-315
 
-                    log::info!("iamap: {val}");
+                    // Parsing this sucks. The first value is amount of levels
+                    // and the 2. is monster_id, so far so good. The next 2
+                    // values are weird though. If you change -315 to 315, it
+                    // counts as having visited the shop one, but I have no
+                    // idea how to further improve that. In addition, you can
+                    // inc. 1 in steps of 4 to inc. max shops by one... but
+                    // that breaks the total count of floors?? It is also
+                    // unclear how effect & name can be changed, might be
+                    // dependant on `LegendaryDungeonsEventTheme`? Whatever is
+                    // may be, I don't think we really need this, as long as
+                    // it does not contain the gems
                 }
 
                 // This is the extra bonus effect all treats get that day

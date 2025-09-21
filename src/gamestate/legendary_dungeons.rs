@@ -5,7 +5,7 @@ use num_traits::FromPrimitive;
 use crate::{
     error::SFError,
     gamestate::items::Item,
-    misc::{CCGet, CFPGet},
+    misc::{CCGet, CFPGet, CGet},
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -257,7 +257,7 @@ pub struct LegendaryDungeonsEvent {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LegendaryDungeons {
     pub stats: DungeonStats,
-    pub total_stats: DungeonTotalStats,
+    pub total_stats: LegendaryDungeonsTotalStats,
 
     /// The hp you currently have
     pub current_hp: u64,
@@ -278,15 +278,21 @@ pub struct LegendaryDungeons {
     pub max_floor: u32,
     /// The amount of keys you have available to unlock doors
     pub keys: u32,
-
     /// The doors that you can pick between when in the `DoorSelect` stage
-    pub(crate) doors: [DoorType; 2],
+    pub(crate) doors: [Door; 2],
     /// The thing you currently have in the room with you
     pub(crate) encounter: RoomEncounter,
     /// Items, that must be collected/chosen between before you can continue
     pub(crate) pending_items: Vec<Item>,
     /// The blessings you can get from the merchant, if you enter it
     pub(crate) merchant_blessings: Vec<MerchantBlessing>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Door {
+    pub typ: DoorType,
+    pub trap: Option<DoorTrap>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -361,9 +367,15 @@ impl LegendaryDungeons {
         self.max_floor = data.csiget(18, "ld max floor", 0)?;
 
         for (pos, v) in self.doors.iter_mut().enumerate() {
-            *v = data
-                .cfpuget(19 + pos, "dungeon stage", |a| a)
+            v.typ = data
+                .cfpuget(19 + pos, "ld door typ", |a| a)
                 .unwrap_or_default();
+
+            let raw_trap = data.cget(25 + pos, "ld door trap")?;
+            v.trap = match raw_trap {
+                0 => None,
+                x => FromPrimitive::from_i64(x),
+            }
         }
 
         // [21] 0 // ?
@@ -371,25 +383,13 @@ impl LegendaryDungeons {
         let raw_enc = data.csiget(22, "ld max floor", 999)?;
         self.encounter = RoomEncounter::parse(raw_enc);
 
-        // Most of this should be an unused (moved) item, but I
-        // don't know where it starts and ends
-
         // [23] 0
         // [24] 0
+
         // [25] 0
         // [26] 0
-        // [27] 0
-        // [28] 0
-        // [29] 0
-        // [30] 0
-        // [31] 0
-        // [32] 0
-        // [33] 0
-        // [34] 0
-        // [35] 0
-        // [36] 0
-        // [37] 0
-        // [38] 0
+
+        // 27..= 38 has moved
 
         self.keys = data.csiget(39, "ld keys", 0)?;
 
@@ -407,9 +407,26 @@ impl LegendaryDungeons {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum DoorTrap {
+    PoisonedDaggers = 1,
+    SwingingAxe = 2,
+    PaintBucket = 3,
+    BearTrap = 4,
+    Guillotine = 5,
+    HammerAmbush = 6,
+    TripWire = 7,
+    TopSpikes = 8,
+    Shark = 9,
+
+    #[default]
+    Unknown = -1,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct DungeonTotalStats {
+pub struct LegendaryDungeonsTotalStats {
     pub legendaries_found: u32,
     pub attempts_best_run: u32,
     pub enemies_defeated: u32,
@@ -417,10 +434,10 @@ pub struct DungeonTotalStats {
     pub gold_found: u64,
 }
 
-impl DungeonTotalStats {
+impl LegendaryDungeonsTotalStats {
     pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
         // Note: There is another value (5), but I can not figure out what it is
-        Ok(DungeonTotalStats {
+        Ok(LegendaryDungeonsTotalStats {
             legendaries_found: data.csiget(0, "ld total legendaries", 0)?,
             attempts_best_run: data.csiget(1, "ld best attempts", 0)?,
             enemies_defeated: data.csiget(2, "ld enemies defeated", 0)?,
