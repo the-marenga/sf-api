@@ -1633,10 +1633,22 @@ impl GameState {
                         .heal_quarter_cost = val.into("iadungeon20cost")?;
                 }
                 "iadungeonsoulstones" => {
+                    let dungeons =
+                        self.legendary_dungeons.active.get_or_insert_default();
+
                     let data: Vec<i64> = val.into_list("iamerchant")?;
-                    if data.iter().any(|a| *a != 0) {
-                        warn!("Non zero value for iadungeonsoulstones: {val}");
-                    }
+                    let mut chunks = data.chunks_exact(6);
+                    dungeons.active_gems = chunks
+                        .by_ref()
+                        .take(3)
+                        .flat_map(GemOfFate::parse)
+                        .flatten()
+                        .collect();
+
+                    dungeons.available_gems = chunks
+                        .flat_map(GemOfFate::parse)
+                        .flatten()
+                        .collect();
                 }
                 "iamap" => {
                     // 25/-5159/1/-315/

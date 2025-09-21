@@ -1,3 +1,5 @@
+use std::default;
+
 use chrono::{DateTime, Local};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
@@ -127,6 +129,7 @@ pub enum LegendaryDungeonStage {
 
     RoomEntered = 10,
     RoomInteracted = 11,
+    PickGem = 12,
     RoomFinished = 100,
     Healing = 101,
 
@@ -275,6 +278,9 @@ pub struct LegendaryDungeons {
     /// The amount of mushrooms you would have to spend to heal 20% of your
     /// health
     pub heal_quarter_cost: u32,
+    /// The gems available to choose from after defeating the boss
+    pub active_gems: Vec<GemOfFate>,
+
 
     /// The doors that you can pick between when in the `DoorSelect` stage
     pub(crate) doors: [Door; 2],
@@ -285,6 +291,8 @@ pub struct LegendaryDungeons {
     pub(crate) pending_items: Vec<Item>,
     /// The effects the merchant is currently trying to sell you
     pub(crate) merchant_offer: Vec<MerchantOffer>,
+    /// The gems available to choose from after defeating the boss
+    pub(crate) available_gems: Vec<GemOfFate>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, Default)]
@@ -554,4 +562,110 @@ impl LegendaryDungeonsTotalStats {
             gold_found: data.csiget(4, "ld total gold", 0)?,
         })
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct GemOfFate {
+    pub typ: GemOfFateType,
+    pub advantage: Option<GemOfFateAdvantage>,
+    pub advantage_pwr: i64,
+    pub disadvantage: Option<GemOfFateDisadvantage>,
+    pub disadvantage_pwr: i64,
+    pub disadvantage_effect: Option<GemOfFateDisadvantageEffect>,
+}
+
+impl GemOfFate {
+    pub(crate) fn parse(data: &[i64]) -> Result<Option<GemOfFate>, SFError> {
+        if data.iter().all(|a| *a == 0) {
+            return Ok(None);
+        }
+        Ok(Some(Self {
+            typ: data.cfpget(0, "ld gof typ", |a| a)?.unwrap_or_default(),
+            advantage: data.cfpget(1, "ld gof adv", |a| a)?,
+            advantage_pwr: data.cget(2, "ld gof dis val")?,
+            disadvantage: data.cfpget(3, "ld gof dis", |a| a)?,
+            disadvantage_pwr: data.cget(4, "ld gof dis val")?,
+            disadvantage_effect: data.cfpget(5, "ld gof dis effect", |a| a)?,
+        }))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum GemOfFateType {
+    EyeOfTheBull = 1,
+    SoulOfTheRabbit = 2,
+    BoulderOfGreed = 3,
+    EmeraldOfTheExplorer = 4,
+    PearlOfTheMasochist = 5,
+    PendantOfTheKeyMaster = 6,
+
+    // TODO:
+
+    #[default]
+    Unknown = -1,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum GemOfFateAdvantage {
+    IncreasedChanceOfKeys = 1,
+    IncreasedEscapeChance = 10,
+    IncreasedDurationOfBlessings = 30,
+    IncreasedBlessingsInBarrels = 50,
+    ReducedDamageFromSacDoors = 70,
+    ReducedDamageFromTraps = 90,
+    IncreasedBlessingsInBarrelsChestsCorpses = 110,
+    MoreHealingFromBlessings = 130,
+
+    #[default]
+    Unknown = -1,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum GemOfFateDisadvantage {
+    // TODO: More
+    ReduceBlessingDuration = 30,
+    IncreaseCurseDuration = 31,
+    IncreaseStrongCurseChance = 32,
+
+    IncreasedMonsterDamage = 40,
+
+    #[default]
+    Unknown = -1,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum GemOfFateDisadvantageEffect {
+    WeakerMonstersSpawn = 1,
+    StrongerMonstersSpawn = 2,
+    MoreTrapsSpawn = 3,
+    // 4-5?
+    SacChestsSpawnBehindClosedDoors = 6,
+
+    MoreSacDoors = 8,
+    FewerSacDoors = 9,
+    CursedChestsSpawnBehindClosedDoors = 10,
+
+    MoreCursedDoors = 12,
+    FewerCursedDoors = 13,
+
+    // ??
+    ChanceOfEpicDoors = 17,
+    ChanceOfUnlockedDoors = 18,
+    ChanceOfDoubleLockedDoor = 19,
+
+    MoreMysteriousRooms = 20,
+    FewerMysteriousRooms = 21,
+    AlwaysOneTrap = 22,
+    AlwaysOneLock = 23,
+    MonstersBehindDoors = 24,
+    NoMoreEpicChests = 25,
+    TrapsInflictCurse = 26,
+
+    #[default]
+    Unknown = -1,
 }

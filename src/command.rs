@@ -691,6 +691,9 @@ pub enum Command {
     },
     /// Starts the normal (not the ultimate) legendary dungeon
     LegendaryDungeonStart,
+
+    // TODO: IADungeonSelectSoulStone (type)
+
     LegendaryDungeonInteract {
         val: usize,
     },
