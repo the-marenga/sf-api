@@ -5,20 +5,11 @@ use num_derive::FromPrimitive;
 use strum::EnumIter;
 
 use crate::{
-    PlayerId,
     gamestate::{
-        character::*,
-        dungeons::{CompanionClass, Dungeon},
-        fortress::*,
-        guild::{Emblem, GuildSkill},
-        idle::IdleBuildingType,
-        items::*,
-        social::Relationship,
-        underworld::*,
-        unlockables::{
+        character::*, dungeons::{CompanionClass, Dungeon}, fortress::*, guild::{Emblem, GuildSkill}, idle::IdleBuildingType, items::*, legendary_dungeon::GemOfFateType, social::Relationship, underworld::*, unlockables::{
             EnchantmentIdent, HabitatType, HellevatorTreatType, Unlockable,
-        },
-    },
+        }
+    }, PlayerId
 };
 
 #[non_exhaustive]
@@ -691,8 +682,14 @@ pub enum Command {
     },
     /// Starts the normal (not the ultimate) legendary dungeon
     LegendaryDungeonStart,
-
-    // TODO: IADungeonSelectSoulStone (type)
+    /// Picks either the left, or the right door
+    LegendaryDungeonPickDoor {
+        /// 0 => left, 1 => right
+        pos: usize,
+    },
+    LegendaryDungeonPickGem {
+        gem_type: GemOfFateType,
+    },
     LegendaryDungeonInteract {
         val: usize,
     },
@@ -1368,6 +1365,12 @@ impl Command {
                 // FinishFight? => 60
                 // Finish Stage => 70
                 format!("IADungeonInteract:{val}")
+            }
+            Command::LegendaryDungeonPickDoor { pos } => {
+                format!("IADungeonInteract:{}", pos + 1)
+            }
+            Command::LegendaryDungeonPickGem { gem_type } => {
+                format!("IADungeonSelectSoulStone:{}", *gem_type as u32)
             }
             // Take item reward: PlayerItemMove: 401/1/2/3/3/2009/133681367/0
             // Buy merchant 1. item: IADungeonMerchantBuy: 2/0

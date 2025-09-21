@@ -155,7 +155,7 @@ pub enum RoomEncounter {
     MimicChest,
     SacrificialChest,
     CurseChest,
-    WeirdChest,
+    TrialChest,
     SatedChest,
 
     Monster(u16),
@@ -178,7 +178,7 @@ impl RoomEncounter {
             500 => RoomEncounter::MimicChest,
             600 => RoomEncounter::SacrificialChest,
             601 => RoomEncounter::CurseChest,
-            602 => RoomEncounter::WeirdChest,
+            602 => RoomEncounter::TrialChest,
             603 => RoomEncounter::SatedChest,
             x if x.is_negative() => {
                 RoomEncounter::Monster(x.abs().try_into().unwrap_or_default())
@@ -290,11 +290,17 @@ pub struct LegendaryDungeon {
     pub(crate) merchant_offer: Vec<MerchantOffer>,
     /// The gems available to choose from after defeating the boss
     pub(crate) available_gems: Vec<GemOfFate>,
+
+    // 2 = alive
+    // 1 = ?
+    // 0 = dead (healing)
+    health_status: i64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RoomType {
+    Outside = 1,
     BossRoom = 4,
 
     Encounter = 100,
@@ -447,7 +453,7 @@ impl MerchantOffer {
 impl LegendaryDungeon {
     pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
         // [00] 718719374 <= Some sort of random id?
-        // [01] 2 <= ?
+        self.health_status = data.cget(1, "ld unknown")?;
 
         self.current_hp = data.cget(2, "ld current hp")?;
         self.pre_battle_hp = data.cget(3, "ld pre hp")?;
@@ -521,6 +527,74 @@ impl LegendaryDungeon {
 
         Ok(())
     }
+
+    #[must_use]
+    /// Returns the status of the current dungeon run. This is basically the
+    /// screen, that you would be looking at in-game
+    pub fn status(&self) -> LegendaryDungeonStatus<'_> {
+        use LegendaryDungeonStage as Stage;
+        use LegendaryDungeonStatus as Status;
+        match self.stage {
+            Stage::NotEntered => Status::NotEntered,
+            Stage::DoorSelect => Status::DoorSelect(&self.doors),
+            Stage::PickGem => Status::PickGem(&self.available_gems),
+            Stage::Healing => Status::Healing {
+                can_continue: self.health_status == 2,
+            },
+            Stage::RoomEntered => Status::Room {
+                status: RoomStatus::Entered,
+                encounter: self.encounter,
+                typ: self.room_type,
+            },
+            // TODO: Does this have valid values for encounter & room type?
+            Stage::RoomInteracted => Status::Room {
+                status: RoomStatus::Interacted,
+                encounter: self.encounter,
+                typ: self.room_type,
+            },
+            // TODO: Does this have valid values for encounter & room type?
+            Stage::RoomFinished => Status::Room {
+                status: RoomStatus::Finished,
+                encounter: self.encounter,
+                typ: self.room_type,
+            },
+            Stage::Unknown => Status::Unknown,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoomStatus {
+    Entered,
+    Interacted,
+    Finished,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LegendaryDungeonStatus<'a> {
+    /// You have not yet entered the dungeon. Start the dungeon by sending a
+    /// `LegendaryDungeonStart` command
+    NotEntered,
+    /// You are in the door select screen and must either pick the left, or
+    /// right door. You do so with the `LegendaryDungeonPickDoor` command with
+    /// the index of the door
+    DoorSelect(&'a [Door; 2]),
+    /// You have defeated the dungeon boss and must pick one of the offered
+    /// gems. You do so with the `IADungeonSelectSoulStone` command and the
+    /// type of the gem you want
+    PickGem(&'a [GemOfFate]),
+    /// We are currently healing. Wait until you can continue.
+    // TODO: Do we continue with `LegendaryDungeonStart`?
+    Healing { can_continue: bool },
+    Room {
+        status: RoomStatus,
+        encounter: RoomEncounter,
+        typ: RoomType,
+    },
+    /// The dungeon is in a state, that has not been anticipated. Your best bet
+    /// is to send a `LegendaryDungeonInteract` with a value of:
+    /// [0,20,40,50,51,60,70] If you get this status, please report it
+    Unknown,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, Default)]
