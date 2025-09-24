@@ -1565,6 +1565,7 @@ macro_rules! generate_flag_enum {
         }
 
         impl Flag {
+            #[allow(unused)]
             pub(crate) fn code(self) -> &'static str {
                 match self {
                     $(
