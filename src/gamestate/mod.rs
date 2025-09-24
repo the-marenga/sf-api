@@ -5,6 +5,7 @@ pub mod fortress;
 pub mod guild;
 pub mod idle;
 pub mod items;
+pub mod legendary_dungeon;
 pub mod rewards;
 pub mod social;
 pub mod tavern;
@@ -24,8 +25,8 @@ use crate::{
     error::*,
     gamestate::{
         arena::*, character::*, dungeons::*, fortress::*, guild::*, idle::*,
-        items::*, rewards::*, social::*, tavern::*, underworld::*,
-        unlockables::*,
+        items::*, legendary_dungeon::*, rewards::*, social::*, tavern::*,
+        underworld::*, unlockables::*,
     },
     misc::*,
     response::Response,
@@ -62,6 +63,9 @@ pub struct GameState {
     pub pets: Option<Pets>,
     /// Contains information about the hellevator, if it is currently active
     pub hellevator: HellevatorEvent,
+    /// Contains information about the legendary dungeons event, if it is
+    /// currently active
+    pub legendary_dungeon: LegendaryDungeonEvent,
     /// Contains information about the blacksmith, if it has been unlocked
     pub blacksmith: Option<Blacksmith>,
     /// Contains information about the witch, if it has been unlocked
@@ -1112,11 +1116,6 @@ impl GameState {
                             x => Some(x.try_into().unwrap_or(1)),
                         };
                 }
-                "iadungeontime" => {
-                    // No idea what this is measuring. Seems to just be a few
-                    // days in the past, or just 0s.
-                    // 1/1695394800/1696359600/1696446000
-                }
                 "workreward" => {
                     // Should be irrelevant
                 }
@@ -1559,6 +1558,114 @@ impl GameState {
                         .get_or_insert_default()
                         .update_fightable_targets(val.as_str())?;
                 }
+                // Legendary Dungeons
+                "iadungeontime" => {
+                    let dungeons = &mut self.legendary_dungeon;
+
+                    let vals: Vec<i64> = val.into_list("iadungeontime")?;
+                    dungeons.theme = vals.cfpget(0, "ld theme", |x| x)?;
+                    dungeons.start = vals.cstget(1, "ld start", server_time)?;
+                    dungeons.end = vals.cstget(2, "ld end", server_time)?;
+                    dungeons.close =
+                        vals.cstget(3, "ld closes", server_time)?;
+                }
+                "iadungeonstatstotal" => {
+                    let dungeons =
+                        self.legendary_dungeon.active.get_or_insert_default();
+
+                    let data: Vec<i64> =
+                        val.into_list("iadungeonstatstotal")?;
+                    dungeons.total_stats = TotalStats::parse(&data)?;
+                }
+                "iadungeonstats" => {
+                    let dungeons =
+                        self.legendary_dungeon.active.get_or_insert_default();
+
+                    let data = val.into_list("iadungeonstats")?;
+                    dungeons.stats = Stats::parse(&data).unwrap_or_default();
+                }
+                "iadungeon" => {
+                    let data: Vec<i64> = val.into_list("iadungeon")?;
+                    let dungeons =
+                        self.legendary_dungeon.active.get_or_insert_default();
+                    dungeons.update(&data)?;
+                    if !new_vals.contains_key("iapendingitems") {
+                        dungeons.pending_items.clear();
+                    }
+                }
+                "iapendingitems" => {
+                    let dungeons =
+                        self.legendary_dungeon.active.get_or_insert_default();
+                    dungeons.pending_items.clear();
+                    let data: Vec<i64> = val.into_list("iapendingitems")?;
+
+                    for slice in
+                        data.skip(1, "ld items")?.chunks_exact(ITEM_PARSE_LEN)
+                    {
+                        let Some(item) = Item::parse(slice, server_time)?
+                        else {
+                            warn!("Could not parse pending ld item");
+                            continue;
+                        };
+                        dungeons.pending_items.push(item);
+                    }
+                }
+                "ialootitem" => {
+                    // The stuff, that was looted after a fight
+                }
+                "iamerchant" => {
+                    let data: Vec<i64> = val.into_list("iamerchant")?;
+
+                    self.legendary_dungeon
+                        .active
+                        .get_or_insert_default()
+                        .merchant_offers = data
+                        .chunks_exact(3)
+                        .flat_map(MerchantOffer::parse)
+                        .flatten()
+                        .collect();
+                }
+                "iadungeon20cost" => {
+                    self.legendary_dungeon
+                        .active
+                        .get_or_insert_default()
+                        .heal_quarter_cost = val.into("iadungeon20cost")?;
+                }
+                "iadungeonsoulstones" => {
+                    let dungeons =
+                        self.legendary_dungeon.active.get_or_insert_default();
+
+                    let data: Vec<i64> = val.into_list("iamerchant")?;
+                    let mut chunks = data.chunks_exact(6);
+                    dungeons.active_gems = chunks
+                        .by_ref()
+                        .take(3)
+                        .flat_map(GemOfFate::parse)
+                        .flatten()
+                        .collect();
+
+                    dungeons.available_gems =
+                        chunks.flat_map(GemOfFate::parse).flatten().collect();
+                }
+                "iamap" => {
+                    // 25/-5159/1/-315/
+                    // 25/-5160/1/-315/
+                    // 25/-5172/1/-315/
+                    // 25/-5168/1/-315
+
+                    // Parsing this sucks. The first value is amount of levels
+                    // and the 2. is monster_id, so far so good. The next 2
+                    // values are weird though. If you change -315 to 315, it
+                    // counts as having visited the shop one, but I have no
+                    // idea how to further improve that. In addition, you can
+                    // inc. 1 in steps of 4 to inc. max shops by one... but
+                    // that breaks the total count of floors?? It is also
+                    // unclear how effect & name can be changed, might be
+                    // dependant on `LegendaryDungeonsEventTheme`? Whatever is
+                    // may be, I don't think we really need this, as long as
+                    // it does not contain the gems
+                }
+
                 // This is the extra bonus effect all treats get that day
                 x if x.contains("dungeonenemies") => {
                     // I `think` we do not need this
