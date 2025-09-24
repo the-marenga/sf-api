@@ -11,6 +11,7 @@ env:
 
 jobs:
   build-no-defaults:
+    name: Build (no defaults)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -18,6 +19,7 @@ jobs:
       - name: Build no defaults
         run: cargo build --verbose --no-default-features
   test:
+    name: Run Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -25,6 +27,7 @@ jobs:
       - name: Run tests
         run: cargo test --verbose
   format:
+    name: Check Code Format
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -34,6 +37,7 @@ jobs:
           toolchain: nightly
       - uses: actions-rust-lang/rustfmt@v1
   clippy:
+    name: Check Clippy Lints
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
