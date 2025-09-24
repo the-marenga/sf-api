@@ -237,14 +237,128 @@ pub struct LegendaryDungeonEvent {
     pub theme: Option<LegendaryDungeonEventTheme>,
     /// The time after which we are allowed to interact with the legendaty
     /// dungeons
-    pub start_time: Option<DateTime<Local>>,
+    pub start: Option<DateTime<Local>>,
     /// The time up until which we are allowed to start new runs
-    pub end_time: Option<DateTime<Local>>,
+    pub end: Option<DateTime<Local>>,
     /// The time at which the dungeon is expected to completely close.
     /// Interacting with the dungeon (at all) is not possible after this.
-    pub close_time: Option<DateTime<Local>>,
+    pub close: Option<DateTime<Local>>,
 
     pub(crate) active: Option<LegendaryDungeon>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LegendaryDungeonStatus<'a> {
+    /// The legendary dungeon is not open, so you can not interact with it in
+    /// any way, shape or form
+    Unavailable,
+    /// You have not yet entered the dungeon. Start the dungeon by sending a
+    /// `LegendaryDungeonStart` command
+    NotEntered,
+    /// The event has ended, so you are not allowed to start another attempt,
+    /// but you may look at the your stats
+    Ended(&'a TotalStats),
+    /// You are in the door select screen and must either pick the left, or
+    /// right door. You do so with the `LegendaryDungeonPickDoor` command with
+    /// the index of the door
+    DoorSelect {
+        dungeon: &'a LegendaryDungeon,
+        doors: &'a [Door; 2],
+    },
+    /// You have defeated the dungeon boss and must pick one of the offered
+    /// gems. You do so with the `IADungeonSelectSoulStone` command and the
+    /// type of the gem you want
+    PickGem {
+        dungeon: &'a LegendaryDungeon,
+        available_gems: &'a [GemOfFate],
+    },
+    /// We are currently healing. Wait until you can continue.
+    // TODO: Do we continue with `LegendaryDungeonStart`?
+    Healing {
+        dungeon: &'a LegendaryDungeon,
+        can_continue: bool,
+    },
+    Room {
+        dungeon: &'a LegendaryDungeon,
+        status: RoomStatus,
+        encounter: RoomEncounter,
+        typ: RoomType,
+    },
+    /// The dungeon is in a state, that has not been anticipated. Your best bet
+    /// is to send a `LegendaryDungeonInteract` with a value of:
+    /// [0,20,40,50,51,60,70] If you get this status, please report it
+    Unknown,
+}
+
+impl LegendaryDungeonEvent {
+    /// Checks if the event has started and not yet ended compared to the
+    /// current time
+    #[must_use]
+    pub fn is_event_enterable(&self) -> bool {
+        let now = Local::now();
+        matches!((self.start, self.end), (Some(start), Some(end)) if end > now && start < now)
+    }
+
+    #[must_use]
+    /// Returns the status of the legendary dungeon event. This is basically the
+    /// screen, that you would be looking at in-game
+    pub fn status(&self) -> LegendaryDungeonStatus<'_> {
+        use LegendaryDungeonStage as Stage;
+        use LegendaryDungeonStatus as Status;
+
+        let now = Local::now();
+        if self.start.is_none_or(|a| a > now) {
+            return LegendaryDungeonStatus::Unavailable;
+        }
+        let Some(active) = &self.active else {
+            if self.close.is_some_and(|a| a > now) {
+                return LegendaryDungeonStatus::NotEntered;
+            }
+            return LegendaryDungeonStatus::Unavailable;
+        };
+
+        match active.stage {
+            Stage::NotEntered => {
+                if self.close.is_some_and(|a| a > now) {
+                    return LegendaryDungeonStatus::NotEntered;
+                }
+                Status::Unavailable
+            }
+            Stage::DoorSelect => Status::DoorSelect {
+                dungeon: active,
+                doors: &active.doors,
+            },
+            Stage::PickGem => Status::PickGem {
+                dungeon: active,
+                available_gems: &active.available_gems,
+            },
+            Stage::Healing => Status::Healing {
+                dungeon: active,
+                can_continue: active.health_status == 2,
+            },
+            Stage::RoomEntered => Status::Room {
+                dungeon: active,
+                status: RoomStatus::Entered,
+                encounter: active.encounter,
+                typ: active.room_type,
+            },
+            // TODO: Does this have valid values for encounter & room type?
+            Stage::RoomInteracted => Status::Room {
+                dungeon: active,
+                status: RoomStatus::Interacted,
+                encounter: active.encounter,
+                typ: active.room_type,
+            },
+            // TODO: Does this have valid values for encounter & room type?
+            Stage::RoomFinished => Status::Room {
+                dungeon: active,
+                status: RoomStatus::Finished,
+                encounter: active.encounter,
+                typ: active.room_type,
+            },
+            Stage::Unknown => Status::Unknown,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -527,40 +641,6 @@ impl LegendaryDungeon {
 
         Ok(())
     }
-
-    #[must_use]
-    /// Returns the status of the current dungeon run. This is basically the
-    /// screen, that you would be looking at in-game
-    pub fn status(&self) -> LegendaryDungeonStatus<'_> {
-        use LegendaryDungeonStage as Stage;
-        use LegendaryDungeonStatus as Status;
-        match self.stage {
-            Stage::NotEntered => Status::NotEntered,
-            Stage::DoorSelect => Status::DoorSelect(&self.doors),
-            Stage::PickGem => Status::PickGem(&self.available_gems),
-            Stage::Healing => Status::Healing {
-                can_continue: self.health_status == 2,
-            },
-            Stage::RoomEntered => Status::Room {
-                status: RoomStatus::Entered,
-                encounter: self.encounter,
-                typ: self.room_type,
-            },
-            // TODO: Does this have valid values for encounter & room type?
-            Stage::RoomInteracted => Status::Room {
-                status: RoomStatus::Interacted,
-                encounter: self.encounter,
-                typ: self.room_type,
-            },
-            // TODO: Does this have valid values for encounter & room type?
-            Stage::RoomFinished => Status::Room {
-                status: RoomStatus::Finished,
-                encounter: self.encounter,
-                typ: self.room_type,
-            },
-            Stage::Unknown => Status::Unknown,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -568,33 +648,6 @@ pub enum RoomStatus {
     Entered,
     Interacted,
     Finished,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LegendaryDungeonStatus<'a> {
-    /// You have not yet entered the dungeon. Start the dungeon by sending a
-    /// `LegendaryDungeonStart` command
-    NotEntered,
-    /// You are in the door select screen and must either pick the left, or
-    /// right door. You do so with the `LegendaryDungeonPickDoor` command with
-    /// the index of the door
-    DoorSelect(&'a [Door; 2]),
-    /// You have defeated the dungeon boss and must pick one of the offered
-    /// gems. You do so with the `IADungeonSelectSoulStone` command and the
-    /// type of the gem you want
-    PickGem(&'a [GemOfFate]),
-    /// We are currently healing. Wait until you can continue.
-    // TODO: Do we continue with `LegendaryDungeonStart`?
-    Healing { can_continue: bool },
-    Room {
-        status: RoomStatus,
-        encounter: RoomEncounter,
-        typ: RoomType,
-    },
-    /// The dungeon is in a state, that has not been anticipated. Your best bet
-    /// is to send a `LegendaryDungeonInteract` with a value of:
-    /// [0,20,40,50,51,60,70] If you get this status, please report it
-    Unknown,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, Default)]

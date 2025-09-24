@@ -1564,11 +1564,9 @@ impl GameState {
 
                     let vals: Vec<i64> = val.into_list("iadungeontime")?;
                     dungeons.theme = vals.cfpget(0, "ld theme", |x| x)?;
-                    dungeons.start_time =
-                        vals.cstget(1, "ld start", server_time)?;
-                    dungeons.end_time =
-                        vals.cstget(2, "ld end", server_time)?;
-                    dungeons.close_time =
+                    dungeons.start = vals.cstget(1, "ld start", server_time)?;
+                    dungeons.end = vals.cstget(2, "ld end", server_time)?;
+                    dungeons.close =
                         vals.cstget(3, "ld closes", server_time)?;
                 }
                 "iadungeonstatstotal" => {
