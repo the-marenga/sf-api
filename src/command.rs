@@ -689,7 +689,7 @@ pub enum Command {
         pos: usize,
     },
     /// Starts the normal (not the ultimate) legendary dungeon
-    LegendaryDungeonStart,
+    LegendaryDungeonEnter,
     LegendaryDungeonMerchantBuy {
         effect: DungeonEffectType,
         keys: u32,
@@ -702,6 +702,15 @@ pub enum Command {
     /// this makes a difference, but you still have the option to choose one
     LegendaryDungeonPlayRPC {
         choice: RPCChoice,
+    },
+    LegendaryDungeonTakeItem {
+        /// The idx of the item in the dungeon, that you want to take, if there
+        /// are multiple. Should just be 0 in most cases
+        item_idx: usize,
+        /// The inventory you move the item to
+        inventory_to: PlayerItemPlace,
+        /// The inventory you move the item from
+        inventory_to_pos: usize,
     },
     /// You are in a (golden) room, that has some sort of gimmick. This could
     /// be the locker room, or smth. else. In those cases you can either
@@ -1391,7 +1400,7 @@ impl Command {
             Command::ExpeditionStart { pos } => {
                 format!("ExpeditionStart:{}", pos + 1)
             }
-            Command::LegendaryDungeonStart => "IADungeonStart:1/0".into(),
+            Command::LegendaryDungeonEnter => "IADungeonStart:1/0".into(),
             Command::LegendaryDungeonMerchantBuy { effect, keys } => {
                 format!("IADungeonMerchantBuy:{}/{}", *effect as i32, *keys)
             }
@@ -1438,10 +1447,22 @@ impl Command {
             Command::LegendaryDungeonPlayRPC { choice } => {
                 format!("IADungeonInteract:{}", *choice as i32)
             }
+            // Take item reward: : 401/1/2/3 /3/2009/133681367/0
             Command::LegendaryDungeonPickGem { gem_type } => {
                 format!("IADungeonSelectSoulStone:{}", *gem_type as u32)
             }
-            // Take item reward: PlayerItemMove: 401/1/2/3/3/2009/133681367/0
+            Command::LegendaryDungeonTakeItem {
+                item_idx,
+                inventory_to,
+                inventory_to_pos,
+            } => {
+                format!(
+                    "PlayerItemMove:401/{}/{}/{}",
+                    item_idx + 1,
+                    *inventory_to as usize,
+                    *inventory_to_pos + 1
+                )
+            }
             // Buy merchant 1. item: IADungeonMerchantBuy: 2/0
             Command::FightDungeon {
                 dungeon,

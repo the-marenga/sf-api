@@ -146,9 +146,9 @@ pub enum RoomEncounter {
     Crate3,
 
     /// Pretty sure this is exclusively the dead (lootable) one
-    FallenWarrior,
+    WarriorSkeleton,
     /// The thing that transforms into an enemy
-    SleepingSkeleton,
+    MageSkeleton,
     Barrel,
 
     MimicChest,
@@ -172,8 +172,8 @@ impl RoomEncounter {
             100 => RoomEncounter::Crate1,
             101 => RoomEncounter::Crate2,
             102 => RoomEncounter::Crate3,
-            300 => RoomEncounter::FallenWarrior,
-            301 => RoomEncounter::SleepingSkeleton,
+            300 => RoomEncounter::WarriorSkeleton,
+            301 => RoomEncounter::MageSkeleton,
             400 => RoomEncounter::Barrel,
             500 => RoomEncounter::MimicChest,
             600 => RoomEncounter::SacrificialChest,
@@ -319,7 +319,11 @@ impl LegendaryDungeonEvent {
         }
 
         let Some(active) = &self.active else {
-            return Status::Unavailable;
+            return if self.end.is_some_and(|a| a > now) {
+                Status::NotEntered
+            } else {
+                Status::Unavailable
+            };
         };
 
         if !active.pending_items.is_empty() {

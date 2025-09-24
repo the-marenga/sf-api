@@ -1,7 +1,7 @@
 use std::{borrow::Borrow, time::Duration};
 
 use chrono::{DateTime, Local};
-use log::info;
+use log::{error, info};
 use sf_api::{
     command::Command, gamestate::legendary_dungeon::*, session::SimpleSession,
 };
@@ -23,12 +23,37 @@ pub async fn main() {
         sleep(Duration::from_secs(10)).await;
 
         match status {
-            LegendaryDungeonStatus::TakeItem { .. } => todo!(),
+            LegendaryDungeonStatus::TakeItem { .. } => {
+                if let Some(slot) = gs.character.inventory.free_slot() {
+                    let (inv, pos) = slot.inventory_pos();
+                    info!("Taking new item");
+                    session
+                        .send_command(Command::LegendaryDungeonTakeItem {
+                            item_idx: 0,
+                            inventory_to: inv.player_item_position(),
+                            inventory_to_pos: pos,
+                        })
+                        .await
+                        .unwrap();
+                } else {
+                    error!(
+                        "We do not have an inventory slot to take the new \
+                         item to"
+                    );
+                    // Either make free slot, sell somehow
+                    return;
+                }
+            }
             LegendaryDungeonStatus::Unavailable => {
                 info!("The event is not ongoing");
                 return;
             }
-            LegendaryDungeonStatus::NotEntered => {}
+            LegendaryDungeonStatus::NotEntered => {
+                session
+                    .send_command(Command::LegendaryDungeonEnter)
+                    .await
+                    .unwrap();
+            }
             LegendaryDungeonStatus::Ended(stats) => {
                 info!("The event has ended. Your stats are: \n{stats:#?}");
                 return;
@@ -168,16 +193,14 @@ pub async fn main() {
                             | RoomEncounter::Crate2
                             | RoomEncounter::Crate3
                             | RoomEncounter::PrizeChest
-                            | RoomEncounter::SatedChest
-                            | RoomEncounter::FallenWarrior => {
+                            | RoomEncounter::SatedChest => {
                                 session
                                     .send_command(Command::LegendaryDungeonEncounterInteract)
                                     .await
                                     .unwrap();
-                                // TODO: Does this 70,70, or do we manually
-                                // escpape?
                             }
-                            RoomEncounter::SleepingSkeleton
+                            RoomEncounter::MageSkeleton
+                            | RoomEncounter::WarriorSkeleton
                             | RoomEncounter::MimicChest
                             | RoomEncounter::Barrel
                             | RoomEncounter::SacrificialChest
@@ -427,11 +450,3 @@ pub async fn login_with_env() -> SimpleSession {
         .await
         .unwrap()
 }
-
-// if gs.character.inventory.free_slot().is_none() {
-//     info!(
-//         "Inventory is full. This should only matter "
-//     );
-//     // You should make a free slot at this point
-//     break;
-// }
