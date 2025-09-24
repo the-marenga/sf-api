@@ -15,10 +15,12 @@ pub async fn main() {
     let mut session = login_with_env().await;
 
     loop {
-        sleep(Duration::from_secs(30)).await;
         let gs = session.game_state().unwrap();
 
         let status = gs.legendary_dungeon.status();
+
+        log::info!("Current status: \n{status:#?}");
+        sleep(Duration::from_secs(10)).await;
 
         match status {
             LegendaryDungeonStatus::TakeItem { .. } => todo!(),
@@ -42,8 +44,11 @@ pub async fn main() {
                 todo!("Start a new dungeon run / continue it")
             }
             LegendaryDungeonStatus::PickGem { available_gems, .. } => {
+                log::info!("We have gems to pick from:\n{available_gems:#?}");
+                sleep(Duration::from_secs(10)).await;
                 let best = available_gems
-                    .first()
+                    .iter()
+                    .find(|a| a.typ != GemOfFateType::Unknown)
                     .expect("We should always have at least one gem");
                 session
                     .send_command(Command::LegendaryDungeonPickGem {
@@ -66,10 +71,24 @@ pub async fn main() {
                         .map(|a| format!(" (trapped {a:?})"))
                         .unwrap_or_else(String::new),
                 );
+                sleep(Duration::from_secs(10)).await;
                 // here you should figure out which door is the best. We just
-                // pick the left door.
+                // pick the left door, as long, as we can
+                let mut pos = 0;
+                if doors[pos].typ == DoorType::DoubleLockedDoor
+                    || doors[pos].typ == DoorType::LockedDoor
+                    || doors[pos].typ == DoorType::Unknown
+                {
+                    // Prefer doors, that are not locked. Since the game will
+                    // not throw impossible things at you, the other door is
+                    // guaranteed to not require a key, if we do not have one
+                    pos = 1;
+                }
+                if doors[pos].typ == DoorType::Blocked {
+                    pos ^= 1;
+                }
                 session
-                    .send_command(Command::LegendaryDungeonPickDoor { pos: 0 })
+                    .send_command(Command::LegendaryDungeonPickDoor { pos })
                     .await
                     .unwrap();
             }
@@ -91,13 +110,25 @@ pub async fn main() {
                         // can lead to 60, or 70 I think. 60 should be
                         // "I defeated the monster" and 70 should be generic
                         // room interaction finished. Not sure though
-                        let RoomEncounter::Monster(_) = encounter else {
+                        if let RoomEncounter::Monster(_) = encounter {
+                            log::info!(
+                                "We have just fought a monster and must leave"
+                            );
+                            sleep(Duration::from_secs(5)).await;
+
                             session
-                                .send_command(Command::LegendaryDungeon60)
+                                .send_command(
+                                    Command::LegendaryDungeonMonsterCollectKey,
+                                )
                                 .await
                                 .unwrap();
                             continue;
                         };
+                        log::info!(
+                            "We have finished this room and must continue to \
+                             the door select"
+                        );
+                        sleep(Duration::from_secs(5)).await;
                         // TODO: Is this right?
                         session
                             .send_command(
@@ -108,6 +139,12 @@ pub async fn main() {
                         continue;
                     }
                     RoomStatus::Finished => {
+                        log::info!(
+                            "We have finished this room and must continue to \
+                             the door select (2)"
+                        );
+                        sleep(Duration::from_secs(5)).await;
+
                         session
                             .send_command(
                                 Command::LegendaryDungeonForcedContinue,
@@ -121,6 +158,8 @@ pub async fn main() {
                 match typ {
                     RoomType::BossRoom => todo!(),
                     RoomType::Generic | RoomType::Encounter => {
+                        log::info!("We have an encounter {encounter:?}");
+                        sleep(Duration::from_secs(5)).await;
                         match encounter {
                             RoomEncounter::BronzeChest
                             | RoomEncounter::SilverChest
@@ -156,17 +195,41 @@ pub async fn main() {
                                 }
                             }
                             RoomEncounter::Unknown => {
-                                // 40 or 41 probably
-                                todo!()
+                                if session
+                                    .send_command(Command::LegendaryDungeonEncounterInteract)
+                                    .await
+                                    .is_err()
+                                {
+                                    session
+                                        .send_command(
+                                            Command::LegendaryDungeonEncounterEscape,
+                                        )
+                                        .await
+                                        .unwrap();
+                                }
                             }
                             RoomEncounter::Monster(_) => {
-                                // 20 => attack
-                                // 21 => run
+                                if dungeon.current_hp >= dungeon.max_hp / 2 {
+                                    session
+                                        .send_command(Command::LegendaryDungeonMonsterFight)
+                                        .await
+                                        .unwrap();
+                                } else {
+                                    session
+                                        .send_command(Command::LegendaryDungeonMonsterEscape)
+                                        .await
+                                        .unwrap();
+                                }
                             }
                         }
                     }
                     RoomType::Empty => {
-                        // 70 - Leave
+                        session
+                            .send_command(
+                                Command::LegendaryDungeonForcedContinue,
+                            )
+                            .await
+                            .unwrap();
                     }
                     RoomType::FountainOfLife
                     | RoomType::SoulBath
@@ -256,10 +319,18 @@ pub async fn main() {
                             .filter(|a| a.keys <= dungeon.keys)
                             .collect::<Vec<_>>();
 
+                        info!(
+                            "We are in the shop. These are the available \
+                             things: \n{available_blessings:#?}"
+                        );
+                        sleep(Duration::from_secs(5)).await;
+
                         // NOTE: You would want to sort this based on which
                         // type is the best. Could also buy two here I think
 
                         if let Some(blessing) = available_blessings.first() {
+                            info!("Buying: {blessing:?}");
+                            sleep(Duration::from_secs(5)).await;
                             session
                                 .send_command(
                                     Command::LegendaryDungeonMerchantBuy {
@@ -269,6 +340,8 @@ pub async fn main() {
                                 )
                                 .await
                                 .unwrap();
+                            info!("Bought it");
+                            sleep(Duration::from_secs(5)).await;
                         } else if 1 == 0 && gs.character.mushrooms > 0 {
                             session
                                 .send_command(

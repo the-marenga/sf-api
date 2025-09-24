@@ -1610,6 +1610,9 @@ impl GameState {
                         dungeons.pending_items.push(item);
                     }
                 }
+                "ialootitem" => {
+                    // The stuff, that was looted after a fight
+                }
                 "iamerchant" => {
                     let data: Vec<i64> = val.into_list("iamerchant")?;
 

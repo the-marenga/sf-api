@@ -713,7 +713,9 @@ pub enum Command {
     /// because otherwise you would just awkwardly stand in the same room until
     /// you "flee"
     LegendaryDungeonForcedContinue,
-    LegendaryDungeon60,
+    /// You have defeated the monster. Collect the key, that it dropped to
+    /// continue
+    LegendaryDungeonMonsterCollectKey,
     /// Picks either the left, or the right door
     LegendaryDungeonPickDoor {
         /// 0 => left, 1 => right
@@ -772,6 +774,8 @@ pub enum Command {
     },
     /// Spend 1000 mushrooms to buy a gold frame
     BuyGoldFrame,
+    LegendaryDungeonMonsterFight,
+    LegendaryDungeonMonsterEscape,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -1391,7 +1395,9 @@ impl Command {
             Command::LegendaryDungeonMerchantBuy { effect, keys } => {
                 format!("IADungeonMerchantBuy:{}/{}", *effect as i32, *keys)
             }
-            Command::LegendaryDungeon60 => "IADungeonInteract:60".into(),
+            Command::LegendaryDungeonMonsterCollectKey => {
+                "IADungeonInteract:60".into()
+            }
             Command::LegendaryDungeonMerchantNewGoods => {
                 "IADungeonInteract:50".into()
             }
@@ -1404,6 +1410,12 @@ impl Command {
                 // FinishFight? => 60
                 // Finish Stage => 70
                 format!("IADungeonInteract:{val}")
+            }
+            Command::LegendaryDungeonMonsterFight => {
+                format!("IADungeonInteract:20")
+            }
+            Command::LegendaryDungeonMonsterEscape => {
+                format!("IADungeonInteract:21")
             }
             Command::LegendaryDungeonEncounterInteract => {
                 format!("IADungeonInteract:40")
