@@ -1616,7 +1616,7 @@ impl GameState {
                     self.legendary_dungeon
                         .active
                         .get_or_insert_default()
-                        .merchant_offer = data
+                        .merchant_offers = data
                         .chunks_exact(3)
                         .flat_map(MerchantOffer::parse)
                         .flatten()

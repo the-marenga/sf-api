@@ -13,7 +13,7 @@ use crate::{
         guild::{Emblem, GuildSkill},
         idle::IdleBuildingType,
         items::*,
-        legendary_dungeon::GemOfFateType,
+        legendary_dungeon::{DungeonEffectType, GemOfFateType, RPCChoice},
         social::Relationship,
         underworld::*,
         unlockables::*,
@@ -690,6 +690,30 @@ pub enum Command {
     },
     /// Starts the normal (not the ultimate) legendary dungeon
     LegendaryDungeonStart,
+    LegendaryDungeonMerchantBuy {
+        effect: DungeonEffectType,
+        keys: u32,
+    },
+    LegendaryDungeonEncounterInteract,
+    LegendaryDungeonEncounterEscape,
+    LegendaryDungeonMerchantNewGoods,
+    LegendaryDungeonRoomLeave,
+    /// Play Rock, Paper, Scissors with your provided choice. I don't think
+    /// this makes a difference, but you still have the option to choose one
+    LegendaryDungeonPlayRPC {
+        choice: RPCChoice,
+    },
+    /// You are in a (golden) room, that has some sort of gimmick. This could
+    /// be the locker room, or smth. else. In those cases you can either
+    /// interact, or leave
+    LegendaryDungeonRoomInteract,
+    /// The dungeon is in a state, that there is only one option, which the
+    /// official client will automatically do. This mainly happens, when you
+    /// Have interacted with the room and the game "automatically" continues,
+    /// because otherwise you would just awkwardly stand in the same room until
+    /// you "flee"
+    LegendaryDungeonForcedContinue,
+    LegendaryDungeon60,
     /// Picks either the left, or the right door
     LegendaryDungeonPickDoor {
         /// 0 => left, 1 => right
@@ -1364,6 +1388,13 @@ impl Command {
                 format!("ExpeditionStart:{}", pos + 1)
             }
             Command::LegendaryDungeonStart => "IADungeonStart:1/0".into(),
+            Command::LegendaryDungeonMerchantBuy { effect, keys } => {
+                format!("IADungeonMerchantBuy:{}/{}", *effect as i32, *keys)
+            }
+            Command::LegendaryDungeon60 => "IADungeonInteract:60".into(),
+            Command::LegendaryDungeonMerchantNewGoods => {
+                "IADungeonInteract:50".into()
+            }
             Command::LegendaryDungeonInteract { val } => {
                 // Left door = 1
                 // Fight Monster => 20
@@ -1374,8 +1405,26 @@ impl Command {
                 // Finish Stage => 70
                 format!("IADungeonInteract:{val}")
             }
+            Command::LegendaryDungeonEncounterInteract => {
+                format!("IADungeonInteract:40")
+            }
+            Command::LegendaryDungeonEncounterEscape => {
+                format!("IADungeonInteract:41")
+            }
+            Command::LegendaryDungeonRoomInteract => {
+                format!("IADungeonInteract:50")
+            }
+            Command::LegendaryDungeonRoomLeave => {
+                format!("IADungeonInteract:51")
+            }
+            Command::LegendaryDungeonForcedContinue => {
+                format!("IADungeonInteract:70")
+            }
             Command::LegendaryDungeonPickDoor { pos } => {
                 format!("IADungeonInteract:{}", pos + 1)
+            }
+            Command::LegendaryDungeonPlayRPC { choice } => {
+                format!("IADungeonInteract:{}", *choice as i32)
             }
             Command::LegendaryDungeonPickGem { gem_type } => {
                 format!("IADungeonSelectSoulStone:{}", *gem_type as u32)

@@ -150,12 +150,12 @@ pub enum RoomEncounter {
     /// The thing that transforms into an enemy
     SleepingSkeleton,
     Barrel,
-    // TODO: Check the real name
-    WorkerChest,
+
     MimicChest,
     SacrificialChest,
     CurseChest,
-    TrialChest,
+    /// The price chest for completing the trial
+    PrizeChest,
     SatedChest,
 
     Monster(u16),
@@ -178,7 +178,7 @@ impl RoomEncounter {
             500 => RoomEncounter::MimicChest,
             600 => RoomEncounter::SacrificialChest,
             601 => RoomEncounter::CurseChest,
-            602 => RoomEncounter::TrialChest,
+            602 => RoomEncounter::PrizeChest,
             603 => RoomEncounter::SatedChest,
             x if x.is_negative() => {
                 RoomEncounter::Monster(x.abs().try_into().unwrap_or_default())
@@ -284,6 +284,10 @@ pub enum LegendaryDungeonStatus<'a> {
         encounter: RoomEncounter,
         typ: RoomType,
     },
+    TakeItem {
+        dungeon: &'a LegendaryDungeon,
+        items: &'a [Item],
+    },
     /// The dungeon is in a state, that has not been anticipated. Your best bet
     /// is to send a `LegendaryDungeonInteract` with a value of:
     /// [0,20,40,50,51,60,70] If you get this status, please report it
@@ -308,23 +312,28 @@ impl LegendaryDungeonEvent {
 
         let now = Local::now();
         if self.start.is_none_or(|a| a > now) {
-            return LegendaryDungeonStatus::Unavailable;
+            return Status::Unavailable;
         }
+        if self.close.is_none_or(|a| a < now) {
+            return Status::Unavailable;
+        }
+
         let Some(active) = &self.active else {
-            if self.close.is_some_and(|a| a > now) {
-                return LegendaryDungeonStatus::NotEntered;
-            }
-            return LegendaryDungeonStatus::Unavailable;
+            return Status::Unavailable;
         };
+
+        if !active.pending_items.is_empty() {
+            return Status::TakeItem {
+                dungeon: active,
+                items: &active.pending_items,
+            };
+        }
 
         match active.stage {
             Stage::NotEntered => {
-                if self.close.is_some_and(|a| a > now) {
-                    // TODO: Do we need to provide the amount of runs already
-                    // done or smth. here?
-                    return LegendaryDungeonStatus::NotEntered;
-                }
-                Status::Unavailable
+                // TODO: Do we need to provide the amount of runs already
+                // done or smth. here?
+                Status::NotEntered
             }
             Stage::DoorSelect => Status::DoorSelect {
                 dungeon: active,
@@ -392,6 +401,8 @@ pub struct LegendaryDungeon {
     /// The amount of mushrooms you would have to spend to heal 20% of your
     /// health
     pub heal_quarter_cost: u32,
+    /// The effects the merchant is currently trying to sell you
+    pub merchant_offers: Vec<MerchantOffer>,
     /// The gems available to choose from after defeating the boss
     pub active_gems: Vec<GemOfFate>,
 
@@ -402,8 +413,6 @@ pub struct LegendaryDungeon {
     pub(crate) encounter: RoomEncounter,
     /// Items, that must be collected/chosen between before you can continue
     pub(crate) pending_items: Vec<Item>,
-    /// The effects the merchant is currently trying to sell you
-    pub(crate) merchant_offer: Vec<MerchantOffer>,
     /// The gems available to choose from after defeating the boss
     pub(crate) available_gems: Vec<GemOfFate>,
 
@@ -416,7 +425,7 @@ pub struct LegendaryDungeon {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RoomType {
-    Outside = 1,
+    Generic = 1,
     BossRoom = 4,
 
     Encounter = 100,
@@ -454,9 +463,6 @@ pub enum RoomType {
     /// If the gambler wins, you receive a curse and lose a part of your life
     /// energy.
     /// If it's a draw, nothing happens.
-    // 90, 70, 70 Rock
-    // 91, 70, 70 Paper
-    // 92, 70, 70 Scisors
     RockPaperScissors = 308,
     /// If you have wondered where the items go that you threw into the arcane
     /// toilet, here you find the answer.
@@ -478,7 +484,7 @@ pub enum RoomType {
     /// reward, wood is added to the fortress storage.
     PileOfWood = 314,
     /// Buy blessings with keys
-    Shop = 315,
+    KeyMasterShop = 315,
     /// The wheel of fortune can be spun. With some luck, you receive a reward
     /// (gold, blessing), but with bad luck, you can lose keys or receive a
     /// curse. You can leave the room without spinning the wheel, without
@@ -509,7 +515,7 @@ pub enum RoomType {
     /// not sound very appealing at first. However, you receive keys if you take
     /// up the offer. If you're not interested, you can simply leave the
     /// store.
-    KeyToFailureShopMaster = 323,
+    KeyToFailureShop = 323,
     /// If you subject yourself to the torture rack, you receive a blessing but
     /// also lose a part of the character's life energy at the same time.
     /// The rainbow room can be left without any consequences.
@@ -798,4 +804,12 @@ pub enum GemOfFateDisadvantageEffect {
 
     #[default]
     Unknown = -1,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum RPCChoice {
+    Rock = 90,
+    Paper = 91,
+    Scissors = 92,
 }
