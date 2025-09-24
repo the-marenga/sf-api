@@ -320,6 +320,8 @@ impl LegendaryDungeonEvent {
         match active.stage {
             Stage::NotEntered => {
                 if self.close.is_some_and(|a| a > now) {
+                    // TODO: Do we need to provide the amount of runs already
+                    // done or smth. here?
                     return LegendaryDungeonStatus::NotEntered;
                 }
                 Status::Unavailable
