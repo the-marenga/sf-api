@@ -345,6 +345,24 @@ pub struct Item {
     pub is_washed: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ItemCommandIdent {
+    typ: u8,
+    model_id: u16,
+    price: u32,
+    mush_price: u32,
+}
+
+impl std::fmt::Display for ItemCommandIdent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "{}/{}/{}/{}",
+            self.typ, self.model_id, self.price, self.mush_price
+        ))
+    }
+}
+
 impl Item {
     /// Maps an item to its ident. This is mainly useful, if you want to see,
     /// if a item is already in your scrapbook
@@ -356,6 +374,19 @@ impl Item {
             model_id: self.model_id,
             color: self.color,
         })
+    }
+
+    /// Commands require an ident for the source ident now. Most likely to make
+    /// sure the item has not changed, which could be the case in the shop.
+    /// This function produces the required identification for an item
+    #[must_use]
+    pub fn command_ident(&self) -> ItemCommandIdent {
+        ItemCommandIdent {
+            typ: self.typ.raw_id(),
+            model_id: self.model_id,
+            price: self.price,
+            mush_price: self.mushroom_price,
+        }
     }
 
     /// Checks, if this item is unique. Technically they are not always unique,
