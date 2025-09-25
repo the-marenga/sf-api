@@ -261,6 +261,10 @@ pub enum Command {
         inventory: PlayerItemPlace,
         /// The position in the chosen inventory you
         inventory_pos: usize,
+        /// Identifies the source item to make sure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
     },
     /// Sells an item from the players inventory. To make this more convenient,
     /// this picks a shop&item position to sell to for you
@@ -269,6 +273,10 @@ pub enum Command {
         inventory: PlayerItemPlace,
         /// The position of the item you want to sell
         inventory_pos: usize,
+        /// Identifies the source item to make sure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
     },
     /// Moves an item from one inventory position to another
     InventoryMove {
@@ -280,6 +288,10 @@ pub enum Command {
         inventory_to: PlayerItemPlace,
         /// The inventory you move the item from
         inventory_to_pos: usize,
+        /// Identifies the source item to make sure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
     },
     /// Allows moving items from any position to any other position items can
     /// be at. You should make sure, that the move makes sense (do not move
@@ -293,6 +305,10 @@ pub enum Command {
         to: ItemPlace,
         /// The position of the item you want to move
         to_pos: usize,
+        /// Identifies the source item to make sure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
     },
     /// Allows using an potion from any position
     UsePotion {
@@ -300,6 +316,10 @@ pub enum Command {
         from: ItemPlace,
         /// The position of the potion you want to use
         from_pos: usize,
+        /// Identifies the source item to make sure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
     },
     /// Opens the message at the specified index [0-100]
     MessageOpen {
@@ -428,6 +448,10 @@ pub enum Command {
         position: u8,
         /// The action you want to use on the item
         action: BlacksmithAction,
+        /// Identifies the source item to make sure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
     },
     /// Sends the specified message in the guild chat
     GuildSendChat {
@@ -466,6 +490,10 @@ pub enum Command {
         to_companion: CompanionClass,
         /// The slot of the companion you want to equip
         to_slot: EquipmentSlot,
+        /// Identifies the source item to make sure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
     },
     /// Collects a specific resource from the fortress
     FortressGather {
@@ -1038,8 +1066,9 @@ impl Command {
                 shop_pos,
                 inventory,
                 inventory_pos,
+                item_ident,
             } => format!(
-                "PlayerItemMove:{}/{}/{}/{}",
+                "PlayerItemMove:{}/{}/{}/{}/{item_ident}",
                 *shop_type as usize,
                 *shop_pos + 1,
                 *inventory as usize,
@@ -1048,6 +1077,7 @@ impl Command {
             Command::SellShop {
                 inventory,
                 inventory_pos,
+                item_ident,
             } => {
                 let mut rng = fastrand::Rng::new();
                 let shop = if rng.bool() {
@@ -1057,7 +1087,7 @@ impl Command {
                 };
                 let shop_pos = rng.u32(0..6);
                 format!(
-                    "PlayerItemMove:{}/{}/{}/{}",
+                    "PlayerItemMove:{}/{}/{}/{}/{item_ident}",
                     *inventory as usize,
                     *inventory_pos + 1,
                     shop as usize,
@@ -1069,8 +1099,9 @@ impl Command {
                 inventory_from_pos,
                 inventory_to,
                 inventory_to_pos,
+                item_ident,
             } => format!(
-                "PlayerItemMove:{}/{}/{}/{}",
+                "PlayerItemMove:{}/{}/{}/{}/{item_ident}",
                 *inventory_from as usize,
                 *inventory_from_pos + 1,
                 *inventory_to as usize,
@@ -1081,16 +1112,21 @@ impl Command {
                 from_pos,
                 to,
                 to_pos,
+                item_ident,
             } => format!(
-                "PlayerItemMove:{}/{}/{}/{}",
+                "PlayerItemMove:{}/{}/{}/{}/{item_ident}",
                 *from as usize,
                 *from_pos + 1,
                 *to as usize,
                 *to_pos + 1
             ),
-            Command::UsePotion { from, from_pos } => {
+            Command::UsePotion {
+                from,
+                from_pos,
+                item_ident,
+            } => {
                 format!(
-                    "PlayerItemMove:{}/{}/1/0/",
+                    "PlayerItemMove:{}/{}/1/0/{item_ident}",
                     *from as usize,
                     *from_pos + 1
                 )
@@ -1134,8 +1170,9 @@ impl Command {
                 inventory_t,
                 position,
                 action,
+                item_ident,
             } => format!(
-                "PlayerItemMove:{}/{}/{}/-1",
+                "PlayerItemMove:{}/{}/{}/-1/{item_ident}",
                 *inventory_t as usize,
                 position + 1,
                 *action as usize
@@ -1159,8 +1196,9 @@ impl Command {
                 from_pos,
                 to_slot,
                 to_companion,
+                item_ident,
             } => format!(
-                "PlayerItemMove:{}/{}/{}/{}",
+                "PlayerItemMove:{}/{}/{}/{}/{item_ident}",
                 *from_inventory as usize,
                 *from_pos,
                 *to_companion as u8 + 101,
