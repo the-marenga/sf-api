@@ -328,6 +328,14 @@ pub enum Command {
     },
     /// Starts a fight against the enemy in the players portal
     FightPortal,
+    /// Updates the current state of the dungeons. This is equivalent to
+    /// clicking the Dungeon-Button in the game. It is strongly recommended to
+    /// call this before fighting, since `next_free_fight` and the dungeon
+    /// floors may not be updated otherwise. Notably, `FightDungeon` and
+    /// `Update` do NOT update these values, so you can end up in an endless
+    /// loop, if you are just relying on `next_free_fight` without calling
+    /// `UpdateDungeons`
+    UpdateDungeons,
     /// Enters a specific dungeon. This works for all dungeons, except the
     /// Tower, which you must enter via the `FightTower` command
     FightDungeon {
@@ -1468,6 +1476,7 @@ impl Command {
             Command::BuyGoldFrame => {
                 format!("PlayerGoldFrameBuy:")
             }
+            Command::UpdateDungeons => format!("PlayerDungeonOpen:"),
         })
     }
 }
