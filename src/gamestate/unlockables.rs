@@ -9,10 +9,10 @@ use strum::EnumIter;
 use super::*;
 use crate::{PlayerId, gamestate::items::*, misc::*};
 
-#[derive(Debug, Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Information about the Hellevator event on the server. If it is active, you
 /// can get more detailed info via `active()`
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorEvent {
     /// The time the hellevator event was enabled at
     pub start: Option<DateTime<Local>>,
@@ -400,10 +400,10 @@ pub struct Witch {
     pub enchantments: EnumMap<Enchantment, Option<EnchantmentIdent>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The S&F server needs a character specific value for enchanting items. This
 /// is that value
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnchantmentIdent(pub(crate) NonZeroU8);
 
 impl Witch {
@@ -509,9 +509,9 @@ pub struct Habitat {
     pub pets: [Pet; PETS_PER_HABITAT],
 }
 
+/// Represents the current state of the habitat exploration
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Represents the current state of the habitat exploration
 pub enum HabitatExploration {
     #[default]
     /// Explored/won all 20 habitat battles. This means you can no longer fight
@@ -720,9 +720,9 @@ impl PetStats {
     }
 }
 
+/// The current state of the mirror
 #[derive(Debug, Clone, Copy, strum::EnumCount, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The current state of the mirror
 pub enum Mirror {
     /// The player is still collecting the mirror pieces
     Pieces {
@@ -775,9 +775,9 @@ impl Unlockable {
     }
 }
 
+/// The current progress towards all achievements
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The current progress towards all achievements
 pub struct Achievements(pub Vec<Achievement>);
 
 impl Achievements {
@@ -805,9 +805,9 @@ impl Achievements {
     }
 }
 
+/// A small challenge you can complete in the game
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A small challenge you can complete in the game
 pub struct Achievement {
     /// Whether or not this achievement has been completed
     pub achieved: bool,
@@ -815,9 +815,9 @@ pub struct Achievement {
     pub progress: i64,
 }
 
+/// Contains all the items & monsters you have found in the scrapbook
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Contains all the items & monsters you have found in the scrapbook
 pub struct ScrapBook {
     /// All the items, that this player has already collected. To check if an
     /// item is in this, you should call `equipment_ident()` on an item and see
@@ -872,9 +872,9 @@ impl ScrapBook {
     }
 }
 
+/// The identification of items in the scrapbook
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The identification of items in the scrapbook
 pub struct EquipmentIdent {
     /// The class the item has and thus the wearer must have
     pub class: Option<Class>,

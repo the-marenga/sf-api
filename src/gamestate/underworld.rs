@@ -8,9 +8,9 @@ use strum::{EnumIter, IntoEnumIterator};
 
 use super::{ArrSkip, CCGet, CFPGet, CSTGet, EnumMapGet, SFError, ServerTime};
 
+/// The information about a characters underworld
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The information about a characters underworld
 pub struct Underworld {
     /// All the buildings, that the underworld can have. If they are not yet
     /// build, they are level 0
@@ -47,10 +47,10 @@ pub struct Underworld {
     pub lured_today: u16,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The price an upgrade, or building something in the underworld costs. These
 /// are always for one upgrade/build, which is important for unit builds
+#[derive(Debug, Default, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UnderworldCost {
     /// The time it takes to complete one build/upgrade
     pub time: Duration,
@@ -160,10 +160,10 @@ impl Underworld {
     }
 }
 
+/// The type of a producible resource in the underworld
 #[derive(Debug, Clone, Copy, strum::EnumCount, Enum, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The type of a producible resource in the underworld
 pub enum UnderworldResourceType {
     Souls = 0,
     Silver = 1,
@@ -171,10 +171,10 @@ pub enum UnderworldResourceType {
     ThirstForAdventure = 2,
 }
 
-#[derive(Debug, Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Information about the producion of a resource in the fortress.  Note that
 /// experience will not have some of these fields
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UnderworldProduction {
     /// The amount the production building has already produced, that you can
     /// collect. Note that this value will be out of date by some amount of
@@ -189,6 +189,7 @@ pub struct UnderworldProduction {
     pub per_hour: u64,
 }
 
+/// The type of building in the underworld
 #[derive(
     Debug,
     Clone,
@@ -201,7 +202,6 @@ pub struct UnderworldProduction {
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The type of building in the underworld
 pub enum UnderworldBuildingType {
     HeartOfDarkness = 0,
     Gate = 1,
@@ -215,19 +215,19 @@ pub enum UnderworldBuildingType {
     Keeper = 9,
 }
 
+/// The type of unit in the underworld
 #[derive(Debug, Clone, Copy, strum::EnumCount, Enum, EnumIter, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The type of unit in the underworld
 pub enum UnderworldUnitType {
     Goblin = 0,
     Troll = 1,
     Keeper = 2,
 }
 
+/// Information about the current building state of a building
 #[derive(Debug, Default, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Information about the current building state of a building
 pub struct UnderworldBuilding {
     /// The current level of this building. If this is 0, it has not yet been
     /// built
@@ -236,9 +236,9 @@ pub struct UnderworldBuilding {
     pub upgrade_cost: UnderworldCost,
 }
 
+/// Information about a single type of unit
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Information about a single type of unit
 pub struct UnderworldUnit {
     /// The current (battle) level this unit has
     pub level: u16,
