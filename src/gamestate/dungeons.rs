@@ -16,9 +16,9 @@ use crate::{
     },
 };
 
+/// The personal demon portal
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The personal demon portal
 pub struct Portal {
     /// The amount of enemies you have fought in the portal already
     pub finished: u16,
@@ -52,10 +52,10 @@ impl Portal {
     }
 }
 
-#[derive(Debug, Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The information about all generic dungeons in the game. Information about
 /// special dungeons like the portal
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Dungeons {
     /// The next time you can fight in the dungeons for free
     pub next_free_fight: Option<DateTime<Local>>,
@@ -92,12 +92,12 @@ impl Dungeons {
     }
 }
 
+/// The current state of a dungeon
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The current state of a dungeon
 pub enum DungeonProgress {
-    #[default]
     /// The dungeon has not yet been unlocked
+    #[default]
     Locked,
     /// The dungeon is open and can be fought in
     Open {
@@ -108,26 +108,29 @@ pub enum DungeonProgress {
     Finished,
 }
 
+/// The category of a dungeon. This is only used internally, so there is no
+/// real point for you to use this
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The category of a dungeon. This is only used internally, so there is no
-/// real point for you to use this
 pub enum DungeonType {
     Light,
     Shadow,
 }
 
+/// The category of a dungeon. This is only used internally, so there is no
+/// real point for you to use this
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The category of a dungeon. This is only used internally, so there is no
-/// real point for you to use this
 pub enum Dungeon {
     Light(LightDungeon),
     Shadow(ShadowDungeon),
 }
 
+/// All possible light dungeons. They are NOT numbered continuously (17 is
+/// missing), so you should use `LightDungeon::iter()`, if you want to iterate
+/// these
 #[derive(
     Debug,
     Clone,
@@ -142,9 +145,6 @@ pub enum Dungeon {
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// All possible light dungeons. They are NOT numbered continuously (17 is
-/// missing), so you should use `LightDungeon::iter()`, if you want to iterate
-/// these
 pub enum LightDungeon {
     DesecratedCatacombs = 0,
     MinesOfGloria = 1,
@@ -190,6 +190,8 @@ impl From<LightDungeon> for Dungeon {
     }
 }
 
+/// All possible shadow dungeons. You can use `ShadowDungeon::iter()`, if you
+/// want to iterate these
 #[derive(
     Debug,
     Clone,
@@ -204,8 +206,6 @@ impl From<LightDungeon> for Dungeon {
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// All possible shadow dungeons. You can use `ShadowDungeon::iter()`, if you
-/// want to iterate these
 pub enum ShadowDungeon {
     DesecratedCatacombs = 0,
     MinesOfGloria = 1,
@@ -314,12 +314,12 @@ impl Dungeons {
     }
 }
 
+/// The class of a companion. There is only 1 companion per class, so this is
+/// also a ident of the characters
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, EnumCount, Enum, EnumIter, Hash,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The class of a companion. There is only 1 companion per class, so this is
-/// also a ident of the characters
 pub enum CompanionClass {
     /// Bert
     Warrior = 0,
@@ -339,10 +339,10 @@ impl From<CompanionClass> for Class {
     }
 }
 
-#[derive(Debug, Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// All the information about a single companion. The class is not included
 /// here, as you access this via a map, where the key will be the class
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Companion {
     /// I can not recall, if I made this signed on purpose, because this should
     /// always be > 0

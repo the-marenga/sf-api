@@ -15,9 +15,9 @@ use crate::{
     misc::soft_into,
 };
 
+/// The information about a characters fortress
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The information about a characters fortress
 pub struct Fortress {
     /// All the buildings, that a fortress can have. If they are not yet built,
     /// they are level 0
@@ -79,10 +79,10 @@ pub struct Fortress {
     pub secret_storage_wood: u64,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The price an upgrade, or building something in the fortress costs. These
 /// are always for one upgrade/build, which is important for unit builds
+#[derive(Debug, Default, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressCost {
     /// The time it takes to complete one build/upgrade
     pub time: Duration,
@@ -106,9 +106,9 @@ impl FortressCost {
     }
 }
 
+/// Information about one of the three resources, that the fortress can produce.
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Information about one of the three resources, that the fortress can produce.
 pub struct FortressResource {
     /// The amount of this resource you have available to spend on upgrades and
     /// recruitment
@@ -120,10 +120,10 @@ pub struct FortressResource {
     pub production: FortressProduction,
 }
 
-#[derive(Debug, Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Information about the production of a resource in the fortress.  Note that
 /// experience will not have some of these fields
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressProduction {
     /// The amount the production building has already produced, that you can
     /// collect. Note that this value will be out of date by some amount of
@@ -141,22 +141,22 @@ pub struct FortressProduction {
     pub per_hour_next_lvl: u64,
 }
 
+/// The type of resource, that the fortress available in the fortress
 #[derive(Debug, Clone, Copy, EnumCount, EnumIter, PartialEq, Eq, Enum)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The type of resource, that the fortress available in the fortress
 pub enum FortressResourceType {
     Wood = 0,
     Stone = 1,
     Experience = 2,
 }
 
+/// The type of building, that can be build in the fortress
 #[derive(
     Debug, Clone, Copy, EnumCount, FromPrimitive, PartialEq, Eq, Enum, EnumIter,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The type of building, that can be build in the fortress
 pub enum FortressBuildingType {
     Fortress = 0,
     LaborersQuarters = 1,
@@ -208,9 +208,9 @@ impl FortressBuildingType {
     }
 }
 
+/// Information about a single type of unit
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Information about a single type of unit
 pub struct FortressUnit {
     /// The level this unit has
     pub level: u16,
@@ -230,10 +230,10 @@ pub struct FortressUnit {
     pub upgrade_next_lvl: u64,
 }
 
-#[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// An action, that costs some amount of resources to do and will finish at a
 /// certain point in time
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressAction<T> {
     /// When this action was started. This can be months in the past, as this
     /// will often not be cleared by the server
@@ -258,20 +258,20 @@ impl<T> Default for FortressAction<T> {
     }
 }
 
+/// The type of a unit usable in the fortress
 #[derive(Debug, Clone, Copy, EnumCount, PartialEq, Eq, Enum, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The type of a unit usable in the fortress
 pub enum FortressUnitType {
     Soldier = 0,
     Magician = 1,
     Archer = 2,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Generic information about a building in the fortress. If you want
 /// information about a production building, you should look at the resources
+#[derive(Debug, Default, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressBuilding {
     /// The current level of this building. If this is 0, it has not yet been
     /// build

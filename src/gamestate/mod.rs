@@ -31,9 +31,9 @@ use crate::{
     response::Response,
 };
 
+/// Represent the full state of the game at some point in time
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Represent the full state of the game at some point in time
 pub struct GameState {
     /// Everything, that can be considered part of the character, or his
     /// immediate surrounding and not the rest of the world
@@ -86,9 +86,10 @@ pub struct GameState {
 }
 
 const SHOP_N: usize = 6;
+
+/// A shop, that you can buy items from
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A shop, that you can buy items from
 pub struct Shop {
     pub typ: ShopType,
     /// The items this shop has for sale
@@ -1929,9 +1930,9 @@ impl StringSetExt for String {
     }
 }
 
+/// The cost of something
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The cost of something
 pub struct NormalCost {
     /// The amount of silver something costs
     pub silver: u64,

@@ -21,10 +21,10 @@ use crate::{
     },
 };
 
+/// A command, that can be send to the sf server
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A command, that can be send to the sf server
 pub enum Command {
     /// If there is a command you somehow know/reverse engineered, or need to
     /// extend the functionality of one of the existing commands, this is the
@@ -51,11 +51,11 @@ pub enum Command {
         /// for logging in again after error
         login_count: u32,
     },
-    #[cfg(feature = "sso")]
     /// Manually sends a login request to the server.
     /// **WARN:** The behaviour for a credentials mismatch, with the
     /// credentials in the user is undefined. Use the login method instead for
     /// a safer abstraction
+    #[cfg(feature = "sso")]
     #[deprecated = "Use a login method instead"]
     SSOLogin {
         /// The Identifies the S&F account, that has this character
@@ -746,9 +746,9 @@ pub enum Command {
     BuyGoldFrame,
 }
 
+/// This is the "Questing instead of expeditions" value in the settings
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// This is the "Questing instead of expeditions" value in the settings
 pub enum ExpeditionSetting {
     /// When expeditions are available, this setting will enable expeditions to
     /// be started. This will disable questing, until either this setting is
@@ -781,19 +781,19 @@ pub enum FortunePayment {
     FreeTurn,
 }
 
+/// The price you have to pay to roll the dice
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The price you have to pay to roll the dice
 pub enum RollDicePrice {
     Free = 0,
     Mushrooms,
     Hourglass,
 }
 
+/// The type of dice you want to play with.
 #[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The type of dice you want to play with.
 pub enum DiceType {
     /// This means you want to discard whatever dice was previously at this
     /// position. This is also the type you want to fill the array with, if you
@@ -806,6 +806,7 @@ pub enum DiceType {
     Arcane,
     Hourglass,
 }
+
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DiceReward {
@@ -815,12 +816,12 @@ pub struct DiceReward {
     pub amount: u32,
 }
 
+/// A type of attribute
 #[derive(
     Debug, Copy, Clone, PartialEq, Eq, Enum, FromPrimitive, Hash, EnumIter,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// A type of attribute
 pub enum AttributeType {
     Strength = 1,
     Dexterity = 2,
@@ -829,20 +830,20 @@ pub enum AttributeType {
     Luck = 5,
 }
 
+/// A type of shop. This is a subset of `ItemPlace`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Enum, EnumIter, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// A type of shop. This is a subset of `ItemPlace`
 pub enum ShopType {
     #[default]
     Weapon = 3,
     Magic = 4,
 }
 
+/// The "currency" you want to use to skip a quest
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The "currency" you want to use to skip a quest
 pub enum TimeSkip {
     Mushroom = 1,
     Glass = 2,
@@ -1483,10 +1484,10 @@ impl Command {
 
 macro_rules! generate_flag_enum {
     ($($variant:ident => $code:expr),*) => {
+        /// The flag of a country, that will be visible in the Hall of Fame
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         #[allow(missing_docs)]
-        /// The flag of a country, that will be visible in the Hall of Fame
         pub enum Flag {
             $(
                 $variant,
