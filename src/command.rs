@@ -380,6 +380,7 @@ pub enum Command {
         /// trying
         player_pet_id: u32,
     },
+    /// Brews a potion at the witch. This will consume 10 juice
     BrewPotion {
         fruit_type: HabitatType,
     },
