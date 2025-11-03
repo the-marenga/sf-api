@@ -3,7 +3,6 @@ use std::{
     str::FromStr,
 };
 
-use base64::Engine;
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumArray, EnumMap};
 use log::warn;
@@ -142,107 +141,6 @@ pub fn to_sf_string(val: &str) -> String {
         }
     }
     new
-}
-
-/// This function is designed for reverse engineering encrypted commands from
-/// the S&F web client. It expects a login response, which is the ~3KB string
-/// response you can see in the network tab of your browser, that starts with
-/// `serverversion` after a login. After that, you can take any URL the client
-/// sends to the server and have it decoded into the actual string command, that
-/// was sent. Note that this function technically only needs the crypto key, not
-/// the full response, but it is way easier to just copy paste the full
-/// response. The command returned here will be `Command::Custom`
-///
-/// # Errors
-///
-/// If either the URL, or the response do not contain the necessary crypto
-/// values, an `InvalidRequest` error will be returned, that mentions the part,
-/// that is missing or malformed. The same goes for the necessary parts of the
-/// decrypted command
-#[allow(clippy::missing_errors_doc, deprecated)]
-#[deprecated(
-    since = "0.2.2",
-    note = "S&F requests are no longer encrypted, so this function will be \
-            removed in a future update. If you need to decode the arguments \
-            to a command yourself, you can just base64 decode them"
-)]
-pub fn decrypt_url(
-    encrypted_url: &str,
-    login_resp: Option<&str>,
-) -> Result<crate::command::Command, SFError> {
-    let crypto_key = if let Some(login_resp) = login_resp {
-        login_resp
-            .split('&')
-            .filter_map(|a| a.split_once(':'))
-            .find(|a| a.0 == "cryptokey")
-            .ok_or(SFError::InvalidRequest("No crypto key in login resp"))?
-            .1
-    } else {
-        DEFAULT_CRYPTO_KEY
-    };
-
-    let encrypted = encrypted_url
-        .split_once("req=")
-        .ok_or(SFError::InvalidRequest("url does not contain request"))?
-        .1
-        .rsplit_once("&rnd=")
-        .ok_or(SFError::InvalidRequest("url does not contain rnd"))?
-        .0;
-
-    let resp = encrypted.get(DEFAULT_CRYPTO_ID.len()..).ok_or(
-        SFError::InvalidRequest("encrypted command does not contain crypto id"),
-    )?;
-    let full_resp = decrypt_server_request(resp, crypto_key)?;
-
-    let (_session_id, command) = full_resp.split_once('|').ok_or(
-        SFError::InvalidRequest("decrypted command has no session id"),
-    )?;
-
-    let (cmd_name, args) = command
-        .split_once(':')
-        .ok_or(SFError::InvalidRequest("decrypted command has no name"))?;
-    let args: Vec<_> = args
-        .trim_end_matches('|')
-        .split('/')
-        .map(std::string::ToString::to_string)
-        .collect();
-
-    Ok(crate::command::Command::Custom {
-        cmd_name: cmd_name.to_string(),
-        arguments: args,
-    })
-}
-
-#[allow(clippy::missing_errors_doc)]
-#[deprecated(
-    since = "0.2.2",
-    note = "S&F requests are no longer encrypted, so this function will be \
-            removed in a future update. If you need to decode the arguments \
-            to a command yourself, you can just base64 decode them"
-)]
-pub fn decrypt_server_request(
-    to_decrypt: &str,
-    key: &str,
-) -> Result<String, SFError> {
-    let text = base64::engine::general_purpose::URL_SAFE
-        .decode(to_decrypt)
-        .map_err(|_| {
-            SFError::InvalidRequest("Value to decode is not base64")
-        })?;
-
-    let mut my_key = [0; 16];
-    my_key.copy_from_slice(
-        key.as_bytes()
-            .get(..16)
-            .ok_or(SFError::InvalidRequest("Key is not 16 bytes long"))?,
-    );
-
-    let mut cipher = libaes::Cipher::new_128(&my_key);
-    cipher.set_auto_padding(false);
-    let decrypted = cipher.cbc_decrypt(CRYPTO_IV.as_bytes(), &text);
-
-    String::from_utf8(decrypted)
-        .map_err(|_| SFError::InvalidRequest("Decrypted value is not UTF8"))
 }
 
 pub(crate) fn parse_vec<B: Display + Copy + std::fmt::Debug, T, F>(
