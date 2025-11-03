@@ -380,6 +380,11 @@ pub enum Command {
         /// trying
         player_pet_id: u32,
     },
+    /// Brews a potion at the witch. This will consume 10 fruit from the given
+    /// habitat
+    BrewPotion {
+        fruit_type: HabitatType,
+    },
     /// Sets the guild info. Note the info about length limit from
     /// `SetDescription` for the description
     GuildSetInfo {
@@ -1398,6 +1403,9 @@ impl Command {
                 habitat: element,
             } => {
                 format!("PetsPvPFight:0/{opponent_id}/{}", *element as u32 + 1)
+            }
+            Command::BrewPotion { fruit_type } => {
+                format!("PlayerWitchBrewPotion:{}", *fruit_type as u8)
             }
             Command::FightPetDungeon {
                 use_mush,
