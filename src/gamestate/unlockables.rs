@@ -860,7 +860,8 @@ impl ScrapBook {
                     // Items
                     if !items.insert(ident) {
                         error!(
-                            "Two scrapbook positions parsed to the same ident"
+                            "Two scrapbook positions parsed to the same \
+                             ident: {index}"
                         );
                     }
                 } else {
@@ -903,7 +904,7 @@ impl ToString for EquipmentIdent {
 }
 
 #[allow(clippy::enum_glob_use)]
-fn parse_scrapbook_item(index: i64) -> Option<EquipmentIdent> {
+fn parse_scrapbook_item(item_idx: i64) -> Option<EquipmentIdent> {
     use Class::*;
     use EquipmentSlot::*;
     let slots: [(_, _, _, &[_]); 44] = [
@@ -953,18 +954,17 @@ fn parse_scrapbook_item(index: i64) -> Option<EquipmentIdent> {
         (4185..4225, Belt, Some(Scout), &[4194, 4195]),
     ];
 
-    let mut is_epic = true;
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    for (range, typ, class, ignore) in slots {
-        is_epic = !is_epic;
-        if !range.contains(&index) {
+    for (pos, (range, typ, class, ignore)) in slots.into_iter().enumerate() {
+        if !range.contains(&item_idx) {
             continue;
         }
-        if ignore.contains(&index) {
+        if ignore.contains(&item_idx) {
             return None;
         }
 
-        let relative_pos = index - range.start + 1;
+        let is_epic = pos % 2 == 1;
+        let relative_pos = item_idx - range.start + 1;
 
         let color = match relative_pos % 10 {
             _ if typ == Talisman || is_epic => 1,
