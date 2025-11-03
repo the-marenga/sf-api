@@ -5,6 +5,7 @@ use log::{error, trace, warn};
 use reqwest::{Client, header::*};
 use url::Url;
 
+pub use crate::response::*;
 use crate::{
     command::Command,
     error::SFError,
@@ -17,8 +18,6 @@ use crate::{
         sha1_hash,
     },
 };
-#[allow(deprecated)]
-pub use crate::{misc::decrypt_url, response::*};
 
 /// The session, that manages the server communication for a character
 #[derive(Debug, Clone)]
