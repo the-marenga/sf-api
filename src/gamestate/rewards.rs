@@ -198,6 +198,8 @@ pub struct TimedSpecials {
     pub calendar: Calendar,
     /// Dr. Abawuwu's wheel
     pub wheel: Wheel,
+    /// The daily reward you can collect before christmas
+    pub advent_calendar: Option<Reward>,
 }
 
 /// Information about the events active in the tavern
