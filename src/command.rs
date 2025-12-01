@@ -184,6 +184,8 @@ pub enum Command {
     },
     /// Collects the current reward from the calendar
     CollectCalendar,
+    /// Collects the current door from the advent calendar
+    CollectAdventsCalendar,
     /// Queries information about another guild. The information can bet found
     /// in `hall_of_fames.other_guilds`
     ViewGuild {
@@ -1486,6 +1488,9 @@ impl Command {
                 format!("PlayerGoldFrameBuy:")
             }
             Command::UpdateDungeons => format!("PlayerDungeonOpen:"),
+            Command::CollectAdventsCalendar => {
+                format!("AdventsCalendarClaimReward:")
+            }
         })
     }
 }

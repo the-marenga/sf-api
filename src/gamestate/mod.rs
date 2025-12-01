@@ -1560,6 +1560,13 @@ impl GameState {
                         .get_or_insert_default()
                         .update_fightable_targets(val.as_str())?;
                 }
+                "adventscalendar" => {
+                    let vals: Vec<i64> = val.into_list("advent door")?;
+                    self.specials.advent_calendar = match vals.first() {
+                        Some(0) | None => None,
+                        _ => Reward::parse(&vals).ok(),
+                    };
+                }
                 // This is the extra bonus effect all treats get that day
                 x if x.contains("dungeonenemies") => {
                     // I `think` we do not need this
