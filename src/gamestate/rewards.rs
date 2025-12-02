@@ -615,8 +615,9 @@ impl TaskType {
             }
             134 => TaskType::OpenAdventCalendar,
             135 => TaskType::EarnMoneyFromExpeditions,
+            136 => TaskType::WinFightsAgainst(Class::PlagueDoctor),
 
-            ..=0 | 136.. => TaskType::Unknown,
+            ..=0 | 137.. => TaskType::Unknown,
         }
     }
 }
