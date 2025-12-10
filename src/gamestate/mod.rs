@@ -1567,6 +1567,20 @@ impl GameState {
                         _ => Reward::parse(&vals).ok(),
                     };
                 }
+                "fortresschances" => {
+                    // chances for different gems to drop in the gem mine / 100
+                    // big/medium/small/orange/black/others
+                    // 3334/3333/3333/0/1700/8300
+                }
+                "deedsandtitlesplayersave" => {
+                    // The deeds of glory of the player
+                    // rank?/110/3199/14/4/0/0/0/0/1/118/0/119/0/94/0/0/0/0/0/0/
+                    // 0
+                }
+                "deedshelves" => {
+                    // deedshelves (subkey => 1)
+                    // 1
+                }
                 // This is the extra bonus effect all treats get that day
                 x if x.contains("dungeonenemies") => {
                     // I `think` we do not need this
