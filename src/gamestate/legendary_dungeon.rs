@@ -29,10 +29,15 @@ impl DungeonEffect {
         max_uses: i64,
         strength: i64,
     ) -> Option<Self> {
-        let typ: DungeonEffectType = FromPrimitive::from_i64(typ)?;
-        let remaining_uses: u32 = remaining.try_into().ok()?;
-        let max_uses: u32 = max_uses.try_into().ok()?;
-        let strength: u32 = strength.try_into().ok()?;
+        if typ <= 0 {
+            return None;
+        }
+        let typ: DungeonEffectType =
+            FromPrimitive::from_i64(typ).unwrap_or_default();
+
+        let remaining_uses: u32 = remaining.try_into().unwrap_or(0);
+        let max_uses: u32 = max_uses.try_into().unwrap_or(0);
+        let strength: u32 = strength.try_into().unwrap_or(0);
 
         Some(DungeonEffect {
             typ,
