@@ -350,13 +350,14 @@ pub struct Companion {
 
 #[cfg(feature = "simulation")]
 pub fn dungeon_enemy(
-    dungeon: impl Into<Dungeon>,
+    _dungeon: impl Into<Dungeon>,
     progress: DungeonProgress,
 ) -> Option<&'static crate::simulate::Monster> {
-    let stage = match progress {
+    let _stage = match progress {
         DungeonProgress::Open { finished } => finished,
         DungeonProgress::Locked | DungeonProgress::Finished => return None,
     };
-    crate::simulate::constants::get_dungeon_enemies(dungeon.into())
-        .get(stage as usize)
+    // crate::simulate::constants::get_dungeon_enemies(dungeon.into())
+    //     .get(stage as usize)
+    todo!()
 }
