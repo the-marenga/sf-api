@@ -37,10 +37,10 @@ pub struct Mail {
     pub open_claimable: Option<ClaimablePreview>,
 }
 
-#[derive(Debug, Clone, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Contains information about everything involving other players on the server.
 /// This mainly revolves around the Hall of Fame
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HallOfFames {
     /// The amount of accounts on the server
     pub players_total: u32,
@@ -83,10 +83,10 @@ pub struct HallOfFameHellevator {
     pub tokens: u64,
 }
 
-#[derive(Debug, Clone, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Contains the results of `ViewGuild` & `ViewPlayer` commands. You can access
 /// the player info via functions and the guild data directly
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Lookup {
     /// This can be accessed by using the `lookup_pid()`/`lookup_name()`
     /// methods on `Lookup`
@@ -140,10 +140,10 @@ impl Lookup {
     }
 }
 
-#[derive(Debug, Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Basic information about one character on the server. To get more
 /// information, you need to query this player via the `ViewPlayer` command
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HallOfFamePlayer {
     /// The rank of this player
     pub rank: u32,
@@ -195,10 +195,10 @@ impl HallOfFamePlayer {
     }
 }
 
-#[derive(Debug, Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Basic information about one guild on the server. To get more information,
 /// you need to query this player via the `ViewGuild` command
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HallOfFameGuild {
     /// The name of the guild
     pub name: String,
@@ -299,9 +299,9 @@ impl HallOfFameUnderworld {
     }
 }
 
+/// Basic information about one guild on the server
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Basic information about one guild on the server
 pub struct HallOfFameFortress {
     /// The name of the person, that owns this fort
     pub name: String,
@@ -316,9 +316,9 @@ pub struct HallOfFameFortress {
     pub honor: u32,
 }
 
+/// Basic information about one players pet collection on the server
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Basic information about one players pet collection on the server
 pub struct HallOfFamePets {
     /// The name of the player, that has these pets
     pub name: String,
@@ -336,9 +336,9 @@ pub struct HallOfFamePets {
     pub unknown: i64,
 }
 
+/// Basic information about one players underworld on the server
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Basic information about one players underworld on the server
 pub struct HallOfFameUnderworld {
     /// The rank this underworld has
     pub rank: u32,
@@ -356,10 +356,10 @@ pub struct HallOfFameUnderworld {
     pub unknown: i64,
 }
 
-#[derive(Debug, Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// All information about another player, that was queried via the `ViewPlayer`
 /// command
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OtherPlayer {
     /// The id of this player. This is mainly just useful to lookup this player
     /// in `Lookup`, if you do not know the name

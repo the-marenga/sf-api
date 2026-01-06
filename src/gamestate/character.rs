@@ -8,10 +8,10 @@ use num_traits::FromPrimitive;
 use super::{Mirror, NormalCost, RelationEntry, SFError, ScrapBook};
 use crate::{PlayerId, command::*, gamestate::items::*, misc::*};
 
-#[derive(Debug, Clone, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Everything, that can be considered part of the character and not the rest
 /// of the world
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Character {
     /// This is the unique identifier of this character. Can be used to compare
     /// against places, that also have `player_ids` to make sure a Hall of

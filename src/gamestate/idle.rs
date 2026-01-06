@@ -6,9 +6,9 @@ use strum::EnumIter;
 
 use super::ServerTime;
 
+/// The idle clicker game where you invest money and get runes by sacrificing
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The idle clicker game where you invest money and get runes by sacrificing
 pub struct IdleGame {
     /// The current amount of money the player
     pub current_money: BigInt,
@@ -30,9 +30,9 @@ pub struct IdleGame {
     pub buildings: EnumMap<IdleBuildingType, IdleBuilding>,
 }
 
+/// A single building in the idle game
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A single building in the idle game
 pub struct IdleBuilding {
     /// The current level of this building
     pub level: u32,
@@ -101,10 +101,10 @@ impl IdleGame {
     }
 }
 
+/// The type of a building in the idle game
 #[derive(Debug, Clone, Copy, Enum, EnumIter, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The type of a building in the idle game
 pub enum IdleBuildingType {
     Seat = 1,
     PopcornStand,

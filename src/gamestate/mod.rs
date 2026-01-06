@@ -31,9 +31,9 @@ use crate::{
     response::Response,
 };
 
+/// Represent the full state of the game at some point in time
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Represent the full state of the game at some point in time
 pub struct GameState {
     /// Everything, that can be considered part of the character, or his
     /// immediate surrounding and not the rest of the world
@@ -86,9 +86,10 @@ pub struct GameState {
 }
 
 const SHOP_N: usize = 6;
+
+/// A shop, that you can buy items from
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A shop, that you can buy items from
 pub struct Shop {
     pub typ: ShopType,
     /// The items this shop has for sale
@@ -1066,6 +1067,7 @@ impl GameState {
                         op.wall_combat_lvl = oop.wall_combat_lvl;
                         op.fortress_rank = oop.fortress_rank;
                         op.soldier_advice = oop.soldier_advice;
+                        op.equipment = oop.equipment;
                     }
                     other_player = Some(op);
                 }
@@ -1558,6 +1560,27 @@ impl GameState {
                         .get_or_insert_default()
                         .update_fightable_targets(val.as_str())?;
                 }
+                "adventscalendar" => {
+                    let vals: Vec<i64> = val.into_list("advent door")?;
+                    self.specials.advent_calendar = match vals.first() {
+                        Some(0) | None => None,
+                        _ => Reward::parse(&vals).ok(),
+                    };
+                }
+                "fortresschances" => {
+                    // chances for different gems to drop in the gem mine / 100
+                    // big/medium/small/orange/black/others
+                    // 3334/3333/3333/0/1700/8300
+                }
+                "deedsandtitlesplayersave" => {
+                    // The deeds of glory of the player
+                    // rank?/110/3199/14/4/0/0/0/0/1/118/0/119/0/94/0/0/0/0/0/0/
+                    // 0
+                }
+                "deedshelves" => {
+                    // deedshelves (subkey => 1)
+                    // 1
+                }
                 // This is the extra bonus effect all treats get that day
                 x if x.contains("dungeonenemies") => {
                     // I `think` we do not need this
@@ -1928,9 +1951,9 @@ impl StringSetExt for String {
     }
 }
 
+/// The cost of something
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The cost of something
 pub struct NormalCost {
     /// The amount of silver something costs
     pub silver: u64,

@@ -16,9 +16,9 @@ use crate::{
     gamestate::{CCGet, CGet, ShopPosition},
 };
 
+/// The basic inventory, that every player has
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The basic inventory, that every player has
 pub struct Inventory {
     pub backpack: Vec<Option<Item>>,
 }
@@ -60,11 +60,11 @@ impl Inventory {
         self.backpack.split_at(5)
     }
 
-    #[must_use]
     // Splits the backpack, as if it was the old bag/fortress chest layout.
     // The first slice will be the bag, the second the fortress chest
     // If the backback if empty for unknown reasons, or is shorter than 5
     // elements, both slices will be emptys
+    #[must_use]
     pub fn as_split_mut(
         &mut self,
     ) -> (&mut [Option<Item>], &mut [Option<Item>]) {
@@ -101,10 +101,10 @@ impl Inventory {
     }
 }
 
+/// All the parts of `ItemPlace`, that are owned by the player
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// All the parts of `ItemPlace`, that are owned by the player
 pub enum PlayerItemPlace {
     Equipment = 1,
     MainInventory = 2,
@@ -196,10 +196,10 @@ impl PlayerItemPlace {
     }
 }
 
+/// All the parts of `ItemPlace`, that are owned by the player
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// All the parts of `ItemPlace`, that are owned by the player
 pub enum InventoryType {
     MainInventory = 2,
     ExtendedInventory = 5,
@@ -228,9 +228,9 @@ impl InventoryType {
     }
 }
 
+/// All places, that items can be dragged to excluding companions
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// All places, that items can be dragged to excluding companions
 pub enum ItemPlace {
     /// The stuff a player can wear
     Equipment = 1,
@@ -244,9 +244,9 @@ pub enum ItemPlace {
     FortressChest = 5,
 }
 
+/// All the equipment a player is wearing
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// All the equipment a player is wearing
 pub struct Equipment(pub EnumMap<EquipmentSlot, Option<Item>>);
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Copy)]
@@ -272,8 +272,8 @@ impl Equipment {
             .map(|(pos, item)| (EquipmentPosition(pos), item.as_ref()))
     }
 
-    #[must_use]
     /// Checks if the character has an item with the enchantment equipped
+    #[must_use]
     pub fn has_enchantment(&self, enchantment: Enchantment) -> bool {
         let item = self.0.get(enchantment.equipment_slot());
         if let Some(item) = item {
@@ -306,10 +306,10 @@ impl Equipment {
 
 pub(crate) const ITEM_PARSE_LEN: usize = 19;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Information about a single item. This can be anything, that is either in a
 /// inventory, in a reward slot, or similar
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Item {
     /// The type of this item. May contain further type specific values
     pub typ: ItemType,
@@ -592,11 +592,11 @@ impl Item {
     }
 }
 
+/// A enchantment, that gives a bonus to an aspect, if the item
 #[derive(
     Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, EnumIter, Hash, Enum,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A enchantment, that gives a bonus to an aspect, if the item
 pub enum Enchantment {
     /// Increased crit damage
     SwordOfVengeance = 11,
@@ -635,9 +635,9 @@ impl Enchantment {
     }
 }
 
+/// A rune, which has both a type and a strength
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A rune, which has both a type and a strength
 pub struct Rune {
     /// The type of tune this is
     pub typ: RuneType,
@@ -665,9 +665,9 @@ pub enum RuneType {
     LightningDamage,
 }
 
+/// A gem slot for an item
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A gem slot for an item
 pub enum GemSlot {
     /// This gemslot has been filled and can only be emptied by the blacksmith
     Filled(Gem),
@@ -694,9 +694,10 @@ impl GemSlot {
         }
     }
 }
+
+/// A potion. This is not just itemtype to make active potions easier
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A potion. This is not just itemtype to make active potions easier
 pub struct Potion {
     /// The rtype of potion
     pub typ: PotionType,
@@ -707,12 +708,12 @@ pub struct Potion {
     pub expires: Option<DateTime<Local>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Copy)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 /// Identifies a specific item and contains all values related to the specific
 /// type. The only thing missing is armor, which can be found as a method on
 /// `Item`
+#[derive(Debug, Clone, PartialEq, Eq, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
 pub enum ItemType {
     Hat,
     BreastPlate,
@@ -988,10 +989,10 @@ impl ItemType {
     }
 }
 
+/// The effect, that the potion is going to have
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The effect, that the potion is going to have
 pub enum PotionType {
     Strength,
     Dexterity,
@@ -1031,10 +1032,10 @@ impl PotionType {
     }
 }
 
+/// The size and with that, the strength, that this potion has
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The size and with that, the strength, that this potion has
 pub enum PotionSize {
     Small,
     Medium,
@@ -1067,10 +1068,10 @@ impl PotionSize {
     }
 }
 
+/// Differentiates resource items
 #[derive(Debug, Clone, PartialEq, Eq, Copy, FromPrimitive)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// Differentiates resource items
 pub enum ResourceType {
     Wood = 17,
     Stone,
@@ -1079,9 +1080,9 @@ pub enum ResourceType {
     Metal,
 }
 
+/// A gem, that is either socketed in an item, or in the inventory
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A gem, that is either socketed in an item, or in the inventory
 pub struct Gem {
     /// The type of gem
     pub typ: GemType,
@@ -1089,10 +1090,10 @@ pub struct Gem {
     pub value: u32,
 }
 
+/// The type the gam has
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The type the gam has
 pub enum GemType {
     Strength,
     Dexterity,
@@ -1129,12 +1130,12 @@ impl GemType {
     }
 }
 
+/// Denotes the place, where an item is equipped
 #[derive(
     Debug, Copy, Clone, PartialEq, Eq, Hash, Enum, EnumIter, EnumCount,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// Denotes the place, where an item is equipped
 pub enum EquipmentSlot {
     Hat = 1,
     BreastPlate,
@@ -1188,10 +1189,10 @@ impl EquipmentSlot {
     }
 }
 
+/// An item usable for pets
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// An item usable for pets
 pub enum PetItem {
     Egg(HabitatType),
     SpecialEgg(HabitatType),

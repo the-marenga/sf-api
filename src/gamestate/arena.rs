@@ -4,9 +4,9 @@ use num_traits::FromPrimitive;
 use super::{items::*, *};
 use crate::PlayerId;
 
+/// The arena, that a player can fight other players in
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The arena, that a player can fight other players in
 pub struct Arena {
     /// The enemies currently available in the arena. You have to fetch the
     /// full player info before fighting them, as you need their name
@@ -18,10 +18,10 @@ pub struct Arena {
     pub fights_for_xp: u8,
 }
 
-#[derive(Debug, Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A complete fight, which can be between multiple fighters for guild/tower
 /// fights
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Fight {
     /// The name of the attacking player for pet battles, or the name of the
     /// attacking guild in guild battles
@@ -101,10 +101,10 @@ impl Fight {
     }
 }
 
-#[derive(Debug, Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// This is a single fight between two fighters, which ends when one of them is
 /// at <= 0 health
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SingleFight {
     /// The ID of the player, that won.
     pub winner_id: PlayerId,
@@ -169,10 +169,10 @@ impl SingleFight {
     }
 }
 
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// A participant in a fight. Can be anything, that shows up in the battle
 /// screen from the player to a fortress Wall
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Fighter {
     /// The type of the fighter
     pub typ: FighterTyp,
@@ -258,9 +258,9 @@ impl Fighter {
     }
 }
 
+/// One round (action) in a fight. This is mostly just one attack
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// One round (action) in a fight. This is mostly just one attack
 pub struct FightAction {
     /// The id of the fighter, that does the action
     pub acting_id: i64,
@@ -272,11 +272,11 @@ pub struct FightAction {
     pub action: FightActionType,
 }
 
-#[non_exhaustive]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// An action in a fight. In the official client this determines the animation,
 /// that gets played
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum FightActionType {
     /// A simple attack with the normal weapon
     Attack,
@@ -319,12 +319,12 @@ impl FightActionType {
     }
 }
 
+/// The type of the participant in a fight
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The type of the participant in a fight
 pub enum FighterTyp {
-    #[default]
     /// Not just the own player, but any player on the server
+    #[default]
     Player,
     /// A generic monster, or dungeon boss with its `monster_id`
     Monster(u16),

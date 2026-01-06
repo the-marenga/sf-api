@@ -5,6 +5,7 @@ use log::{error, trace, warn};
 use reqwest::{Client, header::*};
 use url::Url;
 
+pub use crate::response::*;
 use crate::{
     command::Command,
     error::SFError,
@@ -17,12 +18,10 @@ use crate::{
         sha1_hash,
     },
 };
-#[allow(deprecated)]
-pub use crate::{misc::decrypt_url, response::*};
 
+/// The session, that manages the server communication for a character
 #[derive(Debug, Clone)]
 #[allow(clippy::struct_field_names)]
-/// The session, that manages the server communication for a character
 pub struct Session {
     /// The information necessary to log in
     login_data: LoginData,
@@ -43,9 +42,9 @@ pub struct Session {
     options: ConnectionOptions,
 }
 
+/// The password of a character, hashed in the way, that the server expects
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The password of a character, hashed in the way, that the server expects
 pub struct PWHash(String);
 
 impl PWHash {
@@ -383,8 +382,8 @@ impl Session {
         Ok(Session::new_full(ld, client, options, url))
     }
 
-    #[must_use]
     /// The username of the character, that this session is responsible for
+    #[must_use]
     pub fn username(&self) -> &str {
         match &self.login_data {
             LoginData::Basic { username, .. } => username,
@@ -396,7 +395,6 @@ impl Session {
         }
     }
 
-    #[cfg(feature = "sso")]
     /// Retrieves new sso credentials from its sf account. If the account
     /// already has new creds stored, these are read, otherwise the account will
     /// be logged in again
@@ -406,6 +404,7 @@ impl Session {
     ///   an SSO-Session
     /// - Other errors, depending on if the session is able to renew the
     ///   credentials
+    #[cfg(feature = "sso")]
     pub async fn renew_sso_creds(&mut self) -> Result<(), SFError> {
         let LoginData::SSO {
             account, session, ..
@@ -455,11 +454,11 @@ enum LoginData {
     },
 }
 
-#[derive(Debug, Clone)]
 /// Stores all information necessary to talk to the server. Notably, if you
 /// clone this, instead of creating this multiple times for characters on a
 /// server, this will use the same `reqwest::Client`, which can have slight
 /// benefits to performance
+#[derive(Debug, Clone)]
 pub struct ServerConnection {
     url: url::Url,
     client: Client,
@@ -514,8 +513,8 @@ pub(crate) fn reqwest_client(
     builder.default_headers(headers).build().ok()
 }
 
-#[derive(Debug, Clone)]
 /// Options, that change the behaviour of the communication with the server
+#[derive(Debug, Clone)]
 pub struct ConnectionOptions {
     /// A custom useragent to use, when sending requests to the server
     pub user_agent: Option<String>,
@@ -536,7 +535,7 @@ impl Default for ConnectionOptions {
                  (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
                     .to_string(),
             ),
-            expected_server_version: 2014,
+            expected_server_version: 2016,
             error_on_unsupported_version: false,
         }
     }
@@ -576,12 +575,12 @@ impl SimpleSession {
         })
     }
 
-    #[cfg(feature = "sso")]
     ///  Creates new `SimpleSession`s, by logging in the S&S SSO account and
     /// returning all the characters associated with the account
     ///
     /// # Errors
     /// Have a look at `send_command` for a full list of possible errors
+    #[cfg(feature = "sso")]
     pub async fn login_sf_account(
         username: &str,
         password: &str,

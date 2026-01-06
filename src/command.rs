@@ -21,10 +21,10 @@ use crate::{
     },
 };
 
+/// A command, that can be send to the sf server
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A command, that can be send to the sf server
 pub enum Command {
     /// If there is a command you somehow know/reverse engineered, or need to
     /// extend the functionality of one of the existing commands, this is the
@@ -51,11 +51,11 @@ pub enum Command {
         /// for logging in again after error
         login_count: u32,
     },
-    #[cfg(feature = "sso")]
     /// Manually sends a login request to the server.
     /// **WARN:** The behaviour for a credentials mismatch, with the
     /// credentials in the user is undefined. Use the login method instead for
     /// a safer abstraction
+    #[cfg(feature = "sso")]
     #[deprecated = "Use a login method instead"]
     SSOLogin {
         /// The Identifies the S&F account, that has this character
@@ -184,6 +184,8 @@ pub enum Command {
     },
     /// Collects the current reward from the calendar
     CollectCalendar,
+    /// Collects the current door from the advent calendar
+    CollectAdventsCalendar,
     /// Queries information about another guild. The information can bet found
     /// in `hall_of_fames.other_guilds`
     ViewGuild {
@@ -328,6 +330,14 @@ pub enum Command {
     },
     /// Starts a fight against the enemy in the players portal
     FightPortal,
+    /// Updates the current state of the dungeons. This is equivalent to
+    /// clicking the Dungeon-Button in the game. It is strongly recommended to
+    /// call this before fighting, since `next_free_fight` and the dungeon
+    /// floors may not be updated otherwise. Notably, `FightDungeon` and
+    /// `Update` do NOT update these values, so you can end up in an endless
+    /// loop, if you are just relying on `next_free_fight` without calling
+    /// `UpdateDungeons`
+    UpdateDungeons,
     /// Enters a specific dungeon. This works for all dungeons, except the
     /// Tower, which you must enter via the `FightTower` command
     FightDungeon {
@@ -371,6 +381,11 @@ pub enum Command {
         /// The pet has to be from the same habitat, as the dungeon you are
         /// trying
         player_pet_id: u32,
+    },
+    /// Brews a potion at the witch. This will consume 10 fruit from the given
+    /// habitat
+    BrewPotion {
+        fruit_type: HabitatType,
     },
     /// Sets the guild info. Note the info about length limit from
     /// `SetDescription` for the description
@@ -738,9 +753,9 @@ pub enum Command {
     BuyGoldFrame,
 }
 
+/// This is the "Questing instead of expeditions" value in the settings
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// This is the "Questing instead of expeditions" value in the settings
 pub enum ExpeditionSetting {
     /// When expeditions are available, this setting will enable expeditions to
     /// be started. This will disable questing, until either this setting is
@@ -773,19 +788,19 @@ pub enum FortunePayment {
     FreeTurn,
 }
 
+/// The price you have to pay to roll the dice
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The price you have to pay to roll the dice
 pub enum RollDicePrice {
     Free = 0,
     Mushrooms,
     Hourglass,
 }
 
+/// The type of dice you want to play with.
 #[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The type of dice you want to play with.
 pub enum DiceType {
     /// This means you want to discard whatever dice was previously at this
     /// position. This is also the type you want to fill the array with, if you
@@ -798,6 +813,7 @@ pub enum DiceType {
     Arcane,
     Hourglass,
 }
+
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DiceReward {
@@ -807,12 +823,12 @@ pub struct DiceReward {
     pub amount: u32,
 }
 
+/// A type of attribute
 #[derive(
     Debug, Copy, Clone, PartialEq, Eq, Enum, FromPrimitive, Hash, EnumIter,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// A type of attribute
 pub enum AttributeType {
     Strength = 1,
     Dexterity = 2,
@@ -821,20 +837,20 @@ pub enum AttributeType {
     Luck = 5,
 }
 
+/// A type of shop. This is a subset of `ItemPlace`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Enum, EnumIter, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// A type of shop. This is a subset of `ItemPlace`
 pub enum ShopType {
     #[default]
     Weapon = 3,
     Magic = 4,
 }
 
+/// The "currency" you want to use to skip a quest
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The "currency" you want to use to skip a quest
 pub enum TimeSkip {
     Mushroom = 1,
     Glass = 2,
@@ -848,7 +864,7 @@ impl Command {
     pub(crate) fn request_string(
         &self,
     ) -> Result<String, crate::error::SFError> {
-        const APP_VERSION: &str = "2700000000000";
+        const APP_VERSION: &str = "285000000000";
         use crate::{
             error::SFError,
             gamestate::dungeons::{LightDungeon, ShadowDungeon},
@@ -1390,6 +1406,9 @@ impl Command {
             } => {
                 format!("PetsPvPFight:0/{opponent_id}/{}", *element as u32 + 1)
             }
+            Command::BrewPotion { fruit_type } => {
+                format!("PlayerWitchBrewPotion:{}", *fruit_type as u8)
+            }
             Command::FightPetDungeon {
                 use_mush,
                 habitat: element,
@@ -1468,16 +1487,20 @@ impl Command {
             Command::BuyGoldFrame => {
                 format!("PlayerGoldFrameBuy:")
             }
+            Command::UpdateDungeons => format!("PlayerDungeonOpen:"),
+            Command::CollectAdventsCalendar => {
+                format!("AdventsCalendarClaimReward:")
+            }
         })
     }
 }
 
 macro_rules! generate_flag_enum {
     ($($variant:ident => $code:expr),*) => {
+        /// The flag of a country, that will be visible in the Hall of Fame
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         #[allow(missing_docs)]
-        /// The flag of a country, that will be visible in the Hall of Fame
         pub enum Flag {
             $(
                 $variant,
@@ -1485,6 +1508,7 @@ macro_rules! generate_flag_enum {
         }
 
         impl Flag {
+            #[allow(unused)]
             pub(crate) fn code(self) -> &'static str {
                 match self {
                     $(

@@ -59,12 +59,12 @@ pub async fn main() {
     let mut gs = GameState::new(login_data).unwrap();
 
     if let Some(resp) = custom_resp {
-        let bruh = Response::parse(
+        let resp = Response::parse(
             resp.to_string(),
             chrono::Local::now().naive_local(),
         )
         .unwrap();
-        gs.update(bruh).unwrap();
+        gs.update(resp).unwrap();
     }
 
     let Some(command) = command else {
