@@ -11,7 +11,6 @@ use crate::{
     simulate::{damage::DamageRange, fighter::Fighter},
 };
 
-mod config;
 mod constants;
 mod damage;
 mod fighter;

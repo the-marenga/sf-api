@@ -766,7 +766,7 @@ impl ClassData {
                     calculate_damage_multiplier(main, opponent);
 
                 let dmg_multiplier =
-                    Class::PlagueDoctor.get_config().damage_multiplier;
+                    Class::PlagueDoctor.damage_multiplier();
                 let class_dmg_multi = base_dmg_multi / dmg_multiplier;
 
                 *poison_dmg_multipliers = [

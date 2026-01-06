@@ -76,7 +76,7 @@ fn apply_attributes_bonus(
     target: &Fighter,
     damage: &mut DamageRange,
 ) {
-    let main_attribute = attacker.class.get_config().main_attribute;
+    let main_attribute = attacker.class.main_attribute();
     let attribute = (f64::from(attacker.attributes[main_attribute]) / 2.0).max(
         f64::from(
             attacker.attributes[main_attribute]
@@ -135,7 +135,7 @@ fn get_hand_damage(attacker: &Fighter, is_secondary: bool) -> DamageRange {
         multiplier = if is_secondary { 1.25 } else { 0.875 };
     }
 
-    let weapon_multi = attacker.class.get_config().weapon_multiplier;
+    let weapon_multi = attacker.class.weapon_multiplier();
     let damage: f64 =
         multiplier * (f64::from(attacker.level) - 9.0) * weapon_multi;
     let min = 1.0f64.max((damage * 2.0 / 3.0).ceil());
@@ -149,7 +149,7 @@ pub fn calculate_fire_ball_damage(attacker: &Fighter, target: &Fighter) -> f64 {
         return 0.0;
     }
 
-    let multiplier = target.class.get_config().health_multiplier;
+    let multiplier = target.class.health_multiplier();
 
     let dmg = (multiplier * 0.05 * attacker.health).ceil();
     (target.health / 3.0).ceil().min(dmg)
@@ -165,10 +165,9 @@ pub fn calculate_damage_reduction(attacker: &Fighter, target: &Fighter) -> f64 {
         return 0.0;
     }
 
-    let class_config = target.class.get_config();
-    let max_dmg_reduction = class_config.max_armor_reduction;
+    let max_dmg_reduction = target.class.max_armor_reduction();
 
-    let damage_reduction = class_config.armor_multiplier
+    let damage_reduction = target.class.armor_multiplier()
         * f64::from(target.armor)
         / f64::from(attacker.armor)
         / 100.0;
@@ -180,7 +179,7 @@ pub fn calculate_damage_multiplier(
     attacker: &Fighter,
     target: &Fighter,
 ) -> f64 {
-    let base_multi = attacker.class.get_config().damage_multiplier;
+    let base_multi = attacker.class.damage_multiplier();
     match (attacker.class, target.class) {
         (Class::Mage, Class::Paladin) => base_multi * 1.5,
         // TODO: Is this right?

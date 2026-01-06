@@ -120,7 +120,8 @@ fn read_dungeon_data(
         };
         let level = monster.level.unwrap_or(u16::MAX);
         let armor = monster.armor.unwrap_or_else(|| {
-            let res = u32::from(level) * class.max_damage_reduction_val();
+            let res = u32::from(level)
+                * (class.max_armor_reduction() * 100.0) as u32;
             match dungeon {
                 Dungeon::Light(LightDungeon::TavernoftheDarkDoppelgangers) => {
                     res / 2

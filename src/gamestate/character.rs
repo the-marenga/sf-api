@@ -188,19 +188,40 @@ impl Class {
         match self {
             PlagueDoctor | Paladin | Warrior | Assassin | BattleMage
             | Berserker => 2.0,
-            Scout => 2.5,
-            Mage | DemonHunter | Druid | Bard | Necromancer => 4.5,
+            Scout | DemonHunter => 2.5,
+            Mage | Druid | Bard | Necromancer => 4.5,
         }
     }
 
     #[must_use]
-    pub(crate) fn life_multiplier(self, is_companion: bool) -> f64 {
+    pub fn weapon_gem_multiplier(&self) -> i32 {
+        match self {
+            Class::Warrior | Class::Assassin | Class::Berserker => 1,
+            _ => 2,
+        }
+    }
+
+    #[must_use]
+    pub fn weapon_attribute_multiplier(&self) -> i32 {
+        match self {
+            Class::Warrior
+            | Class::BattleMage
+            | Class::Berserker
+            | Class::Paladin
+            | Class::PlagueDoctor
+            | Class::Assassin => 1,
+            _ => 2,
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn health_multiplier(self) -> f64 {
         use Class::*;
 
         match self {
-            Warrior if is_companion => 6.1,
-            Paladin => 6.0,
+            // TODO: Companion warrior has higher, right?
             Warrior | BattleMage | Druid => 5.0,
+            Paladin => 6.0,
             PlagueDoctor | Scout | Assassin | Berserker | DemonHunter
             | Necromancer => 4.0,
             Mage | Bard => 2.0,
@@ -208,59 +229,72 @@ impl Class {
     }
 
     #[must_use]
-    pub(crate) fn block_chance(self) -> f32 {
+    pub fn item_armor_multiplier(&self) -> f64 {
         match self {
-            Class::Warrior => 0.25,
-            Class::Paladin => 0.3,
-            _ => 0.0,
-        }
-    }
-
-    pub(crate) fn max_damage_reduction_val(self) -> u32 {
-        match self {
-            Class::Mage | Class::BattleMage | Class::Necromancer => 10,
-            Class::Scout
-            | Class::Assassin
-            | Class::Druid
-            | Class::Bard
-            | Class::PlagueDoctor => 25,
-            Class::Paladin => 45,
-            Class::DemonHunter | Class::Berserker | Class::Warrior => 50,
+            Class::Warrior
+            | Class::Berserker
+            | Class::DemonHunter
+            | Class::Paladin => 15.0,
+            Class::Scout | Class::Assassin | Class::Druid | Class::Bard => 7.5,
+            Class::Mage
+            | Class::BattleMage
+            | Class::Necromancer
+            | Class::PlagueDoctor => 3.0,
         }
     }
 
     #[must_use]
-    pub(crate) fn max_damage_reduction_multiplier(self) -> f64 {
-        use Class::*;
+    pub fn item_bonus_multiplier(&self) -> f64 {
         match self {
-            Berserker => 0.5,
-            Warrior | Mage | Scout | Assassin | DemonHunter | Druid
-            | Paladin | PlagueDoctor => 1.0,
-            Bard | Necromancer => 2.0,
-            BattleMage => 5.0,
+            Class::BattleMage | Class::PlagueDoctor => 1.11,
+            Class::Berserker => 1.1,
+            _ => 1.0,
+        }
+    }
+
+    #[must_use]
+    pub fn armor_multiplier(&self) -> f64 {
+        match self {
+            Class::BattleMage => 5.0,
+            Class::Bard | Class::Necromancer | Class::PlagueDoctor => 2.0,
+            Class::Berserker => 0.5,
+            _ => 1.0,
+        }
+    }
+
+    #[must_use]
+    pub fn max_armor_reduction(&self) -> f64 {
+        match self {
+            Class::Mage => 0.1,
+            Class::Warrior
+            | Class::BattleMage
+            | Class::DemonHunter
+            | Class::Bard => 0.5,
+            Class::Paladin => 0.45,
+            Class::Scout
+            | Class::Assassin
+            | Class::Berserker
+            | Class::Druid => 0.25,
+            Class::Necromancer | Class::PlagueDoctor => 0.2,
+        }
+    }
+
+    #[must_use]
+    pub fn damage_multiplier(&self) -> f64 {
+        match self {
+            Class::Assassin => 0.625,
+            Class::Berserker | Class::PlagueDoctor => 1.25,
+            Class::Druid => 1.0 / 3.0,
+            Class::Bard => 1.125,
+            Class::Necromancer => 5.0 / 9.0,
+            Class::Paladin => 0.833,
+            _ => 1.0,
         }
     }
 
     #[must_use]
     pub fn can_wear_shield(self) -> bool {
         matches!(self, Self::Paladin | Self::Warrior)
-    }
-
-    #[must_use]
-    pub(crate) fn damage_factor(self, against: Class) -> f64 {
-        use Class::*;
-        match self {
-            Druid if against == Class::DemonHunter => (1.0 / 3.0) * 1.15,
-            Druid if against == Class::Mage => (1.0 / 3.0) * (4.0 / 3.0),
-            Druid => 1.0 / 3.0,
-            Necromancer if against == Class::DemonHunter => 0.56 + 0.1,
-            Necromancer => 0.56,
-            Assassin => 0.625,
-            Paladin => 0.83,
-            Warrior | Mage | Scout | BattleMage | DemonHunter => 1.0,
-            Bard => 1.125,
-            Berserker | PlagueDoctor => 1.25,
-        }
     }
 }
 
