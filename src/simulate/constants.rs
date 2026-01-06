@@ -108,7 +108,7 @@ fn read_dungeon_data(
             "Mage" => Class::Mage,
             "Scout" => Class::Scout,
             "Assassin" => Class::Assassin,
-            "WarMage" => Class::BattleMage,
+            "WarMage" | "BattleMage" => Class::BattleMage,
             "Berserker" => Class::Berserker,
             "DemonHunter" => Class::DemonHunter,
             "Druid" => Class::Druid,
@@ -120,8 +120,7 @@ fn read_dungeon_data(
         };
         let level = monster.level.unwrap_or(u16::MAX);
         let armor = monster.armor.unwrap_or_else(|| {
-            let res = u32::from(level)
-                * (class.max_armor_reduction() * 100.0) as u32;
+            let res = u32::from(level) * class.max_armor_reduction();
             match dungeon {
                 Dungeon::Light(LightDungeon::TavernoftheDarkDoppelgangers) => {
                     res / 2

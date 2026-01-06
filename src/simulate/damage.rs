@@ -149,7 +149,7 @@ pub fn calculate_fire_ball_damage(attacker: &Fighter, target: &Fighter) -> f64 {
         return 0.0;
     }
 
-    let multiplier = target.class.health_multiplier();
+    let multiplier = target.class.health_multiplier(target.is_companion);
 
     let dmg = (multiplier * 0.05 * attacker.health).ceil();
     (target.health / 3.0).ceil().min(dmg)
@@ -172,7 +172,7 @@ pub fn calculate_damage_reduction(attacker: &Fighter, target: &Fighter) -> f64 {
         / f64::from(attacker.armor)
         / 100.0;
 
-    damage_reduction.min(max_dmg_reduction)
+    damage_reduction.min(f64::from(max_dmg_reduction) / 100.0)
 }
 
 pub fn calculate_damage_multiplier(
@@ -181,7 +181,7 @@ pub fn calculate_damage_multiplier(
 ) -> f64 {
     let base_multi = attacker.class.damage_multiplier();
     match (attacker.class, target.class) {
-        (Class::Mage, Class::Paladin) => base_multi * 1.5,
+        (Class::Mage, Class::Paladin) |
         // TODO: Is this right?
         (Class::Paladin, Class::Mage) => base_multi * 1.5,
         (Class::Druid, Class::Mage) => base_multi * 4.0 / 3.0,

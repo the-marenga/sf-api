@@ -188,6 +188,7 @@ impl Class {
         match self {
             PlagueDoctor | Paladin | Warrior | Assassin | BattleMage
             | Berserker => 2.0,
+            // TODO: Recheck these
             Scout | DemonHunter => 2.5,
             Mage | Druid | Bard | Necromancer => 4.5,
         }
@@ -215,11 +216,11 @@ impl Class {
     }
 
     #[must_use]
-    pub(crate) fn health_multiplier(self) -> f64 {
+    pub(crate) fn health_multiplier(self, is_companion: bool) -> f64 {
         use Class::*;
 
         match self {
-            // TODO: Companion warrior has higher, right?
+            Warrior if is_companion => 6.1,
             Warrior | BattleMage | Druid => 5.0,
             Paladin => 6.0,
             PlagueDoctor | Scout | Assassin | Berserker | DemonHunter
@@ -263,19 +264,19 @@ impl Class {
     }
 
     #[must_use]
-    pub fn max_armor_reduction(&self) -> f64 {
+    pub fn max_armor_reduction(&self) -> u32 {
         match self {
-            Class::Mage => 0.1,
+            Class::Mage => 10,
             Class::Warrior
             | Class::BattleMage
             | Class::DemonHunter
-            | Class::Bard => 0.5,
-            Class::Paladin => 0.45,
+            | Class::Bard => 50,
+            Class::Paladin => 45,
             Class::Scout
             | Class::Assassin
             | Class::Berserker
-            | Class::Druid => 0.25,
-            Class::Necromancer | Class::PlagueDoctor => 0.2,
+            | Class::Druid => 25,
+            Class::Necromancer | Class::PlagueDoctor => 20,
         }
     }
 

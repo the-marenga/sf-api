@@ -1,3 +1,10 @@
+#![allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation
+)]
+
 use std::sync::Arc;
 
 use enum_map::{Enum, EnumMap};
@@ -14,6 +21,7 @@ use crate::{
 mod constants;
 mod damage;
 mod fighter;
+mod upgradeable;
 
 #[derive(Debug, Clone)]
 pub struct Weapon {
@@ -35,8 +43,8 @@ pub fn simulate_battle(
     iterations: u32,
     is_arena_battle: bool,
 ) -> FightSimulationResult {
-    let mut left = left.into();
-    let mut right = right.into();
+    let left = left.into();
+    let right = right.into();
 
     if left.is_empty() || right.is_empty() {
         return FightSimulationResult::default();

@@ -3,10 +3,10 @@ use fastrand::Rng;
 
 use crate::{
     command::AttributeType,
-    gamestate::character::Class,
+    gamestate::{character::Class, items::*},
+    misc::EnumMapGet,
     simulate::{
-        Element, Monster, Weapon,
-        damage::{DamageRange, calculate_damage, calculate_hit_damage, *},
+        Element, Monster, Weapon, damage::*, upgradeable::UpgradeableFighter,
     },
 };
 
@@ -355,6 +355,7 @@ impl InBattleFighter {
                     *round += 1;
                     *poison_round -= 1;
 
+                    #[allow(clippy::indexing_slicing)]
                     let poison_multiplier =
                         poison_dmg_multipliers[*poison_round];
                     let poison_dmg = calculate_hit_damage(
@@ -646,15 +647,7 @@ pub struct Fighter {
     pub guild_portal: f64,
 
     pub is_companion: bool,
-
-    pub gladiator: i32,
-}
-
-impl From<&Monster> for Vec<Fighter> {
-    fn from(value: &Monster) -> Self {
-        let fighter: Fighter = value.into();
-        vec![fighter]
-    }
+    pub gladiator: u32,
 }
 
 impl From<&Monster> for Fighter {
@@ -675,20 +668,125 @@ impl From<&Monster> for Fighter {
             weapon.rune_type = Some(runes.damage_type);
         }
 
+        // TODO: is this real?
+        let second_weapon =
+            (monster.class == Class::Assassin).then(|| weapon.clone());
+
         Fighter {
             class: monster.class,
             level: monster.level,
             attributes: monster.attributes,
             health: monster.hp as f64,
             armor: monster.armor,
+            second_weapon,
             first_weapon: Some(weapon),
-            second_weapon: None,
+            // TODO: Are there actually monster with two weapons
             reaction: 0,
             crit_multiplier: 2.0,
             resistances,
             guild_portal: 0.0,
             is_companion: false,
             gladiator: 0,
+        }
+    }
+}
+
+impl From<&UpgradeableFighter> for Fighter {
+    fn from(char: &UpgradeableFighter) -> Self {
+        use RuneType as RT;
+
+        let attributes = char.attributes();
+        let health = char.hit_points(&attributes) as f64;
+
+        let mut resistances = EnumMap::default();
+        let mut reaction = 0;
+        let mut extra_crit_dmg = 0.0;
+        let mut armor = 0;
+        let mut weapon = None;
+        let mut offhand = None;
+
+        for (slot, item) in &char.equipment.0 {
+            let Some(item) = item else {
+                continue;
+            };
+            armor += item.armor();
+            match item.enchantment {
+                Some(Enchantment::SwordOfVengeance) => {
+                    extra_crit_dmg = 0.05;
+                }
+                Some(Enchantment::ShadowOfTheCowboy) => {
+                    reaction = 1;
+                }
+                _ => {}
+            }
+
+            if let Some(rune) = item.rune {
+                let mut apply = |element| {
+                    *resistances.get_mut(element) += i32::from(rune.value);
+                };
+                match rune.typ {
+                    RT::FireResistance => apply(Element::Fire),
+                    RT::ColdResistence => apply(Element::Cold),
+                    RT::LightningResistance => apply(Element::Lightning),
+                    RT::TotalResistence => {
+                        for val in &mut resistances.values_mut() {
+                            *val += i32::from(rune.value);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            match item.typ {
+                ItemType::Weapon { min_dmg, max_dmg } => {
+                    let mut res = Weapon {
+                        rune_value: 0,
+                        rune_type: None,
+                        damage: DamageRange {
+                            min: f64::from(min_dmg),
+                            max: f64::from(max_dmg),
+                        },
+                    };
+                    if let Some(rune) = item.rune {
+                        res.rune_type = match rune.typ {
+                            RT::FireDamage => Some(Element::Fire),
+                            RT::ColdDamage => Some(Element::Cold),
+                            RT::LightningDamage => Some(Element::Lightning),
+                            _ => None,
+                        };
+                        res.rune_value = rune.value.into();
+                    }
+                    match slot {
+                        EquipmentSlot::Weapon => weapon = Some(res),
+                        EquipmentSlot::Shield => offhand = Some(res),
+                        _ => {}
+                    }
+                }
+                ItemType::Shield { block_chance: _ } => {
+                    // TODO: What about the block chance of this?
+                    // Should this not be used?
+                }
+                _ => (),
+            }
+        }
+
+        let crit_multiplier =
+            2.0 + extra_crit_dmg + f64::from(char.gladiator) * 0.11;
+
+        Fighter {
+            class: char.class,
+            level: char.level,
+            attributes,
+            health,
+            armor,
+            first_weapon: weapon,
+            second_weapon: offhand,
+            reaction,
+            crit_multiplier,
+            resistances,
+            guild_portal: f64::from(char.portal_dmg_bonus),
+            is_companion: char.is_companion,
+            gladiator: char.gladiator,
         }
     }
 }
@@ -765,8 +863,7 @@ impl ClassData {
                 let base_dmg_multi =
                     calculate_damage_multiplier(main, opponent);
 
-                let dmg_multiplier =
-                    Class::PlagueDoctor.damage_multiplier();
+                let dmg_multiplier = Class::PlagueDoctor.damage_multiplier();
                 let class_dmg_multi = base_dmg_multi / dmg_multiplier;
 
                 *poison_dmg_multipliers = [
