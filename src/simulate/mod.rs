@@ -2,92 +2,60 @@ use std::sync::Arc;
 
 use enum_map::{Enum, EnumMap};
 use fastrand::Rng;
+use fighter::InBattleFighter;
 use strum::EnumIter;
 
 use crate::{
     command::AttributeType,
-    gamestate::{GameState, character::Class, items::RuneType},
-    simulate::{
-        class::{GenericFighter, PlayerSquad, create_context},
-        damage::DamageRange,
-    },
+    gamestate::character::Class,
+    simulate::{damage::DamageRange, fighter::Fighter},
 };
 
-mod class;
 mod config;
 mod constants;
 mod damage;
-
-pub use class::Fightable;
+mod fighter;
 
 #[derive(Debug, Clone)]
-pub struct RawWeapon {
-    pub rune_value: u32,
-    pub rune_type: Option<RuneType>,
+pub struct Weapon {
+    pub rune_value: i32,
+    pub rune_type: Option<Element>,
     pub damage: DamageRange,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct FightSimulationResult {
-    win_ratio: f64,
-    won_fights: u32,
+    pub win_ratio: f64,
+    pub won_fights: u32,
 }
 
 #[must_use]
-pub fn simulate_dungeon(
-    gs: &GameState,
-    monster: Monster,
-    is_with_companion: bool,
+pub fn simulate_battle(
+    left: impl Into<Vec<Fighter>>,
+    right: impl Into<Vec<Fighter>>,
     iterations: u32,
+    is_arena_battle: bool,
 ) -> FightSimulationResult {
-    let PlayerSquad { player, companions } = PlayerSquad::new(gs);
-    let monster = GenericFighter::from_monster(&monster);
+    let mut left = left.into();
+    let mut right = right.into();
 
-    let mut lookup_context: Vec<(Box<dyn Fightable>, Box<dyn Fightable>)> =
-        Vec::new();
-
-    if let Some(companions) = &companions
-        && is_with_companion
-    {
-        for companion in companions {
-            let companion_ctx = create_context(companion, &monster, false);
-            let monster_ctx = create_context(&monster, companion, false);
-            lookup_context.push((companion_ctx, monster_ctx));
-        }
+    if left.is_empty() || right.is_empty() {
+        return FightSimulationResult::default();
     }
 
-    let character_context = create_context(&player, &monster, false);
-    let dungeon_context = create_context(&monster, &player, false);
-
-    lookup_context.push((character_context, dungeon_context));
-
-    simulate_fight(lookup_context, iterations)
+    simulate_fight(&left, &right, iterations, is_arena_battle)
 }
 
-//     public FightSimulationResult SimulateArenaFight(Account account,
-//         Player opponent,
-//         FightSimulationOptions? options = null) {
-//         options ??= _defaultOptions;
-//         var characterContext =
-//             _fightableContextFactory.Create(account, opponent, true);
-//         var enemyContext =
-//             _fightableContextFactory.Create(opponent, account, true);
-
-//         return SimulateFight([(characterContext, enemyContext)], options);
-//     }
-
 fn simulate_fight(
-    mut lookup_context: Vec<(Box<dyn Fightable>, Box<dyn Fightable>)>,
+    left: &[Fighter],
+    right: &[Fighter],
     iterations: u32,
+    is_arena_battle: bool,
 ) -> FightSimulationResult {
     let mut won_fights = 0;
-    for _ in 0..100_000 {
-        let fight_result = perform_single_fight(&mut lookup_context);
+    for _ in 0..iterations {
+        let fight_result = perform_single_fight(left, right, is_arena_battle);
         if fight_result == FightOutcome::SimulationBroken {
-            // The fight took so long, that max iter limit kicked in. We
-            // should just break here. Doing so also means wonFights
-            // will be low, so this should lead to this thing here scoring
-            // badly (never being picked)
             break;
         }
         if fight_result == FightOutcome::LeftSideWin {
@@ -103,41 +71,84 @@ fn simulate_fight(
 }
 
 fn perform_single_fight(
-    lookup_context: &mut [(Box<dyn Fightable>, Box<dyn Fightable>)],
+    left: &[Fighter],
+    right: &[Fighter],
+    is_arena_battle: bool,
 ) -> FightOutcome {
     let mut rng = Rng::new();
-    let mut leftover_health: Option<f64> = None;
-    for (char_side, enemy_side) in lookup_context {
-        if let Some(remaining) = leftover_health {
-            enemy_side.context_mut().fighter.health = remaining;
-        }
 
-        let fight_result =
-            perform_fight(char_side.as_mut(), enemy_side.as_mut(), &mut rng);
-        leftover_health = Some(enemy_side.context().fighter.health);
+    let mut left_side = left.iter().peekable();
+    let mut left_in_battle: Option<InBattleFighter> = None;
 
-        // FIXME: This is wrong for guild fights
-        char_side.reset_state();
-        enemy_side.reset_state();
+    let mut right_side = right.iter().peekable();
+    let mut right_in_battle: Option<InBattleFighter> = None;
 
-        if matches!(
-            fight_result,
-            FightOutcome::LeftSideWin | FightOutcome::SimulationBroken
-        ) {
-            return fight_result;
+    for _ in 0..500 {
+        let Some(left) = left_side.peek_mut() else {
+            return FightOutcome::RightSideWin;
+        };
+        let Some(right) = right_side.peek_mut() else {
+            return FightOutcome::LeftSideWin;
+        };
+
+        let make_new_left =
+            || InBattleFighter::new(left, right, is_arena_battle);
+        let make_new_right =
+            || InBattleFighter::new(right, left, is_arena_battle);
+
+        let (left_fighter, right_fighter) =
+            match (&mut left_in_battle, &mut right_in_battle) {
+                (Some(left), Some(right)) => {
+                    // Battle still ongoing between the same two opponents
+                    (left, right)
+                }
+                (None, None) => {
+                    // Battle just started
+                    (
+                        left_in_battle.insert(make_new_left()),
+                        right_in_battle.insert(make_new_right()),
+                    )
+                }
+                (None, Some(r)) => {
+                    r.update_opponent(left, is_arena_battle);
+                    (left_in_battle.insert(make_new_left()), r)
+                }
+                (Some(l), None) => {
+                    l.update_opponent(right, is_arena_battle);
+                    (l, right_in_battle.insert(make_new_right()))
+                }
+            };
+
+        let res = perform_fight(left_fighter, right_fighter, &mut rng);
+
+        // FIXME: Update the other side with the new opponent data without
+        // clearing the entire in battle state (keep stance, or whatever else
+        // persists (if that is even how it works))
+        match res {
+            FightOutcome::LeftSideWin => {
+                right_side.next();
+                right_in_battle = None;
+            }
+            FightOutcome::RightSideWin => {
+                left_side.next();
+                left_in_battle = None;
+            }
+            FightOutcome::SimulationBroken => {
+                return FightOutcome::SimulationBroken;
+            }
         }
     }
 
-    FightOutcome::RightSideWin
+    FightOutcome::SimulationBroken
 }
 
 fn perform_fight<'a>(
-    char_side: &'a mut dyn Fightable,
-    dungeon_side: &'a mut dyn Fightable,
+    char_side: &'a mut InBattleFighter,
+    dungeon_side: &'a mut InBattleFighter,
     rng: &mut Rng,
 ) -> FightOutcome {
-    let char_side_starts = char_side.context().fighter.reaction
-        > dungeon_side.context().fighter.reaction
+    let char_side_starts = char_side.fighter.reaction
+        > dungeon_side.fighter.reaction
         || rng.bool();
 
     let (attacker, defender) = if char_side_starts {
@@ -149,11 +160,11 @@ fn perform_fight<'a>(
     let round = &mut 0u32;
 
     if attacker.attack_before_fight(defender, round, rng) {
-        return OutcomeFromBool(char_side_starts);
+        return outcome_from_bool(char_side_starts);
     }
 
     if defender.attack_before_fight(attacker, round, rng) {
-        return OutcomeFromBool(!char_side_starts);
+        return outcome_from_bool(!char_side_starts);
     }
 
     // for sanity we limit max iters to a somewhat reasonable limit, that
@@ -161,41 +172,19 @@ fn perform_fight<'a>(
     for _ in 0..1_000_000 {
         let skip_round = defender.will_skip_round(attacker, round, rng);
         if !skip_round && attacker.attack(defender, round, rng) {
-            return OutcomeFromBool(char_side_starts);
+            return outcome_from_bool(char_side_starts);
         }
 
         let skip_round = attacker.will_skip_round(defender, round, rng);
         if !skip_round && defender.attack(attacker, round, rng) {
-            return OutcomeFromBool(!char_side_starts);
+            return outcome_from_bool(!char_side_starts);
         }
     }
     // TODO: Log
     FightOutcome::SimulationBroken
 }
 
-//     public static long GetHealth(ClassType @class, long constitution, int
-// level,         double portal, int hpRune, bool hasEternityPotion, bool
-// isCompanion) {         var healthMultiplier = @class.Config.HealthMultiplier;
-//         if (isCompanion && @class == ClassType.Warrior) {
-//             healthMultiplier = 6.1;
-//         }
-//         var health = constitution * (level + 1D);
-
-//         health *= healthMultiplier;
-
-//         var portalBonus = 1 + portal / 100;
-//         var runeBonus = 1 + Math.Min(15, hpRune) / 100D;
-
-//         health = Math.Ceiling(health * portalBonus);
-//         health = Math.Ceiling(health * runeBonus);
-//         if (hasEternityPotion) {
-//             health = Math.Ceiling(health * 1.25D);
-//         }
-
-//         return (long)health;
-//     }
-
-fn OutcomeFromBool(result: bool) -> FightOutcome {
+fn outcome_from_bool(result: bool) -> FightOutcome {
     if result {
         FightOutcome::LeftSideWin
     } else {
@@ -234,5 +223,5 @@ pub struct Monster {
 pub struct MonsterRunes {
     pub damage_type: Element,
     pub damage: i32,
-    pub resistences: EnumMap<Element, i32>,
+    pub resistances: EnumMap<Element, i32>,
 }

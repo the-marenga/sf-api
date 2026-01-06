@@ -1,12 +1,11 @@
-use num_traits::real::Real;
+use fastrand::Rng;
 
 use crate::{
-    command::AttributeType,
-    gamestate::{character::Class, items::RuneType},
-    simulate::{RawWeapon, class::GenericFighter},
+    gamestate::character::Class,
+    simulate::{Weapon, fighter::Fighter},
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct DamageRange {
     pub min: f64,
     pub max: f64,
@@ -31,67 +30,50 @@ impl std::ops::MulAssign<f64> for DamageRange {
 }
 
 pub fn calculate_damage(
-    weapon: Option<&RawWeapon>,
-    attacker: &GenericFighter,
-    target: &GenericFighter,
+    weapon: Option<&Weapon>,
+    attacker: &Fighter,
+    target: &Fighter,
     is_secondary: bool,
 ) -> DamageRange {
     let mut damage = get_base_damge(weapon, attacker, is_secondary);
 
     damage *= 1.0 + attacker.guild_portal / 100.0;
 
-    proc_attributes_bonus(attacker, target, &mut damage);
-    proc_rune_bonus(weapon, target, &mut damage);
-    proc_armor_damage_reduction(attacker, target, &mut damage);
-    proc_class_modifiers(attacker, target, &mut damage);
+    apply_attributes_bonus(attacker, target, &mut damage);
+    apply_rune_bonus(weapon, target, &mut damage);
+
+    // Armor reduction
+    damage *= 1.0 - calculate_damage_reduction(attacker, target);
+    // Class multiplier
+    damage *= calculate_damage_multiplier(attacker, target);
 
     damage
 }
 
-pub fn proc_class_modifiers(
-    attacker: &GenericFighter,
-    target: &GenericFighter,
-    damage: &mut DamageRange,
-) {
-    *damage *= calculate_damage_multiplier(attacker, target);
-}
-
-fn proc_armor_damage_reduction(
-    attacker: &GenericFighter,
-    target: &GenericFighter,
-    damage: &mut DamageRange,
-) {
-    *damage *= 1.0 - calculate_damage_reduction(attacker, target);
-}
-
-fn proc_rune_bonus(
-    weapon: Option<&RawWeapon>,
-    target: &GenericFighter,
+fn apply_rune_bonus(
+    weapon: Option<&Weapon>,
+    target: &Fighter,
     damage: &mut DamageRange,
 ) {
     let Some(weapon) = weapon else {
         return;
     };
-    let Some(rune_type) = weapon.rune_type else {
+    let Some(element) = weapon.rune_type else {
         return;
     };
-    let enemy_rune_resistance = match rune_type {
-        RuneType::LightningDamage => 75.min(target.lightning_resistance),
-        RuneType::ColdDamage => 75.min(target.cold_resistance),
-        RuneType::FireDamage => 75.min(target.fire_resistance),
-        _ => 0,
-    };
+
+    let enemy_rune_resistence = 75.min(target.resistances[element]);
 
     let mut rune_bonus = f64::from(weapon.rune_value) / 100.0;
-    rune_bonus *= (100.0 - f64::from(enemy_rune_resistance)) / 100.0;
+    rune_bonus *= (100.0 - f64::from(enemy_rune_resistence)) / 100.0;
     rune_bonus += 1.0;
 
     *damage *= rune_bonus;
 }
 
-fn proc_attributes_bonus(
-    attacker: &GenericFighter,
-    target: &GenericFighter,
+fn apply_attributes_bonus(
+    attacker: &Fighter,
+    target: &Fighter,
     damage: &mut DamageRange,
 ) {
     let main_attribute = attacker.class.get_config().main_attribute;
@@ -107,9 +89,25 @@ fn proc_attributes_bonus(
     *damage *= attribute_bonus;
 }
 
+pub fn calculate_hit_damage(
+    damage: &DamageRange,
+    round: u32,
+    crit_chance: f64,
+    crit_multiplier: f64,
+    rng: &mut Rng,
+) -> f64 {
+    let base_damage = rng.f64() * (damage.max - damage.min) + damage.min;
+    let mut dmg = base_damage * (1.0 + (f64::from(round) - 1.0) * (1.0 / 6.0));
+
+    if rng.f64() < crit_chance {
+        dmg *= crit_multiplier;
+    }
+    dmg
+}
+
 fn get_base_damge(
-    weapon: Option<&RawWeapon>,
-    attacker: &GenericFighter,
+    weapon: Option<&Weapon>,
+    attacker: &Fighter,
     is_secondary: bool,
 ) -> DamageRange {
     let hand_damage = get_hand_damage(attacker, is_secondary);
@@ -127,10 +125,7 @@ fn get_base_damge(
     weapon.damage
 }
 
-fn get_hand_damage(
-    attacker: &GenericFighter,
-    is_secondary: bool,
-) -> DamageRange {
+fn get_hand_damage(attacker: &Fighter, is_secondary: bool) -> DamageRange {
     if attacker.level <= 10 {
         return DamageRange { min: 1.0, max: 2.0 };
     }
@@ -143,16 +138,13 @@ fn get_hand_damage(
     let weapon_multi = attacker.class.get_config().weapon_multiplier;
     let damage: f64 =
         multiplier * (f64::from(attacker.level) - 9.0) * weapon_multi;
-    let min = 1.0.max((damage * 2.0 / 3.0).ceil());
-    let max = 2.0.max((damage * 4.0 / 3.0).round());
+    let min = 1.0f64.max((damage * 2.0 / 3.0).ceil());
+    let max = 2.0f64.max((damage * 4.0 / 3.0).round());
 
     DamageRange { min, max }
 }
 
-pub fn calculate_fire_ball_damage(
-    attacker: &GenericFighter,
-    target: &GenericFighter,
-) -> f64 {
+pub fn calculate_fire_ball_damage(attacker: &Fighter, target: &Fighter) -> f64 {
     if target.class == Class::Mage {
         return 0.0;
     }
@@ -163,16 +155,13 @@ pub fn calculate_fire_ball_damage(
     (target.health / 3.0).ceil().min(dmg)
 }
 
-pub fn calculate_damage_reduction(
-    attacker: &GenericFighter,
-    target: &GenericFighter,
-) -> f64 {
+pub fn calculate_damage_reduction(attacker: &Fighter, target: &Fighter) -> f64 {
     // Mage negates enemy armor
     if attacker.class == Class::Mage {
         return 0.0;
     }
 
-    if target.armor <= 0 {
+    if target.armor == 0 {
         return 0.0;
     }
 
@@ -188,17 +177,18 @@ pub fn calculate_damage_reduction(
 }
 
 pub fn calculate_damage_multiplier(
-    attacker: &GenericFighter,
-    target: &GenericFighter,
+    attacker: &Fighter,
+    target: &Fighter,
 ) -> f64 {
     let base_multi = attacker.class.get_config().damage_multiplier;
     match (attacker.class, target.class) {
         (Class::Mage, Class::Paladin) => base_multi * 1.5,
+        // TODO: Is this right?
+        (Class::Paladin, Class::Mage) => base_multi * 1.5,
         (Class::Druid, Class::Mage) => base_multi * 4.0 / 3.0,
         (Class::Druid, Class::DemonHunter) => base_multi * 1.15,
         (Class::Bard, Class::PlagueDoctor) => base_multi * 1.05,
         (Class::Necromancer, Class::DemonHunter) => base_multi + 0.1,
-        (Class::Paladin, Class::Mage) => base_multi * 1.5,
         (Class::PlagueDoctor, Class::DemonHunter) => base_multi * 1.065,
         (_, _) => base_multi,
     }

@@ -143,7 +143,7 @@ fn read_dungeon_data(
                 Some(MonsterRunes {
                     damage_type: typ,
                     damage: runes.damage,
-                    resistences: EnumMap::from_array(runes.res),
+                    resistances: EnumMap::from_array(runes.res),
                 })
             }
             None => None,
