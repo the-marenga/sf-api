@@ -49,6 +49,7 @@ pub enum ClassData {
         is_in_bear_form: bool,
         has_just_dodged: bool,
         swoop_chance: f64,
+        swoop_damage_multiplier: f64,
     },
     Bard {
         melody_length: i32,
@@ -180,7 +181,9 @@ impl InBattleFighter {
                 rage_crit_chance,
                 is_in_bear_form,
                 swoop_chance,
+                swoop_damage_multiplier,
             } => {
+                let swoop_damage_multiplier = *swoop_damage_multiplier;
                 if target.is_mage() {
                     return self.attack_generic(target, round, rng);
                 }
@@ -196,7 +199,6 @@ impl InBattleFighter {
                         return false;
                     }
 
-                    // 40???
                     let crit_multiplier = (2.0 + 4.0) * self.crit_chance / 2.0;
 
                     let dmg = calculate_hit_damage(
@@ -209,8 +211,6 @@ impl InBattleFighter {
                     return target.take_attack(dmg, round, rng);
                 }
 
-                let swoop_damage_modifier = (1.0 / 3.0 + 0.8) / (1.0 / 3.0);
-
                 *is_in_bear_form = false;
 
                 let will_swoop = rng.f64() < *swoop_chance;
@@ -220,7 +220,7 @@ impl InBattleFighter {
                     *swoop_chance = 0.5f64.min(*swoop_chance + 0.05);
                     if target.will_take_attack(rng) {
                         let swoop_dmg = self.calc_basic_hit_damage(*round, rng)
-                            * swoop_damage_modifier;
+                            * swoop_damage_multiplier;
 
                         if target.take_attack(swoop_dmg, round, rng) {
                             return true;
@@ -415,7 +415,7 @@ impl InBattleFighter {
     pub fn will_skip_round(
         &mut self,
         target: &mut InBattleFighter,
-        round: &mut u32,
+        _round: &mut u32,
         rng: &mut Rng,
     ) -> bool {
         match &mut self.class_data {
@@ -429,7 +429,8 @@ impl InBattleFighter {
                 if *chain_attack_counter >= 14 {
                     *chain_attack_counter = 0;
                 } else if rng.u32(1..=100) > 50 {
-                    *round += 1;
+                    // NOTE: This is a bug on the server?
+                    // *round += 1;
                     *chain_attack_counter += 1;
                     return true;
                 } else {
@@ -473,12 +474,6 @@ impl InBattleFighter {
                 stance,
                 initial_armor_reduction,
             } => {
-                if self.opponent_is_mage {
-                    let health = &mut self.fighter.health;
-                    *health -= damage;
-                    return *health <= 0.0;
-                }
-
                 let current_armor_reduction = match stance {
                     PaladinStance::Initial | PaladinStance::Defensive => 1.0,
                     PaladinStance::Offensive => {
@@ -486,21 +481,24 @@ impl InBattleFighter {
                             * (1.0 - initial_armor_reduction.min(0.20))
                     }
                 };
-
                 let actual_damage = damage * current_armor_reduction;
-                let current_health = &mut self.fighter.health;
+                let health = &mut self.fighter.health;
+
+                if self.opponent_is_mage {
+                    *health -= actual_damage;
+                    return *health <= 0.0;
+                }
 
                 if *stance == PaladinStance::Defensive
                     && rng.i32(1..101) <= stance.block_chance()
                 {
                     let heal_cap = actual_damage * 0.3;
-                    *current_health += (self.max_health - *current_health)
-                        .clamp(0.0, heal_cap);
+                    *health += (self.max_health - *health).clamp(0.0, heal_cap);
                     return false;
                 }
 
-                *current_health -= actual_damage;
-                *current_health <= 0.0
+                *health -= actual_damage;
+                *health <= 0.0
             }
             _ => {
                 let health = &mut self.fighter.health;
@@ -589,9 +587,12 @@ impl InBattleFighter {
 
         *minion_rounds -= 1;
 
+        // NOTE: Currently skeleton can revive only once per fight but this is
+        // a bug
         if *minion_rounds == 0
             && *current_minion == NecromancerMinionType::Skeleton
             && *skeleton_revives < 1
+            && rng.bool()
         {
             *minion_rounds = 1;
             *skeleton_revives += 1;
@@ -837,10 +838,14 @@ impl ClassData {
                 chain_attack_counter,
             } => *chain_attack_counter = 0,
             ClassData::Druid {
-                rage_crit_chance, ..
+                rage_crit_chance,
+                swoop_damage_multiplier,
+                ..
             } => {
                 *rage_crit_chance =
                     calculate_crit_chance(main, opponent, 0.75, 0.1);
+                *swoop_damage_multiplier =
+                    calculate_swoop_damage(main, opponent);
             }
 
             ClassData::Necromancer {
@@ -900,6 +905,7 @@ impl ClassData {
                 is_in_bear_form: false,
                 has_just_dodged: false,
                 swoop_chance: 0.15,
+                swoop_damage_multiplier: 0.0,
             },
             Class::Bard => ClassData::Bard {
                 melody_length: -1,

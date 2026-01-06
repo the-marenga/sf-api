@@ -83,7 +83,7 @@ impl Dungeons {
         &self,
         dungeon: impl Into<Dungeon> + Copy,
     ) -> Option<&'static crate::simulate::Monster> {
-        dungeon_enemy(dungeon, self.progress(dungeon))
+        get_dungeon_monster(dungeon, self.progress(dungeon))
     }
 }
 
@@ -121,6 +121,19 @@ pub enum DungeonType {
 pub enum Dungeon {
     Light(LightDungeon),
     Shadow(ShadowDungeon),
+}
+
+impl Dungeon {
+    #[must_use]
+    #[allow(clippy::match_same_arms)]
+    pub fn is_with_companions(self) -> bool {
+        match self {
+            Dungeon::Light(LightDungeon::Tower) => true,
+            Dungeon::Shadow(ShadowDungeon::Twister) => false,
+            Dungeon::Light(_) => false,
+            Dungeon::Shadow(_) => true,
+        }
+    }
 }
 
 /// All possible light dungeons. They are NOT numbered continuously (17 is
@@ -349,7 +362,7 @@ pub struct Companion {
 }
 
 #[cfg(feature = "simulation")]
-pub fn dungeon_enemy(
+pub fn get_dungeon_monster(
     dungeon: impl Into<Dungeon>,
     progress: DungeonProgress,
 ) -> Option<&'static crate::simulate::Monster> {

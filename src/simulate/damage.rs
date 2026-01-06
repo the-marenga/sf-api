@@ -93,13 +93,23 @@ pub fn calculate_hit_damage(
     crit_multiplier: f64,
     rng: &mut Rng,
 ) -> f64 {
-    let base_damage = rng.f64() * (damage.max - damage.min) + damage.min;
+    let base_damage = rng.f64() * (1.0 + damage.max - damage.min) + damage.min;
     let mut dmg = base_damage * (1.0 + (f64::from(round) - 1.0) * (1.0 / 6.0));
 
     if rng.f64() < crit_chance {
         dmg *= crit_multiplier;
     }
     dmg
+}
+
+pub fn calculate_swoop_damage(attacker: &Fighter, target: &Fighter) -> f64 {
+    let dmg_multiplier = calculate_damage_multiplier(attacker, target);
+    let base_dmg_multiplier = Class::Druid.damage_multiplier();
+    let class_specific_dmg_multiplier = dmg_multiplier / base_dmg_multiplier;
+
+    (dmg_multiplier / class_specific_dmg_multiplier + 0.8)
+        * class_specific_dmg_multiplier
+        / dmg_multiplier
 }
 
 fn get_base_damge(
@@ -185,7 +195,7 @@ pub fn calculate_damage_multiplier(
         (Class::Druid, Class::DemonHunter) => base_multi * 1.15,
         (Class::Bard, Class::PlagueDoctor) => base_multi * 1.05,
         (Class::Necromancer, Class::DemonHunter) => base_multi + 0.1,
-        (Class::PlagueDoctor, Class::DemonHunter) => base_multi * 1.065,
+        (Class::PlagueDoctor, Class::DemonHunter) => base_multi * 1.06,
         (_, _) => base_multi,
     }
 }

@@ -12,12 +12,14 @@ use fastrand::Rng;
 use fighter::InBattleFighter;
 use strum::EnumIter;
 
+pub use crate::simulate::{
+    damage::DamageRange,
+    fighter::Fighter,
+    upgradeable::{PlayerFighterSquad, UpgradeableFighter},
+};
 use crate::{
     command::AttributeType,
     gamestate::{GameState, character::Class, dungeons::Dungeon},
-    simulate::{
-        damage::DamageRange, fighter::Fighter, upgradeable::PlayerFighterSquad,
-    },
 };
 
 pub(crate) mod constants;
@@ -47,12 +49,13 @@ pub fn simulate_dungeon(
         character,
         companions,
     } = PlayerFighterSquad::new(gs);
-
-    let mut player_side = match dungeon.into() {
-        Dungeon::Shadow(_) => companions
+    let dungeon = dungeon.into();
+    let mut player_side = if dungeon.is_with_companions() {
+        companions
             .map(|a| a.values().map(Fighter::from).collect())
-            .unwrap_or_default(),
-        Dungeon::Light(_) => vec![],
+            .unwrap_or_default()
+    } else {
+        vec![]
     };
     player_side.push(Fighter::from(&character));
 
@@ -154,9 +157,6 @@ fn perform_single_fight(
 
         let res = perform_fight(left_fighter, right_fighter, &mut rng);
 
-        // FIXME: Update the other side with the new opponent data without
-        // clearing the entire in battle state (keep stance, or whatever else
-        // persists (if that is even how it works))
         match res {
             FightOutcome::LeftSideWin => {
                 right_side.next();

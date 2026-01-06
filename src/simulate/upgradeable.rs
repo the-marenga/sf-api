@@ -11,22 +11,22 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct UpgradeableFighter {
-    pub(crate) is_companion: bool,
-    pub(crate) level: u16,
-    pub(crate) class: Class,
+    pub is_companion: bool,
+    pub level: u16,
+    pub class: Class,
     /// The base attributes without any equipment, or other boosts
     pub attribute_basis: EnumMap<AttributeType, u32>,
-    pet_attribute_bonus_perc: EnumMap<AttributeType, f64>,
+    pub pet_attribute_bonus_perc: EnumMap<AttributeType, f64>,
 
-    pub(crate) equipment: Equipment,
-    active_potions: [Option<Potion>; 3],
+    pub equipment: Equipment,
+    pub active_potions: [Option<Potion>; 3],
     /// This should be the percentage bonus to skills from pets
     /// The hp bonus in percent this player has from the personal demon portal
-    portal_hp_bonus: u32,
+    pub portal_hp_bonus: u32,
     /// The damage bonus in percent this player has from the guild demon portal
-    pub(crate) portal_dmg_bonus: u32,
+    pub portal_dmg_bonus: u32,
     // The level of the gladiator in the underworld
-    pub(crate) gladiator: u32,
+    pub gladiator: u32,
 }
 impl UpgradeableFighter {
     /// Inserts a gem on the item in the specified slot

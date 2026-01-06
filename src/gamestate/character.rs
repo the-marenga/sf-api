@@ -183,7 +183,7 @@ impl Class {
     }
 
     #[must_use]
-    pub(crate) fn weapon_multiplier(self) -> f64 {
+    pub fn weapon_multiplier(self) -> f64 {
         use Class::*;
         match self {
             PlagueDoctor | Paladin | Warrior | Assassin | BattleMage
