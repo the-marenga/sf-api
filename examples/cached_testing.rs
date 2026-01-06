@@ -1,14 +1,9 @@
 use std::time::Instant;
 
-use enum_map::EnumMap;
 use sf_api::{
     gamestate::{GameState, dungeons::LightDungeon},
-    misc::EnumMapGet,
     session::*,
-    simulate::{
-        Battle, BattleEvent, BattleFighter, BattleLogger, BattleSide,
-        PlayerFighterSquad,
-    },
+    simulate::simulate_dungeon,
     sso::SFAccount,
 };
 use strum::IntoEnumIterator;
@@ -76,34 +71,18 @@ pub async fn main() {
         let js = serde_json::to_string_pretty(&gs).unwrap();
         std::fs::write("character.json", js).unwrap();
 
-        let squad = PlayerFighterSquad::new(&gs);
-        let player = BattleFighter::from_upgradeable(&squad.character);
-        let mut player_squad = [player];
         for dungeon in LightDungeon::iter() {
-            if dungeon != LightDungeon::NordicGods {
-                continue;
-            }
-
-            let Some(monster) = gs.dungeons.current_enemy(dungeon) else {
+            // if dungeon != LightDungeon::Hemorridor {
+            //     continue;
+            // }
+            let now = Instant::now();
+            let Some(res) = simulate_dungeon(&gs, dungeon, 100_000) else {
                 continue;
             };
-            let monster = BattleFighter::from_monster(monster);
-            let mut monster = [monster];
-            let mut battle = Battle::new(&mut player_squad, &mut monster);
-            let mut winners: EnumMap<BattleSide, u32> = EnumMap::default();
-            let rounds: usize = 1_000;
-            let now = Instant::now();
-            for _ in 0..rounds {
-                let winner = battle.simulate(&mut ());
-                *winners.get_mut(winner) += 1;
-            }
             println!(
-                "won {:.2}% against {dungeon:?} ({:?}) lvl {} in {:?} - {}",
-                (*winners.get(BattleSide::Left) as f32 / rounds as f32) * 100.0,
-                monster[0].class,
-                monster[0].level,
+                "won {:.2}% in {dungeon:?} in {:?}",
+                res.win_ratio * 100.0,
                 now.elapsed(),
-                monster[0].name,
             );
         }
 
@@ -127,53 +106,4 @@ pub async fn main() {
     gs.update(&resp).unwrap();
     let js = serde_json::to_string_pretty(&gs).unwrap();
     std::fs::write("character.json", js).unwrap();
-}
-
-pub struct Logger;
-
-impl BattleLogger for Logger {
-    fn log(&mut self, event: BattleEvent<'_, '_>) {
-        match event {
-            BattleEvent::Attack(attacker, defender, attack_type) => {
-                log::debug!(
-                    "{} attacked {} with {attack_type:?}",
-                    attacker.name,
-                    defender.name
-                )
-            }
-            BattleEvent::Dodged(attacker, defender) => {
-                log::debug!(
-                    "{} dodged attack from {}",
-                    attacker.name,
-                    defender.name
-                )
-            }
-            BattleEvent::Blocked(attacker, defender) => {
-                log::debug!(
-                    "{} blocked attack from {}",
-                    attacker.name,
-                    defender.name
-                )
-            }
-            BattleEvent::Crit(attacker, defender, chance, dmg) => {
-                log::debug!(
-                    "{} crit its attack against {} ({chance}%), extra_dmg \
-                     {dmg}%",
-                    attacker.name,
-                    defender.name
-                )
-            }
-            BattleEvent::DamageReceived(_, defender, dmg) => {
-                log::debug!(
-                    "{} received {:.2}% hp dmg ({dmg}). {:.2}% health \
-                     remaining",
-                    defender.name,
-                    (dmg as f32 / defender.max_hp as f32) * 100.0,
-                    (defender.current_hp as f32 / defender.max_hp as f32)
-                        * 100.0
-                )
-            }
-            _ => {}
-        }
-    }
 }

@@ -77,15 +77,12 @@ fn apply_attributes_bonus(
     damage: &mut DamageRange,
 ) {
     let main_attribute = attacker.class.main_attribute();
-    let attribute = (f64::from(attacker.attributes[main_attribute]) / 2.0).max(
-        f64::from(
-            attacker.attributes[main_attribute]
-                - target.attributes[main_attribute],
-        ) / 2.0,
+    let mut attribute = attacker.attributes[main_attribute] / 2;
+    attribute = attribute.max(
+        attacker.attributes[main_attribute]
+            .saturating_sub(target.attributes[main_attribute] / 2),
     );
-
-    let attribute_bonus = 1.0 + attribute / 10.0;
-
+    let attribute_bonus = 1.0 + f64::from(attribute) / 10.0;
     *damage *= attribute_bonus;
 }
 
@@ -169,7 +166,7 @@ pub fn calculate_damage_reduction(attacker: &Fighter, target: &Fighter) -> f64 {
 
     let damage_reduction = target.class.armor_multiplier()
         * f64::from(target.armor)
-        / f64::from(attacker.armor)
+        / f64::from(attacker.level)
         / 100.0;
 
     damage_reduction.min(f64::from(max_dmg_reduction) / 100.0)

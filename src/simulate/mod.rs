@@ -14,11 +14,13 @@ use strum::EnumIter;
 
 use crate::{
     command::AttributeType,
-    gamestate::character::Class,
-    simulate::{damage::DamageRange, fighter::Fighter},
+    gamestate::{GameState, character::Class, dungeons::Dungeon},
+    simulate::{
+        damage::DamageRange, fighter::Fighter, upgradeable::PlayerFighterSquad,
+    },
 };
 
-mod constants;
+pub(crate) mod constants;
 mod damage;
 mod fighter;
 mod upgradeable;
@@ -36,21 +38,42 @@ pub struct FightSimulationResult {
     pub won_fights: u32,
 }
 
+pub fn simulate_dungeon(
+    gs: &GameState,
+    dungeon: impl Into<Dungeon> + Copy,
+    iterations: u32,
+) -> Option<FightSimulationResult> {
+    let PlayerFighterSquad {
+        character,
+        companions,
+    } = PlayerFighterSquad::new(gs);
+
+    let mut player_side = match dungeon.into() {
+        Dungeon::Shadow(_) => companions
+            .map(|a| a.values().map(Fighter::from).collect())
+            .unwrap_or_default(),
+        Dungeon::Light(_) => vec![],
+    };
+    player_side.push(Fighter::from(&character));
+
+    let monster = gs.dungeons.current_enemy(dungeon)?;
+    let monster = Fighter::from(monster);
+
+    Some(simulate_battle(&player_side, &[monster], iterations, false))
+}
+
 #[must_use]
 pub fn simulate_battle(
-    left: impl Into<Vec<Fighter>>,
-    right: impl Into<Vec<Fighter>>,
+    left: &[Fighter],
+    right: &[Fighter],
     iterations: u32,
     is_arena_battle: bool,
 ) -> FightSimulationResult {
-    let left = left.into();
-    let right = right.into();
-
     if left.is_empty() || right.is_empty() {
         return FightSimulationResult::default();
     }
 
-    simulate_fight(&left, &right, iterations, is_arena_battle)
+    simulate_fight(left, right, iterations, is_arena_battle)
 }
 
 fn simulate_fight(
@@ -125,6 +148,9 @@ fn perform_single_fight(
                     (l, right_in_battle.insert(make_new_right()))
                 }
             };
+
+        // println!("{left_fighter:#?}");
+        // println!("{right_fighter:#?}");
 
         let res = perform_fight(left_fighter, right_fighter, &mut rng);
 

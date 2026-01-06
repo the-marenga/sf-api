@@ -196,7 +196,8 @@ impl InBattleFighter {
                         return false;
                     }
 
-                    let crit_multiplier = (2.0 + 40.0) * self.crit_chance / 2.0;
+                    // 40???
+                    let crit_multiplier = (2.0 + 4.0) * self.crit_chance / 2.0;
 
                     let dmg = calculate_hit_damage(
                         &self.damage,
@@ -384,7 +385,7 @@ impl InBattleFighter {
     ) -> bool {
         *round += 1;
 
-        if !target.will_take_attack(rng) {
+        if !self.is_mage() && !target.will_take_attack(rng) {
             return false;
         }
 
@@ -514,8 +515,7 @@ impl InBattleFighter {
             ClassData::Warrior { block_chance } => {
                 rng.i32(1..101) > *block_chance
             }
-            ClassData::Scout => rng.i32(1..101) > 50,
-            ClassData::Assassin { .. } => rng.u32(1..=100) > 50,
+            ClassData::Assassin { .. } | ClassData::Scout => rng.bool(),
             ClassData::Druid {
                 is_in_bear_form,
                 has_just_dodged,
