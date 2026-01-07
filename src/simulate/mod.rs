@@ -143,11 +143,11 @@ fn perform_single_fight(
                     )
                 }
                 (None, Some(r)) => {
-                    r.update_opponent(left, is_arena_battle);
+                    r.update_opponent(right, left, is_arena_battle);
                     (left_in_battle.insert(make_new_left()), r)
                 }
                 (Some(l), None) => {
-                    l.update_opponent(right, is_arena_battle);
+                    l.update_opponent(left, right, is_arena_battle);
                     (l, right_in_battle.insert(make_new_right()))
                 }
             };
@@ -180,9 +180,8 @@ fn perform_fight<'a>(
     dungeon_side: &'a mut InBattleFighter,
     rng: &mut Rng,
 ) -> FightOutcome {
-    let char_side_starts = char_side.fighter.reaction
-        > dungeon_side.fighter.reaction
-        || rng.bool();
+    let char_side_starts =
+        char_side.reaction > dungeon_side.reaction || rng.bool();
 
     let (attacker, defender) = if char_side_starts {
         (char_side, dungeon_side)
@@ -203,12 +202,14 @@ fn perform_fight<'a>(
     // for sanity we limit max iters to a somewhat reasonable limit, that
     // should never be hit
     for _ in 0..1_000_000 {
-        let skip_round = defender.will_skip_round(attacker, round, rng);
+        let skip_round =
+            defender.will_skips_opponent_round(attacker, round, rng);
         if !skip_round && attacker.attack(defender, round, rng) {
             return outcome_from_bool(char_side_starts);
         }
 
-        let skip_round = attacker.will_skip_round(defender, round, rng);
+        let skip_round =
+            attacker.will_skips_opponent_round(defender, round, rng);
         if !skip_round && defender.attack(attacker, round, rng) {
             return outcome_from_bool(!char_side_starts);
         }

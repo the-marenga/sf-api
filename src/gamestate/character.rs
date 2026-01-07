@@ -215,6 +215,7 @@ impl Class {
         }
     }
 
+    #[cfg(feature = "simulation")]
     #[must_use]
     pub(crate) fn health_multiplier(self, is_companion: bool) -> f64 {
         use Class::*;

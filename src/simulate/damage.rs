@@ -30,14 +30,18 @@ impl std::ops::MulAssign<f64> for DamageRange {
 }
 
 pub fn calculate_damage(
-    weapon: Option<&Weapon>,
     attacker: &Fighter,
     target: &Fighter,
     is_secondary: bool,
 ) -> DamageRange {
+    let weapon = match is_secondary {
+        true => &attacker.second_weapon,
+        false => &attacker.first_weapon,
+    }
+    .as_ref();
     let mut damage = get_base_damge(weapon, attacker, is_secondary);
 
-    damage *= 1.0 + attacker.guild_portal / 100.0;
+    damage *= 1.0 + attacker.portal_dmg_bonus / 100.0;
 
     apply_attributes_bonus(attacker, target, &mut damage);
     apply_rune_bonus(weapon, target, &mut damage);
@@ -158,8 +162,8 @@ pub fn calculate_fire_ball_damage(attacker: &Fighter, target: &Fighter) -> f64 {
 
     let multiplier = target.class.health_multiplier(target.is_companion);
 
-    let dmg = (multiplier * 0.05 * attacker.health).ceil();
-    (target.health / 3.0).ceil().min(dmg)
+    let dmg = (multiplier * 0.05 * attacker.max_health).ceil();
+    (target.max_health / 3.0).ceil().min(dmg)
 }
 
 pub fn calculate_damage_reduction(attacker: &Fighter, target: &Fighter) -> f64 {

@@ -21,7 +21,6 @@ use sf_api::{
 #[rstest]
 #[case::warrior_nordic(Class::Warrior, ShadowDungeon::NordicGods.into(), 6, 0.5478)]
 #[case::mage_workshop(Class::Mage, LightDungeon::WorkshopOfTheHunters.into(), 1, 0.0254)]
-// Not sure if the wr here is correct
 #[case::scout_twister(Class::Scout, ShadowDungeon::Twister.into(), 1000, 1.0000)]
 #[case::demonh_sandstorm(Class::DemonHunter, LightDungeon::Sandstorm.into(), 19, 0.0148)]
 #[case::demonh_rtv(Class::DemonHunter, LightDungeon::RetroTVLegends.into(), 5, 0.0007)]
@@ -31,7 +30,9 @@ fn test_simulate_battle(
     #[case] finished: u16,
     #[case] expected_wr: f64,
 ) {
-    let progress = DungeonProgress::Open { finished: finished - 1 };
+    let progress = DungeonProgress::Open {
+        finished: finished - 1,
+    };
 
     let monster =
         Fighter::from(get_dungeon_monster(dungeon, progress).unwrap());
@@ -47,7 +48,7 @@ fn test_simulate_battle(
     };
     player_side.push(Fighter::from(&squad.character));
 
-    let monster_side =  &[monster];
+    let monster_side = &[monster];
     let res = simulate_battle(&player_side, monster_side, 1_000_000, false);
 
     assert!(
@@ -207,6 +208,7 @@ fn create_fighter(class: Class, is_companion: bool) -> UpgradeableFighter {
     ];
 
     UpgradeableFighter {
+        name: "test".into(),
         is_companion,
         level: 500,
         class,

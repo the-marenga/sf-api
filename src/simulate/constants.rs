@@ -165,8 +165,8 @@ fn read_dungeon_data(
                 monster.luck.unwrap_or(u32::MAX),
             ]),
             hp: monster.life.unwrap_or(u64::MAX),
-            min_dmg: monster.min_dmg.unwrap_or(u32::MAX),
-            max_dmg: monster.max_dmg.unwrap_or(u32::MAX),
+            min_dmg: monster.min_dmg.unwrap_or(0),
+            max_dmg: monster.max_dmg.unwrap_or(0),
             armor,
             runes,
         };

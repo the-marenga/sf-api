@@ -5,650 +5,58 @@ use crate::{
     command::AttributeType,
     gamestate::{character::Class, items::*},
     misc::EnumMapGet,
-    simulate::{
-        Element, Monster, Weapon, damage::*, upgradeable::UpgradeableFighter,
-    },
+    simulate::{damage::*, upgradeable::UpgradeableFighter, *},
 };
 
-#[derive(Debug)]
-pub struct InBattleFighter {
-    pub fighter: Fighter,
-
-    pub max_health: f64,
-    pub damage: DamageRange,
-    pub crit_chance: f64,
-    pub crit_multiplier: f64,
-
-    pub opponent_is_mage: bool,
-
-    pub class_data: ClassData,
-}
-
-#[derive(Debug, Clone)]
-pub enum ClassData {
-    Warrior {
-        block_chance: i32,
-    },
-    Mage,
-    Scout,
-    Assassin {
-        secondary_damage: DamageRange,
-    },
-    BattleMage {
-        fireball_dmg: f64,
-        used_fireball: bool,
-    },
-    Berserker {
-        chain_attack_counter: u32,
-    },
-    DemonHunter {
-        revive_count: u8,
-    },
-    Druid {
-        rage_crit_chance: f64,
-        is_in_bear_form: bool,
-        has_just_dodged: bool,
-        swoop_chance: f64,
-        swoop_damage_multiplier: f64,
-    },
-    Bard {
-        melody_length: i32,
-        next_melody_round: i32,
-        melody_dmg_multiplier: f64,
-    },
-    Necromancer {
-        base_damage_multi: f64,
-        minion_type: NecromancerMinionType,
-        minion_rounds: i32,
-        skeleton_revives: i32,
-    },
-    Paladin {
-        initial_armor_reduction: f64,
-        stance: PaladinStance,
-    },
-    PlagueDoctor {
-        poison_round: usize,
-        poison_dmg_multipliers: [f64; 3],
-    },
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum NecromancerMinionType {
-    None,
-    Skeleton,
-    Hound,
-    Golem,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PaladinStance {
-    Initial,
-    Defensive,
-    Offensive,
-}
-
-impl PaladinStance {
-    pub(crate) fn damage_multiplier(self) -> f64 {
-        match self {
-            PaladinStance::Initial => 1.0,
-            PaladinStance::Defensive => 1.0 / 0.833 * 0.568,
-            PaladinStance::Offensive => 1.0 / 0.833 * 1.253,
-        }
-    }
-
-    pub(crate) fn block_chance(self) -> i32 {
-        match self {
-            PaladinStance::Initial => 30,
-            PaladinStance::Defensive => 50,
-            PaladinStance::Offensive => 25,
-        }
-    }
-}
-
-pub(crate) fn calculate_crit_chance(
-    main: &Fighter,
-    opponent: &Fighter,
-    cap: f64,
-    crit_bonus: f64,
-) -> f64 {
-    (f64::from(main.attributes[AttributeType::Luck]) * 5.0
-        / (f64::from(opponent.level) * 2.0)
-        / 100.0
-        + crit_bonus)
-        .min(cap)
-}
-
-impl InBattleFighter {
-    pub fn is_mage(&self) -> bool {
-        self.fighter.class == Class::Mage
-    }
-
-    pub fn update_opponent(
-        &mut self,
-        opponent: &Fighter,
-        reduce_gladiator: bool,
-    ) {
-        let main = &self.fighter;
-        self.damage =
-            calculate_damage(main.first_weapon.as_ref(), main, opponent, false);
-        let mut crit_multiplier = main.crit_multiplier;
-        if reduce_gladiator {
-            crit_multiplier -=
-                f64::from(main.gladiator.min(opponent.gladiator)) * 0.11;
-        }
-        self.crit_multiplier = crit_multiplier;
-        self.crit_chance = calculate_crit_chance(main, opponent, 0.5, 0.0);
-        self.class_data.update_opponent(main, opponent);
-        self.opponent_is_mage = opponent.class == Class::Mage;
-    }
-
-    pub fn attack(
-        &mut self,
-        target: &mut InBattleFighter,
-        round: &mut u32,
-        rng: &mut Rng,
-    ) -> bool {
-        match &mut self.class_data {
-            ClassData::Assassin { secondary_damage } => {
-                let secondary_damage = *secondary_damage;
-                *round += 1;
-                if target.will_take_attack(rng) {
-                    let first_weapon_damage =
-                        self.calc_basic_hit_damage(*round, rng);
-                    if target.take_attack(first_weapon_damage, round, rng) {
-                        return true;
-                    }
-                }
-
-                *round += 1;
-
-                if !target.will_take_attack(rng) {
-                    return false;
-                }
-
-                let second_weapon_damage = calculate_hit_damage(
-                    &secondary_damage,
-                    *round,
-                    self.crit_chance,
-                    self.crit_multiplier,
-                    rng,
-                );
-
-                target.take_attack(second_weapon_damage, round, rng)
-            }
-            ClassData::Druid {
-                has_just_dodged,
-                rage_crit_chance,
-                is_in_bear_form,
-                swoop_chance,
-                swoop_damage_multiplier,
-            } => {
-                let swoop_damage_multiplier = *swoop_damage_multiplier;
-                if target.is_mage() {
-                    return self.attack_generic(target, round, rng);
-                }
-
-                if *has_just_dodged {
-                    // transform into a bear and attack
-                    *is_in_bear_form = true;
-                    *has_just_dodged = false;
-
-                    *round += 1;
-
-                    if !target.will_take_attack(rng) {
-                        return false;
-                    }
-
-                    let crit_multiplier = (2.0 + 4.0) * self.crit_chance / 2.0;
-
-                    let dmg = calculate_hit_damage(
-                        &self.damage,
-                        *round,
-                        *rage_crit_chance,
-                        crit_multiplier,
-                        rng,
-                    );
-                    return target.take_attack(dmg, round, rng);
-                }
-
-                *is_in_bear_form = false;
-
-                let will_swoop = rng.f64() < *swoop_chance;
-
-                if will_swoop {
-                    *round += 1;
-                    *swoop_chance = 0.5f64.min(*swoop_chance + 0.05);
-                    if target.will_take_attack(rng) {
-                        let swoop_dmg = self.calc_basic_hit_damage(*round, rng)
-                            * swoop_damage_multiplier;
-
-                        if target.take_attack(swoop_dmg, round, rng) {
-                            return true;
-                        }
-                    }
-                }
-
-                self.attack_generic(target, round, rng)
-            }
-            ClassData::Bard {
-                melody_length,
-                next_melody_round,
-                melody_dmg_multiplier,
-            } => {
-                if target.is_mage() {
-                    return self.attack_generic(target, round, rng);
-                }
-
-                if *melody_length == 0 {
-                    *melody_dmg_multiplier = 1.0;
-                }
-                if *melody_length <= 0 && *next_melody_round <= 0 {
-                    let (length, multi) = match rng.u32(0..4) {
-                        0 | 1 => (3, 1.4),
-                        2 => (3, 1.2),
-                        _ => (4, 1.6),
-                    };
-                    *melody_length = length;
-                    *melody_dmg_multiplier = multi;
-                    *next_melody_round = 4;
-                }
-
-                *melody_length -= 1;
-                *next_melody_round -= 1;
-
-                if !target.will_take_attack(rng) {
-                    return false;
-                }
-
-                let dmg = *melody_dmg_multiplier
-                    * self.calc_basic_hit_damage(*round, rng);
-
-                target.take_attack(dmg, round, rng)
-            }
-            ClassData::Necromancer {
-                minion_type,
-                minion_rounds,
-                ..
-            } => {
-                if target.is_mage() {
-                    return self.attack_generic(target, round, rng);
-                }
-                *round += 1;
-
-                if *minion_type == NecromancerMinionType::None && rng.bool() {
-                    // Summon minion
-                    let minion_type_chance = rng.i32(1..4);
-                    let (new_type, new_rounds) = match minion_type_chance {
-                        1 => (NecromancerMinionType::Skeleton, 3),
-                        2 => (NecromancerMinionType::Hound, 2),
-                        _ => (NecromancerMinionType::Golem, 4),
-                    };
-
-                    *minion_type = new_type;
-                    *minion_rounds = new_rounds;
-                    return self.attack_with_minion(target, round, rng);
-                }
-
-                if target.will_take_attack(rng) {
-                    let dmg = self.calc_basic_hit_damage(*round, rng);
-                    if target.take_attack(dmg, round, rng) {
-                        return true;
-                    }
-                }
-
-                self.attack_with_minion(target, round, rng)
-            }
-            ClassData::Paladin { stance, .. } => {
-                if target.is_mage() {
-                    return self.attack_generic(target, round, rng);
-                }
-
-                *round += 1;
-                if rng.bool() {
-                    // change stance
-                    *stance = match stance {
-                        PaladinStance::Initial => PaladinStance::Defensive,
-                        PaladinStance::Defensive => PaladinStance::Offensive,
-                        PaladinStance::Offensive => PaladinStance::Initial,
-                    };
-                }
-
-                let stance_dmg_multi = stance.damage_multiplier();
-
-                if !target.will_take_attack(rng) {
-                    return false;
-                }
-
-                let dmg =
-                    self.calc_basic_hit_damage(*round, rng) * stance_dmg_multi;
-
-                target.take_attack(dmg, round, rng)
-            }
-            ClassData::PlagueDoctor {
-                poison_round,
-                poison_dmg_multipliers,
-            } => {
-                if target.is_mage() {
-                    return self.attack_generic(target, round, rng);
-                }
-
-                if *poison_round == 0 && rng.bool() {
-                    *round += 1;
-                    if !target.will_take_attack(rng) {
-                        return false;
-                    }
-
-                    *poison_round = 3;
-
-                    let poison_multiplier = poison_dmg_multipliers[2];
-                    let tincture_throw_dmg = calculate_hit_damage(
-                        &(self.damage * poison_multiplier),
-                        *round,
-                        self.crit_chance,
-                        self.crit_multiplier,
-                        rng,
-                    );
-
-                    return target.take_attack(tincture_throw_dmg, round, rng);
-                }
-
-                if *poison_round > 0 {
-                    *round += 1;
-                    *poison_round -= 1;
-
-                    #[allow(clippy::indexing_slicing)]
-                    let poison_multiplier =
-                        poison_dmg_multipliers[*poison_round];
-                    let poison_dmg = calculate_hit_damage(
-                        &(self.damage * poison_multiplier),
-                        *round,
-                        self.crit_chance,
-                        self.crit_multiplier,
-                        rng,
-                    );
-
-                    if target.take_attack(poison_dmg, round, rng) {
-                        return true;
-                    }
-                }
-                self.attack_generic(target, round, rng)
-            }
-            _ => self.attack_generic(target, round, rng),
-        }
-    }
-
-    fn attack_generic(
-        &mut self,
-        target: &mut InBattleFighter,
-        round: &mut u32,
-        rng: &mut Rng,
-    ) -> bool {
-        *round += 1;
-
-        if !self.is_mage() && !target.will_take_attack(rng) {
-            return false;
-        }
-
-        let dmg = self.calc_basic_hit_damage(*round, rng);
-        target.take_attack(dmg, round, rng)
-    }
-
-    pub fn attack_before_fight(
-        &mut self,
-        target: &mut InBattleFighter,
-        round: &mut u32,
-        rng: &mut Rng,
-    ) -> bool {
-        match &mut self.class_data {
-            ClassData::BattleMage {
-                fireball_dmg,
-                used_fireball,
-            } if !*used_fireball => {
-                *round += 1;
-                *used_fireball = true;
-                target.take_attack(*fireball_dmg, round, rng)
-            }
-            _ => false,
-        }
-    }
-
-    pub fn will_skip_round(
-        &mut self,
-        target: &mut InBattleFighter,
-        _round: &mut u32,
-        rng: &mut Rng,
-    ) -> bool {
-        match &mut self.class_data {
-            ClassData::Berserker {
-                chain_attack_counter,
-            } => {
-                if target.fighter.class == Class::Mage {
-                    return false;
-                }
-
-                if *chain_attack_counter >= 14 {
-                    *chain_attack_counter = 0;
-                } else if rng.u32(1..=100) > 50 {
-                    // NOTE: This is a bug on the server?
-                    // *round += 1;
-                    *chain_attack_counter += 1;
-                    return true;
-                } else {
-                    *chain_attack_counter = 0;
-                }
-                false
-            }
-            _ => false,
-        }
-    }
-
-    pub fn take_attack(
-        &mut self,
-        damage: f64,
-        round: &mut u32,
-        rng: &mut Rng,
-    ) -> bool {
-        match &mut self.class_data {
-            ClassData::DemonHunter { revive_count } => {
-                let health = &mut self.fighter.health;
-                *health -= damage;
-                if *health > 0.0 {
-                    return false;
-                }
-                if self.opponent_is_mage {
-                    return true;
-                }
-
-                // revive logic
-                let revive_chance = 0.44 - f64::from(*revive_count) * 0.11;
-                if revive_chance <= 0.0 || rng.f64() >= revive_chance {
-                    return true;
-                }
-
-                *round += 1;
-                *revive_count += 1;
-
-                true
-            }
-            ClassData::Paladin {
-                stance,
-                initial_armor_reduction,
-            } => {
-                let current_armor_reduction = match stance {
-                    PaladinStance::Initial | PaladinStance::Defensive => 1.0,
-                    PaladinStance::Offensive => {
-                        1.0 / (1.0 - *initial_armor_reduction)
-                            * (1.0 - initial_armor_reduction.min(0.20))
-                    }
-                };
-                let actual_damage = damage * current_armor_reduction;
-                let health = &mut self.fighter.health;
-
-                if self.opponent_is_mage {
-                    *health -= actual_damage;
-                    return *health <= 0.0;
-                }
-
-                if *stance == PaladinStance::Defensive
-                    && rng.i32(1..101) <= stance.block_chance()
-                {
-                    let heal_cap = actual_damage * 0.3;
-                    *health += (self.max_health - *health).clamp(0.0, heal_cap);
-                    return false;
-                }
-
-                *health -= actual_damage;
-                *health <= 0.0
-            }
-            _ => {
-                let health = &mut self.fighter.health;
-                *health -= damage;
-                *health <= 0.0
-            }
-        }
-    }
-
-    pub fn will_take_attack(&mut self, rng: &mut Rng) -> bool {
-        match &mut self.class_data {
-            ClassData::Warrior { block_chance } => {
-                rng.i32(1..101) > *block_chance
-            }
-            ClassData::Assassin { .. } | ClassData::Scout => rng.bool(),
-            ClassData::Druid {
-                is_in_bear_form,
-                has_just_dodged,
-                ..
-            } => {
-                if !*is_in_bear_form && rng.i32(1..101) <= 35 {
-                    // evade_chance hardcoded to 35 in original
-                    *has_just_dodged = true;
-                    return false;
-                }
-                true
-            }
-            ClassData::Necromancer { minion_type, .. } => {
-                if self.opponent_is_mage {
-                    return true;
-                }
-                if *minion_type != NecromancerMinionType::Golem {
-                    return true;
-                }
-                rng.i32(1..101) > 25
-            }
-            ClassData::Paladin { stance, .. } => {
-                *stance == PaladinStance::Defensive
-                    || rng.i32(1..101) > stance.block_chance()
-            }
-            ClassData::PlagueDoctor { poison_round, .. } => {
-                let chance = match poison_round {
-                    3 => 65,
-                    2 => 50,
-                    1 => 35,
-                    _ => 20,
-                };
-                rng.i32(1..101) > chance
-            }
-            _ => true,
-        }
-    }
-
-    fn calc_basic_hit_damage(&self, round: u32, rng: &mut Rng) -> f64 {
-        calculate_hit_damage(
-            &self.damage,
-            round,
-            self.crit_chance,
-            self.crit_multiplier,
-            rng,
-        )
-    }
-
-    fn attack_with_minion(
-        &mut self,
-        target: &mut InBattleFighter,
-        round: &mut u32,
-        rng: &mut Rng,
-    ) -> bool {
-        let ClassData::Necromancer {
-            minion_type: current_minion,
-            minion_rounds,
-            skeleton_revives,
-            base_damage_multi,
-        } = &mut self.class_data
-        else {
-            // Should not happen
-            return false;
-        };
-
-        if *current_minion == NecromancerMinionType::None {
-            return false;
-        }
-
-        *round += 1;
-
-        *minion_rounds -= 1;
-
-        // NOTE: Currently skeleton can revive only once per fight but this is
-        // a bug
-        if *minion_rounds == 0
-            && *current_minion == NecromancerMinionType::Skeleton
-            && *skeleton_revives < 1
-            && rng.bool()
-        {
-            *minion_rounds = 1;
-            *skeleton_revives += 1;
-        } else if *minion_rounds == 0 {
-            *current_minion = NecromancerMinionType::None;
-            *skeleton_revives = 0;
-        }
-
-        if !target.will_take_attack(rng) {
-            return false;
-        }
-
-        let mut crit_chance = self.crit_chance;
-        let mut crit_multi = self.crit_multiplier;
-        if *current_minion == NecromancerMinionType::Hound {
-            crit_chance = (crit_chance + 0.1).min(0.6);
-            crit_multi = 2.5 * (crit_multi / 2.0);
-        }
-
-        let mut dmg = calculate_hit_damage(
-            &self.damage,
-            *round,
-            crit_chance,
-            crit_multi,
-            rng,
-        );
-
-        let base_multi = *base_damage_multi;
-        let minion_dmg_multiplier = match current_minion {
-            NecromancerMinionType::Skeleton => (base_multi + 0.25) / base_multi,
-            NecromancerMinionType::Hound => (base_multi + 1.0) / base_multi,
-            NecromancerMinionType::Golem => 1.0,
-            NecromancerMinionType::None => 0.0,
-        };
-
-        dmg *= minion_dmg_multiplier;
-        target.take_attack(dmg, round, rng)
-    }
-}
-
+/// Contains all informations, that are necessary for batlles to be simulated.
+/// It is derived by converting any of the things that can fight (player,
+/// companion, etc.) to a fighter through the From<T> traits.
+/// Contains all informations, that are necessary for battles to be simulated.
+/// It is derived by converting any of the things that can fight (player,
+/// companion, etc.) to a fighter through the From<T> traits.
+///
+/// ## Example
+/// To create a `Fighter` from a monster:
+///
+/// ```rust,ignore
+/// let monster: &Monster = get_dungeon_monster(..);
+/// // Convert this to a Fighter
+/// let monster_fighter: Fighter = monster.into();
+/// // or
+/// let monster_fighter = Fighter::from(monster);
+/// ```
 #[derive(Debug, Clone)]
 pub struct Fighter {
+    /// The name, or alternative identification of this fighter. Only used for
+    /// display purposes, does not affect combat.
+    pub name: std::sync::Arc<str>,
+    /// The class of the fighter (e.g., Warrior, Mage).
     pub class: Class,
+    /// The level of the fighter.
     pub level: u16,
+    /// The attributes of the fighter
     pub attributes: EnumMap<AttributeType, u32>,
-    pub health: f64,
+    /// The health the fighter has before going into battle.
+    pub max_health: f64,
+    /// The armor value that reduces incoming damage. Sum of all equipment.
     pub armor: u32,
+    /// The fighter's first weapon, if equipped.
     pub first_weapon: Option<Weapon>,
+    /// The fighter's second weapon, if the fighter is an assassin. Shields are
+    /// not tracked
     pub second_weapon: Option<Weapon>,
-    pub reaction: i32,
-    pub crit_multiplier: f64,
+    /// Check if this fighter has the enchantment to take the first action
+    pub has_reaction_enchant: bool,
+    /// The critical hit multiplier for the fighter.
+    pub crit_dmg_multi: f64,
+    /// The resistances of the fighter to various elements from runes.
     pub resistances: EnumMap<Element, i32>,
-    pub guild_portal: f64,
-
+    /// The damage bonus the fighter receives from guild portal.
+    pub portal_dmg_bonus: f64,
+    /// Indicates whether the fighter is a companion.
     pub is_companion: bool,
-    pub gladiator: u32,
+    /// The level of the gladiator building in the underworld.
+    pub gladiator_lvl: u32,
 }
 
 impl From<&Monster> for Fighter {
@@ -674,20 +82,20 @@ impl From<&Monster> for Fighter {
             (monster.class == Class::Assassin).then(|| weapon.clone());
 
         Fighter {
+            name: monster.name.clone(),
             class: monster.class,
             level: monster.level,
             attributes: monster.attributes,
-            health: monster.hp as f64,
+            max_health: monster.hp as f64,
             armor: monster.armor,
             second_weapon,
             first_weapon: Some(weapon),
-            // TODO: Are there actually monster with two weapons
-            reaction: 0,
-            crit_multiplier: 2.0,
+            has_reaction_enchant: false,
+            crit_dmg_multi: 2.0,
             resistances,
-            guild_portal: 0.0,
+            portal_dmg_bonus: 0.0,
             is_companion: false,
-            gladiator: 0,
+            gladiator_lvl: 0,
         }
     }
 }
@@ -700,7 +108,7 @@ impl From<&UpgradeableFighter> for Fighter {
         let health = char.hit_points(&attributes) as f64;
 
         let mut resistances = EnumMap::default();
-        let mut reaction = 0;
+        let mut has_reaction = false;
         let mut extra_crit_dmg = 0.0;
         let mut armor = 0;
         let mut weapon = None;
@@ -716,7 +124,7 @@ impl From<&UpgradeableFighter> for Fighter {
                     extra_crit_dmg = 0.05;
                 }
                 Some(Enchantment::ShadowOfTheCowboy) => {
-                    reaction = 1;
+                    has_reaction = true;
                 }
                 _ => {}
             }
@@ -775,20 +183,713 @@ impl From<&UpgradeableFighter> for Fighter {
             2.0 + extra_crit_dmg + f64::from(char.gladiator) * 0.11;
 
         Fighter {
+            name: char.name.clone(),
             class: char.class,
             level: char.level,
             attributes,
-            health,
+            max_health: health,
             armor,
             first_weapon: weapon,
             second_weapon: offhand,
-            reaction,
-            crit_multiplier,
+            has_reaction_enchant: has_reaction,
+            crit_dmg_multi: crit_multiplier,
             resistances,
-            guild_portal: f64::from(char.portal_dmg_bonus),
+            portal_dmg_bonus: f64::from(char.portal_dmg_bonus),
             is_companion: char.is_companion,
-            gladiator: char.gladiator,
+            gladiator_lvl: char.gladiator,
         }
+    }
+}
+
+// TODO: Impl From OtherPlayer / Pet
+
+/// Contains all relevant information about a fighter, that has entered combat
+/// against another fighter, that are relevant to resolve this 1on1 battle.
+/// If this fighter has won a 1on1 battle and is matched up with another enemy,
+/// the stats must be updated using `update_opponent()`.
+#[derive(Debug)]
+pub(crate) struct InBattleFighter {
+    /// The name, or alternative identification of this fighter. Only used for
+    /// display purposes, does not affect combat.
+    #[allow(unused)]
+    pub name: Arc<str>,
+    /// The class of the fighter (e.g., Warrior, Mage).
+    pub class: Class,
+    /// The amount of health this fighter has started the battle with
+    pub max_health: f64,
+    /// The amount of health this fighter currently has. May be negative, or
+    /// zero
+    pub health: f64,
+    /// The amount of damage this fighter can do with a normal (weapon 1)
+    /// attack on the first turn
+    pub damage: DamageRange,
+    /// The reaction speed of the fighter, affecting turn order. `1` if this
+    /// fighter has an item with the relevant enchantment
+    pub reaction: u8,
+    /// The chance to land a critical hit against the opponent
+    pub crit_chance: f64,
+    /// The amount of damage a crit does compared to a normal attack
+    pub crit_dmg_multi: f64,
+    /// Just a flag that stores if the opponent is a mage. We could also store
+    /// the class of the opponent here, but we only ever really care about
+    /// mage.
+    pub opponent_is_mage: bool,
+
+    /// All the metadata a fighter needs to keep track of during a fight, that
+    /// is unique to their class.
+    pub class_data: ClassData,
+}
+
+/// The class specific metadata a fighter needs to keep track of during a fight.
+#[derive(Debug, Clone)]
+pub(crate) enum ClassData {
+    Warrior {
+        /// The chance to block an attack with the shield
+        block_chance: i32,
+    },
+    Mage,
+    Scout,
+    Assassin {
+        /// The weapon damage from the secondary weapon
+        secondary_damage: DamageRange,
+    },
+    BattleMage {
+        /// The damage a fireball does against the enemy on the first turn
+        fireball_dmg: f64,
+        /// Has the fireball already been used?
+        used_fireball: bool,
+    },
+    Berserker {
+        /// The amount of times the berserker has attacked consecutively in
+        /// a frenzy
+        frenzy_attacks: u32,
+    },
+    DemonHunter {
+        /// The amount of times the demon hunter has revived
+        revive_count: u32,
+    },
+    Druid {
+        /// Is this character currently in bear form
+        is_in_bear_form: bool,
+        /// The chance to crit whilst in rage (bear form)
+        rage_crit_chance: f64,
+        /// Have we just an enemies attack, which would lead us to transform
+        /// into a bear on our next turn?
+        has_just_dodged: bool,
+        /// The chance to do a swoop attack
+        swoop_chance: f64,
+        /// The amount of damage a swoop attack does compared to a normal
+        /// attack
+        swoop_dmg_multi: f64,
+    },
+    Bard {
+        /// The amount of turns the melody is still active for
+        melody_remaining_rounds: i32,
+        /// The amount of turns until we can start playing a new melody
+        melody_cooldown_rounds: i32,
+        /// The amount of damage an attack does based on the current melody
+        /// compared to a generic attack
+        melody_dmg_multi: f64,
+    },
+    Necromancer {
+        // TODO: When exactly is this applied
+        damage_multi: f64,
+        /// The type of minion, that we have summoned, if any
+        minion: Option<Minion>,
+        /// The amount of rounds the minion is going to remain active for
+        minion_remaining_rounds: i32,
+        /// The amount of times the skeleton has revived
+        skeleton_revived: i32,
+    },
+    Paladin {
+        // TODO: What exactly is this? Is this a damage bonus? Why is it named
+        // this?
+        initial_armor_reduction: f64,
+        /// The current stance, that the paladin is in
+        stance: Stance,
+    },
+    PlagueDoctor {
+        /// The amount of rounds the current tincture is still active for
+        poison_remaining_round: usize,
+        /// The damage multipliers the three turns of poison inflict extra on
+        /// the opponent
+        poison_dmg_multis: [f64; 3],
+    },
+}
+
+/// The type of minion a necromancer can summon
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub(crate) enum Minion {
+    Skeleton,
+    Hound,
+    Golem,
+}
+
+/// The stance a paladin can enter
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Stance {
+    Regular,
+    Defensive,
+    Offensive,
+}
+
+impl Stance {
+    pub(crate) fn damage_multiplier(self) -> f64 {
+        match self {
+            Stance::Regular => 1.0,
+            Stance::Defensive => 1.0 / 0.833 * 0.568,
+            Stance::Offensive => 1.0 / 0.833 * 1.253,
+        }
+    }
+
+    pub(crate) fn block_chance(self) -> i32 {
+        match self {
+            Stance::Regular => 30,
+            Stance::Defensive => 50,
+            Stance::Offensive => 25,
+        }
+    }
+}
+/// Calculates for `main` to crit `opponent`
+pub(crate) fn calculate_crit_chance(
+    main: &Fighter,
+    opponent: &Fighter,
+    cap: f64,
+    crit_bonus: f64,
+) -> f64 {
+    let luck_factor = f64::from(main.attributes[AttributeType::Luck]) * 5.0;
+    let opponent_level_factor = f64::from(opponent.level) * 2.0;
+    let crit_chance = luck_factor / opponent_level_factor / 100.0 + crit_bonus;
+    crit_chance.min(cap)
+}
+
+impl InBattleFighter {
+    /// Shorthand to check if this fighter is a mage
+    pub fn is_mage(&self) -> bool {
+        self.class == Class::Mage
+    }
+
+    /// Update the stats that are affected by the opponent with a new oponent
+    /// without resetting persistent data points
+    pub fn update_opponent(
+        &mut self,
+        main: &Fighter,
+        opponent: &Fighter,
+        reduce_gladiator: bool,
+    ) {
+        self.damage = calculate_damage(main, opponent, false);
+
+        let mut crit_dmg_multi = main.crit_dmg_multi;
+        if reduce_gladiator {
+            let glad_lvl = main.gladiator_lvl.min(opponent.gladiator_lvl);
+            crit_dmg_multi -= f64::from(glad_lvl) * 0.11;
+        }
+        self.crit_dmg_multi = crit_dmg_multi;
+        self.crit_chance = calculate_crit_chance(main, opponent, 0.5, 0.0);
+
+        self.class_data.update_opponent(main, opponent);
+        self.opponent_is_mage = opponent.class == Class::Mage;
+    }
+
+    /// Does a full attack turn for this fighter against the target. Returns
+    /// true, if the opponent has won
+    pub fn attack(
+        &mut self,
+        target: &mut InBattleFighter,
+        round: &mut u32,
+        rng: &mut Rng,
+    ) -> bool {
+        match &mut self.class_data {
+            ClassData::Assassin { secondary_damage } => {
+                let secondary_damage = *secondary_damage;
+
+                // Main hand attack
+                *round += 1;
+                if target.will_take_attack(rng) {
+                    let first_weapon_damage =
+                        self.calc_basic_hit_damage(*round, rng);
+                    if target.take_attack_dmg(first_weapon_damage, round, rng) {
+                        return true;
+                    }
+                }
+
+                // Second hand attack
+                *round += 1;
+                if !target.will_take_attack(rng) {
+                    return false;
+                }
+
+                let second_weapon_damage = calculate_hit_damage(
+                    &secondary_damage,
+                    *round,
+                    self.crit_chance,
+                    self.crit_dmg_multi,
+                    rng,
+                );
+
+                target.take_attack_dmg(second_weapon_damage, round, rng)
+            }
+            ClassData::Druid {
+                has_just_dodged,
+                rage_crit_chance,
+                is_in_bear_form,
+                swoop_chance,
+                swoop_dmg_multi,
+            } => {
+                if target.is_mage() {
+                    return self.attack_generic(target, round, rng);
+                }
+
+                if *has_just_dodged {
+                    // transform into a bear and attack with rage
+                    *is_in_bear_form = true;
+                    *has_just_dodged = false;
+
+                    *round += 1;
+
+                    if !target.will_take_attack(rng) {
+                        return false;
+                    }
+
+                    let rage_crit_multi = 6.0 * self.crit_dmg_multi / 2.0;
+                    let dmg = calculate_hit_damage(
+                        &self.damage,
+                        *round,
+                        *rage_crit_chance,
+                        rage_crit_multi,
+                        rng,
+                    );
+                    return target.take_attack_dmg(dmg, round, rng);
+                }
+
+                *is_in_bear_form = false;
+
+                // eagle form
+
+                let do_swoop_attack = rng.f64() < *swoop_chance;
+                if do_swoop_attack {
+                    *round += 1;
+                    *swoop_chance = (*swoop_chance + 0.05).min(0.5);
+
+                    if target.will_take_attack(rng) {
+                        let swoop_dmg_multi = *swoop_dmg_multi;
+                        let swoop_dmg = self.calc_basic_hit_damage(*round, rng)
+                            * swoop_dmg_multi;
+
+                        if target.take_attack_dmg(swoop_dmg, round, rng) {
+                            return true;
+                        }
+                    }
+                }
+
+                self.attack_generic(target, round, rng)
+            }
+            ClassData::Bard {
+                melody_remaining_rounds,
+                melody_cooldown_rounds,
+                melody_dmg_multi,
+            } => {
+                if target.is_mage() {
+                    return self.attack_generic(target, round, rng);
+                }
+
+                if *melody_remaining_rounds <= 0 && *melody_cooldown_rounds <= 0
+                {
+                    // Start playing a new melody
+                    let (length, multi) = match rng.u32(0..4) {
+                        0 | 1 => (3, 1.4),
+                        2 => (3, 1.2),
+                        _ => (4, 1.6),
+                    };
+                    *melody_remaining_rounds = length;
+                    *melody_dmg_multi = multi;
+                    *melody_cooldown_rounds = 4;
+                } else if *melody_remaining_rounds == 0 {
+                    // Stop a melody effect, that has elapsed
+                    *melody_dmg_multi = 1.0;
+                }
+
+                *melody_remaining_rounds -= 1;
+                *melody_cooldown_rounds -= 1;
+
+                if !target.will_take_attack(rng) {
+                    return false;
+                }
+
+                let dmg_multi = *melody_dmg_multi;
+                let dmg = self.calc_basic_hit_damage(*round, rng) * dmg_multi;
+                target.take_attack_dmg(dmg, round, rng)
+            }
+            ClassData::Necromancer {
+                minion,
+                minion_remaining_rounds: minion_rounds,
+                ..
+            } => {
+                if target.is_mage() {
+                    return self.attack_generic(target, round, rng);
+                }
+                *round += 1;
+
+                if minion.is_none() && rng.bool() {
+                    // Summon a new minion and have it attack
+                    let (new_type, new_rounds) = match rng.u8(0..3) {
+                        0 => (Minion::Skeleton, 3),
+                        1 => (Minion::Hound, 2),
+                        _ => (Minion::Golem, 4),
+                    };
+
+                    *minion = Some(new_type);
+                    *minion_rounds = new_rounds;
+                    return self.attack_with_minion(target, round, rng);
+                }
+
+                if target.will_take_attack(rng) {
+                    // Do a normal attack before minion attack
+                    let dmg = self.calc_basic_hit_damage(*round, rng);
+                    if target.take_attack_dmg(dmg, round, rng) {
+                        return true;
+                    }
+                }
+
+                self.attack_with_minion(target, round, rng)
+            }
+            ClassData::Paladin { stance, .. } => {
+                if target.is_mage() {
+                    return self.attack_generic(target, round, rng);
+                }
+
+                *round += 1;
+                if rng.bool() {
+                    // change stance
+                    *stance = match stance {
+                        Stance::Regular => Stance::Defensive,
+                        Stance::Defensive => Stance::Offensive,
+                        Stance::Offensive => Stance::Regular,
+                    };
+                }
+
+                if !target.will_take_attack(rng) {
+                    return false;
+                }
+
+                let dmg_multi = stance.damage_multiplier();
+                let dmg = self.calc_basic_hit_damage(*round, rng) * dmg_multi;
+                target.take_attack_dmg(dmg, round, rng)
+            }
+            ClassData::PlagueDoctor {
+                poison_remaining_round,
+                poison_dmg_multis,
+            } => {
+                if target.is_mage() {
+                    return self.attack_generic(target, round, rng);
+                }
+
+                if *poison_remaining_round == 0 && rng.bool() {
+                    // Throw a new tincture and attack
+                    *round += 1;
+                    if !target.will_take_attack(rng) {
+                        return false;
+                    }
+
+                    *poison_remaining_round = 3;
+
+                    let dmg_multi = poison_dmg_multis[2];
+                    let dmg =
+                        self.calc_basic_hit_damage(*round, rng) * dmg_multi;
+                    return target.take_attack_dmg(dmg, round, rng);
+                }
+
+                if *poison_remaining_round > 0 {
+                    // Apply damage tick from the tincture that we currently
+                    // have in effect
+                    *round += 1;
+                    *poison_remaining_round -= 1;
+
+                    #[allow(clippy::indexing_slicing)]
+                    let dmg_multi = poison_dmg_multis[*poison_remaining_round];
+                    let dmg =
+                        self.calc_basic_hit_damage(*round, rng) * dmg_multi;
+
+                    if target.class == Class::Paladin {
+                        // Paladin can not block this
+                        target.health -= dmg;
+                        if target.health <= 0.0 {
+                            return true;
+                        }
+                    } else if target.take_attack_dmg(dmg, round, rng) {
+                        return true;
+                    }
+                }
+                self.attack_generic(target, round, rng)
+            }
+            ClassData::Mage => {
+                // Mage attacks to not check will_take_attack
+                let dmg = self.calc_basic_hit_damage(*round, rng);
+                target.take_attack_dmg(dmg, round, rng)
+            }
+            _ => self.attack_generic(target, round, rng),
+        }
+    }
+
+    /// The most generic type of attack. Just a swing/stab/shot with the main
+    /// weapon. Increases turn timer and checks for target dodges.
+    fn attack_generic(
+        &mut self,
+        target: &mut InBattleFighter,
+        round: &mut u32,
+        rng: &mut Rng,
+    ) -> bool {
+        *round += 1;
+
+        if !target.will_take_attack(rng) {
+            return false;
+        }
+
+        let dmg = self.calc_basic_hit_damage(*round, rng);
+        target.take_attack_dmg(dmg, round, rng)
+    }
+
+    pub fn attack_before_fight(
+        &mut self,
+        target: &mut InBattleFighter,
+        round: &mut u32,
+        rng: &mut Rng,
+    ) -> bool {
+        match &mut self.class_data {
+            ClassData::BattleMage {
+                fireball_dmg,
+                used_fireball,
+            } if !*used_fireball => {
+                *round += 1;
+                *used_fireball = true;
+                target.take_attack_dmg(*fireball_dmg, round, rng)
+            }
+            _ => false,
+        }
+    }
+
+    /// Do we deny the opponents next turn?
+    pub fn will_skips_opponent_round(
+        &mut self,
+        target: &mut InBattleFighter,
+        _round: &mut u32,
+        rng: &mut Rng,
+    ) -> bool {
+        match &mut self.class_data {
+            ClassData::Berserker { frenzy_attacks } => {
+                if target.class == Class::Mage {
+                    return false;
+                }
+
+                if *frenzy_attacks < 14 && rng.bool() {
+                    *frenzy_attacks += 1;
+                    return true;
+                }
+
+                *frenzy_attacks = 0;
+                false
+            }
+            _ => false,
+        }
+    }
+
+    /// Applies the given damage to this fighter. The damage will be reduced,
+    /// if possible and if applicable this fighter may revive. If the fighter
+    /// ends up dead, this will return true.
+    pub fn take_attack_dmg(
+        &mut self,
+        damage: f64,
+        round: &mut u32,
+        rng: &mut Rng,
+    ) -> bool {
+        match &mut self.class_data {
+            ClassData::DemonHunter { revive_count } => {
+                let health = &mut self.health;
+                *health -= damage;
+                if *health > 0.0 {
+                    return false;
+                }
+                if self.opponent_is_mage {
+                    return true;
+                }
+
+                // revive logic
+                let revive_chance = 0.44 - (f64::from(*revive_count) * 0.11);
+                if revive_chance <= 0.0 || rng.f64() >= revive_chance {
+                    return true;
+                }
+
+                *round += 1;
+                *revive_count += 1;
+
+                true
+            }
+            ClassData::Paladin {
+                stance,
+                initial_armor_reduction,
+            } => {
+                let current_armor_reduction = match stance {
+                    Stance::Regular | Stance::Defensive => 1.0,
+                    Stance::Offensive => {
+                        1.0 / (1.0 - *initial_armor_reduction)
+                            * (1.0 - initial_armor_reduction.min(0.20))
+                    }
+                };
+                let actual_damage = damage * current_armor_reduction;
+                let health = &mut self.health;
+
+                if self.opponent_is_mage {
+                    *health -= actual_damage;
+                    return *health <= 0.0;
+                }
+
+                if *stance == Stance::Defensive
+                    && rng.i32(1..101) <= stance.block_chance()
+                {
+                    let heal_cap = actual_damage * 0.3;
+                    *health += (self.max_health - *health).clamp(0.0, heal_cap);
+                    return false;
+                }
+
+                *health -= actual_damage;
+                *health <= 0.0
+            }
+            _ => {
+                let health = &mut self.health;
+                *health -= damage;
+                *health <= 0.0
+            }
+        }
+    }
+
+    pub fn will_take_attack(&mut self, rng: &mut Rng) -> bool {
+        match &mut self.class_data {
+            ClassData::Warrior { block_chance } => {
+                rng.i32(1..101) > *block_chance
+            }
+            ClassData::Assassin { .. } | ClassData::Scout => rng.bool(),
+            ClassData::Druid {
+                is_in_bear_form,
+                has_just_dodged,
+                ..
+            } => {
+                if !*is_in_bear_form && rng.i32(1..101) <= 35 {
+                    // evade_chance hardcoded to 35 in original
+                    *has_just_dodged = true;
+                    return false;
+                }
+                true
+            }
+            ClassData::Necromancer {
+                minion: minion_type,
+                ..
+            } => {
+                if self.opponent_is_mage {
+                    return true;
+                }
+                if *minion_type != Some(Minion::Golem) {
+                    return true;
+                }
+                rng.i32(1..101) > 25
+            }
+            ClassData::Paladin { stance, .. } => {
+                *stance == Stance::Defensive
+                    || rng.i32(1..101) > stance.block_chance()
+            }
+            ClassData::PlagueDoctor {
+                poison_remaining_round: poison_round,
+                ..
+            } => {
+                let chance = match poison_round {
+                    3 => 65,
+                    2 => 50,
+                    1 => 35,
+                    _ => 20,
+                };
+                rng.i32(1..101) > chance
+            }
+            _ => true,
+        }
+    }
+
+    fn calc_basic_hit_damage(&self, round: u32, rng: &mut Rng) -> f64 {
+        calculate_hit_damage(
+            &self.damage,
+            round,
+            self.crit_chance,
+            self.crit_dmg_multi,
+            rng,
+        )
+    }
+
+    fn attack_with_minion(
+        &mut self,
+        target: &mut InBattleFighter,
+        round: &mut u32,
+        rng: &mut Rng,
+    ) -> bool {
+        let ClassData::Necromancer {
+            minion: current_minion,
+            minion_remaining_rounds: minion_rounds,
+            skeleton_revived: skeleton_revives,
+            damage_multi: base_damage_multi,
+        } = &mut self.class_data
+        else {
+            // Should not happen
+            return false;
+        };
+
+        if current_minion.is_none() {
+            return false;
+        }
+
+        *round += 1;
+
+        *minion_rounds -= 1;
+
+        // NOTE: Currently skeleton can revive only once per fight but this is
+        // a bug
+        if *minion_rounds == 0
+            && *current_minion == Some(Minion::Skeleton)
+            && *skeleton_revives < 1
+            && rng.bool()
+        {
+            *minion_rounds = 1;
+            *skeleton_revives += 1;
+        } else if *minion_rounds == 0 {
+            *current_minion = None;
+            *skeleton_revives = 0;
+        }
+
+        if !target.will_take_attack(rng) {
+            return false;
+        }
+
+        let mut crit_chance = self.crit_chance;
+        let mut crit_multi = self.crit_dmg_multi;
+        if *current_minion == Some(Minion::Hound) {
+            crit_chance = (crit_chance + 0.1).min(0.6);
+            crit_multi = 2.5 * (crit_multi / 2.0);
+        }
+
+        let mut dmg = calculate_hit_damage(
+            &self.damage,
+            *round,
+            crit_chance,
+            crit_multi,
+            rng,
+        );
+
+        let base_multi = *base_damage_multi;
+        let minion_dmg_multiplier = match current_minion {
+            Some(Minion::Skeleton) => (base_multi + 0.25) / base_multi,
+            Some(Minion::Hound) => (base_multi + 1.0) / base_multi,
+            Some(Minion::Golem) => 1.0,
+            None => 0.0,
+        };
+
+        dmg *= minion_dmg_multiplier;
+        target.take_attack_dmg(dmg, round, rng)
     }
 }
 
@@ -801,21 +902,26 @@ impl InBattleFighter {
         let class_data = ClassData::new(main, opponent);
 
         let mut res = InBattleFighter {
-            fighter: main.clone(),
-            max_health: main.health,
+            name: main.name.clone(),
+            class: main.class,
+            health: main.max_health,
+            max_health: main.max_health,
+            reaction: u8::from(main.has_reaction_enchant),
             damage: DamageRange::default(),
             crit_chance: 0.0,
-            crit_multiplier: 0.0,
+            crit_dmg_multi: 0.0,
             opponent_is_mage: false,
             class_data,
         };
-        res.update_opponent(opponent, reduce_gladiator);
+        res.update_opponent(main, opponent, reduce_gladiator);
         res
     }
 }
 
 impl ClassData {
     pub fn update_opponent(&mut self, main: &Fighter, opponent: &Fighter) {
+        // TODO: Should we reset stuff like melody / druid form etc. when
+        // the opponent becomes a mage?
         match self {
             ClassData::Bard { .. }
             | ClassData::DemonHunter { .. }
@@ -823,23 +929,18 @@ impl ClassData {
             | ClassData::Scout
             | ClassData::Warrior { .. } => {}
             ClassData::Assassin { secondary_damage } => {
-                let range = calculate_damage(
-                    main.second_weapon.as_ref(),
-                    main,
-                    opponent,
-                    true,
-                );
+                let range = calculate_damage(main, opponent, true);
                 *secondary_damage = range;
             }
             ClassData::BattleMage { fireball_dmg, .. } => {
                 *fireball_dmg = calculate_fire_ball_damage(main, opponent);
             }
             ClassData::Berserker {
-                chain_attack_counter,
+                frenzy_attacks: chain_attack_counter,
             } => *chain_attack_counter = 0,
             ClassData::Druid {
                 rage_crit_chance,
-                swoop_damage_multiplier,
+                swoop_dmg_multi: swoop_damage_multiplier,
                 ..
             } => {
                 *rage_crit_chance =
@@ -849,7 +950,8 @@ impl ClassData {
             }
 
             ClassData::Necromancer {
-                base_damage_multi, ..
+                damage_multi: base_damage_multi,
+                ..
             } => {
                 *base_damage_multi =
                     calculate_damage_multiplier(main, opponent);
@@ -862,7 +964,7 @@ impl ClassData {
                     calculate_damage_reduction(opponent, main);
             }
             ClassData::PlagueDoctor {
-                poison_dmg_multipliers,
+                poison_dmg_multis: poison_dmg_multipliers,
                 ..
             } => {
                 let base_dmg_multi =
@@ -896,35 +998,33 @@ impl ClassData {
                 fireball_dmg: 0.0,
                 used_fireball: false,
             },
-            Class::Berserker => ClassData::Berserker {
-                chain_attack_counter: 0,
-            },
+            Class::Berserker => ClassData::Berserker { frenzy_attacks: 0 },
             Class::DemonHunter => ClassData::DemonHunter { revive_count: 0 },
             Class::Druid => ClassData::Druid {
                 rage_crit_chance: 0.0,
                 is_in_bear_form: false,
                 has_just_dodged: false,
                 swoop_chance: 0.15,
-                swoop_damage_multiplier: 0.0,
+                swoop_dmg_multi: 0.0,
             },
             Class::Bard => ClassData::Bard {
-                melody_length: -1,
-                next_melody_round: 0,
-                melody_dmg_multiplier: 1.0,
+                melody_remaining_rounds: -1,
+                melody_cooldown_rounds: 0,
+                melody_dmg_multi: 1.0,
             },
             Class::Necromancer => ClassData::Necromancer {
-                base_damage_multi: 0.0,
-                minion_type: NecromancerMinionType::None,
-                minion_rounds: 0,
-                skeleton_revives: 0,
+                damage_multi: 0.0,
+                minion: None,
+                minion_remaining_rounds: 0,
+                skeleton_revived: 0,
             },
             Class::Paladin => ClassData::Paladin {
                 initial_armor_reduction: 0.0,
-                stance: PaladinStance::Initial,
+                stance: Stance::Regular,
             },
             Class::PlagueDoctor => ClassData::PlagueDoctor {
-                poison_round: 0,
-                poison_dmg_multipliers: [0.0, 0.0, 0.0],
+                poison_remaining_round: 0,
+                poison_dmg_multis: [0.0, 0.0, 0.0],
             },
         };
         res.update_opponent(main, opponent);

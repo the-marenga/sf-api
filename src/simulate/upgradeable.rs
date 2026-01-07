@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use enum_map::EnumMap;
 
 use crate::{
@@ -11,6 +13,7 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct UpgradeableFighter {
+    pub name: Arc<str>,
     pub is_companion: bool,
     pub level: u16,
     pub class: Class,
@@ -133,6 +136,7 @@ impl UpgradeableFighter {
     #[must_use]
     pub fn from_other(other: &OtherPlayer) -> Self {
         UpgradeableFighter {
+            name: other.name.as_str().into(),
             is_companion: false,
             level: other.level,
             class: other.class,
@@ -304,6 +308,7 @@ impl PlayerFighterSquad {
 
         let char = &gs.character;
         let character = UpgradeableFighter {
+            name: char.name.as_str().into(),
             is_companion: false,
             level: char.level,
             class: char.class,
@@ -326,6 +331,7 @@ impl PlayerFighterSquad {
             let res = classes.map(|class| {
                 let comp = comps.get(class);
                 UpgradeableFighter {
+                    name: format!("{}'a {class:?} companion", char.name).into(),
                     is_companion: true,
                     level: comp.level.try_into().unwrap_or(1),
                     class: class.into(),
