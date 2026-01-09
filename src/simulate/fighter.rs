@@ -342,7 +342,7 @@ impl Stance {
         }
     }
 
-    pub(crate) fn block_chance(self) -> i32 {
+    pub(crate) fn block_chance(self) -> u8 {
         match self {
             Stance::Regular => 30,
             Stance::Defensive => 50,
@@ -649,6 +649,7 @@ impl InBattleFighter {
         target.take_attack_dmg(dmg, round, rng)
     }
 
+    /// Any kind of attack, that happens at the start of a 1v1 fight
     pub fn attack_before_fight(
         &mut self,
         target: &mut InBattleFighter,
@@ -744,7 +745,7 @@ impl InBattleFighter {
                 }
 
                 if *stance == Stance::Defensive
-                    && rng.i32(1..101) <= stance.block_chance()
+                    && rng.u8(1..=100) <= stance.block_chance()
                 {
                     let heal_cap = actual_damage * 0.3;
                     *health += (self.max_health - *health).clamp(0.0, heal_cap);
@@ -762,10 +763,11 @@ impl InBattleFighter {
         }
     }
 
+    /// Checks if this fighter manages to block/dodge the enemies attack
     pub fn will_take_attack(&mut self, rng: &mut Rng) -> bool {
         match &mut self.class_data {
             ClassData::Warrior { block_chance } => {
-                rng.i32(1..101) > *block_chance
+                rng.i32(1..=100) > *block_chance
             }
             ClassData::Assassin { .. } | ClassData::Scout => rng.bool(),
             ClassData::Druid {
@@ -773,40 +775,37 @@ impl InBattleFighter {
                 has_just_dodged,
                 ..
             } => {
-                if !*is_in_bear_form && rng.i32(1..101) <= 35 {
+                if !*is_in_bear_form && rng.u8(1..=100) <= 35 {
                     // evade_chance hardcoded to 35 in original
                     *has_just_dodged = true;
                     return false;
                 }
                 true
             }
-            ClassData::Necromancer {
-                minion: minion_type,
-                ..
-            } => {
+            ClassData::Necromancer { minion, .. } => {
                 if self.opponent_is_mage {
                     return true;
                 }
-                if *minion_type != Some(Minion::Golem) {
+                if *minion != Some(Minion::Golem) {
                     return true;
                 }
-                rng.i32(1..101) > 25
+                rng.u8(1..=100) > 25
             }
             ClassData::Paladin { stance, .. } => {
                 *stance == Stance::Defensive
-                    || rng.i32(1..101) > stance.block_chance()
+                    || rng.u8(1..=100) > stance.block_chance()
             }
             ClassData::PlagueDoctor {
-                poison_remaining_round: poison_round,
+                poison_remaining_round,
                 ..
             } => {
-                let chance = match poison_round {
+                let chance = match poison_remaining_round {
                     3 => 65,
                     2 => 50,
                     1 => 35,
                     _ => 20,
                 };
-                rng.i32(1..101) > chance
+                rng.u8(1..=100) > chance
             }
             _ => true,
         }
@@ -829,36 +828,36 @@ impl InBattleFighter {
         rng: &mut Rng,
     ) -> bool {
         let ClassData::Necromancer {
-            minion: current_minion,
-            minion_remaining_rounds: minion_rounds,
-            skeleton_revived: skeleton_revives,
-            damage_multi: base_damage_multi,
+            minion,
+            minion_remaining_rounds,
+            skeleton_revived,
+            damage_multi,
         } = &mut self.class_data
         else {
             // Should not happen
             return false;
         };
 
-        if current_minion.is_none() {
+        if minion.is_none() {
             return false;
         }
 
         *round += 1;
 
-        *minion_rounds -= 1;
+        *minion_remaining_rounds -= 1;
 
         // NOTE: Currently skeleton can revive only once per fight but this is
         // a bug
-        if *minion_rounds == 0
-            && *current_minion == Some(Minion::Skeleton)
-            && *skeleton_revives < 1
+        if *minion_remaining_rounds == 0
+            && *minion == Some(Minion::Skeleton)
+            && *skeleton_revived < 1
             && rng.bool()
         {
-            *minion_rounds = 1;
-            *skeleton_revives += 1;
-        } else if *minion_rounds == 0 {
-            *current_minion = None;
-            *skeleton_revives = 0;
+            *minion_remaining_rounds = 1;
+            *skeleton_revived += 1;
+        } else if *minion_remaining_rounds == 0 {
+            *minion = None;
+            *skeleton_revived = 0;
         }
 
         if !target.will_take_attack(rng) {
@@ -867,7 +866,7 @@ impl InBattleFighter {
 
         let mut crit_chance = self.crit_chance;
         let mut crit_multi = self.crit_dmg_multi;
-        if *current_minion == Some(Minion::Hound) {
+        if *minion == Some(Minion::Hound) {
             crit_chance = (crit_chance + 0.1).min(0.6);
             crit_multi = 2.5 * (crit_multi / 2.0);
         }
@@ -880,15 +879,15 @@ impl InBattleFighter {
             rng,
         );
 
-        let base_multi = *base_damage_multi;
-        let minion_dmg_multiplier = match current_minion {
+        let base_multi = *damage_multi;
+        let minion_dmg_multiplier = match minion {
             Some(Minion::Skeleton) => (base_multi + 0.25) / base_multi,
             Some(Minion::Hound) => (base_multi + 1.0) / base_multi,
             Some(Minion::Golem) => 1.0,
             None => 0.0,
         };
-
         dmg *= minion_dmg_multiplier;
+
         target.take_attack_dmg(dmg, round, rng)
     }
 }
@@ -919,7 +918,11 @@ impl InBattleFighter {
 }
 
 impl ClassData {
-    pub fn update_opponent(&mut self, main: &Fighter, opponent: &Fighter) {
+    pub(crate) fn update_opponent(
+        &mut self,
+        main: &Fighter,
+        opponent: &Fighter,
+    ) {
         // TODO: Should we reset stuff like melody / druid form etc. when
         // the opponent becomes a mage?
         match self {
@@ -940,21 +943,16 @@ impl ClassData {
             } => *chain_attack_counter = 0,
             ClassData::Druid {
                 rage_crit_chance,
-                swoop_dmg_multi: swoop_damage_multiplier,
+                swoop_dmg_multi,
                 ..
             } => {
                 *rage_crit_chance =
                     calculate_crit_chance(main, opponent, 0.75, 0.1);
-                *swoop_damage_multiplier =
-                    calculate_swoop_damage(main, opponent);
+                *swoop_dmg_multi = calculate_swoop_damage(main, opponent);
             }
 
-            ClassData::Necromancer {
-                damage_multi: base_damage_multi,
-                ..
-            } => {
-                *base_damage_multi =
-                    calculate_damage_multiplier(main, opponent);
+            ClassData::Necromancer { damage_multi, .. } => {
+                *damage_multi = calculate_damage_multiplier(main, opponent);
             }
             ClassData::Paladin {
                 initial_armor_reduction,
@@ -964,8 +962,7 @@ impl ClassData {
                     calculate_damage_reduction(opponent, main);
             }
             ClassData::PlagueDoctor {
-                poison_dmg_multis: poison_dmg_multipliers,
-                ..
+                poison_dmg_multis, ..
             } => {
                 let base_dmg_multi =
                     calculate_damage_multiplier(main, opponent);
@@ -973,7 +970,7 @@ impl ClassData {
                 let dmg_multiplier = Class::PlagueDoctor.damage_multiplier();
                 let class_dmg_multi = base_dmg_multi / dmg_multiplier;
 
-                *poison_dmg_multipliers = [
+                *poison_dmg_multis = [
                     (base_dmg_multi - 0.9 * class_dmg_multi) / base_dmg_multi,
                     (base_dmg_multi - 0.55 * class_dmg_multi) / base_dmg_multi,
                     (base_dmg_multi - 0.2 * class_dmg_multi) / base_dmg_multi,
@@ -983,7 +980,7 @@ impl ClassData {
         }
     }
 
-    pub fn new(main: &Fighter, opponent: &Fighter) -> ClassData {
+    pub(crate) fn new(main: &Fighter, opponent: &Fighter) -> ClassData {
         let mut res = match main.class {
             Class::Warrior if main.is_companion => {
                 ClassData::Warrior { block_chance: 0 }

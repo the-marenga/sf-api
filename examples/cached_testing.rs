@@ -76,7 +76,7 @@ pub async fn main() {
             //     continue;
             // }
             let now = Instant::now();
-            let Some(res) = simulate_dungeon(&gs, dungeon, 100_000) else {
+            let Some(res) = simulate_dungeon(&gs, dungeon, 1_000_000) else {
                 continue;
             };
             println!(

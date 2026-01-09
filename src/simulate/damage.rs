@@ -29,7 +29,7 @@ impl std::ops::MulAssign<f64> for DamageRange {
     }
 }
 
-pub fn calculate_damage(
+pub(crate) fn calculate_damage(
     attacker: &Fighter,
     target: &Fighter,
     is_secondary: bool,
@@ -90,7 +90,9 @@ fn apply_attributes_bonus(
     *damage *= attribute_bonus;
 }
 
-pub fn calculate_hit_damage(
+/// Calculates the amount of damage a hit with the given base damage range
+/// does, when scaled up by the rounds and affected by crit's
+pub(crate) fn calculate_hit_damage(
     damage: &DamageRange,
     round: u32,
     crit_chance: f64,
@@ -106,7 +108,11 @@ pub fn calculate_hit_damage(
     dmg
 }
 
-pub fn calculate_swoop_damage(attacker: &Fighter, target: &Fighter) -> f64 {
+/// Calculates the amount of base damage a swoop attack does
+pub(crate) fn calculate_swoop_damage(
+    attacker: &Fighter,
+    target: &Fighter,
+) -> f64 {
     let dmg_multiplier = calculate_damage_multiplier(attacker, target);
     let base_dmg_multiplier = Class::Druid.damage_multiplier();
     let class_specific_dmg_multiplier = dmg_multiplier / base_dmg_multiplier;
@@ -116,6 +122,9 @@ pub fn calculate_swoop_damage(attacker: &Fighter, target: &Fighter) -> f64 {
         / dmg_multiplier
 }
 
+/// Calculates the raw base damage a fighter does (unaffected by the enemy).
+/// This is mainly just the scaled weapon damage, but may be unarmed damage,
+/// if not weapon is given, or unarmed dmg is higher
 fn get_base_damge(
     weapon: Option<&Weapon>,
     attacker: &Fighter,
