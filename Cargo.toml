@@ -42,3 +42,6 @@ criterion = "0.5"
 [[bench]]
 name = "battle_benchmark"
 harness = false
+
+[profile.bench]
+debug = true

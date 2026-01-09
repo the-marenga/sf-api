@@ -40,7 +40,7 @@ fn battle_benchmark(c: &mut Criterion) {
             let monster_side = vec![monster];
 
             b.iter(|| {
-                simulate_battle(&player_side, &monster_side, 10_000, false)
+                simulate_battle(&player_side, &monster_side, 100_000, false)
             })
         });
     }

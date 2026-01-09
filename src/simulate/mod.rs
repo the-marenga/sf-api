@@ -20,6 +20,7 @@ pub use crate::simulate::{
 use crate::{
     command::AttributeType,
     gamestate::{GameState, character::Class, dungeons::Dungeon},
+    simulate::fighter::FighterIdent,
 };
 
 pub(crate) mod constants;
@@ -85,9 +86,11 @@ fn simulate_fight(
     iterations: u32,
     is_arena_battle: bool,
 ) -> FightSimulationResult {
+    let mut cache = InBattleCache(Vec::new());
     let mut won_fights = 0;
     for _ in 0..iterations {
-        let fight_result = perform_single_fight(left, right, is_arena_battle);
+        let fight_result =
+            perform_single_fight(left, right, is_arena_battle, &mut cache);
         if fight_result == FightOutcome::SimulationBroken {
             break;
         }
@@ -103,10 +106,35 @@ fn simulate_fight(
     }
 }
 
+struct InBattleCache(
+    Vec<((FighterIdent, FighterIdent), InBattleFighter)>,
+);
+
+impl InBattleCache {
+    pub fn get_or_insert(
+        &mut self,
+        this: &Fighter,
+        other: &Fighter,
+        is_arena_battle: bool,
+    ) -> InBattleFighter {
+        if self.0.len() > 10 {
+            return InBattleFighter::new(this, other, is_arena_battle);
+        }
+        let ident = (this.ident, other.ident);
+        if let Some(existing) = self.0.iter().find(|a| a.0 == ident) {
+            return existing.1.clone();
+        }
+        let new = InBattleFighter::new(this, other, is_arena_battle);
+        self.0.push((ident, new.clone()));
+        new
+    }
+}
+
 fn perform_single_fight(
     left: &[Fighter],
     right: &[Fighter],
     is_arena_battle: bool,
+    cache: &mut InBattleCache,
 ) -> FightOutcome {
     let mut rng = Rng::new();
 
@@ -124,11 +152,6 @@ fn perform_single_fight(
             return FightOutcome::LeftSideWin;
         };
 
-        let make_new_left =
-            || InBattleFighter::new(left, right, is_arena_battle);
-        let make_new_right =
-            || InBattleFighter::new(right, left, is_arena_battle);
-
         let (left_fighter, right_fighter) =
             match (&mut left_in_battle, &mut right_in_battle) {
                 (Some(left), Some(right)) => {
@@ -138,17 +161,39 @@ fn perform_single_fight(
                 (None, None) => {
                     // Battle just started
                     (
-                        left_in_battle.insert(make_new_left()),
-                        right_in_battle.insert(make_new_right()),
+                        left_in_battle.insert(cache.get_or_insert(
+                            left,
+                            right,
+                            is_arena_battle,
+                        )),
+                        right_in_battle.insert(cache.get_or_insert(
+                            right,
+                            left,
+                            is_arena_battle,
+                        )),
                     )
                 }
                 (None, Some(r)) => {
                     r.update_opponent(right, left, is_arena_battle);
-                    (left_in_battle.insert(make_new_left()), r)
+                    (
+                        left_in_battle.insert(cache.get_or_insert(
+                            left,
+                            right,
+                            is_arena_battle,
+                        )),
+                        r,
+                    )
                 }
                 (Some(l), None) => {
                     l.update_opponent(left, right, is_arena_battle);
-                    (l, right_in_battle.insert(make_new_right()))
+                    (
+                        l,
+                        right_in_battle.insert(cache.get_or_insert(
+                            right,
+                            left,
+                            is_arena_battle,
+                        )),
+                    )
                 }
             };
 

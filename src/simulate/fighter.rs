@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use enum_map::EnumMap;
 use fastrand::Rng;
 
@@ -8,7 +10,7 @@ use crate::{
     simulate::{damage::*, upgradeable::UpgradeableFighter, *},
 };
 
-/// Contains all informations, that are necessary for batlles to be simulated.
+/// Contains all informations, that are necessary for battles to be simulated.
 /// It is derived by converting any of the things that can fight (player,
 /// companion, etc.) to a fighter through the From<T> traits.
 /// Contains all informations, that are necessary for battles to be simulated.
@@ -27,6 +29,7 @@ use crate::{
 /// ```
 #[derive(Debug, Clone)]
 pub struct Fighter {
+    pub ident: FighterIdent,
     /// The name, or alternative identification of this fighter. Only used for
     /// display purposes, does not affect combat.
     pub name: std::sync::Arc<str>,
@@ -59,6 +62,21 @@ pub struct Fighter {
     pub gladiator_lvl: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FighterIdent(u32);
+
+impl FighterIdent {
+    pub fn new() -> Self {
+        FighterIdent(fastrand::u32(..))
+    }
+}
+
+impl Default for FighterIdent {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl From<&Monster> for Fighter {
     fn from(monster: &Monster) -> Fighter {
         let mut weapon = Weapon {
@@ -82,6 +100,7 @@ impl From<&Monster> for Fighter {
             (monster.class == Class::Assassin).then(|| weapon.clone());
 
         Fighter {
+            ident: FighterIdent::new(),
             name: monster.name.clone(),
             class: monster.class,
             level: monster.level,
@@ -183,6 +202,7 @@ impl From<&UpgradeableFighter> for Fighter {
             2.0 + extra_crit_dmg + f64::from(char.gladiator) * 0.11;
 
         Fighter {
+            ident: FighterIdent::new(),
             name: char.name.clone(),
             class: char.class,
             level: char.level,
@@ -207,7 +227,7 @@ impl From<&UpgradeableFighter> for Fighter {
 /// against another fighter, that are relevant to resolve this 1on1 battle.
 /// If this fighter has won a 1on1 battle and is matched up with another enemy,
 /// the stats must be updated using `update_opponent()`.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct InBattleFighter {
     /// The name, or alternative identification of this fighter. Only used for
     /// display purposes, does not affect combat.
