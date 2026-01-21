@@ -26,11 +26,22 @@ tokio = { version = "1.49", features = ["sync", "time"], optional = true }
 url = { version = "2.5", optional = true }
 
 [features]
-default = ["sso", "serde"]
+default = ["sso", "serde", "simulation"]
 session = ["dep:reqwest", "dep:tokio", "dep:url"]
+simulation = ["dep:serde", "dep:serde_json"]
 sso = ["session", "dep:serde", "dep:serde_json"]
 serde = ["dep:serde", "num-bigint/serde", "chrono/serde", "enum-map/serde"]
 
 [dev-dependencies]
 tokio = { version = "1.49", features = ["full"] }
 env_logger = "0.11.8"
+enum-map = "2.7"
+rstest = "*"
+criterion = "0.5"
+
+[[bench]]
+name = "battle_benchmark"
+harness = false
+
+[profile.bench]
+debug = true
