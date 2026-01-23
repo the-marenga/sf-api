@@ -9,15 +9,14 @@ use crate::{
     gamestate::{
         character::*,
         dungeons::{CompanionClass, Dungeon},
+        event::*,
         fortress::*,
         guild::{Emblem, GuildSkill},
         idle::IdleBuildingType,
         items::*,
         social::Relationship,
         underworld::*,
-        unlockables::{
-            EnchantmentIdent, HabitatType, HellevatorTreatType, Unlockable,
-        },
+        unlockables::*,
     },
 };
 
@@ -349,6 +348,30 @@ pub enum Command {
         /// run out. Note, that this is currently ignored by the server for
         /// some reason
         use_mushroom: bool,
+    },
+    WorldBossEnter,
+    /// Update minor things in the world boss event, such as the attack timers
+    WorldBossUpdate,
+    WorldBossChangeTarget {
+        target: WorldBossTowerSegment,
+    },
+    /// Buys a new catapult for the fight against the world boss
+    WorldBossBuyCatapult {
+        // You can buy catapult with a duration between [1, 10] hours
+        length: u32,
+    },
+    WorldBossBuyUpgrade {
+        offer_idx: usize,
+        use_mushrooms: bool,
+    },
+    /// Destroys the catapult currently owned by the player
+    WorldBossRemoveCatapult,
+    /// Collects all chests in `available_daily_chests`
+    WorldBossCollectDailyChests,
+    WorldBossCollectBattleRewards,
+    WorldBossProjectileBuy {
+        offer_idx: usize,
+        amount: ProjectileOfferQuantity,
     },
     /// Attacks the requested level of the tower
     FightTower {
@@ -1490,6 +1513,35 @@ impl Command {
             Command::UpdateDungeons => format!("PlayerDungeonOpen:"),
             Command::CollectAdventsCalendar => {
                 format!("AdventsCalendarClaimReward:")
+            }
+            Command::WorldBossEnter => format!("WorldBossEnter:"),
+            Command::WorldBossUpdate => format!("WorldBossEventPoll:"),
+            Command::WorldBossCollectDailyChests => {
+                "WorldBossOpenChest:1".into()
+            }
+            Command::WorldBossCollectBattleRewards => {
+                "WorldBossOpenChest:0".into()
+            }
+            Command::WorldBossChangeTarget { target } => {
+                format!("WorldBossChangeLevel:{}", *target as usize)
+            }
+            Command::WorldBossBuyCatapult { length } => {
+                format!("WorldBossUpgradeUnlock:{length}")
+            }
+            Command::WorldBossRemoveCatapult => {
+                "WorldBossUpgradeDestroy:".into()
+            }
+            Command::WorldBossBuyUpgrade {
+                offer_idx,
+                use_mushrooms,
+            } => {
+                format!(
+                    "WorldBossUpgradeBuy:{offer_idx}/{}",
+                    u8::from(*use_mushrooms)
+                )
+            }
+            Command::WorldBossProjectileBuy { offer_idx, amount } => {
+                format!("WorldBossAmmoBuy:{offer_idx}/{}", *amount as u8)
             }
         })
     }

@@ -10,7 +10,7 @@ pub async fn main() {
     const USE_CACHE: bool = true;
 
     let custom_resp: Option<&str> = None;
-    let command = None;
+    let command = Some(sf_api::command::Command::WorldBossEnter);
 
     let username = std::env::var("USERNAME").unwrap();
 
