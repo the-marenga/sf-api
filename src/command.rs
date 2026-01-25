@@ -1536,12 +1536,13 @@ impl Command {
                 use_mushrooms,
             } => {
                 format!(
-                    "WorldBossUpgradeBuy:{offer_idx}/{}",
-                    u8::from(*use_mushrooms)
+                    "WorldBossUpgradeBuy:{}/{}",
+                    offer_idx + 1,
+                    u8::from(*use_mushrooms) + 1
                 )
             }
             Command::WorldBossProjectileBuy { offer_idx, amount } => {
-                format!("WorldBossAmmoBuy:{offer_idx}/{}", *amount as u8)
+                format!("WorldBossAmmoBuy:{}/{}", offer_idx + 1, *amount as u8)
             }
         })
     }
