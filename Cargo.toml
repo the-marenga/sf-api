@@ -33,11 +33,11 @@ sso = ["session", "dep:serde", "dep:serde_json"]
 serde = ["dep:serde", "num-bigint/serde", "chrono/serde", "enum-map/serde"]
 
 [dev-dependencies]
-tokio = { version = "1.49", features = ["full"] }
-env_logger = "0.11.8"
+criterion = "0.8"
 enum-map = "2.7"
-rstest = "*"
-criterion = "0.5"
+env_logger = "0.11.8"
+rstest = "0.26.1"
+tokio = { version = "1.49", features = ["full"] }
 
 [[bench]]
 name = "battle_benchmark"
