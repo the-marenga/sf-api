@@ -954,7 +954,7 @@ impl Command {
             Command::FinishQuest { skip } => {
                 format!(
                     "PlayerAdventureFinished:{}",
-                    skip.map(|a| a as u8).unwrap_or(0)
+                    skip.map_or(0, |a| a as u8)
                 )
             }
             Command::StartWork { hours } => format!("PlayerWorkStart:{hours}"),

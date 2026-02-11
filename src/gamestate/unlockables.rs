@@ -495,6 +495,160 @@ pub struct Pets {
     pub atr_bonus: EnumMap<AttributeType, u32>,
 }
 
+/// Maps the index of the pet in their habitat to their base stats
+#[cfg(feature = "simulation")]
+static PET_BASE_STAT_ARRAY: [u32; 20] = [
+    10, 11, 12, 13, 14, 16, 18, 20, 25, 30, 35, 40, 50, 60, 70, 80, 100, 130,
+    160, 160,
+];
+
+/// Maps the habitat relativ eindex of the pet to their class
+#[cfg(feature = "simulation")]
+#[rustfmt::skip]
+static PET_CLASS_LOOKUP: EnumMap<HabitatType, [Class; 20]> =
+    EnumMap::from_array([
+        // Shadow
+        [
+            Class::Scout,   Class::Warrior, Class::Warrior, Class::Mage,
+            Class::Mage,    Class::Mage,    Class::Scout,   Class::Scout,
+            Class::Scout,   Class::Warrior, Class::Mage,    Class::Mage,
+            Class::Scout,   Class::Scout,   Class::Warrior, Class::Warrior,
+            Class::Mage,    Class::Warrior, Class::Warrior, Class::Scout,
+        ],
+        // Light
+        [
+            Class::Warrior, Class::Warrior, Class::Mage,    Class::Mage,
+            Class::Scout,   Class::Scout,   Class::Mage,    Class::Warrior,
+            Class::Warrior, Class::Mage,    Class::Mage,    Class::Scout,
+            Class::Scout,   Class::Mage,    Class::Mage,    Class::Warrior,
+            Class::Warrior, Class::Warrior, Class::Mage,    Class::Scout,
+        ],
+        // Earth
+        [
+            Class::Warrior, Class::Warrior, Class::Scout,   Class::Scout,
+            Class::Warrior, Class::Scout,   Class::Mage,    Class::Mage,
+            Class::Warrior, Class::Warrior, Class::Scout,   Class::Warrior,
+            Class::Scout,   Class::Scout,   Class::Mage,    Class::Mage,
+            Class::Mage,    Class::Warrior, Class::Warrior, Class::Warrior,
+        ],
+        // Fire
+        [
+            Class::Scout,   Class::Scout,   Class::Warrior, Class::Mage,
+            Class::Mage,    Class::Scout,   Class::Scout,   Class::Mage,
+            Class::Warrior, Class::Mage,    Class::Mage,    Class::Scout,
+            Class::Scout,   Class::Scout,   Class::Scout,   Class::Scout,
+            Class::Mage,    Class::Warrior, Class::Mage,    Class::Warrior,
+        ],
+        // Water
+        [   Class::Mage,    Class::Warrior, Class::Warrior, Class::Warrior,
+            Class::Warrior, Class::Scout,   Class::Warrior, Class::Scout,
+            Class::Scout,   Class::Warrior, Class::Mage,    Class::Mage,
+            Class::Mage,    Class::Warrior, Class::Mage,    Class::Mage,
+            Class::Warrior, Class::Mage,    Class::Warrior, Class::Scout,
+        ],
+    ]);
+
+impl Pets {
+    /// Get the current monster we would be fighting, when
+    #[cfg(feature = "simulation")]
+    pub fn get_exploration_enemy(
+        &self,
+        habitat: HabitatType,
+    ) -> Option<crate::simulate::Monster> {
+        let h = &self.habitats[habitat];
+        let stage = match h.exploration {
+            HabitatExploration::Finished => return None,
+            HabitatExploration::Exploring { fights_won, .. } => fights_won,
+        };
+        crate::simulate::constants::PET_MONSTER
+            .get(&habitat)
+            .and_then(|a| a.get((stage) as usize))
+            .map(crate::simulate::Monster::from)
+    }
+
+    /// Converts the given player pet into a fighter, usable in the simulation.
+    /// The given pet does not need to have stats populated to work, since all
+    /// stats will be dynamically calculated
+    #[cfg(feature = "simulation")]
+    #[must_use]
+    pub fn pet_to_fighter(
+        &self,
+        pet: &Pet,
+        gladiator: u32,
+    ) -> crate::simulate::Fighter {
+        let habitat_pets = &self.habitats[pet.element].pets;
+        let pack_bonus = habitat_pets
+            .iter()
+            .map(|a| match a.level {
+                0 => 0.0,
+                _ => 0.05,
+            })
+            .sum::<f64>();
+
+        let level_bonus = habitat_pets
+            .iter()
+            .map(|p| match p.level {
+                ..100 => 0.0,
+                100..150 => 0.05,
+                150..200 => 0.75,
+                200.. => 0.1,
+            })
+            .sum::<f64>();
+
+        let habitat_idx = habitat_pets
+            .iter()
+            .position(|a| a.id == pet.id)
+            .unwrap_or(0);
+
+        let base_stat =
+            PET_BASE_STAT_ARRAY.get(habitat_idx).copied().unwrap_or(0);
+        let high_stat = (f64::from(base_stat * (u32::from(pet.level) + 1))
+            * (1.0 + pack_bonus + level_bonus))
+            .floor();
+        let low_stat = (0.5 * high_stat).round();
+        let luck = (0.75 * high_stat).round();
+        let con = high_stat;
+
+        let class = *PET_CLASS_LOOKUP[pet.element]
+            .get(habitat_idx)
+            .unwrap_or(&Class::Warrior);
+
+        let (str, dex, int) = match class {
+            Class::Warrior => (high_stat, low_stat, low_stat),
+            Class::Mage => (low_stat, low_stat, high_stat),
+            _ => (low_stat, high_stat, low_stat),
+        };
+
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        let pet_fighter = crate::simulate::UpgradeableFighter {
+            name: format!(
+                "{:?} pet #{} ({}) ",
+                pet.element,
+                pet.id,
+                habitat_idx + 1
+            )
+            .into(),
+            class,
+            level: pet.level,
+            attribute_basis: EnumMap::from_array([
+                str as u32,
+                dex as u32,
+                int as u32,
+                con as u32,
+                luck as u32,
+            ]),
+            is_companion: false,
+            pet_attribute_bonus_perc: EnumMap::default(),
+            equipment: Equipment::default(),
+            active_potions: Default::default(),
+            portal_hp_bonus: 0,
+            portal_dmg_bonus: 0,
+            gladiator,
+        };
+        (&pet_fighter).into()
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Habitat {
@@ -621,6 +775,7 @@ impl Pets {
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pet {
+    /// The unique id of this pet accross all habitats (1..=101)
     pub id: u32,
     pub level: u16,
     /// The amount of fruits this pet got today
