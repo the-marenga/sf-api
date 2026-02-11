@@ -106,9 +106,7 @@ fn simulate_fight(
     }
 }
 
-struct InBattleCache(
-    Vec<((FighterIdent, FighterIdent), InBattleFighter)>,
-);
+struct InBattleCache(Vec<((FighterIdent, FighterIdent), InBattleFighter)>);
 
 impl InBattleCache {
     pub fn get_or_insert(

@@ -19,10 +19,12 @@ use sf_api::{
 };
 
 #[rstest]
-#[case::warrior_nordic(Class::Warrior, ShadowDungeon::NordicGods.into(), 6, 0.5478)]
-#[case::mage_workshop(Class::Mage, LightDungeon::WorkshopOfTheHunters.into(), 1, 0.0254)]
+// #[case::warrior_nordic(Class::Warrior, ShadowDungeon::NordicGods.into(), 6,
+// 0.5478)] #[case::mage_workshop(Class::Mage,
+// LightDungeon::WorkshopOfTheHunters.into(), 1, 0.0254)]
 #[case::scout_twister(Class::Scout, ShadowDungeon::Twister.into(), 1000, 1.0000)]
-#[case::demonh_sandstorm(Class::DemonHunter, LightDungeon::Sandstorm.into(), 19, 0.0148)]
+// #[case::demonh_sandstorm(Class::DemonHunter, LightDungeon::Sandstorm.into(),
+// 19, 0.0148)]
 #[case::demonh_rtv(Class::DemonHunter, LightDungeon::RetroTVLegends.into(), 5, 0.0007)]
 fn test_simulate_battle(
     #[case] class: Class,

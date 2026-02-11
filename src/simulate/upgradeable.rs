@@ -133,6 +133,12 @@ impl UpgradeableFighter {
         self.equipment.0.get_mut(slot).take()
     }
 
+    /// Unequips the item at the provided slot and returns the old item, if any
+    #[must_use]
+    pub fn get_equipment(&self, slot: EquipmentSlot) -> Option<&Item> {
+        self.equipment.0.get(slot).as_ref()
+    }
+
     #[must_use]
     pub fn from_other(other: &OtherPlayer) -> Self {
         UpgradeableFighter {

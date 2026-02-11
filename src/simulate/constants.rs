@@ -8,6 +8,7 @@ use crate::{
     gamestate::{
         character::Class,
         dungeons::{Dungeon, LightDungeon, ShadowDungeon},
+        unlockables::HabitatType,
     },
     misc::EnumMapGet,
     simulate::{Element, Monster, MonsterRunes},
@@ -39,9 +40,50 @@ pub struct RawMonsterRunes {
     damage: i32,
 }
 
+pub(crate) static PET_MONSTER: LazyLock<
+    HashMap<HabitatType, Vec<PetDungeonEnemy>>,
+> = LazyLock::new(|| {
+    #[allow(clippy::unwrap_used)]
+    serde_json::from_str(include_str!("pet_dungeons.json")).unwrap()
+});
+
+#[derive(Debug, serde::Deserialize)]
+pub(crate) struct PetDungeonEnemy<'a> {
+    pub name: &'a str,
+    pub class: Class,
+    pub level: u16,
+    pub strength: u32,
+    pub dexterity: u32,
+    pub intelligence: u32,
+    pub constitution: u32,
+    pub luck: u32,
+    pub life: u64,
+}
+
+impl From<&PetDungeonEnemy<'_>> for Monster {
+    fn from(pet: &PetDungeonEnemy) -> Self {
+        Self {
+            name: pet.name.into(),
+            level: pet.level,
+            class: pet.class,
+            attributes: EnumMap::from_array([
+                pet.strength,
+                pet.dexterity,
+                pet.intelligence,
+                pet.constitution,
+                pet.luck,
+            ]),
+            hp: pet.life,
+            min_dmg: 0,
+            max_dmg: 0,
+            armor: 0,
+            runes: None,
+        }
+    }
+}
+
 #[derive(serde::Deserialize)]
 struct MonsterData<'a> {
-    #[serde(borrow)]
     name: Option<&'a str>,
     class: Option<&'a str>,
     level: Option<u16>,
@@ -294,7 +336,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse() {
+    fn test_dungeon_parse() {
         let _monsters = DungeonMonsters::parse();
+    }
+
+    #[test]
+    fn test_access_pet_dungeons() {
+        let pet_dungeons = &*PET_MONSTER;
+        assert!(!pet_dungeons.is_empty());
     }
 }
