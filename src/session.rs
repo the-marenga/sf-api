@@ -540,8 +540,8 @@ pub struct ConnectionOptions {
 #[derive(Debug, Clone)]
 pub struct ProxySettings {
     pub url: String,
-    username: Option<String>,
-    password: Option<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
 }
 
 impl Default for ConnectionOptions {
