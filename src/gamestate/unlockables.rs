@@ -563,7 +563,7 @@ impl Pets {
         crate::simulate::constants::PET_MONSTER
             .get(&habitat)
             .and_then(|a| a.get((stage) as usize))
-            .map(crate::simulate::Monster::from)
+            .cloned()
     }
 
     /// Converts the given player pet into a fighter, usable in the simulation.

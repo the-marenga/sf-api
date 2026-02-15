@@ -101,7 +101,7 @@ impl From<&Monster> for Fighter {
 
         Fighter {
             ident: FighterIdent::new(),
-            name: monster.name.clone(),
+            name: std::sync::Arc::from(monster.name),
             class: monster.class,
             level: monster.level,
             attributes: monster.attributes,

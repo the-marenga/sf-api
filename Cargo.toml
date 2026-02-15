@@ -32,6 +32,10 @@ simulation = ["dep:serde", "dep:serde_json"]
 sso = ["session", "dep:serde", "dep:serde_json"]
 serde = ["dep:serde", "num-bigint/serde", "chrono/serde", "enum-map/serde"]
 
+[build-dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
 [dev-dependencies]
 criterion = "0.8"
 enum-map = "2.7"

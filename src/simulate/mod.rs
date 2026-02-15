@@ -285,7 +285,7 @@ pub enum Element {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Monster {
-    pub name: Arc<str>,
+    pub name: &'static str,
     pub level: u16,
     pub class: Class,
     pub attributes: EnumMap<AttributeType, u32>,
