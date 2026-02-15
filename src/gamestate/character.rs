@@ -183,24 +183,47 @@ impl Class {
     }
 
     #[must_use]
-    pub(crate) fn weapon_multiplier(self) -> f64 {
+    pub fn weapon_multiplier(self) -> f64 {
         use Class::*;
         match self {
             PlagueDoctor | Paladin | Warrior | Assassin | BattleMage
             | Berserker => 2.0,
-            Scout => 2.5,
-            Mage | DemonHunter | Druid | Bard | Necromancer => 4.5,
+            // TODO: Recheck these
+            Scout | DemonHunter => 2.5,
+            Mage | Druid | Bard | Necromancer => 4.5,
         }
     }
 
     #[must_use]
-    pub(crate) fn life_multiplier(self, is_companion: bool) -> f64 {
+    pub fn weapon_gem_multiplier(&self) -> i32 {
+        match self {
+            Class::Warrior | Class::Assassin | Class::Berserker => 1,
+            _ => 2,
+        }
+    }
+
+    #[must_use]
+    pub fn weapon_attribute_multiplier(&self) -> i32 {
+        match self {
+            Class::Warrior
+            | Class::BattleMage
+            | Class::Berserker
+            | Class::Paladin
+            | Class::PlagueDoctor
+            | Class::Assassin => 1,
+            _ => 2,
+        }
+    }
+
+    #[cfg(feature = "simulation")]
+    #[must_use]
+    pub(crate) fn health_multiplier(self, is_companion: bool) -> f64 {
         use Class::*;
 
         match self {
             Warrior if is_companion => 6.1,
-            Paladin => 6.0,
             Warrior | BattleMage | Druid => 5.0,
+            Paladin => 6.0,
             PlagueDoctor | Scout | Assassin | Berserker | DemonHunter
             | Necromancer => 4.0,
             Mage | Bard => 2.0,
@@ -208,27 +231,66 @@ impl Class {
     }
 
     #[must_use]
-    pub(crate) fn armor_factor(self) -> f64 {
-        use Class::*;
+    pub fn item_armor_multiplier(&self) -> f64 {
         match self {
-            Berserker => 0.5,
-            Paladin | Warrior | Mage | Scout | DemonHunter | Druid
-            | Assassin => 1.0,
-            Bard | Necromancer => 2.0,
-            PlagueDoctor => 2.5,
-            BattleMage => 5.0,
+            Class::Warrior
+            | Class::Berserker
+            | Class::DemonHunter
+            | Class::Paladin => 15.0,
+            Class::Scout | Class::Assassin | Class::Druid | Class::Bard => 7.5,
+            Class::Mage
+            | Class::BattleMage
+            | Class::Necromancer
+            | Class::PlagueDoctor => 3.0,
         }
     }
 
     #[must_use]
-    pub(crate) fn max_damage_reduction(self) -> f64 {
-        use Class::*;
+    pub fn item_bonus_multiplier(&self) -> f64 {
         match self {
-            Bard | BattleMage | DemonHunter | Warrior => 0.5,
-            Paladin => 0.45,
-            PlagueDoctor | Druid | Assassin | Berserker | Scout => 0.25,
-            Necromancer => 0.2,
-            Mage => 0.1,
+            Class::BattleMage | Class::PlagueDoctor => 1.11,
+            Class::Berserker => 1.1,
+            _ => 1.0,
+        }
+    }
+
+    #[must_use]
+    pub fn armor_multiplier(&self) -> f64 {
+        match self {
+            Class::BattleMage => 5.0,
+            Class::Bard | Class::Necromancer | Class::PlagueDoctor => 2.0,
+            Class::Berserker => 0.5,
+            _ => 1.0,
+        }
+    }
+
+    #[must_use]
+    pub fn max_armor_reduction(&self) -> u32 {
+        match self {
+            Class::Mage => 10,
+            Class::Warrior
+            | Class::BattleMage
+            | Class::DemonHunter
+            | Class::Bard => 50,
+            Class::Paladin => 45,
+            Class::Scout
+            | Class::Assassin
+            | Class::Berserker
+            | Class::Druid => 25,
+            Class::Necromancer | Class::PlagueDoctor => 20,
+        }
+    }
+
+    #[must_use]
+    pub fn damage_multiplier(&self) -> f64 {
+        match self {
+            Class::Assassin => 0.625,
+            Class::Berserker | Class::PlagueDoctor => 1.25,
+            Class::Druid => 1.0 / 3.0,
+            Class::Bard => 1.125,
+            Class::Necromancer => 5.0 / 9.0,
+            Class::Paladin => 0.833,
+            _ => 1.0,
         }
     }
 
@@ -236,40 +298,6 @@ impl Class {
     pub fn can_wear_shield(self) -> bool {
         matches!(self, Self::Paladin | Self::Warrior)
     }
-
-    #[must_use]
-    pub(crate) fn damage_factor(self, against: Class) -> f64 {
-        use Class::*;
-        match self {
-            Druid if against == Class::DemonHunter => 0.33 + 0.15,
-            Druid if against == Class::Mage => 0.33 + 0.33,
-            Druid => 0.33,
-            Necromancer if against == Class::DemonHunter => 0.56 + 0.1,
-            Necromancer => 0.56,
-            Assassin => 0.625,
-            Paladin => 0.83,
-            Warrior | Mage | Scout | BattleMage | DemonHunter => 1.0,
-            Bard => 1.125,
-            Berserker | PlagueDoctor => 1.25,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
-pub enum DruidMask {
-    Cat = 4,
-    Bear = 5,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
-pub enum BardInstrument {
-    Harp = 1,
-    Lute,
-    Flute,
 }
 
 #[derive(Debug, PartialEq, Eq, Default, Clone, Copy, FromPrimitive, Hash)]
@@ -288,6 +316,10 @@ pub enum Race {
 }
 
 impl Race {
+    /// These are the boni the game claims to give to certain races. As far as I
+    /// can tell though, these are actually irrellevant. Changing the race mid
+    /// game does nothing and the calcs without it are linig up perfectly. That
+    /// means these values here have no reason to exist
     #[must_use]
     pub fn stat_modifiers(self) -> EnumMap<AttributeType, i32> {
         let raw = match self {

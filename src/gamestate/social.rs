@@ -412,6 +412,7 @@ pub struct OtherPlayer {
     pub max_damage_base: u32,
     pub soldier_advice: Option<u16>,
     pub fortress: Option<OtherFortress>,
+    pub gladiator_lvl: u32,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -549,6 +550,7 @@ impl OtherPlayer {
             op.fortress = Some(fortress);
         }
 
+        op.gladiator_lvl = data.csiget(260, "other gladiator", 0)?;
         Ok(op)
     }
 }

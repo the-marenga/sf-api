@@ -8,13 +8,7 @@ use super::{
     AttributeType, CCGet, Class, EnumMapGet, Item, SFError, ServerTime,
     items::Equipment,
 };
-use crate::{
-    misc::soft_into,
-    simulate::{
-        Monster,
-        constants::{LIGHT_ENEMIES, SHADOW_ENEMIES},
-    },
-};
+use crate::misc::soft_into;
 
 /// The personal demon portal
 #[derive(Debug, Default, Clone)]
@@ -84,11 +78,12 @@ impl Dungeons {
     /// "mirrorimage" enemy will be listed as a warrior with 0 stats/lvl/xp/hp.
     // If you care about the actual stats, you should map this to the player
     // stats yourself
+    #[cfg(feature = "simulation")]
     pub fn current_enemy(
         &self,
         dungeon: impl Into<Dungeon> + Copy,
-    ) -> Option<&'static Monster> {
-        dungeon_enemy(dungeon, self.progress(dungeon))
+    ) -> Option<&'static crate::simulate::Monster> {
+        get_dungeon_monster(dungeon, self.progress(dungeon))
     }
 }
 
@@ -126,6 +121,19 @@ pub enum DungeonType {
 pub enum Dungeon {
     Light(LightDungeon),
     Shadow(ShadowDungeon),
+}
+
+impl Dungeon {
+    #[must_use]
+    #[allow(clippy::match_same_arms)]
+    pub fn is_with_companions(self) -> bool {
+        match self {
+            Dungeon::Light(LightDungeon::Tower) => true,
+            Dungeon::Shadow(ShadowDungeon::Twister) => false,
+            Dungeon::Light(_) => false,
+            Dungeon::Shadow(_) => true,
+        }
+    }
 }
 
 /// All possible light dungeons. They are NOT numbered continuously (17 is
@@ -353,22 +361,15 @@ pub struct Companion {
     pub attributes: EnumMap<AttributeType, u32>,
 }
 
-pub fn dungeon_enemy(
+#[cfg(feature = "simulation")]
+pub fn get_dungeon_monster(
     dungeon: impl Into<Dungeon>,
     progress: DungeonProgress,
-) -> Option<&'static Monster> {
+) -> Option<&'static crate::simulate::Monster> {
     let stage = match progress {
         DungeonProgress::Open { finished } => finished,
         DungeonProgress::Locked | DungeonProgress::Finished => return None,
     };
-
-    let dungeon: Dungeon = dungeon.into();
-    match dungeon {
-        Dungeon::Light(dungeon) => {
-            LIGHT_ENEMIES.get(dungeon).get(stage as usize)
-        }
-        Dungeon::Shadow(dungeon) => {
-            SHADOW_ENEMIES.get(dungeon).get(stage as usize)
-        }
-    }
+    crate::simulate::constants::get_dungeon_enemies(dungeon.into())
+        .get(stage as usize)
 }
