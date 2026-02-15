@@ -155,7 +155,7 @@ impl UpgradeableFighter {
             portal_hp_bonus: other.portal_hp_bonus,
             portal_dmg_bonus: other.portal_dmg_bonus,
             // TODO:
-            gladiator: 0,
+            gladiator: other.gladiator_lvl,
         }
     }
 
