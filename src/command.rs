@@ -467,7 +467,14 @@ pub enum Command {
     /// by querying the Hall of Fame with a special command. As such, the
     /// result of this command will be parsed as a normal Hall of Fame lookup
     /// in the `GameState`
-    ViewLureEnemy,
+    UpdateLureSuggestion,
+    /// Looks up who the suggested player for the underworld actually is. The
+    /// result will be in `hall_of_fames.players`, since this command basically
+    /// just queries the Hall of Fame
+    ViewLureSuggestion {
+        /// The suggested enemy fetched using `UpdateLureSuggestion`
+        suggestion: LureSuggestion,
+    },
     /// Spins the wheel. All information about when you can spin, or what you
     /// won are in `game_state.specials.wheel`
     SpinWheelOfFortune {
@@ -1198,7 +1205,7 @@ impl Command {
                     *companion as u8 + 101,
                 )
             }
-            Command::ViewLureEnemy => {
+            Command::UpdateLureSuggestion => {
                 format!("PlayerGetHallOfFame:-4//0/0")
             }
             Command::SpinWheelOfFortune {
@@ -1546,7 +1553,18 @@ impl Command {
             Command::CollectAdventsCalendar => {
                 format!("AdventsCalendarClaimReward:")
             }
+            Command::ViewLureSuggestion { suggestion } => {
+                format!("PlayerGetHallOfFame:{}//0/0", suggestion.0)
+            }
         })
+    }
+
+    /// Returns `true` if the command is [`ViewLureSuggestion`].
+    ///
+    /// [`ViewLureSuggestion`]: Command::ViewLureSuggestion
+    #[must_use]
+    pub fn is_view_lure_suggestion(&self) -> bool {
+        matches!(self, Self::ViewLureSuggestion { .. })
     }
 }
 
