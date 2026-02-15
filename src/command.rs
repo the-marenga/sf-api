@@ -518,6 +518,12 @@ pub enum Command {
         /// The type of resource you want to collect
         resource: FortressResourceType,
     },
+    /// Changes the fortress enemy to the counterattackable enemy
+    FortressChangeEnemy {
+        /// The if of the counter attack notification mail of the enemy, that
+        /// you want to change to
+        msg_id: i64,
+    },
     /// Collects resources from the fortress secret storage
     /// Note that the official client only ever collect either stone or wood
     /// but not both at the same time
@@ -1555,6 +1561,9 @@ impl Command {
             }
             Command::ViewLureSuggestion { suggestion } => {
                 format!("PlayerGetHallOfFame:{}//0/0", suggestion.0)
+            }
+            Command::FortressChangeEnemy { msg_id } => {
+                format!("FortressEnemy:0/{msg_id}")
             }
         })
     }
