@@ -454,6 +454,15 @@ impl GameState {
                             &val.into_list("fortress upgrade prices")?,
                         )?;
                 }
+                "Arenarank" => {
+                    if let Some(uw) = self.underworld.as_mut() {
+                        uw.lure_suggestion = val
+                            .as_str()
+                            .parse::<u32>()
+                            .ok()
+                            .map(LureSuggestion);
+                    }
+                }
                 "witch" => {
                     self.witch
                         .get_or_insert_with(Default::default)
