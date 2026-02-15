@@ -455,6 +455,19 @@ pub enum Command {
         /// The enchantment to apply
         enchantment: EnchantmentIdent,
     },
+    /// Enchants the item the companion has equiped, whiich is associated with
+    /// this enchantment.
+    WitchEnchantCompanion {
+        /// The enchantment to apply
+        enchantment: EnchantmentIdent,
+        /// The companion you want to enchant the item of
+        companion: CompanionClass,
+    },
+    /// The recommended underworld enemy is dynamically fetched by the game
+    /// by querying the Hall of Fame with a special command. As such, the
+    /// result of this command will be parsed as a normal Hall of Fame lookup
+    /// in the `GameState`
+    ViewLureEnemy,
     /// Spins the wheel. All information about when you can spin, or what you
     /// won are in `game_state.specials.wheel`
     SpinWheelOfFortune {
@@ -471,16 +484,27 @@ pub enum Command {
         /// One of [0,1,2], depending on which chest you want to collect
         pos: usize,
     },
+    /// Moves an item from a normal inventory, into the equipmentslot of the
+    /// player. This can be used to equip items, but also to socket/replace
+    /// gems
+    Equip {
+        /// The inventory of your character you take the item from
+        from_inventory: InventoryType,
+        /// The position in the inventory, that you
+        from_pos: usize,
+        /// The slot of the companion you want to equip
+        to_slot: EquipmentSlot,
+    },
     /// Moves an item from a normal inventory, onto one of the companions
     EquipCompanion {
         /// The inventory of your character you take the item from
         from_inventory: InventoryType,
         /// The position in the inventory, that you
-        from_pos: u8,
-        /// The companion you want to equip
-        to_companion: CompanionClass,
+        from_pos: usize,
         /// The slot of the companion you want to equip
         to_slot: EquipmentSlot,
+        /// The companion you want to equip
+        to_companion: CompanionClass,
     },
     /// Collects a specific resource from the fortress
     FortressGather {
@@ -546,6 +570,11 @@ pub enum Command {
     },
     /// Upgrades the Hall of Knights to the next level
     FortressUpgradeHallOfKnights,
+    /// Upgrades the given unit in the fortress using the smith
+    FortressUpgradeUnit {
+        /// The unit you want to upgrade
+        unit: FortressUnitType,
+    },
     /// Sends a whisper message to another player
     Whisper {
         player_name: String,
@@ -1159,6 +1188,19 @@ impl Command {
             Command::WitchEnchant { enchantment } => {
                 format!("PlayerWitchEnchantItem:{}/1", enchantment.0)
             }
+            Command::WitchEnchantCompanion {
+                enchantment,
+                companion,
+            } => {
+                format!(
+                    "PlayerWitchEnchantItem:{}/{}",
+                    enchantment.0,
+                    *companion as u8 + 101,
+                )
+            }
+            Command::ViewLureEnemy => {
+                format!("PlayerGetHallOfFame:-4//0/0")
+            }
             Command::SpinWheelOfFortune {
                 payment: fortune_payment,
             } => {
@@ -1170,15 +1212,25 @@ impl Command {
             Command::FortressGatherSecretStorage { stone, wood } => {
                 format!("FortressGatherTreasure:{wood}/{stone}")
             }
-            Command::EquipCompanion {
+            Command::Equip {
                 from_inventory,
                 from_pos,
                 to_slot,
+            } => format!(
+                "PlayerItemMove:{}/{}/1/{}",
+                *from_inventory as usize,
+                *from_pos + 1,
+                *to_slot as usize
+            ),
+            Command::EquipCompanion {
+                from_inventory,
+                from_pos,
                 to_companion,
+                to_slot,
             } => format!(
                 "PlayerItemMove:{}/{}/{}/{}",
                 *from_inventory as usize,
-                *from_pos,
+                *from_pos + 1,
                 *to_companion as u8 + 101,
                 *to_slot as usize
             ),
@@ -1199,7 +1251,7 @@ impl Command {
                 format!("FortressGemstoneStart:",)
             }
             Command::FortressGemStoneSearchCancel => {
-                format!("FortressGemStoneStop:0")
+                format!("FortressGemStoneStop:")
             }
             Command::FortressGemStoneSearchFinish { mushrooms } => {
                 format!("FortressGemstoneFinished:{mushrooms}",)
@@ -1215,6 +1267,9 @@ impl Command {
             }
             Command::FortressUpgradeHallOfKnights => {
                 format!("FortressGroupBonusUpgrade:")
+            }
+            Command::FortressUpgradeUnit { unit } => {
+                format!("FortressGroupBonusUpgrade:{}", *unit as u8 + 1)
             }
             Command::Whisper {
                 player_name: player,

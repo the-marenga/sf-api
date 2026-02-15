@@ -479,7 +479,7 @@ pub enum ExpeditionThing {
 
     Dummy1 = 1,
     Dummy2 = 2,
-    Dumy3 = 3,
+    Dummy3 = 3,
 
     ToiletPaper = 11,
 
@@ -556,7 +556,7 @@ impl ExpeditionThing {
     pub fn required_bounty(&self) -> Option<ExpeditionThing> {
         use ExpeditionThing::*;
         Some(match self {
-            Dummy1 | Dummy2 | Dumy3 => DummyBounty,
+            Dummy1 | Dummy2 | Dummy3 => DummyBounty,
             ToiletPaper => ToiletPaperBounty,
             Dragon => DragonBounty,
             BurntCampfire => BurntCampfireBounty,
@@ -578,7 +578,7 @@ impl ExpeditionThing {
     pub fn is_bounty_for(&self) -> Option<&'static [ExpeditionThing]> {
         use ExpeditionThing::*;
         Some(match self {
-            DummyBounty => &[Dummy1, Dummy2, Dumy3],
+            DummyBounty => &[Dummy1, Dummy2, Dummy3],
             ToiletPaperBounty => &[ToiletPaper],
             DragonBounty => &[Dragon],
             BurntCampfireBounty => &[BurntCampfire],
