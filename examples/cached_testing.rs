@@ -1,12 +1,4 @@
-use std::time::Instant;
-
-use sf_api::{
-    gamestate::{GameState, dungeons::LightDungeon},
-    session::*,
-    simulate::simulate_dungeon,
-    sso::SFAccount,
-};
-use strum::IntoEnumIterator;
+use sf_api::{gamestate::GameState, session::*, sso::SFAccount};
 
 #[tokio::main]
 pub async fn main() {
@@ -70,22 +62,6 @@ pub async fn main() {
     let Some(command) = command else {
         let js = serde_json::to_string_pretty(&gs).unwrap();
         std::fs::write("character.json", js).unwrap();
-
-        for dungeon in LightDungeon::iter() {
-            // if dungeon != LightDungeon::Hemorridor {
-            //     continue;
-            // }
-            let now = Instant::now();
-            let Some(res) = simulate_dungeon(&gs, dungeon, 1_000_000) else {
-                continue;
-            };
-            println!(
-                "won {:.2}% in {dungeon:?} in {:?}",
-                res.win_ratio * 100.0,
-                now.elapsed(),
-            );
-        }
-
         return;
     };
     let cache_name = format!(

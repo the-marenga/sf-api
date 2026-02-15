@@ -1,6 +1,6 @@
 [package]
 name = "sf-api"
-version = "0.3.4"
+version = "0.4.0"
 edition = "2024"
 license = "MIT"
 description = "A simple API to send commands to the Shakes & Fidget servers and parse their responses into characters"
@@ -28,7 +28,7 @@ url = { version = "2.5", optional = true }
 [features]
 default = ["sso", "serde", "simulation"]
 session = ["dep:reqwest", "dep:tokio", "dep:url"]
-simulation = ["dep:serde", "dep:serde_json"]
+simulation = []
 sso = ["session", "dep:serde", "dep:serde_json"]
 serde = ["dep:serde", "num-bigint/serde", "chrono/serde", "enum-map/serde"]
 

@@ -16,17 +16,7 @@ use crate::{
 /// Contains all informations, that are necessary for battles to be simulated.
 /// It is derived by converting any of the things that can fight (player,
 /// companion, etc.) to a fighter through the From<T> traits.
-///
-/// ## Example
-/// To create a `Fighter` from a monster:
-///
-/// ```rust,ignore
-/// let monster: &Monster = get_dungeon_monster(..);
-/// // Convert this to a Fighter
-/// let monster_fighter: Fighter = monster.into();
-/// // or
-/// let monster_fighter = Fighter::from(monster);
-/// ```
+/// Further information is available on the `simulate_battle` function.
 #[derive(Debug, Clone)]
 pub struct Fighter {
     pub ident: FighterIdent,
@@ -276,8 +266,6 @@ pub(crate) enum ClassData {
     BattleMage {
         /// The damage a fireball does against the enemy on the first turn
         fireball_dmg: f64,
-        /// Has the fireball already been used?
-        used_fireball: bool,
     },
     Berserker {
         /// The amount of times the berserker has attacked consecutively in
@@ -677,12 +665,8 @@ impl InBattleFighter {
         rng: &mut Rng,
     ) -> bool {
         match &mut self.class_data {
-            ClassData::BattleMage {
-                fireball_dmg,
-                used_fireball,
-            } if !*used_fireball => {
+            ClassData::BattleMage { fireball_dmg } => {
                 *round += 1;
-                *used_fireball = true;
                 target.take_attack_dmg(*fireball_dmg, round, rng)
             }
             _ => false,
@@ -1011,10 +995,7 @@ impl ClassData {
             Class::Assassin => ClassData::Assassin {
                 secondary_damage: DamageRange::default(),
             },
-            Class::BattleMage => ClassData::BattleMage {
-                fireball_dmg: 0.0,
-                used_fireball: false,
-            },
+            Class::BattleMage => ClassData::BattleMage { fireball_dmg: 0.0 },
             Class::Berserker => ClassData::Berserker { frenzy_attacks: 0 },
             Class::DemonHunter => ClassData::DemonHunter { revive_count: 0 },
             Class::Druid => ClassData::Druid {

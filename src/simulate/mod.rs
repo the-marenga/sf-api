@@ -1,10 +1,19 @@
+//! This simulator is based on Ernest Koguc's simulator (<https://github.com/ernest-koguc/sf-simulator>).
+//! Minor changes have been done to bridge the gap of the original garbage
+//! collected and object oriented design of the original into rust, but
+//! otherwise, this is a direct port. As such, all credit for this
+//! implementation, goes directly to him.
+//! Apart from this, `HafisCZ`'s sf-tools (<https://github.com/HafisCZ/sf-tools>)
+//! must also be credited. Sf-tools predates Ernest Koguc's sim and was/is used
+//! as a reference, both for results and code. The dungeon data used in the
+//! simulations has also been imported and converted directly from that source
+
 #![allow(
     clippy::cast_possible_wrap,
     clippy::cast_sign_loss,
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation
 )]
-
 use std::sync::Arc;
 
 use enum_map::{Enum, EnumMap};
@@ -18,8 +27,7 @@ pub use crate::simulate::{
     upgradeable::{PlayerFighterSquad, UpgradeableFighter},
 };
 use crate::{
-    command::AttributeType,
-    gamestate::{GameState, character::Class, dungeons::Dungeon},
+    command::AttributeType, gamestate::character::Class,
     simulate::fighter::FighterIdent,
 };
 
@@ -28,44 +36,58 @@ mod damage;
 mod fighter;
 mod upgradeable;
 
+/// All the information about a weapon, that is relevant for battle simulations
 #[derive(Debug, Clone)]
 pub struct Weapon {
+    /// The effect amount of this rune
     pub rune_value: i32,
+    /// The (battle relevant) type this rune has
     pub rune_type: Option<Element>,
+    /// The amount of damage this weapon does
     pub damage: DamageRange,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct FightSimulationResult {
+    /// The amount percentage of fights, that were won (0.0-1.0)
     pub win_ratio: f64,
+    /// The amount of fights, that were won, out of the total amount of
+    /// iterations
     pub won_fights: u32,
 }
 
-pub fn simulate_dungeon(
-    gs: &GameState,
-    dungeon: impl Into<Dungeon> + Copy,
-    iterations: u32,
-) -> Option<FightSimulationResult> {
-    let PlayerFighterSquad {
-        character,
-        companions,
-    } = PlayerFighterSquad::new(gs);
-    let dungeon = dungeon.into();
-    let mut player_side = if dungeon.is_with_companions() {
-        companions
-            .map(|a| a.values().map(Fighter::from).collect())
-            .unwrap_or_default()
-    } else {
-        vec![]
-    };
-    player_side.push(Fighter::from(&character));
-
-    let monster = gs.dungeons.current_enemy(dungeon)?;
-    let monster = Fighter::from(monster);
-
-    Some(simulate_battle(&player_side, &[monster], iterations, false))
-}
-
+/// Simulates `iterations` many fights between both sides. The returned result
+/// will be from the perspective of the left side. A win ratio of 1.0 will mean,
+/// the left side win all fights.
+///
+/// Both sides are `Fighter`'s. These can be derived from `UpgradeableFighter`
+/// and `Monster`.
+///
+/// To obtain an `UpgradeableFighter`, we create a `PlayerFighterSquad`, which
+/// can then be turned into a fighter and be used in simulations.
+///
+/// ```rust
+/// use sf_api::{simulate::{Fighter, PlayerFighterSquad, UpgradeableFighter}, gamestate::GameState};
+/// let gs: GameState = GameState::default();
+/// let squad = PlayerFighterSquad::new(&gs);
+/// let player: UpgradeableFighter = squad.character;
+/// let fighter: Fighter = Fighter::from(&player);
+/// ```
+///
+/// We go through the `PlayerFighterSquad`, because calculating the stats for
+/// player + companion is pretty much as fast, as computing the stats for just
+/// the player. Similarely, we use `Fighter`, not `UpgradeableFighter`, because
+/// calculating the final stats of any fighter (attributes, rune values, etc)
+/// is work, that we would not want to do each time this function is invoked.
+///
+/// To obtain monsters, we use `current_enemy()` on Dungeons.
+///
+/// ```rust
+/// use sf_api::{simulate::{Fighter, UpgradeableFighter}, gamestate::{dungeons::LightDungeon, GameState}};
+/// let gs: GameState = GameState::default();
+/// let Some(monster) = gs.dungeons.current_enemy(LightDungeon::MinesOfGloria) else { return };
+/// let fighter: Fighter = Fighter::from(monster);
+/// ```
 #[must_use]
 pub fn simulate_battle(
     left: &[Fighter],
