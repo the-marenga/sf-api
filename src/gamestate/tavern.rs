@@ -446,8 +446,8 @@ pub struct ExpeditionBoss {
 pub struct ExpeditionEncounter {
     /// The type of thing you engage, or find on this path
     pub typ: ExpeditionThing,
-    /// The heroism you get from picking this encounter. This contains the
-    /// bonus from bounties, but no further boni from
+    /// The base heroism you get from picking this encounter. This does not
+    /// contains the bonus from bounties
     pub heroism: i32,
 }
 
