@@ -515,9 +515,9 @@ pub(crate) fn reqwest_client(
         }
         builder = builder.proxy(proxy);
     }
-    if let Some(ua) = options.user_agent.clone() {
-        builder = builder.user_agent(ua);
-    }
+
+    let ua = options.user_agent.as_deref().unwrap_or(DEFAULT_USER_AGENT);
+    builder = builder.user_agent(ua);
     builder.default_headers(headers).build().ok()
 }
 
@@ -544,14 +544,14 @@ pub struct ProxySettings {
     pub password: Option<String>,
 }
 
+static DEFAULT_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
+                                   AppleWebKit/537.36 (KHTML, like Gecko) \
+                                   Chrome/115.0.0.0 Safari/537.36";
+
 impl Default for ConnectionOptions {
     fn default() -> Self {
         Self {
-            user_agent: Some(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
-                 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
-                    .to_string(),
-            ),
+            user_agent: Some(DEFAULT_USER_AGENT.to_string()),
             expected_server_version: 2018,
             error_on_unsupported_version: false,
             proxy: None,
