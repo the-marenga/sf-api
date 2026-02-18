@@ -350,6 +350,7 @@ pub struct Expedition {
     /// The different encounters, that you can choose between. Should be 3
     pub(crate) encounters: Vec<ExpeditionEncounter>,
     pub(crate) busy_until: Option<DateTime<Local>>,
+    pub(crate) busy_since: Option<DateTime<Local>>,
 }
 
 impl Expedition {
@@ -386,7 +387,10 @@ impl Expedition {
             2 => ExpeditionStage::Boss(self.boss),
             3 => ExpeditionStage::Rewards(self.rewards.clone()),
             4 => match self.busy_until {
-                Some(x) if x > Local::now() => ExpeditionStage::Waiting(x),
+                Some(x) if x > Local::now() => ExpeditionStage::Waiting {
+                    busy_until: x,
+                    busy_since: self.busy_since.unwrap_or_default(),
+                },
                 _ if self.current_floor == 10 => ExpeditionStage::Finished,
                 _ => cross_roads(),
             },
@@ -415,7 +419,12 @@ pub enum ExpeditionStage {
     /// When this is `< Local::now()`, you can send the update command to
     /// update the expedition stage, which will make `current_stage()`
     /// yield the new encounters
-    Waiting(DateTime<Local>),
+    Waiting {
+        /// The time at which the next stage will be available
+        busy_since: DateTime<Local>,
+        /// The start time of this waiting period
+        busy_until: DateTime<Local>,
+    },
     /// The expedition has finished and you can choose another one
     Finished,
     /// Something strange happened and the current stage is not known. Feel

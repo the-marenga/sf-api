@@ -909,7 +909,7 @@ impl GameState {
                     exp.current_floor = data.csiget(0, "clearing", 0)?;
                     exp.heroism = data.csiget(13, "heroism", 0)?;
 
-                    let _busy_since =
+                    exp.busy_since =
                         data.cstget(15, "exp start", server_time)?;
                     exp.busy_until =
                         data.cstget(16, "exp busy", server_time)?;
