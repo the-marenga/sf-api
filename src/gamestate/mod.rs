@@ -831,14 +831,19 @@ impl GameState {
                                 target: data
                                     .cfpget(0, "expedition typ", |a| a)?
                                     .unwrap_or_default(),
-                                thirst_for_adventure_sec: data
-                                    .csiget(6, "exp alu", 600)?,
                                 location_1: data
                                     .cfpget(4, "exp loc 1", |a| a)?
                                     .unwrap_or_default(),
                                 location_2: data
                                     .cfpget(5, "exp loc 2", |a| a)?
                                     .unwrap_or_default(),
+                                thirst_for_adventure_sec: data
+                                    .csiget(6, "exp alu", 600)?,
+                                special: data.cfpget(
+                                    7,
+                                    "exp special",
+                                    |a| a,
+                                )?,
                             })
                         })
                         .collect::<Result<_, _>>()?;
@@ -909,7 +914,7 @@ impl GameState {
                     exp.current_floor = data.csiget(0, "clearing", 0)?;
                     exp.heroism = data.csiget(13, "heroism", 0)?;
 
-                    let _busy_since =
+                    exp.busy_since =
                         data.cstget(15, "exp start", server_time)?;
                     exp.busy_until =
                         data.cstget(16, "exp busy", server_time)?;
