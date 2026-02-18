@@ -1603,10 +1603,6 @@ impl GameState {
             }
         }
 
-        if let Some(exp) = self.tavern.expeditions.active_mut() {
-            exp.adjust_bounty_heroism();
-        }
-
         if let Some(og) = other_guild {
             self.lookup.guilds.insert(og.name.clone(), og);
         }

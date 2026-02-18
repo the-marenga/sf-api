@@ -340,8 +340,6 @@ pub struct Expedition {
     ///  The heroism we have collected so far
     pub heroism: i32,
 
-    pub(crate) adjusted_bounty_heroism: bool,
-
     pub(crate) floor_stage: i64,
 
     /// Choose one of these rewards
@@ -355,21 +353,6 @@ pub struct Expedition {
 }
 
 impl Expedition {
-    pub(crate) fn adjust_bounty_heroism(&mut self) {
-        if self.adjusted_bounty_heroism {
-            return;
-        }
-
-        for ExpeditionEncounter { typ, heroism } in &mut self.encounters {
-            if let Some(possible_bounty) = typ.required_bounty()
-                && self.items.iter().flatten().any(|a| a == &possible_bounty)
-            {
-                *heroism += 10;
-            }
-        }
-        self.adjusted_bounty_heroism = true;
-    }
-
     pub(crate) fn update_encounters(&mut self, data: &[i64]) {
         if !data.len().is_multiple_of(2) {
             warn!("weird encounters: {data:?}");
@@ -463,8 +446,8 @@ pub struct ExpeditionBoss {
 pub struct ExpeditionEncounter {
     /// The type of thing you engage, or find on this path
     pub typ: ExpeditionThing,
-    /// The heroism you get from picking this encounter. This contains the
-    /// bonus from bounties, but no further boni from
+    /// The base heroism you get from picking this encounter. This does not
+    /// contains the bonus from bounties
     pub heroism: i32,
 }
 
