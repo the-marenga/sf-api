@@ -601,6 +601,21 @@ pub struct AvailableExpedition {
     /// The second location, that you visit during the expedition. Might
     /// influence the final monsters type
     pub location_2: Location,
+    /// Anything special about this expedition, that may be relevant for us to
+    /// pick this
+    pub special: Option<ExpeditionSpecial>,
+}
+
+/// A special reward, that will be encountered, or earned by going on this
+/// expedition
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+pub enum ExpeditionSpecial {
+    /// This expedition will have an egg to collect
+    Egg = 1,
+    /// This expedition will advance a daily task
+    DailyTask,
 }
 
 /// The amount, that you either won or lost gambling. If the value is negative,
