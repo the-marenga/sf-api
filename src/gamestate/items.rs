@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
-use log::{info, warn};
+use log::warn;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter};
@@ -319,6 +319,10 @@ pub struct Item {
     /// junk for other players and potentially in other cases, where you should
     /// not be able to see a price
     pub mushroom_price: u32,
+    /// The non-truncated version of the model id. The normal `model_id` is
+    /// fine to identify this item visually, but this here is for doing more
+    /// specific calculations, apart from that
+    pub full_model_id: u32,
     /// The model id of this item
     pub model_id: u16,
     /// The class restriction, that this item has. Will only cover the three
@@ -339,16 +343,16 @@ pub struct Item {
     /// This is the color, or other cosmetic variation of an item. There is no
     /// clear 1 => red mapping, so only the raw value here
     pub color: u8,
-
+    /// The amount of times this item has been upgraded at the blacksmith
     pub upgrade_count: u8,
+    /// The quality level of this item
     pub item_quality: u32,
+    /// Has this item been through the washing cycle?
     pub is_washed: bool,
-
-    pub full_model_id: u32,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct DismantleReward {
+pub struct BlacksmithPayment {
     pub metal: u64,
     pub arcane: u64,
 }
@@ -361,23 +365,24 @@ impl Item {
     /// <https://snfsmithsim.12hp.de>/ . As such, all credit goes to:
     /// `ÐonMuErte`, `Werwolf Legion (F17)` & `Rising Phoenix (F21)`
     #[must_use]
-    pub fn dismantle_reward(&self) -> DismantleReward {
+    pub fn dismantle_reward(&self) -> BlacksmithPayment {
         let mut attribute_val =
             f64::from(*self.attributes.values().max().unwrap_or(&0));
         let item_stats = self.attributes.values().filter(|a| **a > 0).count();
-        if self.price != 0 {
-            for _ in 0..self.upgrade_count {
-                attribute_val = (attribute_val / 1.04).round();
-            }
-        }
-        if item_stats == 4 {
-            attribute_val *= 1.2;
-        }
         let is_scout_or_mage_weapon = self
             .class
             .is_some_and(|a| a == Class::Scout || a == Class::Mage)
             && self.typ.is_weapon();
 
+        if self.price != 0 {
+            for _ in 0..self.upgrade_count {
+                attribute_val = (attribute_val / 1.04).round();
+            }
+        }
+
+        if item_stats >= 4 {
+            attribute_val *= 1.2;
+        }
         if is_scout_or_mage_weapon {
             attribute_val /= 2.0;
         }
@@ -393,33 +398,125 @@ impl Item {
             _ => (0, 0),
         };
 
-        let p_rng = (u32::from(self.typ.raw_id()) * 37)
+        let price = (u32::from(self.typ.raw_id()) * 37)
             + (self.full_model_id * 83)
             + (min_dmg * 1731)
             + (max_dmg * 162);
 
-        let (m_rng, k_rng) = match item_stats {
-            1 => (75 + (p_rng % 26), p_rng % 2),
-            2 => (50 + (p_rng % 31), 5 + (p_rng % 6)),
-            _ => (25 + (p_rng % 26), 50 + (p_rng % 51)),
+        let (metal_price, arcane_price) = match item_stats {
+            1 => (75 + (price % 26), price % 2),
+            2 => (50 + (price % 31), 5 + (price % 6)),
+            // Epics
+            _ => (25 + (price % 26), 50 + (price % 51)),
         };
 
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         let calc_result = |rng: u32| {
             ((attribute_val * f64::from(rng)) / 100.0).floor() as u64
         };
-        let mut metal_result = calc_result(m_rng);
-        let mut arcane_result = calc_result(k_rng);
+        let mut metal_result = calc_result(metal_price);
+        let mut arcane_result = calc_result(arcane_price);
 
         if is_scout_or_mage_weapon {
             metal_result *= 2;
             arcane_result *= 2;
         }
-        DismantleReward {
+        BlacksmithPayment {
             metal: metal_result * 2,
             arcane: arcane_result * 2,
         }
     }
+
+    /// Calculates the amount of metal & arcane it would cost to upgrade this
+    /// item. Each upgrade increases the highest attribute by 3% (all highest
+    /// for epics)
+    ///
+    /// This code is a direct port of the implementation available here:
+    /// <https://snfsmithsim.12hp.de>/ . As such, all credit goes to:
+    /// `ÐonMuErte`, `Werwolf Legion (F17)` & `Rising Phoenix (F21)`
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    pub fn upgrade_costs(&self) -> Option<BlacksmithPayment> {
+        if self.upgrade_count >= 20 || self.equipment_ident().is_none() {
+            return None;
+        }
+
+        let item_stats = self.attributes.values().filter(|a| **a > 0).count();
+        let is_scout_or_mage_weapon = self
+            .class
+            .is_some_and(|a| a == Class::Scout || a == Class::Mage)
+            && self.typ.is_weapon();
+
+        // Highest attribue is the base price
+        let mut price =
+            f64::from(*self.attributes.values().max().unwrap_or(&0));
+
+        // 5-stats items
+        if item_stats >= 4 {
+            price *= 1.2;
+        }
+
+        if is_scout_or_mage_weapon {
+            price /= 2.0;
+        }
+
+        // 1-stat items
+        if item_stats == 1 && price > 66.0 {
+            price = (price * 0.75).ceil();
+        }
+
+        price = price.round().powf(1.2).floor();
+
+        let mut metal_price = 50;
+        let mut arcane_price = match item_stats {
+            1 => 25,
+            2 => 50,
+            // Epics
+            _ => 75,
+        };
+
+        let i = i64::from(self.upgrade_count);
+        match i {
+            0 => {
+                metal_price *= 3;
+                arcane_price = 0;
+            }
+            1 => {
+                metal_price *= 4;
+                arcane_price = 1;
+            }
+            2..=7 => {
+                metal_price *= i + 3;
+                arcane_price *= i - 1;
+            }
+            8 => {
+                metal_price *= 12;
+                arcane_price *= 8;
+            }
+            9 => {
+                metal_price *= 15;
+                arcane_price *= 10;
+            }
+            _ => {
+                metal_price *= i + 6;
+                arcane_price *= 10 + 2 * (i - 9);
+            }
+        }
+
+        metal_price = ((price * (metal_price as f64)) / 100.0).floor() as i64;
+        arcane_price = ((price * (arcane_price as f64)) / 100.0).floor() as i64;
+
+        if is_scout_or_mage_weapon {
+            metal_price *= 2;
+            arcane_price *= 2;
+        }
+
+        Some(BlacksmithPayment {
+            metal: metal_price.try_into().unwrap_or(0),
+            arcane: arcane_price.try_into().unwrap_or(0),
+        })
+    }
+
     /// Maps an item to its ident. This is mainly useful, if you want to see,
     /// if a item is already in your scrapbook
     #[must_use]
