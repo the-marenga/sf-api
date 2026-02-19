@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
-use log::warn;
+use log::{info, warn};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter};
@@ -343,9 +343,83 @@ pub struct Item {
     pub upgrade_count: u8,
     pub item_quality: u32,
     pub is_washed: bool,
+
+    pub full_model_id: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct DismantleReward {
+    pub metal: u64,
+    pub arcane: u64,
 }
 
 impl Item {
+    /// Calculates the amount of metal & arcane we are expected to receive from
+    /// the blacksmith
+    ///
+    /// This code is a direct port of the implementation available here:
+    /// <https://snfsmithsim.12hp.de>/ . As such, all credit goes to:
+    /// `ÐonMuErte`, `Werwolf Legion (F17)` & `Rising Phoenix (F21)`
+    #[must_use]
+    pub fn dismantle_reward(&self) -> DismantleReward {
+        let mut attribute_val =
+            f64::from(*self.attributes.values().max().unwrap_or(&0));
+        let item_stats = self.attributes.values().filter(|a| **a > 0).count();
+        if self.price != 0 {
+            for _ in 0..self.upgrade_count {
+                attribute_val = (attribute_val / 1.04).round();
+            }
+        }
+        if item_stats == 4 {
+            attribute_val *= 1.2;
+        }
+        let is_scout_or_mage_weapon = self
+            .class
+            .is_some_and(|a| a == Class::Scout || a == Class::Mage)
+            && self.typ.is_weapon();
+
+        if is_scout_or_mage_weapon {
+            attribute_val /= 2.0;
+        }
+        // // 1-stat items
+        if (item_stats == 1) && attribute_val > 66.0 {
+            attribute_val = attribute_val.round() * 0.75;
+        }
+
+        attribute_val = attribute_val.round().powf(1.2).floor();
+
+        let (min_dmg, max_dmg) = match self.typ {
+            ItemType::Weapon { min_dmg, max_dmg } => (min_dmg, max_dmg),
+            _ => (0, 0),
+        };
+
+        let p_rng = (u32::from(self.typ.raw_id()) * 37)
+            + (self.full_model_id * 83)
+            + (min_dmg * 1731)
+            + (max_dmg * 162);
+
+        let (m_rng, k_rng) = match item_stats {
+            1 => (75 + (p_rng % 26), p_rng % 2),
+            2 => (50 + (p_rng % 31), 5 + (p_rng % 6)),
+            _ => (25 + (p_rng % 26), 50 + (p_rng % 51)),
+        };
+
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        let calc_result = |rng: u32| {
+            ((attribute_val * f64::from(rng)) / 100.0).floor() as u64
+        };
+        let mut metal_result = calc_result(m_rng);
+        let mut arcane_result = calc_result(k_rng);
+
+        if is_scout_or_mage_weapon {
+            metal_result *= 2;
+            arcane_result *= 2;
+        }
+        DismantleReward {
+            metal: metal_result * 2,
+            arcane: arcane_result * 2,
+        }
+    }
     /// Maps an item to its ident. This is mainly useful, if you want to see,
     /// if a item is already in your scrapbook
     #[must_use]
@@ -585,8 +659,9 @@ impl Item {
             price,
             mushroom_price: data.csiget(14, "mushroom price", u32::MAX)?,
             upgrade_count: data.csiget(15, "upgrade count", u8::MAX)?,
-            item_quality: data.csiget(17, "upgrade count", 0)?,
+            item_quality: data.csiget(17, "item quality", 0)?,
             is_washed: data.csiget(18, "is washed", 0)? != 0,
+            full_model_id: data.csiget(3, "raw model id", 0)?,
         };
         Ok(Some(item))
     }
