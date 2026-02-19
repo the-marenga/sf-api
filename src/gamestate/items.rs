@@ -25,6 +25,7 @@ pub struct Inventory {
 
 /// The game keeps track between 5 slot bag and the extended inventory.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BagPosition(pub(crate) usize);
 
 impl BagPosition {
