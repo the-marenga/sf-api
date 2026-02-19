@@ -92,6 +92,7 @@ fn init_squad(class: Class, init_companions: bool) -> PlayerFighterSquad {
                 upgrade_count: 0,
                 item_quality: 0,
                 is_washed: false,
+                full_model_id: 0,
             });
 
             companion
@@ -181,6 +182,7 @@ fn create_fighter(class: Class, is_companion: bool) -> UpgradeableFighter {
         color: 1,
         upgrade_count: 0,
         item_quality: 0,
+        full_model_id: 0,
         is_washed: false,
     };
 
@@ -232,6 +234,7 @@ fn create_rune_item(typ: ItemType, rune_typ: RuneType, value: u8) -> Item {
         enchantment: None,
         color: 1,
         upgrade_count: 0,
+        full_model_id: 0,
         item_quality: 0,
         is_washed: false,
     }

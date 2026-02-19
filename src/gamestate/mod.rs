@@ -113,6 +113,7 @@ impl Default for Shop {
             upgrade_count: 0,
             item_quality: 0,
             is_washed: false,
+            full_model_id: 0,
         });
 
         Self {
