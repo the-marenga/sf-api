@@ -611,8 +611,7 @@ impl Item {
         // Scout   => Weapon: Ranged, Armor: Medium
         // Mage    => Weapon: Magic,  Armor: Light
         match (class, class_requirement) {
-            // Weapon: Meele, Armor: Heavy
-            (Warrior, Warrior) => true,
+            (Warrior | Paladin, Warrior) => true,
             (Berserker, Warrior) => !self.typ.is_shield(),
             // Weapon: Ranged, Armor: Medium
             (Scout, Scout) => true,
@@ -632,6 +631,8 @@ impl Item {
             (DemonHunter, Warrior) => {
                 !self.typ.is_weapon() && !self.typ.is_shield()
             }
+            (PlagueDoctor, Warrior) => self.typ.is_weapon(),
+            (PlagueDoctor, Mage) => !self.typ.is_weapon(),
             _ => false,
         }
     }
