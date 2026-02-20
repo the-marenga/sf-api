@@ -638,7 +638,7 @@ pub enum Command {
     /// Upgrades an idle building by the requested amount
     IdleUpgrade {
         typ: IdleBuildingType,
-        amount: u64,
+        amount: IdleUpgradeAmount,
     },
     /// Sacrifice all the money in the idle game for runes
     IdleSacrifice,
@@ -896,6 +896,23 @@ pub enum ShopType {
 pub enum TimeSkip {
     Mushroom = 1,
     Glass = 2,
+}
+
+/// The allowed amounts, that you can upgrade idle buildings by
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+pub enum IdleUpgradeAmount {
+    /// Upgrades as much as we can afford to
+    Max = -1,
+    /// Upgrades one building
+    One = 1,
+    /// Upgrades the building ten times
+    Ten = 10,
+    /// Upgrades the building twenty times
+    Twenty = 20,
+    /// Upgrades the building one hundred times
+    Hundred = 100,
 }
 
 impl Command {
@@ -1344,7 +1361,7 @@ impl Command {
                 format!("GroupPetBattle:{}", usize::from(*use_mushroom))
             }
             Command::IdleUpgrade { typ: kind, amount } => {
-                format!("IdleIncrease:{}/{}", *kind as usize, amount)
+                format!("IdleIncrease:{}/{}", *kind as usize, *amount as i32)
             }
             Command::IdleSacrifice => format!("IdlePrestige:0"),
             Command::SwapManequin => format!("PlayerDummySwap:301/1"),
@@ -1566,14 +1583,6 @@ impl Command {
                 format!("FortressEnemy:0/{msg_id}")
             }
         })
-    }
-
-    /// Returns `true` if the command is [`ViewLureSuggestion`].
-    ///
-    /// [`ViewLureSuggestion`]: Command::ViewLureSuggestion
-    #[must_use]
-    pub fn is_view_lure_suggestion(&self) -> bool {
-        matches!(self, Self::ViewLureSuggestion { .. })
     }
 }
 
