@@ -909,8 +909,8 @@ pub enum IdleUpgradeAmount {
     One = 1,
     /// Upgrades the building ten times
     Ten = 10,
-    /// Upgrades the building twenty times
-    Twenty = 20,
+    /// Upgrades the building twenty-five times
+    TwentyFive = 25,
     /// Upgrades the building one hundred times
     Hundred = 100,
 }
