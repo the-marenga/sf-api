@@ -606,33 +606,31 @@ impl Item {
             return true;
         };
 
-        // Class requirements
-        // Warrior => Weapon: Meele,  Armor: Heavy
-        // Scout   => Weapon: Ranged, Armor: Medium
-        // Mage    => Weapon: Magic,  Armor: Light
-        match (class, class_requirement) {
-            // Weapon: Meele, Armor: Heavy
-            (Warrior, Warrior) => true,
-            (Berserker, Warrior) => !self.typ.is_shield(),
-            // Weapon: Ranged, Armor: Medium
-            (Scout, Scout) => true,
-            // Weapon: Magic, Armor: Light
-            (Mage | Necromancer, Mage) => true,
-            // Weapon: Meele, Armor: Medium
-            (Assassin, Warrior) => self.typ.is_weapon(),
-            (Assassin, Scout) => !self.typ.is_weapon(),
-            // Weapon: Magic, Armor: Medium
-            (Bard | Druid, Mage) => self.typ.is_weapon(),
-            (Bard | Druid, Scout) => !self.typ.is_weapon(),
-            // Weapon: Meele, Armor: Light
-            (BattleMage, Warrior) => self.typ.is_weapon(),
-            (BattleMage, Mage) => !self.typ.is_weapon(),
-            // Weapon: Ranged, Armor: Heavy
-            (DemonHunter, Scout) => self.typ.is_weapon(),
-            (DemonHunter, Warrior) => {
-                !self.typ.is_weapon() && !self.typ.is_shield()
-            }
-            _ => false,
+        match class {
+            Warrior | Paladin => class_requirement == Warrior,
+            Berserker => class_requirement == Warrior && !self.typ.is_shield(),
+            Scout => class_requirement == Scout,
+            Mage | Necromancer => class_requirement == Mage,
+            Assassin => match class_requirement {
+                Warrior => self.typ.is_weapon(),
+                Scout => !self.typ.is_weapon(),
+                _ => false,
+            },
+            Bard | Druid => match class_requirement {
+                Mage => self.typ.is_weapon(),
+                Scout => !self.typ.is_weapon(),
+                _ => false,
+            },
+            BattleMage | PlagueDoctor => match class_requirement {
+                Warrior => self.typ.is_weapon(),
+                Mage => !self.typ.is_weapon(),
+                _ => false,
+            },
+            DemonHunter => match class_requirement {
+                Scout => self.typ.is_weapon(),
+                Warrior => !self.typ.is_weapon() && !self.typ.is_shield(),
+                _ => false,
+            },
         }
     }
 
