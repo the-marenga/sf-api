@@ -113,15 +113,37 @@ pub enum PlayerItemPlace {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ItemPosition {
     pub place: ItemPlace,
     pub position: usize,
 }
 
+impl std::fmt::Display for ItemPosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "{}/{}",
+            self.place as usize,
+            self.position + 1
+        ))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerItemPosition {
     pub place: PlayerItemPlace,
     pub position: usize,
+}
+
+impl std::fmt::Display for PlayerItemPosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "{}/{}",
+            self.place as usize,
+            self.position + 1
+        ))
+    }
 }
 
 impl From<PlayerItemPosition> for ItemPosition {
@@ -140,8 +162,8 @@ impl From<BagPosition> for ItemPosition {
     }
 }
 
-impl From<EquipmentPosition> for ItemPosition {
-    fn from(value: EquipmentPosition) -> Self {
+impl From<EquipmentSlot> for ItemPosition {
+    fn from(value: EquipmentSlot) -> Self {
         let player: PlayerItemPosition = value.into();
         player.into()
     }
@@ -175,11 +197,11 @@ impl From<BagPosition> for PlayerItemPosition {
     }
 }
 
-impl From<EquipmentPosition> for PlayerItemPosition {
-    fn from(value: EquipmentPosition) -> Self {
+impl From<EquipmentSlot> for PlayerItemPosition {
+    fn from(value: EquipmentSlot) -> Self {
         Self {
             place: PlayerItemPlace::Equipment,
-            position: value.0,
+            position: value as usize - 1,
         }
     }
 }
@@ -250,29 +272,7 @@ pub enum ItemPlace {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Equipment(pub EnumMap<EquipmentSlot, Option<Item>>);
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Copy)]
-pub struct EquipmentPosition(pub(crate) usize);
-
-impl EquipmentPosition {
-    /// The 0 based index into the Equipment enum map
-    #[must_use]
-    pub fn position(&self) -> usize {
-        self.0
-    }
-}
-
 impl Equipment {
-    /// Creates an iterator over the inventory slots.
-    pub fn iter(
-        &self,
-    ) -> impl Iterator<Item = (EquipmentPosition, Option<&Item>)> {
-        self.0
-            .as_slice()
-            .iter()
-            .enumerate()
-            .map(|(pos, item)| (EquipmentPosition(pos), item.as_ref()))
-    }
-
     /// Checks if the character has an item with the enchantment equipped
     #[must_use]
     pub fn has_enchantment(&self, enchantment: Enchantment) -> bool {

@@ -7,6 +7,7 @@ use strum::EnumIter;
 use crate::{
     PlayerId,
     gamestate::{
+        ShopPosition,
         character::*,
         dungeons::{CompanionClass, Dungeon},
         fortress::*,
@@ -248,21 +249,20 @@ pub enum Command {
     ToiletOpen,
     /// Drops an item from one of the inventories into the toilet
     ToiletDrop {
-        /// The inventory you want to take the item from
-        inventory: PlayerItemPlace,
-        /// The position of the item in the inventory. Starts at 0
-        pos: usize,
+        /// The place of the item, that you want to throw into the toilet.
+        /// You can use `BagPosition` and `EquipmentSlot` here by calling
+        /// `pos.into()`
+        item_pos: PlayerItemPosition,
     },
     /// Buys an item from the shop and puts it in the inventoy slot specified
     BuyShop {
-        /// The shop you want to buy from
-        shop_type: ShopType,
-        /// the position of the item you want to buy from the shop
-        shop_pos: usize,
-        /// The inventory you want to put the new item into
-        inventory: PlayerItemPlace,
-        /// The position in the chosen inventory you
-        inventory_pos: usize,
+        /// The position of the item you want to buy. You get this from
+        /// `.iter()` on shop, or by constructing it yourself
+        shop_pos: ShopPosition,
+        /// The place you the new item should end up in.
+        /// You can use `BagPosition` and `EquipmentSlot` here by calling
+        /// `pos.into()`
+        new_pos: PlayerItemPosition,
         /// Identifies the source item to make sure it has not changed since
         /// you looked at it (shop reroll, etc.). You can get this ident by
         /// calling `.command_ident()` on any Item
@@ -271,25 +271,25 @@ pub enum Command {
     /// Sells an item from the players inventory. To make this more convenient,
     /// this picks a shop&item position to sell to for you
     SellShop {
-        /// The inventory you want to sell an item from
-        inventory: PlayerItemPlace,
-        /// The position of the item you want to sell
-        inventory_pos: usize,
+        /// The position of the item you want to sell in the shop
+        /// You can use `BagPosition` and `EquipmentSlot` here by calling
+        /// `pos.into()`
+        item_pos: PlayerItemPosition,
         /// Identifies the source item to make sure it has not changed since
         /// you looked at it (shop reroll, etc.). You can get this ident by
         /// calling `.command_ident()` on any Item
         item_ident: ItemCommandIdent,
     },
-    /// Moves an item from one inventory position to another
-    InventoryMove {
-        /// The inventory you move the item from
-        inventory_from: PlayerItemPlace,
-        /// The position of the item you want to move
-        inventory_from_pos: usize,
-        /// The inventory you move the item to
-        inventory_to: PlayerItemPlace,
-        /// The inventory you move the item from
-        inventory_to_pos: usize,
+    /// Moves an item from one player owned position to another
+    PlayerItemMove {
+        /// The position that you want to move the item from
+        /// You can use `BagPosition` and `EquipmentSlot` here by calling
+        /// `pos.into()`
+        from: PlayerItemPosition,
+        /// The position that you want to move the item to
+        /// You can use `BagPosition` and `EquipmentSlot` here by calling
+        /// `pos.into()`
+        to: PlayerItemPosition,
         /// Identifies the source item to make sure it has not changed since
         /// you looked at it (shop reroll, etc.). You can get this ident by
         /// calling `.command_ident()` on any Item
@@ -300,13 +300,9 @@ pub enum Command {
     /// items from shop to shop)
     ItemMove {
         /// The place of thing you move the item from
-        from: ItemPlace,
-        /// The position of the item you want to move
-        from_pos: usize,
-        /// The place of thing you move the item to
-        to: ItemPlace,
-        /// The position of the item you want to move
-        to_pos: usize,
+        from: ItemPosition,
+        /// The position of the item you want to move to
+        to: ItemPosition,
         /// Identifies the source item to make sure it has not changed since
         /// you looked at it (shop reroll, etc.). You can get this ident by
         /// calling `.command_ident()` on any Item
@@ -315,9 +311,7 @@ pub enum Command {
     /// Allows using an potion from any position
     UsePotion {
         /// The place of the potion you use from
-        from: ItemPlace,
-        /// The position of the potion you want to use
-        from_pos: usize,
+        from: ItemPosition,
         /// Identifies the source item to make sure it has not changed since
         /// you looked at it (shop reroll, etc.). You can get this ident by
         /// calling `.command_ident()` on any Item
@@ -450,17 +444,17 @@ pub enum Command {
     },
     /// Drop the item from the specified position into the witches cauldron
     WitchDropCauldron {
-        /// The inventory you want to move an item from
-        inventory_t: PlayerItemPlace,
-        /// The position of the item to move
-        position: usize,
+        /// The place of the item, that you want to drop into the cauldron.
+        /// You can use `BagPosition` and `EquipmentSlot` here by calling
+        /// `pos.into()`
+        item_pos: PlayerItemPosition,
     },
     /// Uses the blacksmith with the specified action on the specified item
     Blacksmith {
-        /// The inventory the item you want to act upon is in
-        inventory_t: PlayerItemPlace,
-        /// The position of the item in the inventory
-        position: u8,
+        /// The place of the item, that you want to use at the blacksmith.
+        /// You can use `BagPosition` and `EquipmentSlot` here by calling
+        /// `pos.into()`
+        item_pos: PlayerItemPosition,
         /// The action you want to use on the item
         action: BlacksmithAction,
         /// Identifies the source item to make sure it has not changed since
@@ -519,23 +513,21 @@ pub enum Command {
     /// player. This can be used to equip items, but also to socket/replace
     /// gems
     Equip {
-        /// The inventory of your character you take the item from
-        from_inventory: InventoryType,
-        /// The position in the inventory, that you
-        from_pos: usize,
+        /// The position in the inventory, that you want to equip in the
+        /// equipment slot
+        from_pos: PlayerItemPosition,
+        /// The slot of the item you want to equip
+        to_slot: EquipmentSlot,
         /// Identifies the source item to make sure it has not changed since
         /// you looked at it (shop reroll, etc.). You can get this ident by
         /// calling `.command_ident()` on any Item
         item_ident: ItemCommandIdent,
-        /// The slot of the companion you want to equip
-        to_slot: EquipmentSlot,
     },
     /// Moves an item from a normal inventory, onto one of the companions
     EquipCompanion {
-        /// The inventory of your character you take the item from
-        from_inventory: InventoryType,
-        /// The position in the inventory, that you
-        from_pos: usize,
+        /// The position in the inventory, that you want to equip in the
+        /// companion equipment slot
+        from_pos: PlayerItemPosition,
         /// The slot of the companion you want to equip
         to_slot: EquipmentSlot,
         /// Identifies the source item to make sure it has not changed since
@@ -1118,8 +1110,8 @@ impl Command {
             } => {
                 format!("PlayerTowerBattle:{progress}/{}", u8::from(*use_mush))
             }
-            Command::ToiletDrop { inventory, pos } => {
-                format!("PlayerToilettLoad:{}/{}", *inventory as usize, pos + 1)
+            Command::ToiletDrop { item_pos } => {
+                format!("PlayerToilettLoad:{item_pos}")
             }
             Command::GuildPortalBattle => format!("GroupPortalBattle:"),
             Command::GuildGetFightableTargets => {
@@ -1141,21 +1133,12 @@ impl Command {
                 format!("PetsGetStats:{pet_index}")
             }
             Command::BuyShop {
-                shop_type,
                 shop_pos,
-                inventory,
-                inventory_pos,
+                new_pos,
                 item_ident,
-            } => format!(
-                "PlayerItemMove:{}/{}/{}/{}/{item_ident}",
-                *shop_type as usize,
-                *shop_pos + 1,
-                *inventory as usize,
-                *inventory_pos + 1
-            ),
+            } => format!("PlayerItemMove:{shop_pos}/{new_pos}/{item_ident}"),
             Command::SellShop {
-                inventory,
-                inventory_pos,
+                item_pos,
                 item_ident,
             } => {
                 let mut rng = fastrand::Rng::new();
@@ -1166,49 +1149,23 @@ impl Command {
                 };
                 let shop_pos = rng.u32(0..6);
                 format!(
-                    "PlayerItemMove:{}/{}/{}/{}/{item_ident}",
-                    *inventory as usize,
-                    *inventory_pos + 1,
+                    "PlayerItemMove:{item_pos}/{}/{}/{item_ident}",
                     shop as usize,
                     shop_pos + 1,
                 )
             }
-            Command::InventoryMove {
-                inventory_from,
-                inventory_from_pos,
-                inventory_to,
-                inventory_to_pos,
+            Command::PlayerItemMove {
+                from,
+                to,
                 item_ident,
-            } => format!(
-                "PlayerItemMove:{}/{}/{}/{}/{item_ident}",
-                *inventory_from as usize,
-                *inventory_from_pos + 1,
-                *inventory_to as usize,
-                *inventory_to_pos + 1
-            ),
+            } => format!("PlayerItemMove:{from}/{to}/{item_ident}"),
             Command::ItemMove {
                 from,
-                from_pos,
                 to,
-                to_pos,
                 item_ident,
-            } => format!(
-                "PlayerItemMove:{}/{}/{}/{}/{item_ident}",
-                *from as usize,
-                *from_pos + 1,
-                *to as usize,
-                *to_pos + 1
-            ),
-            Command::UsePotion {
-                from,
-                from_pos,
-                item_ident,
-            } => {
-                format!(
-                    "PlayerItemMove:{}/{}/1/0/{item_ident}",
-                    *from as usize,
-                    *from_pos + 1
-                )
+            } => format!("PlayerItemMove:{from}/{to}/{item_ident}",),
+            Command::UsePotion { from, item_ident } => {
+                format!("PlayerItemMove:{from}/1/0/{item_ident}",)
             }
             Command::UnlockFeature { unlockable } => format!(
                 "UnlockFeature:{}/{}",
@@ -1237,23 +1194,15 @@ impl Command {
             Command::SendMessage { to, msg } => {
                 format!("PlayerMessageSend:{to}/{}", to_sf_string(msg))
             }
-            Command::WitchDropCauldron {
-                inventory_t,
-                position,
-            } => format!(
-                "PlayerWitchSpendItem:{}/{}",
-                *inventory_t as usize,
-                position + 1
-            ),
+            Command::WitchDropCauldron { item_pos } => {
+                format!("PlayerWitchSpendItem:{item_pos}",)
+            }
             Command::Blacksmith {
-                inventory_t,
-                position,
+                item_pos,
                 action,
                 item_ident,
             } => format!(
-                "PlayerItemMove:{}/{}/{}/-1/{item_ident}",
-                *inventory_t as usize,
-                position + 1,
+                "PlayerItemMove:{item_pos}/{}/-1/{item_ident}",
                 *action as usize
             ),
             Command::WitchEnchant { enchantment } => {
@@ -1284,26 +1233,20 @@ impl Command {
                 format!("FortressGatherTreasure:{wood}/{stone}")
             }
             Command::Equip {
-                from_inventory,
                 from_pos,
                 to_slot,
                 item_ident,
             } => format!(
-                "PlayerItemMove:{}/{}/1/{}/{item_ident}",
-                *from_inventory as usize,
-                *from_pos + 1,
+                "PlayerItemMove:{from_pos}/1/{}/{item_ident}",
                 *to_slot as usize
             ),
             Command::EquipCompanion {
-                from_inventory,
                 from_pos,
                 to_companion,
                 item_ident,
                 to_slot,
             } => format!(
-                "PlayerItemMove:{}/{}/{}/{}/{item_ident}",
-                *from_inventory as usize,
-                *from_pos + 1,
+                "PlayerItemMove:{from_pos}/{}/{}/{item_ident}",
                 *to_companion as u8 + 101,
                 *to_slot as usize
             ),
