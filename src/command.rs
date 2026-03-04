@@ -21,10 +21,10 @@ use crate::{
     },
 };
 
+/// A command, that can be send to the sf server
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A command, that can be send to the sf server
 pub enum Command {
     /// If there is a command you somehow know/reverse engineered, or need to
     /// extend the functionality of one of the existing commands, this is the
@@ -51,11 +51,11 @@ pub enum Command {
         /// for logging in again after error
         login_count: u32,
     },
-    #[cfg(feature = "sso")]
     /// Manually sends a login request to the server.
     /// **WARN:** The behaviour for a credentials mismatch, with the
     /// credentials in the user is undefined. Use the login method instead for
     /// a safer abstraction
+    #[cfg(feature = "sso")]
     #[deprecated = "Use a login method instead"]
     SSOLogin {
         /// The Identifies the S&F account, that has this character
@@ -184,6 +184,8 @@ pub enum Command {
     },
     /// Collects the current reward from the calendar
     CollectCalendar,
+    /// Collects the current door from the advent calendar
+    CollectAdventsCalendar,
     /// Queries information about another guild. The information can bet found
     /// in `hall_of_fames.other_guilds`
     ViewGuild {
@@ -348,6 +350,14 @@ pub enum Command {
     },
     /// Starts a fight against the enemy in the players portal
     FightPortal,
+    /// Updates the current state of the dungeons. This is equivalent to
+    /// clicking the Dungeon-Button in the game. It is strongly recommended to
+    /// call this before fighting, since `next_free_fight` and the dungeon
+    /// floors may not be updated otherwise. Notably, `FightDungeon` and
+    /// `Update` do NOT update these values, so you can end up in an endless
+    /// loop, if you are just relying on `next_free_fight` without calling
+    /// `UpdateDungeons`
+    UpdateDungeons,
     /// Enters a specific dungeon. This works for all dungeons, except the
     /// Tower, which you must enter via the `FightTower` command
     FightDungeon {
@@ -391,6 +401,11 @@ pub enum Command {
         /// The pet has to be from the same habitat, as the dungeon you are
         /// trying
         player_pet_id: u32,
+    },
+    /// Brews a potion at the witch. This will consume 10 fruit from the given
+    /// habitat
+    BrewPotion {
+        fruit_type: HabitatType,
     },
     /// Sets the guild info. Note the info about length limit from
     /// `SetDescription` for the description
@@ -464,6 +479,26 @@ pub enum Command {
         /// The enchantment to apply
         enchantment: EnchantmentIdent,
     },
+    /// Enchants the item the companion has equiped, whiich is associated with
+    /// this enchantment.
+    WitchEnchantCompanion {
+        /// The enchantment to apply
+        enchantment: EnchantmentIdent,
+        /// The companion you want to enchant the item of
+        companion: CompanionClass,
+    },
+    /// The recommended underworld enemy is dynamically fetched by the game
+    /// by querying the Hall of Fame with a special command. As such, the
+    /// result of this command will be parsed as a normal Hall of Fame lookup
+    /// in the `GameState`
+    UpdateLureSuggestion,
+    /// Looks up who the suggested player for the underworld actually is. The
+    /// result will be in `hall_of_fames.players`, since this command basically
+    /// just queries the Hall of Fame
+    ViewLureSuggestion {
+        /// The suggested enemy fetched using `UpdateLureSuggestion`
+        suggestion: LureSuggestion,
+    },
     /// Spins the wheel. All information about when you can spin, or what you
     /// won are in `game_state.specials.wheel`
     SpinWheelOfFortune {
@@ -480,25 +515,46 @@ pub enum Command {
         /// One of [0,1,2], depending on which chest you want to collect
         pos: usize,
     },
+    /// Moves an item from a normal inventory, into the equipmentslot of the
+    /// player. This can be used to equip items, but also to socket/replace
+    /// gems
+    Equip {
+        /// The inventory of your character you take the item from
+        from_inventory: InventoryType,
+        /// The position in the inventory, that you
+        from_pos: usize,
+        /// Identifies the source item to make sure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
+        /// The slot of the companion you want to equip
+        to_slot: EquipmentSlot,
+    },
     /// Moves an item from a normal inventory, onto one of the companions
     EquipCompanion {
         /// The inventory of your character you take the item from
         from_inventory: InventoryType,
         /// The position in the inventory, that you
-        from_pos: u8,
-        /// The companion you want to equip
-        to_companion: CompanionClass,
+        from_pos: usize,
         /// The slot of the companion you want to equip
         to_slot: EquipmentSlot,
         /// Identifies the source item to make sure it has not changed since
         /// you looked at it (shop reroll, etc.). You can get this ident by
         /// calling `.command_ident()` on any Item
         item_ident: ItemCommandIdent,
+        /// The companion you want to equip
+        to_companion: CompanionClass,
     },
     /// Collects a specific resource from the fortress
     FortressGather {
         /// The type of resource you want to collect
         resource: FortressResourceType,
+    },
+    /// Changes the fortress enemy to the counterattackable enemy
+    FortressChangeEnemy {
+        /// The if of the counter attack notification mail of the enemy, that
+        /// you want to change to
+        msg_id: i64,
     },
     /// Collects resources from the fortress secret storage
     /// Note that the official client only ever collect either stone or wood
@@ -559,6 +615,11 @@ pub enum Command {
     },
     /// Upgrades the Hall of Knights to the next level
     FortressUpgradeHallOfKnights,
+    /// Upgrades the given unit in the fortress using the smith
+    FortressUpgradeUnit {
+        /// The unit you want to upgrade
+        unit: FortressUnitType,
+    },
     /// Sends a whisper message to another player
     Whisper {
         player_name: String,
@@ -609,7 +670,7 @@ pub enum Command {
     /// Upgrades an idle building by the requested amount
     IdleUpgrade {
         typ: IdleBuildingType,
-        amount: u64,
+        amount: IdleUpgradeAmount,
     },
     /// Sacrifice all the money in the idle game for runes
     IdleSacrifice,
@@ -766,9 +827,9 @@ pub enum Command {
     BuyGoldFrame,
 }
 
+/// This is the "Questing instead of expeditions" value in the settings
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// This is the "Questing instead of expeditions" value in the settings
 pub enum ExpeditionSetting {
     /// When expeditions are available, this setting will enable expeditions to
     /// be started. This will disable questing, until either this setting is
@@ -801,19 +862,19 @@ pub enum FortunePayment {
     FreeTurn,
 }
 
+/// The price you have to pay to roll the dice
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The price you have to pay to roll the dice
 pub enum RollDicePrice {
     Free = 0,
     Mushrooms,
     Hourglass,
 }
 
+/// The type of dice you want to play with.
 #[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The type of dice you want to play with.
 pub enum DiceType {
     /// This means you want to discard whatever dice was previously at this
     /// position. This is also the type you want to fill the array with, if you
@@ -826,6 +887,7 @@ pub enum DiceType {
     Arcane,
     Hourglass,
 }
+
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DiceReward {
@@ -835,12 +897,12 @@ pub struct DiceReward {
     pub amount: u32,
 }
 
+/// A type of attribute
 #[derive(
     Debug, Copy, Clone, PartialEq, Eq, Enum, FromPrimitive, Hash, EnumIter,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// A type of attribute
 pub enum AttributeType {
     Strength = 1,
     Dexterity = 2,
@@ -849,23 +911,40 @@ pub enum AttributeType {
     Luck = 5,
 }
 
+/// A type of shop. This is a subset of `ItemPlace`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Enum, EnumIter, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// A type of shop. This is a subset of `ItemPlace`
 pub enum ShopType {
     #[default]
     Weapon = 3,
     Magic = 4,
 }
 
+/// The "currency" you want to use to skip a quest
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The "currency" you want to use to skip a quest
 pub enum TimeSkip {
     Mushroom = 1,
     Glass = 2,
+}
+
+/// The allowed amounts, that you can upgrade idle buildings by
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+pub enum IdleUpgradeAmount {
+    /// Upgrades as much as we can afford to
+    Max = -1,
+    /// Upgrades one building
+    One = 1,
+    /// Upgrades the building ten times
+    Ten = 10,
+    /// Upgrades the building twenty-five times
+    TwentyFive = 25,
+    /// Upgrades the building one hundred times
+    Hundred = 100,
 }
 
 impl Command {
@@ -876,7 +955,7 @@ impl Command {
     pub(crate) fn request_string(
         &self,
     ) -> Result<String, crate::error::SFError> {
-        const APP_VERSION: &str = "2700000000000";
+        const APP_VERSION: &str = "285000000000";
         use crate::{
             error::SFError,
             gamestate::dungeons::{LightDungeon, ShadowDungeon},
@@ -966,7 +1045,7 @@ impl Command {
             Command::FinishQuest { skip } => {
                 format!(
                     "PlayerAdventureFinished:{}",
-                    skip.map(|a| a as u8).unwrap_or(0)
+                    skip.map_or(0, |a| a as u8)
                 )
             }
             Command::StartWork { hours } => format!("PlayerWorkStart:{hours}"),
@@ -1180,6 +1259,19 @@ impl Command {
             Command::WitchEnchant { enchantment } => {
                 format!("PlayerWitchEnchantItem:{}/1", enchantment.0)
             }
+            Command::WitchEnchantCompanion {
+                enchantment,
+                companion,
+            } => {
+                format!(
+                    "PlayerWitchEnchantItem:{}/{}",
+                    enchantment.0,
+                    *companion as u8 + 101,
+                )
+            }
+            Command::UpdateLureSuggestion => {
+                format!("PlayerGetHallOfFame:-4//0/0")
+            }
             Command::SpinWheelOfFortune {
                 payment: fortune_payment,
             } => {
@@ -1191,16 +1283,27 @@ impl Command {
             Command::FortressGatherSecretStorage { stone, wood } => {
                 format!("FortressGatherTreasure:{wood}/{stone}")
             }
-            Command::EquipCompanion {
+            Command::Equip {
                 from_inventory,
                 from_pos,
                 to_slot,
+                item_ident,
+            } => format!(
+                "PlayerItemMove:{}/{}/1/{}/{item_ident}",
+                *from_inventory as usize,
+                *from_pos + 1,
+                *to_slot as usize
+            ),
+            Command::EquipCompanion {
+                from_inventory,
+                from_pos,
                 to_companion,
                 item_ident,
+                to_slot,
             } => format!(
                 "PlayerItemMove:{}/{}/{}/{}/{item_ident}",
                 *from_inventory as usize,
-                *from_pos,
+                *from_pos + 1,
                 *to_companion as u8 + 101,
                 *to_slot as usize
             ),
@@ -1221,7 +1324,7 @@ impl Command {
                 format!("FortressGemstoneStart:",)
             }
             Command::FortressGemStoneSearchCancel => {
-                format!("FortressGemStoneStop:0")
+                format!("FortressGemStoneStop:")
             }
             Command::FortressGemStoneSearchFinish { mushrooms } => {
                 format!("FortressGemstoneFinished:{mushrooms}",)
@@ -1237,6 +1340,9 @@ impl Command {
             }
             Command::FortressUpgradeHallOfKnights => {
                 format!("FortressGroupBonusUpgrade:")
+            }
+            Command::FortressUpgradeUnit { unit } => {
+                format!("FortressGroupBonusUpgrade:{}", *unit as u8 + 1)
             }
             Command::Whisper {
                 player_name: player,
@@ -1298,7 +1404,7 @@ impl Command {
                 format!("GroupPetBattle:{}", usize::from(*use_mushroom))
             }
             Command::IdleUpgrade { typ: kind, amount } => {
-                format!("IdleIncrease:{}/{}", *kind as usize, amount)
+                format!("IdleIncrease:{}/{}", *kind as usize, *amount as i32)
             }
             Command::IdleSacrifice => format!("IdlePrestige:0"),
             Command::SwapManequin => format!("PlayerDummySwap:301/1"),
@@ -1428,6 +1534,9 @@ impl Command {
             } => {
                 format!("PetsPvPFight:0/{opponent_id}/{}", *element as u32 + 1)
             }
+            Command::BrewPotion { fruit_type } => {
+                format!("PlayerWitchBrewPotion:{}", *fruit_type as u8)
+            }
             Command::FightPetDungeon {
                 use_mush,
                 habitat: element,
@@ -1506,16 +1615,26 @@ impl Command {
             Command::BuyGoldFrame => {
                 format!("PlayerGoldFrameBuy:")
             }
+            Command::UpdateDungeons => format!("PlayerDungeonOpen:"),
+            Command::CollectAdventsCalendar => {
+                format!("AdventsCalendarClaimReward:")
+            }
+            Command::ViewLureSuggestion { suggestion } => {
+                format!("PlayerGetHallOfFame:{}//0/0", suggestion.0)
+            }
+            Command::FortressChangeEnemy { msg_id } => {
+                format!("FortressEnemy:0/{msg_id}")
+            }
         })
     }
 }
 
 macro_rules! generate_flag_enum {
     ($($variant:ident => $code:expr),*) => {
+        /// The flag of a country, that will be visible in the Hall of Fame
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         #[allow(missing_docs)]
-        /// The flag of a country, that will be visible in the Hall of Fame
         pub enum Flag {
             $(
                 $variant,

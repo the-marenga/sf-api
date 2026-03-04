@@ -2,9 +2,10 @@ use std::{borrow::Borrow, fmt::Debug, str::FromStr, time::Duration};
 
 use base64::Engine;
 use log::{error, trace, warn};
-use reqwest::{Client, header::*};
+use reqwest::{Client, Proxy, header::*};
 use url::Url;
 
+pub use crate::response::*;
 use crate::{
     command::Command,
     error::SFError,
@@ -17,12 +18,10 @@ use crate::{
         sha1_hash,
     },
 };
-#[allow(deprecated)]
-pub use crate::{misc::decrypt_url, response::*};
 
+/// The session, that manages the server communication for a character
 #[derive(Debug, Clone)]
 #[allow(clippy::struct_field_names)]
-/// The session, that manages the server communication for a character
 pub struct Session {
     /// The information necessary to log in
     login_data: LoginData,
@@ -43,9 +42,9 @@ pub struct Session {
     options: ConnectionOptions,
 }
 
+/// The password of a character, hashed in the way, that the server expects
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The password of a character, hashed in the way, that the server expects
 pub struct PWHash(String);
 
 impl PWHash {
@@ -383,8 +382,8 @@ impl Session {
         Ok(Session::new_full(ld, client, options, url))
     }
 
-    #[must_use]
     /// The username of the character, that this session is responsible for
+    #[must_use]
     pub fn username(&self) -> &str {
         match &self.login_data {
             LoginData::Basic { username, .. } => username,
@@ -396,7 +395,6 @@ impl Session {
         }
     }
 
-    #[cfg(feature = "sso")]
     /// Retrieves new sso credentials from its sf account. If the account
     /// already has new creds stored, these are read, otherwise the account will
     /// be logged in again
@@ -406,6 +404,7 @@ impl Session {
     ///   an SSO-Session
     /// - Other errors, depending on if the session is able to renew the
     ///   credentials
+    #[cfg(feature = "sso")]
     pub async fn renew_sso_creds(&mut self) -> Result<(), SFError> {
         let LoginData::SSO {
             account, session, ..
@@ -455,11 +454,11 @@ enum LoginData {
     },
 }
 
-#[derive(Debug, Clone)]
 /// Stores all information necessary to talk to the server. Notably, if you
 /// clone this, instead of creating this multiple times for characters on a
 /// server, this will use the same `reqwest::Client`, which can have slight
 /// benefits to performance
+#[derive(Debug, Clone)]
 pub struct ServerConnection {
     url: url::Url,
     client: Client,
@@ -508,17 +507,27 @@ pub(crate) fn reqwest_client(
         HeaderValue::from_static("en;q=0.7,en-US;q=0.6"),
     );
     let mut builder = reqwest::Client::builder();
-    if let Some(ua) = options.user_agent.clone() {
-        builder = builder.user_agent(ua);
+    if let Some(settings) = &options.proxy {
+        let mut proxy = Proxy::https(&settings.url).ok()?;
+        if let Some(username) = &settings.username {
+            let password = settings.password.as_deref().unwrap_or("");
+            proxy = proxy.basic_auth(username, password);
+        }
+        builder = builder.proxy(proxy);
     }
+
+    let ua = options.user_agent.as_deref().unwrap_or(DEFAULT_USER_AGENT);
+    builder = builder.user_agent(ua);
     builder.default_headers(headers).build().ok()
 }
 
-#[derive(Debug, Clone)]
 /// Options, that change the behaviour of the communication with the server
+#[derive(Debug, Clone)]
 pub struct ConnectionOptions {
     /// A custom useragent to use, when sending requests to the server
     pub user_agent: Option<String>,
+    /// A custom proxy to use for network requests
+    pub proxy: Option<ProxySettings>,
     /// The server version, that this API was last tested on
     pub expected_server_version: u32,
     /// If this is true, any request to the server will error, if the servers
@@ -528,16 +537,24 @@ pub struct ConnectionOptions {
     pub error_on_unsupported_version: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct ProxySettings {
+    pub url: String,
+    pub username: Option<String>,
+    pub password: Option<String>,
+}
+
+static DEFAULT_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
+                                   AppleWebKit/537.36 (KHTML, like Gecko) \
+                                   Chrome/115.0.0.0 Safari/537.36";
+
 impl Default for ConnectionOptions {
     fn default() -> Self {
         Self {
-            user_agent: Some(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
-                 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
-                    .to_string(),
-            ),
-            expected_server_version: 2014,
+            user_agent: Some(DEFAULT_USER_AGENT.to_string()),
+            expected_server_version: 2018,
             error_on_unsupported_version: false,
+            proxy: None,
         }
     }
 }
@@ -576,12 +593,12 @@ impl SimpleSession {
         })
     }
 
-    #[cfg(feature = "sso")]
     ///  Creates new `SimpleSession`s, by logging in the S&S SSO account and
     /// returning all the characters associated with the account
     ///
     /// # Errors
     /// Have a look at `send_command` for a full list of possible errors
+    #[cfg(feature = "sso")]
     pub async fn login_sf_account(
         username: &str,
         password: &str,

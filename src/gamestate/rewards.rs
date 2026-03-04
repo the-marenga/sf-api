@@ -12,12 +12,12 @@ use super::{
 };
 use crate::{command::AttributeType, error::SFError};
 
+/// The type of a reward you can win by spinning the wheel. The wheel can be
+/// upgraded, so some rewards may not always be available
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 #[allow(missing_docs)]
-/// The type of a reward you can win by spinning the wheel. The wheel can be
-/// upgraded, so some rewards may not always be available
 pub enum WheelRewardType {
     Mushrooms,
     Stone,
@@ -35,9 +35,9 @@ pub enum WheelRewardType {
     Unknown,
 }
 
+/// The thing you won from spinning the wheel
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The thing you won from spinning the wheel
 pub struct WheelReward {
     /// The type of item you have won
     pub typ: WheelRewardType,
@@ -106,9 +106,9 @@ impl WheelReward {
     }
 }
 
+/// A possible reward on the calendar
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A possible reward on the calendar
 pub struct CalendarReward {
     /// Note that this is technically correct, but at low levels, these are
     /// often overwritten to silver
@@ -118,10 +118,10 @@ pub struct CalendarReward {
     pub amount: i64,
 }
 
+/// The type of reward gainable by collecting the calendar
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The type of reward gainable by collecting the calendar
 pub enum CalendarRewardType {
     Silver,
     Mushrooms,
@@ -186,9 +186,9 @@ impl CalendarReward {
     }
 }
 
+/// Everything, that changes over time
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Everything, that changes over time
 pub struct TimedSpecials {
     /// All of the events active in the tavern
     pub events: Events,
@@ -198,11 +198,13 @@ pub struct TimedSpecials {
     pub calendar: Calendar,
     /// Dr. Abawuwu's wheel
     pub wheel: Wheel,
+    /// The daily reward you can collect before christmas
+    pub advent_calendar: Option<Reward>,
 }
 
+/// Information about the events active in the tavern
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Information about the events active in the tavern
 pub struct Events {
     /// All of the events active in the tavern
     pub active: HashSet<Event>,
@@ -210,10 +212,10 @@ pub struct Events {
     pub ends: Option<DateTime<Local>>,
 }
 
+/// Grants rewards once a day
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[doc(alias = "DailyLoginBonus")]
-/// Grants rewards once a day
 pub struct Calendar {
     /// The amount of times the calendar has been collected already.
     /// `rewards[collected]` will give you the position in the rewards you will
@@ -226,9 +228,9 @@ pub struct Calendar {
     pub next_possible: Option<DateTime<Local>>,
 }
 
+/// The tasks you get from the goblin gleeman
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The tasks you get from the goblin gleeman
 pub struct Tasks {
     /// The tasks, that update daily
     pub daily: DailyTasks,
@@ -236,9 +238,9 @@ pub struct Tasks {
     pub event: EventTasks,
 }
 
+/// Information about the tasks, that reset every day
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Information about the tasks, that reset every day
 pub struct DailyTasks {
     /// The tasks you have to do
     pub tasks: Vec<Task>,
@@ -246,9 +248,9 @@ pub struct DailyTasks {
     pub rewards: [RewardChest; 3],
 }
 
+/// Information about the tasks, that are based on some event theme
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Information about the tasks, that are based on some event theme
 pub struct EventTasks {
     /// The "theme" the event task has. This is mainly irrelevant
     pub theme: EventTaskTheme,
@@ -336,9 +338,9 @@ impl Task {
     }
 }
 
+/// Dr. Abawuwu's wheel
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Dr. Abawuwu's wheel
 pub struct Wheel {
     /// The amount of lucky coins you have to spin the weel
     pub lucky_coins: u32,
@@ -350,11 +352,11 @@ pub struct Wheel {
     pub result: Option<WheelReward>,
 }
 
-#[non_exhaustive]
+/// The theme the event tasks have
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Default, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 #[allow(missing_docs)]
-/// The theme the event tasks have
 pub enum EventTaskTheme {
     // 1 is not set
     Gambler = 2,
@@ -378,11 +380,11 @@ pub enum EventTaskTheme {
     Unknown = 245,
 }
 
-#[non_exhaustive]
+/// The type of task you have to do
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 #[allow(missing_docs)]
-/// The type of task you have to do
 pub enum TaskType {
     AddSocketToItem,
     BlacksmithDismantle,
@@ -613,15 +615,16 @@ impl TaskType {
             }
             134 => TaskType::OpenAdventCalendar,
             135 => TaskType::EarnMoneyFromExpeditions,
+            136 => TaskType::WinFightsAgainst(Class::PlagueDoctor),
 
-            ..=0 | 136.. => TaskType::Unknown,
+            ..=0 | 137.. => TaskType::Unknown,
         }
     }
 }
 
+/// Something to do to get a point reward
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Something to do to get a point reward
 pub struct Task {
     /// The thing you are tasked with doing or getting for this task
     pub typ: TaskType,
@@ -650,9 +653,9 @@ impl Task {
     }
 }
 
+/// Something you can unlock for completing tasks
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Something you can unlock for completing tasks
 pub struct RewardChest {
     /// Whether or not this chest has been unlocked
     pub opened: bool,
@@ -662,9 +665,9 @@ pub struct RewardChest {
     pub rewards: Vec<Reward>,
 }
 
+/// The reward for opening a chest
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The reward for opening a chest
 pub struct Reward {
     /// The type of the thing you are getting
     pub typ: RewardType,
@@ -772,10 +775,10 @@ impl RewardChest {
     }
 }
 
+/// The type of event, that is currently happening on the server
 #[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The type of event, that is currently happening on the server
 pub enum Event {
     ExceptionalXPEvent = 0,
     GloriousGoldGalore,

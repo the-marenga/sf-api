@@ -1,10 +1,10 @@
 use std::{error::Error, fmt::Display};
 
+/// An error, that occurred during the communication (sending/receiving/parsing)
+/// of requests to the S&F server
 #[derive(Debug)]
 #[non_exhaustive]
 #[allow(clippy::module_name_repetitions)]
-/// An error, that occurred during the communication (sending/receiving/parsing)
-/// of requests to the S&F server
 pub enum SFError {
     /// Whatever you were trying to send was not possible to send. This is
     /// either our issue when you were doing something normal, or you were

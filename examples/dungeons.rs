@@ -16,7 +16,7 @@ pub async fn main() {
 
     loop {
         sleep(Duration::from_secs(2)).await;
-        let gs = session.game_state().unwrap();
+        let gs = session.send_command(Command::UpdateDungeons).await.unwrap();
 
         // We might have dungeon keys still waiting to be unlocked, so we
         // should use everything we have

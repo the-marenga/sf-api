@@ -118,8 +118,8 @@ pub async fn main() {
                 // finished. next time we call active, it will be None
                 continue;
             }
-            ExpeditionStage::Waiting(until) => {
-                let remaining = time_remaining(until);
+            ExpeditionStage::Waiting { busy_until, .. } => {
+                let remaining = time_remaining(busy_until);
                 if remaining.as_secs() > 60 && gs.tavern.quicksand_glasses > 0 {
                     println!("Skipping the {}s wait", remaining.as_secs());
                     Command::ExpeditionSkipWait {
