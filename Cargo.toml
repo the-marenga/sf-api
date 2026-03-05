@@ -22,7 +22,7 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
 sha1 = "0.10"
 strum = { version = "0.28", features = ["strum_macros", "derive"] }
-tokio = { version = "1.49", features = ["sync", "time"], optional = true }
+tokio = { version = "1.50", features = ["sync", "time"], optional = true }
 url = { version = "2.5", optional = true }
 
 [features]
@@ -41,7 +41,7 @@ criterion = "0.8"
 enum-map = "2.7"
 env_logger = "0.11.9"
 rstest = "0.26.1"
-tokio = { version = "1.49", features = ["full"] }
+tokio = { version = "1.50", features = ["full"] }
 
 [[bench]]
 name = "battle_benchmark"
