@@ -30,7 +30,7 @@ pub struct Session {
     /// The id of our session. This will remain the same as long as our login
     /// is valid and nobody else logs in
     session_id: String,
-    /// The amount of commands we have send
+    /// The amount of commands we have sent
     player_id: u32,
     login_count: u32,
     crypto_id: String,
@@ -142,7 +142,7 @@ impl Session {
         self.session_id.chars().any(|a| a != '0')
     }
 
-    /// Logges in the session by sending a login response to the server and
+    /// Logs in the session by sending a login response to the server and
     /// updating the internal cryptography values. If the session is currently
     /// logged in, this also clears the existing state beforehand.
     ///
@@ -323,7 +323,7 @@ impl Session {
     ///   server is running an unsupported version
     /// - `EmptyResponse`: If the servers response was empty
     /// - `InvalidRequest`: If your response was invalid to send in some way
-    /// - `ConnectionError`: If the command could not be send, or the response
+    /// - `ConnectionError`: If the command could not be sent, or the response
     ///   could not successfully be received
     /// - `ParsingError`: If the response from the server was unexpected in some
     ///   way
@@ -400,7 +400,7 @@ impl Session {
     /// be logged in again
     ///
     /// # Errors
-    /// - `InvalidRequest`: If you call this function with anything other, than
+    /// - `InvalidRequest`: If you call this function with anything other than
     ///   an SSO-Session
     /// - Other errors, depending on if the session is able to renew the
     ///   credentials
@@ -411,7 +411,7 @@ impl Session {
         } = &mut self.login_data
         else {
             return Err(SFError::InvalidRequest(
-                "Can not renow sso credentials for a non-sso account",
+                "Can not renew sso credentials for a non-sso account",
             ));
         };
         let mut account = account.lock().await;
@@ -440,7 +440,7 @@ enum LoginData {
         /// A reference to the Account, that owns this character. Used to have
         /// an easy way of renewing credentials.
         account: std::sync::Arc<tokio::sync::Mutex<crate::sso::SFAccount>>,
-        /// The SSO account session. We "cache" this to A, not constanty do a
+        /// The SSO account session. We "cache" this to A, not constantly do a
         /// mutex lookup and B, because we have to know, if the accounts
         /// session has changed since we last used it. Otherwise we
         /// could have multiple characters all seeing an expired
@@ -666,7 +666,7 @@ impl SimpleSession {
     /// # Errors
     /// - `EmptyResponse`: If the servers response was empty
     /// - `InvalidRequest`: If your response was invalid to send in some way
-    /// - `ConnectionError`: If the command could not be send, or the response
+    /// - `ConnectionError`: If the command could not be sent, or the response
     ///   could not successfully be received
     /// - `ParsingError`: If the response from the server was unexpected in some
     ///   way

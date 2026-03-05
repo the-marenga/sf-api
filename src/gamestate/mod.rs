@@ -359,8 +359,8 @@ impl GameState {
                 "systemmessagelist" => {}
                 "newslist" => {}
                 "dummieequipment" => {
-                    let m: Vec<i64> = val.into_list("manequin")?;
-                    self.character.manequin =
+                    let m: Vec<i64> = val.into_list("mannequin")?;
+                    self.character.mannequin =
                         Some(Equipment::parse(&m, server_time)?);
                 }
                 "owntower" => {
