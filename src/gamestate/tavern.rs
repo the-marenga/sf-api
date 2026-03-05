@@ -38,7 +38,7 @@ pub struct Tavern {
     pub dice_game: DiceGame,
     /// Information about everything related to expeditions
     pub expeditions: ExpeditionsEvent,
-    /// Decides if you can on on expeditions, or quests, when this event is
+    /// Decides if you can go on expeditions, or quests, when this event is
     /// currently ongoing
     pub questing_preference: ExpeditionSetting,
     /// The result of playing the shell game

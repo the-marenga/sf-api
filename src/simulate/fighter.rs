@@ -10,10 +10,10 @@ use crate::{
     simulate::{damage::*, upgradeable::UpgradeableFighter, *},
 };
 
-/// Contains all informations, that are necessary for battles to be simulated.
+/// Contains all information, that is necessary for battles to be simulated.
 /// It is derived by converting any of the things that can fight (player,
 /// companion, etc.) to a fighter through the From<T> traits.
-/// Contains all informations, that are necessary for battles to be simulated.
+/// Contains all information, that is necessary for battles to be simulated.
 /// It is derived by converting any of the things that can fight (player,
 /// companion, etc.) to a fighter through the From<T> traits.
 /// Further information is available on the `simulate_battle` function.

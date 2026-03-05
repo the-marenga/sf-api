@@ -53,9 +53,9 @@ pub struct Character {
     /// All items the character has currently equipped (on the body)
     pub equipment: Equipment,
 
-    /// If the character has a manequin, this will contain all the equipment
+    /// If the character has a mannequin, this will contain all the equipment
     /// stored in it
-    pub manequin: Option<Equipment>,
+    pub mannequin: Option<Equipment>,
     /// The potions currently active
     pub active_potions: [Option<Potion>; 3],
 
