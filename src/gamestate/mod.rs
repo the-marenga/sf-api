@@ -132,7 +132,7 @@ pub struct ShopPosition {
 
 impl std::fmt::Display for ShopPosition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{}/{}", self.typ as usize, self.pos + 1))
+        write!(f, "{}/{}", self.typ as usize, self.pos + 1)
     }
 }
 

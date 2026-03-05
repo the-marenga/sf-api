@@ -121,11 +121,7 @@ pub struct ItemPosition {
 
 impl std::fmt::Display for ItemPosition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!(
-            "{}/{}",
-            self.place as usize,
-            self.position + 1
-        ))
+        write!(f, "{}/{}", self.place as usize, self.position + 1)
     }
 }
 
@@ -138,11 +134,7 @@ pub struct PlayerItemPosition {
 
 impl std::fmt::Display for PlayerItemPosition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!(
-            "{}/{}",
-            self.place as usize,
-            self.position + 1
-        ))
+        write!(f, "{}/{}", self.place as usize, self.position + 1)
     }
 }
 
@@ -363,10 +355,11 @@ pub struct ItemCommandIdent {
 
 impl std::fmt::Display for ItemCommandIdent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!(
+        write!(
+            f,
             "{}/{}/{}/{}",
             self.typ, self.full_model_id, self.price, self.mush_price
-        ))
+        )
     }
 }
 

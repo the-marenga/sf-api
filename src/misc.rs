@@ -24,7 +24,7 @@ pub fn sha1_hash(val: &str) -> String {
     let hash = hasher.finalize();
     let mut result = String::with_capacity(hash.len() * 2);
     for byte in &hash {
-        _ = result.write_fmt(format_args!("{byte:02x}"));
+        _ = write!(result, "{byte:02x}");
     }
     result
 }

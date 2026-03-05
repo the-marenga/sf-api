@@ -1163,9 +1163,9 @@ impl Command {
                 from,
                 to,
                 item_ident,
-            } => format!("PlayerItemMove:{from}/{to}/{item_ident}",),
+            } => format!("PlayerItemMove:{from}/{to}/{item_ident}"),
             Command::UsePotion { from, item_ident } => {
-                format!("PlayerItemMove:{from}/1/0/{item_ident}",)
+                format!("PlayerItemMove:{from}/1/0/{item_ident}")
             }
             Command::UnlockFeature { unlockable } => format!(
                 "UnlockFeature:{}/{}",
@@ -1195,7 +1195,7 @@ impl Command {
                 format!("PlayerMessageSend:{to}/{}", to_sf_string(msg))
             }
             Command::WitchDropCauldron { item_pos } => {
-                format!("PlayerWitchSpendItem:{item_pos}",)
+                format!("PlayerWitchSpendItem:{item_pos}")
             }
             Command::Blacksmith {
                 item_pos,
@@ -1264,13 +1264,13 @@ impl Command {
                 format!("FortressBuildUnitStart:{}/{count}", *unit as usize + 1)
             }
             Command::FortressGemStoneSearch => {
-                format!("FortressGemstoneStart:",)
+                format!("FortressGemstoneStart:")
             }
             Command::FortressGemStoneSearchCancel => {
                 format!("FortressGemStoneStop:")
             }
             Command::FortressGemStoneSearchFinish { mushrooms } => {
-                format!("FortressGemstoneFinished:{mushrooms}",)
+                format!("FortressGemstoneFinished:{mushrooms}")
             }
             Command::FortressAttack { soldiers } => {
                 format!("FortressAttack:{soldiers}")
