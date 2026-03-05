@@ -38,7 +38,7 @@ pub struct Tavern {
     pub dice_game: DiceGame,
     /// Information about everything related to expeditions
     pub expeditions: ExpeditionsEvent,
-    /// Decides if you can on on expeditions, or quests, when this event is
+    /// Decides if you can go on expeditions, or quests, when this event is
     /// currently ongoing
     pub questing_preference: ExpeditionSetting,
     /// The result of playing the shell game
@@ -340,8 +340,6 @@ pub struct Expedition {
     ///  The heroism we have collected so far
     pub heroism: i32,
 
-    pub(crate) adjusted_bounty_heroism: bool,
-
     pub(crate) floor_stage: i64,
 
     /// Choose one of these rewards
@@ -352,24 +350,10 @@ pub struct Expedition {
     /// The different encounters, that you can choose between. Should be 3
     pub(crate) encounters: Vec<ExpeditionEncounter>,
     pub(crate) busy_until: Option<DateTime<Local>>,
+    pub(crate) busy_since: Option<DateTime<Local>>,
 }
 
 impl Expedition {
-    pub(crate) fn adjust_bounty_heroism(&mut self) {
-        if self.adjusted_bounty_heroism {
-            return;
-        }
-
-        for ExpeditionEncounter { typ, heroism } in &mut self.encounters {
-            if let Some(possible_bounty) = typ.required_bounty()
-                && self.items.iter().flatten().any(|a| a == &possible_bounty)
-            {
-                *heroism += 10;
-            }
-        }
-        self.adjusted_bounty_heroism = true;
-    }
-
     pub(crate) fn update_encounters(&mut self, data: &[i64]) {
         if !data.len().is_multiple_of(2) {
             warn!("weird encounters: {data:?}");
@@ -403,7 +387,10 @@ impl Expedition {
             2 => ExpeditionStage::Boss(self.boss),
             3 => ExpeditionStage::Rewards(self.rewards.clone()),
             4 => match self.busy_until {
-                Some(x) if x > Local::now() => ExpeditionStage::Waiting(x),
+                Some(x) if x > Local::now() => ExpeditionStage::Waiting {
+                    busy_until: x,
+                    busy_since: self.busy_since.unwrap_or_default(),
+                },
                 _ if self.current_floor == 10 => ExpeditionStage::Finished,
                 _ => cross_roads(),
             },
@@ -432,7 +419,12 @@ pub enum ExpeditionStage {
     /// When this is `< Local::now()`, you can send the update command to
     /// update the expedition stage, which will make `current_stage()`
     /// yield the new encounters
-    Waiting(DateTime<Local>),
+    Waiting {
+        /// The time at which the next stage will be available
+        busy_since: DateTime<Local>,
+        /// The start time of this waiting period
+        busy_until: DateTime<Local>,
+    },
     /// The expedition has finished and you can choose another one
     Finished,
     /// Something strange happened and the current stage is not known. Feel
@@ -463,8 +455,8 @@ pub struct ExpeditionBoss {
 pub struct ExpeditionEncounter {
     /// The type of thing you engage, or find on this path
     pub typ: ExpeditionThing,
-    /// The heroism you get from picking this encounter. This contains the
-    /// bonus from bounties, but no further boni from
+    /// The base heroism you get from picking this encounter. This does not
+    /// contains the bonus from bounties
     pub heroism: i32,
 }
 
@@ -479,7 +471,7 @@ pub enum ExpeditionThing {
 
     Dummy1 = 1,
     Dummy2 = 2,
-    Dumy3 = 3,
+    Dummy3 = 3,
 
     ToiletPaper = 11,
 
@@ -556,7 +548,7 @@ impl ExpeditionThing {
     pub fn required_bounty(&self) -> Option<ExpeditionThing> {
         use ExpeditionThing::*;
         Some(match self {
-            Dummy1 | Dummy2 | Dumy3 => DummyBounty,
+            Dummy1 | Dummy2 | Dummy3 => DummyBounty,
             ToiletPaper => ToiletPaperBounty,
             Dragon => DragonBounty,
             BurntCampfire => BurntCampfireBounty,
@@ -578,7 +570,7 @@ impl ExpeditionThing {
     pub fn is_bounty_for(&self) -> Option<&'static [ExpeditionThing]> {
         use ExpeditionThing::*;
         Some(match self {
-            DummyBounty => &[Dummy1, Dummy2, Dumy3],
+            DummyBounty => &[Dummy1, Dummy2, Dummy3],
             ToiletPaperBounty => &[ToiletPaper],
             DragonBounty => &[Dragon],
             BurntCampfireBounty => &[BurntCampfire],
@@ -609,6 +601,21 @@ pub struct AvailableExpedition {
     /// The second location, that you visit during the expedition. Might
     /// influence the final monsters type
     pub location_2: Location,
+    /// Anything special about this expedition, that may be relevant for us to
+    /// pick this
+    pub special: Option<ExpeditionSpecial>,
+}
+
+/// A special reward, that will be encountered, or earned by going on this
+/// expedition
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+pub enum ExpeditionSpecial {
+    /// This expedition will have an egg to collect
+    Egg = 1,
+    /// This expedition will advance a daily task
+    DailyTask,
 }
 
 /// The amount, that you either won or lost gambling. If the value is negative,

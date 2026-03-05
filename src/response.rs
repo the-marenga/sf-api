@@ -235,7 +235,7 @@ impl Response {
     }
 }
 
-/// This is the raw &str, that the server send as a value to some key. This
+/// This is the raw &str, that the server sent as a value to some key. This
 /// often requires extra conversions/parsing to use practically, so we associate
 /// the most common parsing functions as methods to this data.
 #[derive(Debug, Clone, Copy)]
@@ -299,7 +299,7 @@ impl ResponseVal<'_> {
         self.sub_key
     }
 
-    /// Returns the raw reference to the internal &str, that the server send
+    /// Returns the raw reference to the internal &str, that the server sent
     #[must_use]
     pub fn as_str(&self) -> &str {
         self.value

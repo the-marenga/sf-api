@@ -25,6 +25,7 @@ pub struct Inventory {
 
 /// The game keeps track between 5 slot bag and the extended inventory.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BagPosition(pub(crate) usize);
 
 impl BagPosition {
@@ -112,15 +113,29 @@ pub enum PlayerItemPlace {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ItemPosition {
     pub place: ItemPlace,
     pub position: usize,
 }
 
+impl std::fmt::Display for ItemPosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.place as usize, self.position + 1)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerItemPosition {
     pub place: PlayerItemPlace,
     pub position: usize,
+}
+
+impl std::fmt::Display for PlayerItemPosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.place as usize, self.position + 1)
+    }
 }
 
 impl From<PlayerItemPosition> for ItemPosition {
@@ -139,8 +154,8 @@ impl From<BagPosition> for ItemPosition {
     }
 }
 
-impl From<EquipmentPosition> for ItemPosition {
-    fn from(value: EquipmentPosition) -> Self {
+impl From<EquipmentSlot> for ItemPosition {
+    fn from(value: EquipmentSlot) -> Self {
         let player: PlayerItemPosition = value.into();
         player.into()
     }
@@ -174,11 +189,11 @@ impl From<BagPosition> for PlayerItemPosition {
     }
 }
 
-impl From<EquipmentPosition> for PlayerItemPosition {
-    fn from(value: EquipmentPosition) -> Self {
+impl From<EquipmentSlot> for PlayerItemPosition {
+    fn from(value: EquipmentSlot) -> Self {
         Self {
             place: PlayerItemPlace::Equipment,
-            position: value.0,
+            position: value as usize - 1,
         }
     }
 }
@@ -249,29 +264,7 @@ pub enum ItemPlace {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Equipment(pub EnumMap<EquipmentSlot, Option<Item>>);
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Copy)]
-pub struct EquipmentPosition(pub(crate) usize);
-
-impl EquipmentPosition {
-    /// The 0 based index into the Equipment enum map
-    #[must_use]
-    pub fn position(&self) -> usize {
-        self.0
-    }
-}
-
 impl Equipment {
-    /// Creates an iterator over the inventory slots.
-    pub fn iter(
-        &self,
-    ) -> impl Iterator<Item = (EquipmentPosition, Option<&Item>)> {
-        self.0
-            .as_slice()
-            .iter()
-            .enumerate()
-            .map(|(pos, item)| (EquipmentPosition(pos), item.as_ref()))
-    }
-
     /// Checks if the character has an item with the enchantment equipped
     #[must_use]
     pub fn has_enchantment(&self, enchantment: Enchantment) -> bool {
@@ -319,6 +312,10 @@ pub struct Item {
     /// junk for other players and potentially in other cases, where you should
     /// not be able to see a price
     pub mushroom_price: u32,
+    /// The non-truncated version of the model id. The normal `model_id` is
+    /// fine to identify this item visually, but this here is for doing more
+    /// specific calculations, apart from that
+    pub full_model_id: u32,
     /// The model id of this item
     pub model_id: u16,
     /// The class restriction, that this item has. Will only cover the three
@@ -339,13 +336,199 @@ pub struct Item {
     /// This is the color, or other cosmetic variation of an item. There is no
     /// clear 1 => red mapping, so only the raw value here
     pub color: u8,
-
+    /// The amount of times this item has been upgraded at the blacksmith
     pub upgrade_count: u8,
+    /// The quality level of this item
     pub item_quality: u32,
+    /// Has this item been through the washing cycle?
     pub is_washed: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ItemCommandIdent {
+    typ: u8,
+    full_model_id: u32,
+    price: u32,
+    mush_price: u32,
+}
+
+impl std::fmt::Display for ItemCommandIdent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}/{}/{}/{}",
+            self.typ, self.full_model_id, self.price, self.mush_price
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct BlacksmithPayment {
+    pub metal: u64,
+    pub arcane: u64,
+}
+
 impl Item {
+    /// Calculates the amount of metal & arcane we are expected to receive from
+    /// the blacksmith
+    ///
+    /// This code is a direct port of the implementation available here:
+    /// <https://snfsmithsim.12hp.de>/ . As such, all credit goes to:
+    /// `ÐonMuErte`, `Werwolf Legion (F17)` & `Rising Phoenix (F21)`
+    #[must_use]
+    pub fn dismantle_reward(&self) -> BlacksmithPayment {
+        let mut attribute_val =
+            f64::from(*self.attributes.values().max().unwrap_or(&0));
+        let item_stats = self.attributes.values().filter(|a| **a > 0).count();
+        let is_scout_or_mage_weapon = self
+            .class
+            .is_some_and(|a| a == Class::Scout || a == Class::Mage)
+            && self.typ.is_weapon();
+
+        if self.price != 0 {
+            for _ in 0..self.upgrade_count {
+                attribute_val = (attribute_val / 1.04).round();
+            }
+        }
+
+        if item_stats >= 4 {
+            attribute_val *= 1.2;
+        }
+        if is_scout_or_mage_weapon {
+            attribute_val /= 2.0;
+        }
+        // // 1-stat items
+        if (item_stats == 1) && attribute_val > 66.0 {
+            attribute_val = attribute_val.round() * 0.75;
+        }
+
+        attribute_val = attribute_val.round().powf(1.2).floor();
+
+        let (min_dmg, max_dmg) = match self.typ {
+            ItemType::Weapon { min_dmg, max_dmg } => (min_dmg, max_dmg),
+            _ => (0, 0),
+        };
+
+        let price = (u32::from(self.typ.raw_id()) * 37)
+            + (self.full_model_id * 83)
+            + (min_dmg * 1731)
+            + (max_dmg * 162);
+
+        let (metal_price, arcane_price) = match item_stats {
+            1 => (75 + (price % 26), price % 2),
+            2 => (50 + (price % 31), 5 + (price % 6)),
+            // Epics
+            _ => (25 + (price % 26), 50 + (price % 51)),
+        };
+
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        let calc_result = |rng: u32| {
+            ((attribute_val * f64::from(rng)) / 100.0).floor() as u64
+        };
+        let mut metal_result = calc_result(metal_price);
+        let mut arcane_result = calc_result(arcane_price);
+
+        if is_scout_or_mage_weapon {
+            metal_result *= 2;
+            arcane_result *= 2;
+        }
+        BlacksmithPayment {
+            metal: metal_result * 2,
+            arcane: arcane_result * 2,
+        }
+    }
+
+    /// Calculates the amount of metal & arcane it would cost to upgrade this
+    /// item. Each upgrade increases the highest attribute by 3% (all highest
+    /// for epics)
+    ///
+    /// This code is a direct port of the implementation available here:
+    /// <https://snfsmithsim.12hp.de>/ . As such, all credit goes to:
+    /// `ÐonMuErte`, `Werwolf Legion (F17)` & `Rising Phoenix (F21)`
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+    pub fn upgrade_costs(&self) -> Option<BlacksmithPayment> {
+        if self.upgrade_count >= 20 || self.equipment_ident().is_none() {
+            return None;
+        }
+
+        let item_stats = self.attributes.values().filter(|a| **a > 0).count();
+        let is_scout_or_mage_weapon = self
+            .class
+            .is_some_and(|a| a == Class::Scout || a == Class::Mage)
+            && self.typ.is_weapon();
+
+        // Highest attribue is the base price
+        let mut price =
+            f64::from(*self.attributes.values().max().unwrap_or(&0));
+
+        // 5-stats items
+        if item_stats >= 4 {
+            price *= 1.2;
+        }
+
+        if is_scout_or_mage_weapon {
+            price /= 2.0;
+        }
+
+        // 1-stat items
+        if item_stats == 1 && price > 66.0 {
+            price = (price * 0.75).ceil();
+        }
+
+        price = price.round().powf(1.2).floor();
+
+        let mut metal_price = 50;
+        let mut arcane_price = match item_stats {
+            1 => 25,
+            2 => 50,
+            // Epics
+            _ => 75,
+        };
+
+        let i = i64::from(self.upgrade_count);
+        match i {
+            0 => {
+                metal_price *= 3;
+                arcane_price = 0;
+            }
+            1 => {
+                metal_price *= 4;
+                arcane_price = 1;
+            }
+            2..=7 => {
+                metal_price *= i + 3;
+                arcane_price *= i - 1;
+            }
+            8 => {
+                metal_price *= 12;
+                arcane_price *= 8;
+            }
+            9 => {
+                metal_price *= 15;
+                arcane_price *= 10;
+            }
+            _ => {
+                metal_price *= i + 6;
+                arcane_price *= 10 + 2 * (i - 9);
+            }
+        }
+
+        metal_price = ((price * (metal_price as f64)) / 100.0).floor() as i64;
+        arcane_price = ((price * (arcane_price as f64)) / 100.0).floor() as i64;
+
+        if is_scout_or_mage_weapon {
+            metal_price *= 2;
+            arcane_price *= 2;
+        }
+
+        Some(BlacksmithPayment {
+            metal: metal_price.try_into().unwrap_or(0),
+            arcane: arcane_price.try_into().unwrap_or(0),
+        })
+    }
+
     /// Maps an item to its ident. This is mainly useful, if you want to see,
     /// if a item is already in your scrapbook
     #[must_use]
@@ -356,6 +539,19 @@ impl Item {
             model_id: self.model_id,
             color: self.color,
         })
+    }
+
+    /// Commands require an ident for the source ident now. Most likely to make
+    /// sure the item has not changed, which could be the case in the shop.
+    /// This function produces the required identification for an item
+    #[must_use]
+    pub fn command_ident(&self) -> ItemCommandIdent {
+        ItemCommandIdent {
+            typ: self.typ.raw_id(),
+            full_model_id: self.full_model_id,
+            price: self.price,
+            mush_price: self.mushroom_price,
+        }
     }
 
     /// Checks, if this item is unique. Technically they are not always unique,
@@ -434,33 +630,31 @@ impl Item {
             return true;
         };
 
-        // Class requirements
-        // Warrior => Weapon: Meele,  Armor: Heavy
-        // Scout   => Weapon: Ranged, Armor: Medium
-        // Mage    => Weapon: Magic,  Armor: Light
-        match (class, class_requirement) {
-            // Weapon: Meele, Armor: Heavy
-            (Warrior, Warrior) => true,
-            (Berserker, Warrior) => !self.typ.is_shield(),
-            // Weapon: Ranged, Armor: Medium
-            (Scout, Scout) => true,
-            // Weapon: Magic, Armor: Light
-            (Mage | Necromancer, Mage) => true,
-            // Weapon: Meele, Armor: Medium
-            (Assassin, Warrior) => self.typ.is_weapon(),
-            (Assassin, Scout) => !self.typ.is_weapon(),
-            // Weapon: Magic, Armor: Medium
-            (Bard | Druid, Mage) => self.typ.is_weapon(),
-            (Bard | Druid, Scout) => !self.typ.is_weapon(),
-            // Weapon: Meele, Armor: Light
-            (BattleMage, Warrior) => self.typ.is_weapon(),
-            (BattleMage, Mage) => !self.typ.is_weapon(),
-            // Weapon: Ranged, Armor: Heavy
-            (DemonHunter, Scout) => self.typ.is_weapon(),
-            (DemonHunter, Warrior) => {
-                !self.typ.is_weapon() && !self.typ.is_shield()
-            }
-            _ => false,
+        match class {
+            Warrior | Paladin => class_requirement == Warrior,
+            Berserker => class_requirement == Warrior && !self.typ.is_shield(),
+            Scout => class_requirement == Scout,
+            Mage | Necromancer => class_requirement == Mage,
+            Assassin => match class_requirement {
+                Warrior => self.typ.is_weapon(),
+                Scout => !self.typ.is_weapon(),
+                _ => false,
+            },
+            Bard | Druid => match class_requirement {
+                Mage => self.typ.is_weapon(),
+                Scout => !self.typ.is_weapon(),
+                _ => false,
+            },
+            BattleMage | PlagueDoctor => match class_requirement {
+                Warrior => self.typ.is_weapon(),
+                Mage => !self.typ.is_weapon(),
+                _ => false,
+            },
+            DemonHunter => match class_requirement {
+                Scout => self.typ.is_weapon(),
+                Warrior => !self.typ.is_weapon() && !self.typ.is_shield(),
+                _ => false,
+            },
         }
     }
 
@@ -486,6 +680,8 @@ impl Item {
         };
         let mut rune = None;
         let mut attributes: EnumMap<AttributeType, u32> = EnumMap::default();
+        let price = data.csiget(13, "item price", u32::MAX)?;
+
         if typ.equipment_slot().is_some() {
             for i in 0..3 {
                 let atr_typ = data.cget(i + 7, "item atr typ")?;
@@ -498,7 +694,6 @@ impl Item {
                     warn!("Invalid attribute value: {atr_val}, {typ:?}");
                     continue;
                 };
-
                 match atr_typ {
                     0 => {}
                     1..=5 => {
@@ -506,10 +701,12 @@ impl Item {
                         else {
                             continue;
                         };
-                        *attributes.get_mut(atr_typ) = atr_val;
+                        *attributes.get_mut(atr_typ) += atr_val;
                     }
                     6 => {
-                        attributes.as_mut_array().fill(atr_val);
+                        for atr in attributes.values_mut() {
+                            *atr += atr_val;
+                        }
                     }
                     21 => {
                         for atr in [
@@ -517,7 +714,7 @@ impl Item {
                             AttributeType::Constitution,
                             AttributeType::Luck,
                         ] {
-                            *attributes.get_mut(atr) = atr_val;
+                            *attributes.get_mut(atr) += atr_val;
                         }
                     }
                     22 => {
@@ -526,7 +723,7 @@ impl Item {
                             AttributeType::Constitution,
                             AttributeType::Luck,
                         ] {
-                            *attributes.get_mut(atr) = atr_val;
+                            *attributes.get_mut(atr) += atr_val;
                         }
                     }
                     23 => {
@@ -535,7 +732,7 @@ impl Item {
                             AttributeType::Constitution,
                             AttributeType::Luck,
                         ] {
-                            *attributes.get_mut(atr) = atr_val;
+                            *attributes.get_mut(atr) += atr_val;
                         }
                     }
                     rune_typ => {
@@ -579,11 +776,12 @@ impl Item {
             class,
             attributes,
             color,
-            price: data.csiget(13, "item price", u32::MAX)?,
+            price,
             mushroom_price: data.csiget(14, "mushroom price", u32::MAX)?,
             upgrade_count: data.csiget(15, "upgrade count", u8::MAX)?,
-            item_quality: data.csiget(17, "upgrade count", 0)?,
+            item_quality: data.csiget(17, "item quality", 0)?,
             is_washed: data.csiget(18, "is washed", 0)? != 0,
+            full_model_id: data.csiget(3, "raw model id", 0)?,
         };
         Ok(Some(item))
     }

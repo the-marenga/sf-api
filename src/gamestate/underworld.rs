@@ -44,7 +44,17 @@ pub struct Underworld {
     pub lure_level: u16,
     /// The amount of players, that have been lured into the underworld today
     pub lured_today: u16,
+    /// The suggested enemy to attack in the underworld. Must be populated with
+    /// the `UpdateLureSuggestion` command.
+    pub lure_suggestion: Option<LureSuggestion>,
 }
+
+/// The ident by which we can fetch more information about the lure enemy using
+/// the `ViewLureSuggestion` command.
+/// (Don't ask me why this process is so convoluted)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct LureSuggestion(pub(crate) u32);
 
 /// The price an upgrade, or building something in the underworld costs. These
 /// are always for one upgrade/build, which is important for unit builds

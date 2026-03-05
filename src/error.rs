@@ -16,7 +16,7 @@ pub enum SFError {
     /// There was some error encountered when sending data to the server. Most
     /// likely the server, or your connection is down
     ConnectionError,
-    /// Whatever the server send back was invalid. Could be because of features
+    /// Whatever the server sent back was invalid. Could be because of features
     /// not yet supported, or a bug in the API
     ParsingError(&'static str, String),
     /// The server responded with an error. If you are already logged in, this
@@ -56,30 +56,32 @@ impl Error for SFError {
 impl Display for SFError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            SFError::InvalidRequest(msg) => f.write_fmt(format_args!(
-                "Tried to send an invalid request: {msg}"
-            )),
+            SFError::InvalidRequest(msg) => {
+                write!(f, "Tried to send an invalid request: {msg}")
+            }
             SFError::EmptyResponse => {
                 f.write_str("Received an empty response from the server")
             }
             SFError::ConnectionError => {
                 f.write_str("Could not communicate with the server")
             }
-            SFError::ParsingError(name, value) => f.write_fmt(format_args!(
+            SFError::ParsingError(name, value) => write!(
+                f,
                 "Error parsing the server response because {name} had an \
                  unexpected value of: {value}"
-            )),
+            ),
             SFError::ServerError(e) => {
-                f.write_fmt(format_args!("Server responded with error: {e}"))
+                write!(f, "Server responded with error: {e}")
             }
-            SFError::UnsupportedVersion(v) => f.write_fmt(format_args!(
-                "The server version {v} is not supported"
-            )),
+            SFError::UnsupportedVersion(v) => {
+                write!(f, "The server version {v} is not supported")
+            }
             SFError::TooShortResponse { name, pos, array } => {
-                f.write_fmt(format_args!(
+                write!(
+                    f,
                     "Tried to access the response for {name} at [{pos}] , but \
                      the response is too short. The response is: {array}"
-                ))
+                )
             }
         }
     }
