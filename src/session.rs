@@ -521,7 +521,7 @@ pub(crate) fn reqwest_client(
     builder.default_headers(headers).build().ok()
 }
 
-/// Options, that change the behaviour of the communication with the server
+/// Options, that change the behavior of the communication with the server
 #[derive(Debug, Clone)]
 pub struct ConnectionOptions {
     /// A custom useragent to use, when sending requests to the server

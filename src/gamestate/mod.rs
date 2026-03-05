@@ -78,7 +78,7 @@ pub struct GameState {
     pub lookup: Lookup,
     /// Anything you can find in the mail tab of the official client
     pub mail: Mail,
-    /// The raw timestamp, that the server has send us
+    /// The raw timestamp, that the server has sent us
     last_request_timestamp: i64,
     /// The amount of sec, that the server is ahead of us in seconds (can be
     /// negative)

@@ -202,9 +202,9 @@ impl SFAccount {
     /// around anyways
     ///
     /// # Errors
-    /// May return `ParsingError` if the server changed it's API, or
+    /// May return `ParsingError` if the server changed its API, or
     /// `ConnectionError`, if the server could not be reached. The characters
-    /// in the Vec may be `InvalidRequest`, iff the server the server the
+    /// in the Vec may be `InvalidRequest`, iff the server the
     /// character would be on could not be determined
     pub async fn characters(
         self,

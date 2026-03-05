@@ -73,7 +73,7 @@ pub struct Guild {
     member_count: u8,
     /// Information about the members of the guild. This includes the player
     pub members: Vec<GuildMemberData>,
-    /// The chat messages, that get send in the guild chat
+    /// The chat messages, that get sent in the guild chat
     pub chat: Vec<ChatMessage>,
     /// The whisper messages, that a player can receive
     pub whispers: Vec<ChatMessage>,
@@ -137,7 +137,7 @@ pub struct Emblem {
 }
 
 impl Emblem {
-    /// Returns the guild emblem in it's server encoded form
+    /// Returns the guild emblem in its server encoded form
     #[must_use]
     pub fn server_encode(&self) -> String {
         // TODO: Actually parse this
@@ -150,7 +150,7 @@ impl Emblem {
     }
 }
 
-/// A message, that the player has received, or has send to others via the chat
+/// A message, that the player has received, or has sent to others via the chat
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ChatMessage {
@@ -160,7 +160,7 @@ pub struct ChatMessage {
     /// The time at which this message has been sent. I have not checked the
     /// timezone here. Might be UTC/Your TZ/Server TZ
     pub time: NaiveTime,
-    /// The actual bessage, that got send
+    /// The actual message, that got sent
     pub message: String,
 }
 
@@ -486,7 +486,7 @@ pub struct GuildMemberData {
     pub battles_joined: Option<BattlesJoined>,
     /// The level of this member
     pub level: u16,
-    /// The last time this player was online (last time they send an update
+    /// The last time this player was online (last time they sent an update
     /// command)
     pub last_online: Option<DateTime<Local>>,
     /// The level, that this member has upgraded their treasure to

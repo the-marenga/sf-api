@@ -16,7 +16,7 @@ pub enum SFError {
     /// There was some error encountered when sending data to the server. Most
     /// likely the server, or your connection is down
     ConnectionError,
-    /// Whatever the server send back was invalid. Could be because of features
+    /// Whatever the server sent back was invalid. Could be because of features
     /// not yet supported, or a bug in the API
     ParsingError(&'static str, String),
     /// The server responded with an error. If you are already logged in, this
