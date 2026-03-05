@@ -40,12 +40,21 @@ pub struct Underworld {
     /// The time the building upgrade began
     pub upgrade_begin: Option<DateTime<Local>>,
 
-    /// The combined level of all buildings in the underworld, which is
-    /// equivalent to honor
-    pub honor: u16,
+    /// The level of characters you need to lure to get the full reward
+    pub lure_level: u16,
     /// The amount of players, that have been lured into the underworld today
     pub lured_today: u16,
+    /// The suggested enemy to attack in the underworld. Must be populated with
+    /// the `UpdateLureSuggestion` command.
+    pub lure_suggestion: Option<LureSuggestion>,
 }
+
+/// The ident by which we can fetch more information about the lure enemy using
+/// the `ViewLureSuggestion` command.
+/// (Don't ask me why this process is so convoluted)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct LureSuggestion(pub(crate) u32);
 
 /// The price an upgrade, or building something in the underworld costs. These
 /// are always for one upgrade/build, which is important for unit builds
@@ -154,7 +163,7 @@ impl Underworld {
         self.upgrade_finish = data.cstget(469, "u expand end", server_time)?;
         self.upgrade_begin =
             data.cstget(470, "u upgrade begin", server_time)?;
-        self.honor = data.csiget(471, "uu honor", 0)?;
+        self.lure_level = data.csiget(471, "uu lure lvl", 0)?;
         self.lured_today = data.csiget(472, "u battles today", 0)?;
         Ok(())
     }

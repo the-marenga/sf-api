@@ -78,7 +78,7 @@ pub struct GameState {
     pub lookup: Lookup,
     /// Anything you can find in the mail tab of the official client
     pub mail: Mail,
-    /// The raw timestamp, that the server has send us
+    /// The raw timestamp, that the server has sent us
     last_request_timestamp: i64,
     /// The amount of sec, that the server is ahead of us in seconds (can be
     /// negative)
@@ -113,6 +113,7 @@ impl Default for Shop {
             upgrade_count: 0,
             item_quality: 0,
             is_washed: false,
+            full_model_id: 0,
         });
 
         Self {
@@ -123,9 +124,16 @@ impl Default for Shop {
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ShopPosition {
-    pub(crate) typ: ShopType,
-    pub(crate) pos: usize,
+    pub typ: ShopType,
+    pub pos: usize,
+}
+
+impl std::fmt::Display for ShopPosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.typ as usize, self.pos + 1)
+    }
 }
 
 impl ShopPosition {
@@ -351,8 +359,8 @@ impl GameState {
                 "systemmessagelist" => {}
                 "newslist" => {}
                 "dummieequipment" => {
-                    let m: Vec<i64> = val.into_list("manequin")?;
-                    self.character.manequin =
+                    let m: Vec<i64> = val.into_list("mannequin")?;
+                    self.character.mannequin =
                         Some(Equipment::parse(&m, server_time)?);
                 }
                 "owntower" => {
@@ -453,6 +461,15 @@ impl GameState {
                         .update_prices(
                             &val.into_list("fortress upgrade prices")?,
                         )?;
+                }
+                "Arenarank" => {
+                    if let Some(uw) = self.underworld.as_mut() {
+                        uw.lure_suggestion = val
+                            .as_str()
+                            .parse::<u32>()
+                            .ok()
+                            .map(LureSuggestion);
+                    }
                 }
                 "witch" => {
                     self.witch
@@ -822,14 +839,19 @@ impl GameState {
                                 target: data
                                     .cfpget(0, "expedition typ", |a| a)?
                                     .unwrap_or_default(),
-                                thirst_for_adventure_sec: data
-                                    .csiget(6, "exp alu", 600)?,
                                 location_1: data
                                     .cfpget(4, "exp loc 1", |a| a)?
                                     .unwrap_or_default(),
                                 location_2: data
                                     .cfpget(5, "exp loc 2", |a| a)?
                                     .unwrap_or_default(),
+                                thirst_for_adventure_sec: data
+                                    .csiget(6, "exp alu", 600)?,
+                                special: data.cfpget(
+                                    7,
+                                    "exp special",
+                                    |a| a,
+                                )?,
                             })
                         })
                         .collect::<Result<_, _>>()?;
@@ -900,7 +922,7 @@ impl GameState {
                     exp.current_floor = data.csiget(0, "clearing", 0)?;
                     exp.heroism = data.csiget(13, "heroism", 0)?;
 
-                    let _busy_since =
+                    exp.busy_since =
                         data.cstget(15, "exp start", server_time)?;
                     exp.busy_until =
                         data.cstget(16, "exp busy", server_time)?;
@@ -1592,10 +1614,6 @@ impl GameState {
                     warn!("Update ignored {x} -> {val:?}");
                 }
             }
-        }
-
-        if let Some(exp) = self.tavern.expeditions.active_mut() {
-            exp.adjust_bounty_heroism();
         }
 
         if let Some(og) = other_guild {
