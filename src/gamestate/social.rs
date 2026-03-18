@@ -372,6 +372,8 @@ pub struct OtherPlayer {
     pub description: String,
     /// If the player is in a guild, this will contain the name
     pub guild: Option<String>,
+    /// The time at which this player joined their guild, if any
+    pub guild_joined: Option<DateTime<Local>>,
     /// The mount the player currently ahs rented
     pub mount: Option<Mount>,
     /// Information about the players visual apperarence
@@ -502,6 +504,8 @@ impl OtherPlayer {
             data.csimget(252, "other portal dmg bonus", 0, |a| {
                 (a >> 16) & 0xFF
             })?;
+        op.guild_joined =
+            data.cstget(166, "other joined guild", server_time)?;
 
         op.armor = data.csiget(168, "other armor", 0)?;
         op.min_damage_base = data.csiget(169, "other min damage", 0)?;
