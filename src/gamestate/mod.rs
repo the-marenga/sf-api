@@ -1628,6 +1628,13 @@ impl GameState {
                     self.specials.wheel.next_free_spin =
                         data.cstget(2, "next lucky turn", server_time)?;
                 }
+                "dice" => {
+                    let data: Vec<i64> = val.into_list("dice")?;
+                    self.tavern.dice_game.next_free =
+                        data.cstget(0, "dice next", server_time)?;
+                    self.tavern.dice_game.remaining =
+                        data.csiget(1, "rem dice games", 0)?;
+                }
                 x if x.contains("average") && x.ends_with("level") => {
                     // We do not care about avg. item lvl
                 }
@@ -1832,10 +1839,6 @@ impl GameState {
             data.csimget(648, "calendar collected", 245, |a| a >> 16)?;
         self.specials.calendar.next_possible =
             data.cstget(649, "calendar next", server_time)?;
-        self.tavern.dice_game.next_free =
-            data.cstget(650, "dice next", server_time)?;
-        self.tavern.dice_game.remaining =
-            data.csiget(651, "rem dice games", 0)?;
 
         self.witch.get_or_insert_default().enchantment_price =
             data.csiget(519, "enchantment price", u64::MAX)?;
