@@ -1609,6 +1609,12 @@ impl GameState {
                         server_time,
                     )?;
                 }
+                "fortressunits" => {
+                     self.fortress.get_or_insert_default().update_units(
+                        &val.into_list("ft units")?,
+                        server_time,
+                    )?;
+                }
                 // This is the extra bonus effect all treats get that day
                 x if x.contains("dungeonenemies") => {
                     // I `think` we do not need this

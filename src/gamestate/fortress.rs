@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
+use log::info;
 use num_derive::FromPrimitive;
 use strum::{EnumCount, EnumIter, IntoEnumIterator};
 
@@ -417,42 +418,6 @@ impl Fortress {
                 server_time.convert_to_local(data.cget(553 + idx, msg)?, msg);
         }
 
-        #[allow(clippy::enum_glob_use)]
-        {
-            use FortressBuildingType::*;
-            use FortressUnitType::*;
-            self.units.get_mut(Soldier).limit = soft_into(
-                self.buildings.get_mut(Barracks).level * 3,
-                "soldier max count",
-                0,
-            );
-            self.units.get_mut(Magician).limit = soft_into(
-                self.buildings.get_mut(MagesTower).level,
-                "magician max count",
-                0,
-            );
-            self.units.get_mut(Archer).limit = soft_into(
-                self.buildings.get_mut(ArcheryGuild).level * 2,
-                "archer max count",
-                0,
-            );
-
-            self.units.get_mut(Soldier).count =
-                data.csimget(547, "soldier count", 0, |x| x & 0xFFFF)?;
-            self.units.get_mut(Soldier).in_training =
-                data.csimget(548, "soldier in que", 0, |x| x >> 16)?;
-
-            self.units.get_mut(Magician).count =
-                data.csimget(547, "magician count", 0, |x| x >> 16)?;
-            self.units.get_mut(Magician).in_training =
-                data.csimget(549, "magicians in que", 0, |x| x & 0xFFFF)?;
-
-            self.units.get_mut(Archer).count =
-                data.csimget(548, "archer count", 0, |x| x & 0xFFFF)?;
-            self.units.get_mut(Archer).in_training =
-                data.csimget(549, "archer in que", 0, |x| x >> 16)?;
-        }
-
         self.building_upgrade = FortressAction {
             start: data.cstget(573, "fortress upgrade begin", server_time)?,
             finish: data.cstget(572, "fortress upgrade end", server_time)?,
@@ -532,6 +497,29 @@ impl Fortress {
         }
         self.gem_search.cost =
             FortressCost::parse(data.skip(48, "gem_search_cost")?)?;
+        Ok(())
+    }
+
+    pub(crate) fn update_units(
+        &mut self,
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<(), SFError> {
+        for (idx, (typ, unit)) in self.units.iter_mut().enumerate() {
+            unit.count = data.csiget(idx, "ft unit count", 0)?;
+            unit.in_training = data.csiget(3 + idx, "ft unit in que", 0)?;
+            unit.training.start =
+                data.cstget(6 + idx, "ft training start", server_time)?;
+            unit.training.finish =
+                data.cstget(9 + idx, "ft training end", server_time)?;
+            let base_limit = data.csiget(12 + idx, "ft unit in que", 0)?;
+            unit.limit = base_limit
+                * match typ {
+                    FortressUnitType::Magician => 1,
+                    FortressUnitType::Archer => 2,
+                    FortressUnitType::Soldier => 3,
+                };
+        }
         Ok(())
     }
 }
