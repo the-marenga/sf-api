@@ -1020,10 +1020,10 @@ impl GameState {
                                 self.mail.combat_log.push(cle);
                             }
                             Err(e) => {
-                                warn!(
-                                    "Unable to parse combat log entry: \
-                                     {parts:?} - {e}"
-                                );
+                                // warn!(
+                                //     "Unable to parse combat log entry: \
+                                //      {parts:?} - {e}"
+                                // );
                             }
                         }
                     }
@@ -1610,10 +1610,15 @@ impl GameState {
                     )?;
                 }
                 "fortressunits" => {
-                     self.fortress.get_or_insert_default().update_units(
+                    self.fortress.get_or_insert_default().update_units(
                         &val.into_list("ft units")?,
                         server_time,
                     )?;
+                }
+                "fortress" => {
+                    self.fortress
+                        .get_or_insert_default()
+                        .update_new(&val.into_list("fortress")?, server_time)?;
                 }
                 // This is the extra bonus effect all treats get that day
                 x if x.contains("dungeonenemies") => {
@@ -1755,11 +1760,6 @@ impl GameState {
             data.cfpget(286, "character mount", |a| a & 0xFF)?;
         self.character.mount_end =
             data.cstget(451, "mount end", server_time)?;
-
-        if self.character.level >= 25 {
-            let fortress = self.fortress.get_or_insert_with(Default::default);
-            fortress.update(data, server_time)?;
-        }
 
         self.character.active_potions = ItemType::parse_active_potions(
             data.skip(493, "TODO")?,

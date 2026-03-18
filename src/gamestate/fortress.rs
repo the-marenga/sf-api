@@ -3,7 +3,6 @@ use std::time::Duration;
 
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
-use log::info;
 use num_derive::FromPrimitive;
 use strum::{EnumCount, EnumIter, IntoEnumIterator};
 
@@ -13,7 +12,6 @@ use super::{
 use crate::{
     PlayerId,
     gamestate::{CGet, EnumMapGet},
-    misc::soft_into,
 };
 
 /// The information about a characters fortress
@@ -395,59 +393,6 @@ impl Fortress {
         Ok(())
     }
 
-    pub(crate) fn update(
-        &mut self,
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<(), SFError> {
-        // Buildings
-        for (idx, typ) in FortressBuildingType::iter().enumerate() {
-            self.buildings.get_mut(typ).level =
-                data.csiget(524 + idx, "building lvl", 0)?;
-        }
-        self.hall_of_knights_level =
-            data.csiget(598, "hall of knights level", 0)?;
-
-        // Units
-        for (idx, typ) in FortressUnitType::iter().enumerate() {
-            let msg = "fortress unit training start";
-            self.units.get_mut(typ).training.start =
-                server_time.convert_to_local(data.cget(550 + idx, msg)?, msg);
-            let msg = "fortress unit training finish";
-            self.units.get_mut(typ).training.finish =
-                server_time.convert_to_local(data.cget(553 + idx, msg)?, msg);
-        }
-
-        self.building_upgrade = FortressAction {
-            start: data.cstget(573, "fortress upgrade begin", server_time)?,
-            finish: data.cstget(572, "fortress upgrade end", server_time)?,
-            cost: FortressCost::default(),
-            target: data.cfpget(571, "fortress building upgrade", |x| x - 1)?,
-        };
-
-        self.upgrades = data.csiget(581, "fortress lvl", 0)?;
-        self.honor = data.csiget(582, "fortress honor", 0)?;
-        let fortress_rank: i64 = data.csiget(583, "fortress rank", 0)?;
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        if fortress_rank > 0 {
-            self.rank = Some(fortress_rank as u32);
-        } else {
-            self.rank = None;
-        }
-
-        self.gem_search.start =
-            data.cstget(596, "gem search start", server_time)?;
-        self.gem_search.finish =
-            data.cstget(595, "gem search end", server_time)?;
-        self.gem_search.target =
-            GemType::parse(data.cget(594, "gem target")?, 0);
-
-        self.attack_target = data.cwiget(587, "fortress enemy")?;
-        self.attack_free_reroll =
-            data.cstget(586, "fortress attack reroll", server_time)?;
-        Ok(())
-    }
-
     pub(crate) fn update_unit_prices(
         &mut self,
         data: &[i64],
@@ -520,6 +465,58 @@ impl Fortress {
                     FortressUnitType::Soldier => 3,
                 };
         }
+        Ok(())
+    }
+
+    pub(crate) fn update_new(
+        &mut self,
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<(), SFError> {
+        // Buildings
+        for (idx, (_, building)) in self.buildings.iter_mut().enumerate() {
+            building.level = data.csiget(idx, "building lvl", 0)?;
+        }
+        let upgrade = &mut self.building_upgrade;
+        upgrade.target =
+            data.cfpget(12, "fortress building upgrade", |x| x - 1)?;
+        upgrade.finish =
+            data.cstget(13, "fortress upgrade end", server_time)?;
+        upgrade.start =
+            data.cstget(14, "fortress upgrade begin", server_time)?;
+
+        self.upgrades = data.csiget(15, "fortress lvl", 0)?;
+        self.honor = data.csiget(16, "fortress honor", 0)?;
+        let fortress_rank: i64 = data.csiget(17, "fortress rank", 0)?;
+
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        if fortress_rank > 0 {
+            self.rank = Some(fortress_rank as u32);
+        } else {
+            self.rank = None;
+        }
+        self.attack_free_reroll =
+            data.cstget(18, "fortress attack reroll", server_time)?;
+        self.attack_target = data.cwiget(19, "fortress enemy")?;
+
+        // 20 = 1541425816 ???
+        // 21 = 1751042620 ???
+
+        self.gem_search.target =
+            GemType::parse(data.cget(22, "gem target")?, 0);
+        self.gem_search.finish =
+            data.cstget(23, "gem search end", server_time)?;
+        self.gem_search.start =
+            data.cstget(24, "gem search start", server_time)?;
+        self.hall_of_knights_level =
+            data.csiget(25, "hall of knights level", 0)?;
+
+        // 26 = 14309
+
+        if data.len() > 27 {
+            log::warn!("fortress update has new values: {data:?}");
+        }
+
         Ok(())
     }
 }
