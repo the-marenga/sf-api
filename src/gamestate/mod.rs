@@ -472,9 +472,12 @@ impl GameState {
                     }
                 }
                 "witch" => {
+                    // old witch data without price
+                }
+                "witchshop" => {
                     self.witch
                         .get_or_insert_with(Default::default)
-                        .update(&val.into_list("witch")?, server_time)?;
+                        .update(&val.into_list("witch")?)?;
                 }
                 "underworldupgradeprice" => {
                     self.underworld
@@ -1839,9 +1842,6 @@ impl GameState {
             data.csimget(648, "calendar collected", 245, |a| a >> 16)?;
         self.specials.calendar.next_possible =
             data.cstget(649, "calendar next", server_time)?;
-
-        self.witch.get_or_insert_default().enchantment_price =
-            data.csiget(519, "enchantment price", u64::MAX)?;
 
         Ok(())
     }

@@ -407,24 +407,26 @@ pub struct Witch {
 pub struct EnchantmentIdent(pub(crate) NonZeroU8);
 
 impl Witch {
-    pub(crate) fn update(
-        &mut self,
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<(), SFError> {
+    pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
+        self.enchantment_price = data.csiget(35, "witch price", u64::MAX)?;
         self.required_item = None;
-        if data.cget(5, "w current item")? == 0 {
-            self.required_item =
-                ItemType::parse(data.skip(3, "witch item")?, server_time)?
-                    .and_then(|a| a.equipment_slot());
+        if data.cget(33, "w needs more")? == 0 {
+            let raw_required = data.cget(34, "w required")?;
+            for slot in EquipmentSlot::iter() {
+                let id = i64::from(slot.raw_id());
+                if id == raw_required {
+                    self.required_item = Some(slot);
+                    break;
+                }
+            }
         }
         if self.required_item.is_none() {
             self.cauldron_bubbling = true;
         } else {
             // I would like to offer the raw values here, but the -1 just
             // makes this annoying. A Option<(u32, u32)> is also weird
-            let current: i32 = data.ciget(1, "witch current")?;
-            let target: i32 = data.ciget(2, "witch target")?;
+            let current: i32 = data.ciget(2, "witch current")?;
+            let target: i32 = data.ciget(3, "witch target")?;
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
             if current < 0 || target <= 0 {
                 self.progress = 100;
@@ -435,9 +437,9 @@ impl Witch {
             }
         }
 
-        let e_count: u8 = data.ciget(7, "enchant count")?;
+        let e_count: u8 = data.ciget(4, "enchant count")?;
         for i in 0..e_count {
-            let iid = data.cget(9 + 3 * i as usize, "iid")? - 1;
+            let iid = data.cget(6 + 3 * i as usize, "iid")? - 1;
             let key = match iid {
                 0 => continue,
                 10 => Enchantment::SwordOfVengeance,
