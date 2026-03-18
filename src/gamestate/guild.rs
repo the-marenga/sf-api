@@ -1,8 +1,9 @@
 #![allow(clippy::module_name_repetitions)]
 use chrono::{DateTime, Local, NaiveTime};
-use enum_map::EnumMap;
+use enum_map::{Enum, EnumMap};
 use log::warn;
 use num_derive::FromPrimitive;
+use strum::{EnumIter, IntoEnumIterator};
 
 use super::{
     ArrSkip, AttributeType, CCGet, CFPGet, CGet, CSTGet, NormalCost, Potion,
@@ -35,17 +36,15 @@ pub struct Guild {
 
     /// The skill you yourself contribute to the guild
     pub own_treasure_skill: u16,
-    /// The price to pay to upgrade your treasure by one rank
-    pub own_treasure_upgrade: NormalCost,
     /// The total amount of treasure skill the guild has
     pub total_treasure_skill: u16,
-
     /// The skill you yourself contribute to the guild
     pub own_instructor_skill: u16,
-    /// The price to pay to upgrade your instructor by one rank
-    pub own_instructor_upgrade: NormalCost,
     /// The total amount of instructor skill the guild has
     pub total_instructor_skill: u16,
+
+    /// The price to pay to upgrade the given skill
+    pub upgrade_price: EnumMap<GuildSkill, NormalCost>,
 
     /// How many raids this guild has completed already
     pub finished_raids: u16,
@@ -347,14 +346,13 @@ impl Guild {
         &mut self,
         data: &[i64],
     ) -> Result<(), SFError> {
-        self.own_treasure_upgrade.silver =
-            data.csiget(0, "treasure upgr. silver", 0)?;
-        self.own_treasure_upgrade.mushrooms =
-            data.csiget(1, "treasure upgr. mush", 0)?;
-        self.own_instructor_upgrade.silver =
-            data.csiget(2, "instr upgr. silver", 0)?;
-        self.own_instructor_upgrade.mushrooms =
-            data.csiget(3, "instr upgr. mush", 0)?;
+        for (idx, skill) in GuildSkill::iter().enumerate() {
+            let skill = &mut self.upgrade_price[skill];
+            skill.silver =
+                data.csiget(idx * 2, "guild upgr. silver", u64::MAX)?;
+            skill.mushrooms =
+                data.csiget(1 + idx * 2, "guild upgr. mush", u16::MAX)?;
+        }
         Ok(())
     }
 
@@ -522,7 +520,7 @@ pub enum GuildRank {
 }
 
 /// Something the player can upgrade in the guild
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Enum, Eq, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 pub enum GuildSkill {
