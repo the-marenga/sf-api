@@ -1620,6 +1620,17 @@ impl GameState {
                         .get_or_insert_default()
                         .update_new(&val.into_list("fortress")?, server_time)?;
                 }
+                "wheel" => {
+                    let data: Vec<i64> = val.into_list("wheel")?;
+                    // [0] => 2 ??
+                    self.specials.wheel.spins_today =
+                        data.csiget(1, "lucky turns", 0)?;
+                    self.specials.wheel.next_free_spin =
+                        data.cstget(2, "next lucky turn", server_time)?;
+                }
+                x if x.contains("average") && x.ends_with("level") => {
+                    // We do not care about avg. item lvl
+                }
                 // This is the extra bonus effect all treats get that day
                 x if x.contains("dungeonenemies") => {
                     // I `think` we do not need this
@@ -1765,9 +1776,6 @@ impl GameState {
             data.skip(493, "TODO")?,
             server_time,
         );
-        self.specials.wheel.spins_today = data.csiget(579, "lucky turns", 0)?;
-        self.specials.wheel.next_free_spin =
-            data.cstget(580, "next lucky turn", server_time)?;
 
         self.character.mirror = Mirror::parse(data.cget(28, "mirror start")?);
         self.arena.next_free_fight =
