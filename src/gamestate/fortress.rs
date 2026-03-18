@@ -72,11 +72,6 @@ pub struct Fortress {
     pub attack_free_reroll: Option<DateTime<Local>>,
     /// The price in silver re-rolling costs
     pub opponent_reroll_price: u64,
-
-    /// The amount of stone currently in your secret storage
-    pub secret_storage_stone: u64,
-    /// The amount of wood currently in your secret storage
-    pub secret_storage_wood: u64,
 }
 
 /// The price an upgrade, or building something in the fortress costs. These
@@ -116,8 +111,20 @@ pub struct FortressResource {
     /// The maximum amount of this resource, that you can store. If `current ==
     /// limit`, you will not be able to collect resources from buildings
     pub limit: u64,
+    /// The maximum amount of this resource, that you can store in the fortress
+    /// after you upgrade the Heart of Darkness
+    pub limit_next_level: u64,
     /// Information about the production building, that produces this resource.
     pub production: FortressProduction,
+    /// The secret storage, available in the treasury
+    pub secret_storage: FortressSecretStorage,
+}
+
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FortressSecretStorage {
+    pub amount: u64,
+    pub limit: u64,
 }
 
 /// Information about the production of a resource in the fortress.  Note that
@@ -360,6 +367,33 @@ impl Fortress {
         }
     }
 
+    pub(crate) fn update_resources(
+        &mut self,
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<(), SFError> {
+        for (idx, (typ, resource)) in self.resources.iter_mut().enumerate() {
+            resource.production.last_collectable =
+                data.csiget(idx, "ft resource last collectable", 0)?;
+            resource.production.limit =
+                data.csiget(3 + idx, "ft resource production limit", 0)?;
+            resource.production.per_hour =
+                data.csiget(8 + idx, "ft resource per hour", 0)?;
+
+            if typ != FortressResourceType::Experience {
+                resource.limit =
+                    data.csiget(6 + idx, "ft resource limit", 0)?;
+                resource.limit_next_level =
+                    data.csiget(12 + idx, "ft resource per hour", 0)?;
+                resource.secret_storage.limit =
+                    data.csiget(14 + idx, "ft secret storage limit", 0)?;
+            }
+        }
+        self.last_collectable_updated =
+            data.cstget(11, "ft resource update", server_time)?;
+        Ok(())
+    }
+
     pub(crate) fn update(
         &mut self,
         data: &[i64],
@@ -419,26 +453,6 @@ impl Fortress {
                 data.csimget(549, "archer in que", 0, |x| x >> 16)?;
         }
 
-        // Items
-        for (idx, typ) in FortressResourceType::iter().enumerate() {
-            if typ != FortressResourceType::Experience {
-                self.resources.get_mut(typ).production.per_hour_next_lvl =
-                    data.csiget(584 + idx, "max saved next resource", 0)?;
-            }
-
-            self.resources.get_mut(typ).limit =
-                data.csiget(568 + idx, "resource max save", 0)?;
-            self.resources.get_mut(typ).production.last_collectable =
-                data.csiget(562 + idx, "resource in collectable", 0)?;
-            self.resources.get_mut(typ).production.limit =
-                data.csiget(565 + idx, "resource max in store", 0)?;
-            self.resources.get_mut(typ).production.per_hour =
-                data.csiget(574 + idx, "resource per hour", 0)?;
-        }
-
-        self.last_collectable_updated =
-            data.cstget(577, "fortress collection update", server_time)?;
-
         self.building_upgrade = FortressAction {
             start: data.cstget(573, "fortress upgrade begin", server_time)?,
             finish: data.cstget(572, "fortress upgrade end", server_time)?,
@@ -466,13 +480,6 @@ impl Fortress {
         self.attack_target = data.cwiget(587, "fortress enemy")?;
         self.attack_free_reroll =
             data.cstget(586, "fortress attack reroll", server_time)?;
-
-        // Secret storage
-        self.secret_storage_wood =
-            data.csiget(698, "secret storage wood", 0)?;
-        self.secret_storage_stone =
-            data.csiget(700, "secret storage stone", 0)?;
-
         Ok(())
     }
 
