@@ -1638,6 +1638,22 @@ impl GameState {
                     self.tavern.dice_game.remaining =
                         data.csiget(1, "rem dice games", 0)?;
                 }
+                "charactergroup" => {
+                    let data: Vec<i64> = val.into_list("c group")?;
+                    let guild = self.guild.get_or_insert_with(Default::default);
+                    guild.own_treasure_skill =
+                        data.csiget(0, "own treasure skill", 0)?;
+                    guild.own_instructor_skill =
+                        data.csiget(1, "own instruction skill", 0)?;
+                    guild.hydra.next_battle =
+                        data.cstget(2, "pet battle", server_time)?;
+                    guild.hydra.remaining_fights =
+                        data.csiget(3, "remaining pet battles", 0)?;
+                    guild.own_pet_lvl = data.csiget(4, "own pet lvl", 0)?;
+                    guild.joined =
+                        data.cstget(5, "guild joined", server_time)?;
+                    // [6] => ????
+                }
                 x if x.contains("average") && x.ends_with("level") => {
                     // We do not care about avg. item lvl
                 }
@@ -1804,10 +1820,6 @@ impl GameState {
             *val = data.csiget(599 + idx, "enemy_id", 0)?;
         }
 
-        if let Some(jg) = data.cstget(443, "guild join date", server_time)? {
-            self.guild.get_or_insert_with(Default::default).joined = jg;
-        }
-
         self.dungeons.next_free_fight =
             data.cstget(459, "dungeon timer", server_time)?;
 
@@ -1822,21 +1834,11 @@ impl GameState {
             .player_hp_bonus =
             data.csimget(445, "portal hp bonus", 0, |a| a >> 24)?;
 
-        let guild = self.guild.get_or_insert_with(Default::default);
-        // TODO: This might be better as & 0xFF?
-        guild.portal.damage_bonus =
+        self.guild
+            .get_or_insert_with(Default::default)
+            .portal
+            .damage_bonus =
             data.cimget(445, "portal dmg bonus", |a| (a >> 16) % 256)?;
-        guild.own_treasure_skill = data.csiget(623, "own treasure skill", 0)?;
-        guild.own_instructor_skill =
-            data.csiget(624, "own instruction skill", 0)?;
-        guild.hydra.next_battle =
-            data.cstget(627, "pet battle", server_time)?;
-        guild.hydra.remaining_fights =
-            data.csiget(628, "remaining pet battles", 0)?;
-
-        // self.character.druid_mask = data.cfpget(653, "druid mask", |a| a)?;
-        // self.character.bard_instrument =
-        //     data.cfpget(701, "bard instrument", |a| a)?;
 
         self.specials.calendar.collected =
             data.csimget(648, "calendar collected", 245, |a| a >> 16)?;
