@@ -328,7 +328,6 @@ impl GameState {
                     }
                     let toilet = self.tavern.toilet.get_or_insert_default();
                     toilet.sacrifices_left = vals[2] as u32;
-                    toilet.used = toilet.sacrifices_left == 0;
                 }
                 "companionequipment" => {
                     let data: Vec<i64> = val.into_list("quest items")?;
@@ -1673,6 +1672,18 @@ impl GameState {
                     self.character.active_potions =
                         items::parse_active_potions_new(&data, server_time);
                 }
+                "arcanetoilet" => {
+                    let data: Vec<i64> = val.into_list("toilet")?;
+                      
+                    // Toilet remains none as long as its level is 0
+                    let toilet_lvl = data.cget(0, "toilet lvl")?;
+                    if toilet_lvl > 0 {
+                        self.tavern
+                            .toilet
+                            .get_or_insert_with(Default::default)
+                            .update(&data, server_time)?;
+                    }
+                }
                 x if x.contains("average") && x.ends_with("level") => {
                     // We do not care about avg. item lvl
                 }
@@ -1816,15 +1827,6 @@ impl GameState {
             data.cstget(451, "mount end", server_time)?;
 
         self.character.mirror = Mirror::parse(data.cget(28, "mirror start")?);
-
-        // Toilet remains none as long as its level is 0
-        let toilet_lvl = data.cget(491, "toilet lvl")?;
-        if toilet_lvl > 0 {
-            self.tavern
-                .toilet
-                .get_or_insert_with(Default::default)
-                .update(data)?;
-        }
 
         self.dungeons.next_free_fight =
             data.cstget(459, "dungeon timer", server_time)?;

@@ -299,9 +299,6 @@ impl CurrentAction {
 #[derive(Debug, Clone, Default, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Toilet {
-    // Checks if all sacrifices today have been used up
-    #[deprecated(note = "You should use sacrifices_left instead")]
-    pub used: bool,
     /// The level the aura is at currently
     pub aura: u32,
     /// The amount of mana currently in the toilet
@@ -313,10 +310,12 @@ pub struct Toilet {
 }
 
 impl Toilet {
-    pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
-        self.aura = data.csiget(491, "aura level", 0)?;
-        self.mana_currently = data.csiget(492, "mana now", 0)?;
-        self.mana_total = data.csiget(515, "mana missing", 1000)?;
+    pub(crate) fn update(&mut self, data: &[i64], server_time: ServerTime) -> Result<(), SFError> {
+        self.aura = data.csiget(0, "aura level", 0)?;
+        self.mana_currently = data.csiget(1, "mana now", 0)?;
+        // TODO: What is this? Last time we flushed/got an item? 
+        let _unknown_time = data.cstget(2, "mana time", server_time)?;
+        self.mana_total = data.csiget(3, "mana missing", 1000)?;
         Ok(())
     }
 }
