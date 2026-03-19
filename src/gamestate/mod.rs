@@ -1621,7 +1621,7 @@ impl GameState {
                 "fortress" => {
                     self.fortress
                         .get_or_insert_default()
-                        .update_new(&val.into_list("fortress")?, server_time)?;
+                        .update(&val.into_list("fortress")?, server_time)?;
                 }
                 "wheel" => {
                     let data: Vec<i64> = val.into_list("wheel")?;
@@ -1653,6 +1653,20 @@ impl GameState {
                     guild.joined =
                         data.cstget(5, "guild joined", server_time)?;
                     // [6] => ????
+                }
+                "arena" => {
+                    let data: Vec<i64> = val.into_list("arena")?;
+                    // 1771873930/0/506799/725/412904/1
+                    self.arena.next_free_fight =
+                        data.cstget(0, "next battle time", server_time)?;
+                    self.arena.fights_for_xp =
+                        data.csiget(1, "arena xp fights", 0)?;
+                    for (idx, val) in
+                        self.arena.enemy_ids.iter_mut().enumerate()
+                    {
+                        *val = data.csiget(2 + idx, "arena enemy id", 0)?;
+                    }
+                    // [5] => ??
                 }
                 x if x.contains("average") && x.ends_with("level") => {
                     // We do not care about avg. item lvl
@@ -1766,8 +1780,6 @@ impl GameState {
         self.character.max_damage = data.csiget(449, "max damage", 0)?;
 
         self.character.level = data.csimget(7, "level", 0, |a| a & 0xFFFF)?;
-        self.arena.fights_for_xp =
-            data.csimget(7, "arena xp fights", 0, |a| a >> 16)?;
 
         self.character.experience = data.csiget(8, "experience", 0)?;
         self.character.next_level_xp = data.csiget(9, "xp to next lvl", 0)?;
@@ -1804,8 +1816,6 @@ impl GameState {
         );
 
         self.character.mirror = Mirror::parse(data.cget(28, "mirror start")?);
-        self.arena.next_free_fight =
-            data.cstget(460, "next battle time", server_time)?;
 
         // Toilet remains none as long as its level is 0
         let toilet_lvl = data.cget(491, "toilet lvl")?;
@@ -1814,10 +1824,6 @@ impl GameState {
                 .toilet
                 .get_or_insert_with(Default::default)
                 .update(data)?;
-        }
-
-        for (idx, val) in self.arena.enemy_ids.iter_mut().enumerate() {
-            *val = data.csiget(599 + idx, "enemy_id", 0)?;
         }
 
         self.dungeons.next_free_fight =

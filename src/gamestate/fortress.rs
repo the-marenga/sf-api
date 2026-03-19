@@ -468,7 +468,7 @@ impl Fortress {
         Ok(())
     }
 
-    pub(crate) fn update_new(
+    pub(crate) fn update(
         &mut self,
         data: &[i64],
         server_time: ServerTime,
