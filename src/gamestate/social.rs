@@ -516,7 +516,7 @@ impl OtherPlayer {
         self.race = data.cfpuget(18, "char race", |a| a)?;
         // 2
         //////
-        self.class = data.cfpuget(20, "character class", |a| a)?;
+        self.class = data.cfpuget(20, "character class", |a| a - 1)?;
         self.mount = data.cfpget(21, "character mount", |a| a & 0xFF)?;
         // 3
         // 0

@@ -331,6 +331,10 @@ impl GameState {
                 }
                 "companionequipment" => {
                     let data: Vec<i64> = val.into_list("quest items")?;
+                    if data.is_empty() {
+                        continue;
+                    }
+                    log::info!("{data:?}");
                     for (idx, cmp) in self
                         .dungeons
                         .companions
@@ -1759,7 +1763,7 @@ impl GameState {
                     // 2
                     // ////
                     self.character.class =
-                        data.cfpuget(20, "character class", |a| a)?;
+                        data.cfpuget(20, "character class", |a| a - 1)?;
                     self.character.mount =
                         data.cfpget(21, "character mount", |a| a & 0xFF)?;
                     // 3
