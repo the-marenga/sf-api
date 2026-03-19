@@ -13,8 +13,7 @@ use super::{
     character::{Mount, Portrait},
     fortress::FortressBuildingType,
     guild::GuildRank,
-    items::{Equipment, ItemType},
-    unlockables::Mirror,
+    items::Equipment,
 };
 use crate::{PlayerId, misc::*};
 
@@ -404,8 +403,6 @@ pub struct OtherPlayer {
     pub class: Class,
     pub race: Race,
 
-    pub mirror: Mirror,
-
     /// None if they do not have a scrapbook
     pub scrapbook_count: Option<u32>,
     pub active_potions: [Option<Potion>; 3],
@@ -476,7 +473,6 @@ impl OtherPlayer {
         op.rank = data.ciget(6, "other rank")?;
         op.race = data.cfpuget(18, "other race", |a| a)?;
         op.portrait = Portrait::parse(data.skip(8, "other portrait")?)?;
-        op.mirror = Mirror::parse(data.cget(19, "other mirror")?);
         op.class = data.cfpuget(20, "other class", |a| a - 1)?;
         update_enum_map(
             &mut op.base_attributes,

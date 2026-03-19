@@ -877,38 +877,6 @@ impl PetStats {
     }
 }
 
-/// The current state of the mirror
-#[derive(Debug, Clone, Copy, strum::EnumCount, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum Mirror {
-    /// The player is still collecting the mirror pieces
-    Pieces {
-        /// The amount of pieces the character has found
-        amount: u8,
-    },
-    /// The player has found all mirror pieces and thus has a working mirror
-    #[default]
-    Full,
-}
-
-impl Mirror {
-    pub(crate) fn parse(i: i64) -> Mirror {
-        /// Bitmask to cover bits 20 to 32, which is where each bit set is one
-        /// mirror piece found
-        const MIRROR_PIECES_MASK: i64 = 0xFFF8_0000;
-
-        if i & (1 << 8) != 0 {
-            return Mirror::Full;
-        }
-        Mirror::Pieces {
-            amount: (i & MIRROR_PIECES_MASK)
-                .count_ones()
-                .try_into()
-                .unwrap_or(0),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Unlockable {

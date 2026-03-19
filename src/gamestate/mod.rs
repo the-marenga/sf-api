@@ -15,7 +15,7 @@ use std::{borrow::Borrow, collections::HashSet};
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use enum_map::EnumMap;
-use log::{error, warn};
+use log::{error, info, warn};
 use num_traits::FromPrimitive;
 use strum::{EnumCount, IntoEnumIterator};
 
@@ -1674,7 +1674,7 @@ impl GameState {
                 }
                 "arcanetoilet" => {
                     let data: Vec<i64> = val.into_list("toilet")?;
-                      
+
                     // Toilet remains none as long as its level is 0
                     let toilet_lvl = data.cget(0, "toilet lvl")?;
                     if toilet_lvl > 0 {
@@ -1683,6 +1683,47 @@ impl GameState {
                             .get_or_insert_with(Default::default)
                             .update(&data, server_time)?;
                     }
+                }
+                "characterstatus" => {
+                    let data: Vec<i64> = val.into_list("char status")?;
+                    info!("{data:?}");
+                    // 1
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 11   // [13]??
+                    // 6000 // [456]  
+                    // 0
+                    self.specials.calendar.collected =
+                        data.csiget(8, "calendar collected", 245)?;
+                    self.specials.calendar.next_possible =
+                        data.cstget(9, "calendar next", server_time)?;
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 1513       // was [15]
+                    // 1541087831 // acc creation time?
+                    // 0
+                    // 0
+                    // 0
+                    self.pets
+                        .get_or_insert_with(Default::default)
+                        .next_free_exploration =
+                        data.cstget(20, "pet next free exp", server_time)?;
+                    self.dungeons.next_free_fight =
+                        data.cstget(21, "dungeon timer", server_time)?;
+                    // 0
+                    // 1
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 0
                 }
                 x if x.contains("average") && x.ends_with("level") => {
                     // We do not care about avg. item lvl
@@ -1825,16 +1866,7 @@ impl GameState {
             data.cfpget(286, "character mount", |a| a & 0xFF)?;
         self.character.mount_end =
             data.cstget(451, "mount end", server_time)?;
-
-        self.character.mirror = Mirror::parse(data.cget(28, "mirror start")?);
-
-        self.dungeons.next_free_fight =
-            data.cstget(459, "dungeon timer", server_time)?;
-
-        self.pets
-            .get_or_insert_with(Default::default)
-            .next_free_exploration =
-            data.cstget(660, "pet next free exp", server_time)?;
+        dbg!(data.iter().position(|x| *x == 11).unwrap());
 
         self.dungeons
             .portal
@@ -1847,11 +1879,6 @@ impl GameState {
             .portal
             .damage_bonus =
             data.cimget(445, "portal dmg bonus", |a| (a >> 16) % 256)?;
-
-        self.specials.calendar.collected =
-            data.csimget(648, "calendar collected", 245, |a| a >> 16)?;
-        self.specials.calendar.next_possible =
-            data.cstget(649, "calendar next", server_time)?;
 
         Ok(())
     }
