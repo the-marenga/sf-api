@@ -568,6 +568,7 @@ pub enum CombatMessageType {
     WonFight = 7,
     FortressFight = 8,
     FortressDefense = 9,
+    ShadowWorld = 12,
     FortressDefenseAlreadyCountered = 109,
     PetAttack = 14,
     PetDefense = 15,
@@ -601,15 +602,16 @@ impl CombatLogEntry {
     ) -> Result<CombatLogEntry, SFError> {
         let msg_id = data.cfsuget(0, "combat msg_id")?;
         let battle_t: i64 = data.cfsuget(3, "battle t")?;
-        let mt = FromPrimitive::from_i64(battle_t).ok_or_else(|| {
-            SFError::ParsingError("combat mt", battle_t.to_string())
-        })?;
         let time_stamp: i64 = data.cfsuget(4, "combat log time")?;
         let time = server_time
             .convert_to_local(time_stamp, "combat time")
             .ok_or_else(|| {
                 SFError::ParsingError("combat time", time_stamp.to_string())
             })?;
+
+        let mt = FromPrimitive::from_i64(battle_t).ok_or_else(|| {
+            SFError::ParsingError("combat mt", format!("{battle_t} @ {time:?}"))
+        })?;
 
         Ok(CombatLogEntry {
             msg_id,

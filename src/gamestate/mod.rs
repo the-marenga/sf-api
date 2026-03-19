@@ -15,7 +15,7 @@ use std::{borrow::Borrow, collections::HashSet};
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use enum_map::EnumMap;
-use log::{error, info, warn};
+use log::{error, warn};
 use num_traits::FromPrimitive;
 use strum::{EnumCount, IntoEnumIterator};
 
@@ -274,7 +274,7 @@ impl GameState {
                 }
                 "cryptoid not found" => return Err(SFError::ConnectionError),
                 "ownplayersave" => {
-                    self.update_player_save(&val.into_list("player save")?)?;
+                    // Goodbye old friend...
                 }
                 "owngroupname" => self
                     .guild
@@ -1022,10 +1022,10 @@ impl GameState {
                                 self.mail.combat_log.push(cle);
                             }
                             Err(e) => {
-                                // warn!(
-                                //     "Unable to parse combat log entry: \
-                                //      {parts:?} - {e}"
-                                // );
+                                warn!(
+                                    "Unable to parse combat log entry: \
+                                     {parts:?} - {e}"
+                                );
                             }
                         }
                     }
@@ -1686,15 +1686,20 @@ impl GameState {
                 }
                 "characterstatus" => {
                     let data: Vec<i64> = val.into_list("char status")?;
-                    info!("{data:?}");
-                    // 1
-                    // 0
-                    // 0
-                    // 0
-                    // 0
-                    // 11   // [13]??
-                    // 6000 // [456]  
-                    // 0
+
+                    self.tavern.current_action = CurrentAction::parse(
+                        data.cget(1, "action id")?,
+                        data.cget(2, "action sec")?,
+                        data.cstget(3, "current action time", server_time)?,
+                    );
+
+                    // NOTE: [4] contains the start
+                    self.tavern.beer_max = data.csiget(5, "beer total", 0)?;
+
+                    self.tavern.thirst_for_adventure_sec =
+                        data.csiget(6, "remaining ALU", 0)?;
+                    self.tavern.beer_drunk =
+                        data.csiget(7, "beer drunk count", 0)?;
                     self.specials.calendar.collected =
                         data.csiget(8, "calendar collected", 245)?;
                     self.specials.calendar.next_possible =
@@ -1724,6 +1729,117 @@ impl GameState {
                     // 0
                     // 0
                     // 0
+                }
+                "ownplayersavecharacter" => {
+                    let data: Vec<i64> = val.into_list("char save")?;
+
+                    // 1482984989 // creation time?
+                    self.character.player_id =
+                        data.csiget(1, "player id", 0)?;
+                    // 0
+                    self.character.level =
+                        data.csimget(3, "level", 0, |a| a & 0xFFFF)?;
+                    self.character.experience =
+                        data.csiget(4, "experience", 0)?;
+                    self.character.next_level_xp =
+                        data.csiget(5, "xp to next lvl", 0)?;
+                    self.character.honor = data.csiget(6, "honor", 0)?;
+                    self.character.rank = data.csiget(7, "rank", 0)?;
+                    self.character.portrait =
+                        Portrait::parse(data.skip(8, "portrait")?)
+                            .unwrap_or_default();
+                    ///// Portrait
+                    // 4
+                    // 206
+                    // 203
+                    // 2
+                    // 0
+                    // 2
+                    // 7
+                    // 2
+                    // 0
+                    // 0
+                    self.character.race =
+                        data.cfpuget(18, "char race", |a| a)?;
+                    // 2
+                    // ////
+                    self.character.class =
+                        data.cfpuget(20, "character class", |a| a)?;
+                    self.character.mount =
+                        data.cfpget(21, "character mount", |a| a & 0xFF)?;
+                    // 3
+                    // 0
+                    self.character.armor = data.csiget(23, "total armor", 0)?;
+                    self.character.min_damage =
+                        data.csiget(24, "min damage", 0)?;
+                    self.character.max_damage =
+                        data.csiget(25, "max damage", 0)?;
+                    self.guild
+                        .get_or_insert_with(Default::default)
+                        .portal
+                        .damage_bonus =
+                        data.cimget(26, "portal dmg bonus", |a| a)?;
+                    // 4280492 ??
+                    self.dungeons
+                        .portal
+                        .get_or_insert_with(Default::default)
+                        .player_hp_bonus =
+                        data.csimget(28, "portal hp bonus", 0, |a| a)?;
+                    self.character.mount_end =
+                        data.cstget(29, "mount end", server_time)?;
+                    update_enum_map(
+                        &mut self.character.attribute_basis,
+                        data.skip(30, "char attr basis")?,
+                    );
+                    update_enum_map(
+                        &mut self.character.attribute_additions,
+                        data.skip(35, "char attr adds")?,
+                    );
+                    update_enum_map(
+                        &mut self.character.attribute_times_bought,
+                        data.skip(40, "char attr tb")?,
+                    );
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 1
+                    // 17
+                    // 0
+                    // 0
+                    // 0
+                    // 66
+                    // 0
+                    // 7
+                    // 18
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 80315 // guild_id ?
+                    // 12122
+                    // 0
+                    // 31
+                    // 15
+                }
+                "adventure" => {
+                    let data: Vec<i64> = val.into_list("char save")?;
+                    // 198 - Might be the person to give you the quest?
+                    // 198 - ??
+                    for (slice, quest) in data
+                        .skip(2, "quests")?
+                        .chunks_exact(7)
+                        .zip(&mut self.tavern.quests)
+                    {
+                        quest.update(slice)?;
+                    }
+                }
+                "events" => {
+                    // Information about the currently ongoing major event
+                    // (I think)
                 }
                 x if x.contains("average") && x.ends_with("level") => {
                     // We do not care about avg. item lvl
@@ -1817,70 +1933,6 @@ impl GameState {
                 relation,
             });
         }
-    }
-    pub(crate) fn update_player_save(
-        &mut self,
-        data: &[i64],
-    ) -> Result<(), SFError> {
-        let server_time = self.server_time();
-        if data.len() < 700 {
-            warn!("Skipping account update");
-            return Ok(());
-        }
-
-        self.character.player_id = data.csiget(1, "player id", 0)?;
-        self.character.portrait =
-            Portrait::parse(data.skip(17, "TODO")?).unwrap_or_default();
-
-        self.character.armor = data.csiget(447, "total armor", 0)?;
-        self.character.min_damage = data.csiget(448, "min damage", 0)?;
-        self.character.max_damage = data.csiget(449, "max damage", 0)?;
-
-        self.character.level = data.csimget(7, "level", 0, |a| a & 0xFFFF)?;
-
-        self.character.experience = data.csiget(8, "experience", 0)?;
-        self.character.next_level_xp = data.csiget(9, "xp to next lvl", 0)?;
-        self.character.honor = data.csiget(10, "honor", 0)?;
-        self.character.rank = data.csiget(11, "rank", 0)?;
-        self.character.class =
-            data.cfpuget(29, "character class", |a| (a & 0xFF) - 1)?;
-        self.character.race =
-            data.cfpuget(27, "character race", |a| a & 0xFF)?;
-
-        self.tavern.update(data, server_time)?;
-
-        update_enum_map(
-            &mut self.character.attribute_basis,
-            data.skip(30, "char attr basis")?,
-        );
-        update_enum_map(
-            &mut self.character.attribute_additions,
-            data.skip(35, "char attr adds")?,
-        );
-        update_enum_map(
-            &mut self.character.attribute_times_bought,
-            data.skip(40, "char attr tb")?,
-        );
-
-        self.character.mount =
-            data.cfpget(286, "character mount", |a| a & 0xFF)?;
-        self.character.mount_end =
-            data.cstget(451, "mount end", server_time)?;
-        dbg!(data.iter().position(|x| *x == 11).unwrap());
-
-        self.dungeons
-            .portal
-            .get_or_insert_with(Default::default)
-            .player_hp_bonus =
-            data.csimget(445, "portal hp bonus", 0, |a| a >> 24)?;
-
-        self.guild
-            .get_or_insert_with(Default::default)
-            .portal
-            .damage_bonus =
-            data.cimget(445, "portal dmg bonus", |a| (a >> 16) % 256)?;
-
-        Ok(())
     }
 
     pub(crate) fn update_gttime(

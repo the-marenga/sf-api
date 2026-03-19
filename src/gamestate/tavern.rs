@@ -4,8 +4,7 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
 use super::{
-    ArrSkip, CCGet, CFPGet, CGet, CSTGet, ExpeditionSetting, SFError,
-    ServerTime, items::Item,
+    CCGet, CFPGet, CSTGet, ExpeditionSetting, SFError, ServerTime, items::Item,
 };
 use crate::{
     command::{DiceReward, DiceType},
@@ -149,27 +148,6 @@ impl Tavern {
     pub fn can_change_questing_preference(&self) -> bool {
         self.thirst_for_adventure_sec == 6000 && self.beer_drunk == 0
     }
-
-    pub(crate) fn update(
-        &mut self,
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<(), SFError> {
-        self.current_action = CurrentAction::parse(
-            data.cget(45, "action id")? & 0xFF,
-            data.cget(46, "action sec")? & 0xFF,
-            data.cstget(47, "current action time", server_time)?,
-        );
-        self.thirst_for_adventure_sec = data.csiget(456, "remaining ALU", 0)?;
-        self.beer_drunk = data.csiget(457, "beer drunk count", 0)?;
-        self.beer_max = data.csiget(13, "beer total", 0)?;
-
-        for (qidx, quest) in self.quests.iter_mut().enumerate() {
-            let quest_start = data.skip(235 + qidx, "tavern quest")?;
-            quest.update(quest_start)?;
-        }
-        Ok(())
-    }
 }
 
 /// One of the three possible quests in the tavern
@@ -228,13 +206,14 @@ impl Quest {
     }
 
     pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
-        self.base_length = data.csiget(6, "quest length", 100_000)?;
-        self.base_silver = data.csiget(48, "quest silver", 0)?;
-        self.base_experience = data.csiget(45, "quest xp", 0)?;
+        // NOTE: I think [0], [1] was just flavor text
+        self.monster_id = data.csimget(2, "quest monster id", 0, |a| -a)?;
         self.location_id = data
             .cfpget(3, "quest location id", |a| a)?
             .unwrap_or_default();
-        self.monster_id = data.csimget(0, "quest monster id", 0, |a| -a)?;
+        self.base_length = data.csiget(4, "quest length", 100_000)?;
+        self.base_experience = data.csiget(5, "quest xp", 0)?;
+        self.base_silver = data.csiget(6, "quest silver", 0)?;
         Ok(())
     }
 }
@@ -310,10 +289,14 @@ pub struct Toilet {
 }
 
 impl Toilet {
-    pub(crate) fn update(&mut self, data: &[i64], server_time: ServerTime) -> Result<(), SFError> {
+    pub(crate) fn update(
+        &mut self,
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<(), SFError> {
         self.aura = data.csiget(0, "aura level", 0)?;
         self.mana_currently = data.csiget(1, "mana now", 0)?;
-        // TODO: What is this? Last time we flushed/got an item? 
+        // TODO: What is this? Last time we flushed/got an item?
         let _unknown_time = data.cstget(2, "mana time", server_time)?;
         self.mana_total = data.csiget(3, "mana missing", 1000)?;
         Ok(())

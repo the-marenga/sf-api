@@ -1403,8 +1403,7 @@ pub(crate) fn parse_active_potions(
         Some(Potion {
             typ: PotionType::parse(data[i])?,
             size: PotionSize::parse(data[i])?,
-            expires: server_time
-                .convert_to_local(data[3 + i], "potion exp"),
+            expires: server_time.convert_to_local(data[3 + i], "potion exp"),
         })
     })
 }
@@ -1421,8 +1420,7 @@ pub(crate) fn parse_active_potions_new(
         Some(Potion {
             typ: PotionType::parse(data[i + 1])?,
             size: PotionSize::parse(data[i + 1])?,
-            expires: server_time
-                .convert_to_local(data[4 + i], "potion exp"),
+            expires: server_time.convert_to_local(data[4 + i], "potion exp"),
             // 6 => effect, but no idea why we would want to use that
         })
     })
