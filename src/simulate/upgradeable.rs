@@ -146,11 +146,11 @@ impl UpgradeableFighter {
             is_companion: false,
             level: other.level,
             class: other.class,
-            attribute_basis: other.base_attributes,
+            attribute_basis: other.attribute_basis,
             equipment: other.equipment.clone(),
             active_potions: other.active_potions,
             pet_attribute_bonus_perc: other
-                .pet_attribute_bonus_perc
+                .attribute_pet_bonus
                 .map(|_, a| f64::from(a) / 100.0),
             portal_hp_bonus: other.portal_hp_bonus,
             portal_dmg_bonus: other.portal_dmg_bonus,

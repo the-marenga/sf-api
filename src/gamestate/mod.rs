@@ -555,10 +555,7 @@ impl GameState {
                         )?;
                 }
                 "soldieradvice" => {
-                    other_player
-                        .get_or_insert_with(Default::default)
-                        .soldier_advice =
-                        val.into::<u16>("other player soldier advice").ok();
+                    // Replaced
                 }
                 "owngroupdescription" => self
                     .guild
@@ -1066,34 +1063,29 @@ impl GameState {
                             ),
                         )?);
                 }
+                "otherplayersavecharacter" => {
+                    other_player
+                        .get_or_insert_default()
+                        .update(&val.into_list("other player")?, server_time)?;
+                }
+                "otherplayersavepotions" => {
+                    other_player.get_or_insert_default().active_potions =
+                        items::parse_active_potions(
+                            &val.into_list("other potions")?,
+                            server_time,
+                        );
+                }
                 "otherplayer" => {
-                    let mut op = match OtherPlayer::parse(
-                        &val.into_list("other player")?,
-                        server_time,
-                    ) {
-                        Ok(op) => op,
-                        Err(e) => {
-                            warn!("{e}");
-                            // Should we err here?
-                            other_player = None;
-                            continue;
-                        }
-                    };
-
-                    // TODO: This sucks! Change parse -> update
-                    if let Some(oop) = other_player {
-                        op.name = oop.name;
-                        op.description = oop.description;
-                        op.guild = oop.guild;
-                        op.relationship = oop.relationship;
-                        op.pet_attribute_bonus_perc =
-                            oop.pet_attribute_bonus_perc;
-                        op.wall_combat_lvl = oop.wall_combat_lvl;
-                        op.fortress_rank = oop.fortress_rank;
-                        op.soldier_advice = oop.soldier_advice;
-                        op.equipment = oop.equipment;
+                    let data: Vec<i64> = val.into_list("other player")?;
+                    #[allow(deprecated)]
+                    {
+                        other_player.get_or_insert_default().guild_joined =
+                            data.cstget(
+                                166,
+                                "other joined guild",
+                                server_time,
+                            )?;
                     }
-                    other_player = Some(op);
                 }
                 "otherplayerfriendstatus" => {
                     other_player
@@ -1129,13 +1121,17 @@ impl GameState {
                         Some(val.into("mrank under")?);
                 }
                 "otherplayerfortressrank" => {
-                    other_player
-                        .get_or_insert_with(Default::default)
-                        .fortress_rank =
-                        match val.into::<i64>("other player fortress rank")? {
-                            ..=-1 => None,
-                            x => Some(x.try_into().unwrap_or(1)),
-                        };
+                    match val.into::<i64>("other player fortress rank")? {
+                        ..=-1 => {}
+                        x => {
+                            let rank = x.try_into().unwrap_or(1);
+                            other_player
+                                .get_or_insert_default()
+                                .fortress
+                                .get_or_insert_default()
+                                .rank = rank;
+                        }
+                    }
                 }
                 "iadungeontime" => {
                     // No idea what this is measuring. Seems to just be a few
@@ -1655,7 +1651,6 @@ impl GameState {
                 }
                 "arena" => {
                     let data: Vec<i64> = val.into_list("arena")?;
-                    // 1771873930/0/506799/725/412904/1
                     self.arena.next_free_fight =
                         data.cstget(0, "next battle time", server_time)?;
                     self.arena.fights_for_xp =
@@ -1670,7 +1665,7 @@ impl GameState {
                 "ownplayersavepotions" => {
                     let data: Vec<i64> = val.into_list("potions")?;
                     self.character.active_potions =
-                        items::parse_active_potions_new(&data, server_time);
+                        items::parse_active_potions(&data, server_time);
                 }
                 "arcanetoilet" => {
                     let data: Vec<i64> = val.into_list("toilet")?;
@@ -1733,7 +1728,7 @@ impl GameState {
                 "ownplayersavecharacter" => {
                     let data: Vec<i64> = val.into_list("char save")?;
 
-                    // 1482984989 // creation time?
+                    // 1482984989 // creation time? secret id?
                     self.character.player_id =
                         data.csiget(1, "player id", 0)?;
                     // 0
@@ -1819,11 +1814,11 @@ impl GameState {
                     // 0
                     // 0
                     // 0
-                    // 80315 // guild_id ?
-                    // 12122
+                    // 80315    // guild_id ?
+                    // 12122    // sb count
                     // 0
                     // 31
-                    // 15
+                    // 15       // gladiators
                 }
                 "adventure" => {
                     let data: Vec<i64> = val.into_list("char save")?;
@@ -1840,6 +1835,11 @@ impl GameState {
                 "events" => {
                     // Information about the currently ongoing major event
                     // (I think)
+                }
+                "otherplayerfortressinfo" => {
+                    other_player
+                        .get_or_insert_default()
+                        .update_fortress(&val.into_list("other ft")?)?;
                 }
                 x if x.contains("average") && x.ends_with("level") => {
                     // We do not care about avg. item lvl

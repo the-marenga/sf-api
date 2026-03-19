@@ -1395,23 +1395,6 @@ pub(crate) fn parse_active_potions(
     data: &[i64],
     server_time: ServerTime,
 ) -> [Option<Potion>; 3] {
-    if data.len() < 6 {
-        return Default::default();
-    }
-    #[allow(clippy::indexing_slicing)]
-    core::array::from_fn(move |i| {
-        Some(Potion {
-            typ: PotionType::parse(data[i])?,
-            size: PotionSize::parse(data[i])?,
-            expires: server_time.convert_to_local(data[3 + i], "potion exp"),
-        })
-    })
-}
-
-pub(crate) fn parse_active_potions_new(
-    data: &[i64],
-    server_time: ServerTime,
-) -> [Option<Potion>; 3] {
     if data.len() < 10 {
         return Default::default();
     }
