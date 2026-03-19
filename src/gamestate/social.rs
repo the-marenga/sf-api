@@ -494,7 +494,7 @@ impl OtherPlayer {
                 Some(soft_into(sb_count - 10000, "scrapbook count", 0));
         }
 
-        op.active_potions = ItemType::parse_active_potions(
+        op.active_potions = super::items::parse_active_potions(
             data.skip(194, "other potions")?,
             server_time,
         );

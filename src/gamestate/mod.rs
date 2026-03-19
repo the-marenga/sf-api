@@ -1668,6 +1668,11 @@ impl GameState {
                     }
                     // [5] => ??
                 }
+                "ownplayersavepotions" => {
+                    let data: Vec<i64> = val.into_list("potions")?;
+                    self.character.active_potions =
+                        items::parse_active_potions_new(&data, server_time);
+                }
                 x if x.contains("average") && x.ends_with("level") => {
                     // We do not care about avg. item lvl
                 }
@@ -1809,11 +1814,6 @@ impl GameState {
             data.cfpget(286, "character mount", |a| a & 0xFF)?;
         self.character.mount_end =
             data.cstget(451, "mount end", server_time)?;
-
-        self.character.active_potions = ItemType::parse_active_potions(
-            data.skip(493, "TODO")?,
-            server_time,
-        );
 
         self.character.mirror = Mirror::parse(data.cget(28, "mirror start")?);
 
