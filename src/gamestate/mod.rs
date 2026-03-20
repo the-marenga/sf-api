@@ -334,7 +334,6 @@ impl GameState {
                     if data.is_empty() {
                         continue;
                     }
-                    log::info!("{data:?}");
                     for (idx, cmp) in self
                         .dungeons
                         .companions
@@ -1682,6 +1681,10 @@ impl GameState {
                             .get_or_insert_with(Default::default)
                             .update(&data, server_time)?;
                     }
+                }
+                "vipstatus" => {
+                    other_player.get_or_insert_default().is_vip =
+                        val.as_str() != "0";
                 }
                 "characterstatus" => {
                     let data: Vec<i64> = val.into_list("char status")?;

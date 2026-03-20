@@ -424,6 +424,8 @@ pub struct OtherPlayer {
     pub fortress: Option<OtherFortress>,
     /// The level of their gladiator in the underworld
     pub gladiator_lvl: u32,
+    /// Is the player considered to be a VIP by the game
+    pub is_vip: bool,
 }
 
 #[derive(Debug, Default, Clone)]
