@@ -274,7 +274,7 @@ impl GameState {
                 }
                 "cryptoid not found" => return Err(SFError::ConnectionError),
                 "ownplayersave" => {
-                    self.update_player_save(&val.into_list("player save")?)?;
+                    // Goodbye old friend...
                 }
                 "owngroupname" => self
                     .guild
@@ -328,10 +328,12 @@ impl GameState {
                     }
                     let toilet = self.tavern.toilet.get_or_insert_default();
                     toilet.sacrifices_left = vals[2] as u32;
-                    toilet.used = toilet.sacrifices_left == 0;
                 }
                 "companionequipment" => {
                     let data: Vec<i64> = val.into_list("quest items")?;
+                    if data.is_empty() {
+                        continue;
+                    }
                     for (idx, cmp) in self
                         .dungeons
                         .companions
@@ -472,9 +474,12 @@ impl GameState {
                     }
                 }
                 "witch" => {
+                    // old witch data without price
+                }
+                "witchshop" => {
                     self.witch
                         .get_or_insert_with(Default::default)
-                        .update(&val.into_list("witch")?, server_time)?;
+                        .update(&val.into_list("witch")?)?;
                 }
                 "underworldupgradeprice" => {
                     self.underworld
@@ -553,10 +558,7 @@ impl GameState {
                         )?;
                 }
                 "soldieradvice" => {
-                    other_player
-                        .get_or_insert_with(Default::default)
-                        .soldier_advice =
-                        val.into::<u16>("other player soldier advice").ok();
+                    // Replaced
                 }
                 "owngroupdescription" => self
                     .guild
@@ -1064,34 +1066,29 @@ impl GameState {
                             ),
                         )?);
                 }
+                "otherplayersavecharacter" => {
+                    other_player
+                        .get_or_insert_default()
+                        .update(&val.into_list("other player")?, server_time)?;
+                }
+                "otherplayersavepotions" => {
+                    other_player.get_or_insert_default().active_potions =
+                        items::parse_active_potions(
+                            &val.into_list("other potions")?,
+                            server_time,
+                        );
+                }
                 "otherplayer" => {
-                    let mut op = match OtherPlayer::parse(
-                        &val.into_list("other player")?,
-                        server_time,
-                    ) {
-                        Ok(op) => op,
-                        Err(e) => {
-                            warn!("{e}");
-                            // Should we err here?
-                            other_player = None;
-                            continue;
-                        }
-                    };
-
-                    // TODO: This sucks! Change parse -> update
-                    if let Some(oop) = other_player {
-                        op.name = oop.name;
-                        op.description = oop.description;
-                        op.guild = oop.guild;
-                        op.relationship = oop.relationship;
-                        op.pet_attribute_bonus_perc =
-                            oop.pet_attribute_bonus_perc;
-                        op.wall_combat_lvl = oop.wall_combat_lvl;
-                        op.fortress_rank = oop.fortress_rank;
-                        op.soldier_advice = oop.soldier_advice;
-                        op.equipment = oop.equipment;
+                    let data: Vec<i64> = val.into_list("other player")?;
+                    #[allow(deprecated)]
+                    {
+                        other_player.get_or_insert_default().guild_joined =
+                            data.cstget(
+                                166,
+                                "other joined guild",
+                                server_time,
+                            )?;
                     }
-                    other_player = Some(op);
                 }
                 "otherplayerfriendstatus" => {
                     other_player
@@ -1127,13 +1124,17 @@ impl GameState {
                         Some(val.into("mrank under")?);
                 }
                 "otherplayerfortressrank" => {
-                    other_player
-                        .get_or_insert_with(Default::default)
-                        .fortress_rank =
-                        match val.into::<i64>("other player fortress rank")? {
-                            ..=-1 => None,
-                            x => Some(x.try_into().unwrap_or(1)),
-                        };
+                    match val.into::<i64>("other player fortress rank")? {
+                        ..=-1 => {}
+                        x => {
+                            let rank = x.try_into().unwrap_or(1);
+                            other_player
+                                .get_or_insert_default()
+                                .fortress
+                                .get_or_insert_default()
+                                .rank = rank;
+                        }
+                    }
                 }
                 "iadungeontime" => {
                     // No idea what this is measuring. Seems to just be a few
@@ -1603,6 +1604,253 @@ impl GameState {
                     // deedshelves (subkey => 1)
                     // 1
                 }
+                "fortressstorage" => {
+                    self.fortress.get_or_insert_default().update_resources(
+                        &val.into_list("ft resources")?,
+                        server_time,
+                    )?;
+                }
+                "fortressunits" => {
+                    self.fortress.get_or_insert_default().update_units(
+                        &val.into_list("ft units")?,
+                        server_time,
+                    )?;
+                }
+                "fortress" => {
+                    self.fortress
+                        .get_or_insert_default()
+                        .update(&val.into_list("fortress")?, server_time)?;
+                }
+                "wheel" => {
+                    let data: Vec<i64> = val.into_list("wheel")?;
+                    // [0] => 2 ??
+                    self.specials.wheel.spins_today =
+                        data.csiget(1, "lucky turns", 0)?;
+                    self.specials.wheel.next_free_spin =
+                        data.cstget(2, "next lucky turn", server_time)?;
+                }
+                "dice" => {
+                    let data: Vec<i64> = val.into_list("dice")?;
+                    self.tavern.dice_game.next_free =
+                        data.cstget(0, "dice next", server_time)?;
+                    self.tavern.dice_game.remaining =
+                        data.csiget(1, "rem dice games", 0)?;
+                }
+                "charactergroup" => {
+                    let data: Vec<i64> = val.into_list("c group")?;
+                    let guild = self.guild.get_or_insert_with(Default::default);
+                    guild.own_treasure_skill =
+                        data.csiget(0, "own treasure skill", 0)?;
+                    guild.own_instructor_skill =
+                        data.csiget(1, "own instruction skill", 0)?;
+                    guild.hydra.next_battle =
+                        data.cstget(2, "pet battle", server_time)?;
+                    guild.hydra.remaining_fights =
+                        data.csiget(3, "remaining pet battles", 0)?;
+                    guild.own_pet_lvl = data.csiget(4, "own pet lvl", 0)?;
+                    guild.joined =
+                        data.cstget(5, "guild joined", server_time)?;
+                    // [6] => ????
+                }
+                "arena" => {
+                    let data: Vec<i64> = val.into_list("arena")?;
+                    self.arena.next_free_fight =
+                        data.cstget(0, "next battle time", server_time)?;
+                    self.arena.fights_for_xp =
+                        data.csiget(1, "arena xp fights", 0)?;
+                    for (idx, val) in
+                        self.arena.enemy_ids.iter_mut().enumerate()
+                    {
+                        *val = data.csiget(2 + idx, "arena enemy id", 0)?;
+                    }
+                    // [5] => ??
+                }
+                "ownplayersavepotions" => {
+                    let data: Vec<i64> = val.into_list("potions")?;
+                    self.character.active_potions =
+                        items::parse_active_potions(&data, server_time);
+                }
+                "arcanetoilet" => {
+                    let data: Vec<i64> = val.into_list("toilet")?;
+
+                    // Toilet remains none as long as its level is 0
+                    let toilet_lvl = data.cget(0, "toilet lvl")?;
+                    if toilet_lvl > 0 {
+                        self.tavern
+                            .toilet
+                            .get_or_insert_with(Default::default)
+                            .update(&data, server_time)?;
+                    }
+                }
+                "vipstatus" => {
+                    other_player.get_or_insert_default().is_vip =
+                        val.as_str() != "0";
+                }
+                "characterstatus" => {
+                    let data: Vec<i64> = val.into_list("char status")?;
+
+                    self.tavern.current_action = CurrentAction::parse(
+                        data.cget(1, "action id")?,
+                        data.cget(2, "action sec")?,
+                        data.cstget(3, "current action time", server_time)?,
+                    );
+
+                    // NOTE: [4] contains the start
+                    self.tavern.beer_max = data.csiget(5, "beer total", 0)?;
+
+                    self.tavern.thirst_for_adventure_sec =
+                        data.csiget(6, "remaining ALU", 0)?;
+                    self.tavern.beer_drunk =
+                        data.csiget(7, "beer drunk count", 0)?;
+                    self.specials.calendar.collected =
+                        data.csiget(8, "calendar collected", 245)?;
+                    self.specials.calendar.next_possible =
+                        data.cstget(9, "calendar next", server_time)?;
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 1513       // was [15]
+                    // 1541087831 // acc creation time?
+                    // 0
+                    // 0
+                    // 0
+                    self.pets
+                        .get_or_insert_with(Default::default)
+                        .next_free_exploration =
+                        data.cstget(20, "pet next free exp", server_time)?;
+                    self.dungeons.next_free_fight =
+                        data.cstget(21, "dungeon timer", server_time)?;
+                    // 0
+                    // 1
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                }
+                "ownplayersavecharacter" => {
+                    let data: Vec<i64> = val.into_list("char save")?;
+
+                    // 1482984989 // creation time? secret id?
+                    self.character.player_id =
+                        data.csiget(1, "player id", 0)?;
+                    // 0
+                    self.character.level =
+                        data.csimget(3, "level", 0, |a| a & 0xFFFF)?;
+                    self.character.experience =
+                        data.csiget(4, "experience", 0)?;
+                    self.character.next_level_xp =
+                        data.csiget(5, "xp to next lvl", 0)?;
+                    self.character.honor = data.csiget(6, "honor", 0)?;
+                    self.character.rank = data.csiget(7, "rank", 0)?;
+                    self.character.portrait =
+                        Portrait::parse(data.skip(8, "portrait")?)
+                            .unwrap_or_default();
+                    ///// Portrait
+                    // 4
+                    // 206
+                    // 203
+                    // 2
+                    // 0
+                    // 2
+                    // 7
+                    // 2
+                    // 0
+                    // 0
+                    self.character.race =
+                        data.cfpuget(18, "char race", |a| a)?;
+                    // 2
+                    // ////
+                    self.character.class =
+                        data.cfpuget(20, "character class", |a| a - 1)?;
+                    self.character.mount =
+                        data.cfpget(21, "character mount", |a| a & 0xFF)?;
+                    // 3
+                    // 0
+                    self.character.armor = data.csiget(23, "total armor", 0)?;
+                    self.character.min_damage =
+                        data.csiget(24, "min damage", 0)?;
+                    self.character.max_damage =
+                        data.csiget(25, "max damage", 0)?;
+                    self.guild
+                        .get_or_insert_with(Default::default)
+                        .portal
+                        .damage_bonus =
+                        data.cimget(26, "portal dmg bonus", |a| a)?;
+                    // 4280492 ??
+                    self.dungeons
+                        .portal
+                        .get_or_insert_with(Default::default)
+                        .player_hp_bonus =
+                        data.csimget(28, "portal hp bonus", 0, |a| a)?;
+                    self.character.mount_end =
+                        data.cstget(29, "mount end", server_time)?;
+                    update_enum_map(
+                        &mut self.character.attribute_basis,
+                        data.skip(30, "char attr basis")?,
+                    );
+                    update_enum_map(
+                        &mut self.character.attribute_additions,
+                        data.skip(35, "char attr adds")?,
+                    );
+                    update_enum_map(
+                        &mut self.character.attribute_times_bought,
+                        data.skip(40, "char attr tb")?,
+                    );
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 1
+                    // 17
+                    // 0
+                    // 0
+                    // 0
+                    // 66
+                    // 0
+                    // 7
+                    // 18
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 0
+                    // 80315    // guild_id ?
+                    // 12122    // sb count
+                    // 0
+                    // 31
+                    // 15       // gladiators
+                }
+                "adventure" => {
+                    let data: Vec<i64> = val.into_list("char save")?;
+                    // 198 - Might be the person to give you the quest?
+                    // 198 - ??
+                    for (slice, quest) in data
+                        .skip(2, "quests")?
+                        .chunks_exact(7)
+                        .zip(&mut self.tavern.quests)
+                    {
+                        quest.update(slice)?;
+                    }
+                }
+                "events" => {
+                    // Information about the currently ongoing major event
+                    // (I think)
+                }
+                "otherplayerfortressinfo" => {
+                    other_player
+                        .get_or_insert_default()
+                        .update_fortress(&val.into_list("other ft")?)?;
+                }
+                x if x.contains("average") && x.ends_with("level") => {
+                    // We do not care about avg. item lvl
+                }
                 // This is the extra bonus effect all treats get that day
                 x if x.contains("dungeonenemies") => {
                     // I `think` we do not need this
@@ -1692,135 +1940,6 @@ impl GameState {
                 relation,
             });
         }
-    }
-    pub(crate) fn update_player_save(
-        &mut self,
-        data: &[i64],
-    ) -> Result<(), SFError> {
-        let server_time = self.server_time();
-        if data.len() < 700 {
-            warn!("Skipping account update");
-            return Ok(());
-        }
-
-        self.character.player_id = data.csiget(1, "player id", 0)?;
-        self.character.portrait =
-            Portrait::parse(data.skip(17, "TODO")?).unwrap_or_default();
-
-        self.character.armor = data.csiget(447, "total armor", 0)?;
-        self.character.min_damage = data.csiget(448, "min damage", 0)?;
-        self.character.max_damage = data.csiget(449, "max damage", 0)?;
-
-        self.character.level = data.csimget(7, "level", 0, |a| a & 0xFFFF)?;
-        self.arena.fights_for_xp =
-            data.csimget(7, "arena xp fights", 0, |a| a >> 16)?;
-
-        self.character.experience = data.csiget(8, "experience", 0)?;
-        self.character.next_level_xp = data.csiget(9, "xp to next lvl", 0)?;
-        self.character.honor = data.csiget(10, "honor", 0)?;
-        self.character.rank = data.csiget(11, "rank", 0)?;
-        self.character.class =
-            data.cfpuget(29, "character class", |a| (a & 0xFF) - 1)?;
-        self.character.race =
-            data.cfpuget(27, "character race", |a| a & 0xFF)?;
-
-        self.tavern.update(data, server_time)?;
-
-        update_enum_map(
-            &mut self.character.attribute_basis,
-            data.skip(30, "char attr basis")?,
-        );
-        update_enum_map(
-            &mut self.character.attribute_additions,
-            data.skip(35, "char attr adds")?,
-        );
-        update_enum_map(
-            &mut self.character.attribute_times_bought,
-            data.skip(40, "char attr tb")?,
-        );
-
-        self.character.mount =
-            data.cfpget(286, "character mount", |a| a & 0xFF)?;
-        self.character.mount_end =
-            data.cstget(451, "mount end", server_time)?;
-
-        if self.character.level >= 25 {
-            let fortress = self.fortress.get_or_insert_with(Default::default);
-            fortress.update(data, server_time)?;
-        }
-
-        self.character.active_potions = ItemType::parse_active_potions(
-            data.skip(493, "TODO")?,
-            server_time,
-        );
-        self.specials.wheel.spins_today = data.csiget(579, "lucky turns", 0)?;
-        self.specials.wheel.next_free_spin =
-            data.cstget(580, "next lucky turn", server_time)?;
-
-        self.character.mirror = Mirror::parse(data.cget(28, "mirror start")?);
-        self.arena.next_free_fight =
-            data.cstget(460, "next battle time", server_time)?;
-
-        // Toilet remains none as long as its level is 0
-        let toilet_lvl = data.cget(491, "toilet lvl")?;
-        if toilet_lvl > 0 {
-            self.tavern
-                .toilet
-                .get_or_insert_with(Default::default)
-                .update(data)?;
-        }
-
-        for (idx, val) in self.arena.enemy_ids.iter_mut().enumerate() {
-            *val = data.csiget(599 + idx, "enemy_id", 0)?;
-        }
-
-        if let Some(jg) = data.cstget(443, "guild join date", server_time)? {
-            self.guild.get_or_insert_with(Default::default).joined = jg;
-        }
-
-        self.dungeons.next_free_fight =
-            data.cstget(459, "dungeon timer", server_time)?;
-
-        self.pets
-            .get_or_insert_with(Default::default)
-            .next_free_exploration =
-            data.cstget(660, "pet next free exp", server_time)?;
-
-        self.dungeons
-            .portal
-            .get_or_insert_with(Default::default)
-            .player_hp_bonus =
-            data.csimget(445, "portal hp bonus", 0, |a| a >> 24)?;
-
-        let guild = self.guild.get_or_insert_with(Default::default);
-        // TODO: This might be better as & 0xFF?
-        guild.portal.damage_bonus =
-            data.cimget(445, "portal dmg bonus", |a| (a >> 16) % 256)?;
-        guild.own_treasure_skill = data.csiget(623, "own treasure skill", 0)?;
-        guild.own_instructor_skill =
-            data.csiget(624, "own instruction skill", 0)?;
-        guild.hydra.next_battle =
-            data.cstget(627, "pet battle", server_time)?;
-        guild.hydra.remaining_fights =
-            data.csiget(628, "remaining pet battles", 0)?;
-
-        // self.character.druid_mask = data.cfpget(653, "druid mask", |a| a)?;
-        // self.character.bard_instrument =
-        //     data.cfpget(701, "bard instrument", |a| a)?;
-
-        self.specials.calendar.collected =
-            data.csimget(648, "calendar collected", 245, |a| a >> 16)?;
-        self.specials.calendar.next_possible =
-            data.cstget(649, "calendar next", server_time)?;
-        self.tavern.dice_game.next_free =
-            data.cstget(650, "dice next", server_time)?;
-        self.tavern.dice_game.remaining =
-            data.csiget(651, "rem dice games", 0)?;
-
-        self.witch.get_or_insert_default().enchantment_price =
-            data.csiget(519, "enchantment price", u64::MAX)?;
-
-        Ok(())
     }
 
     pub(crate) fn update_gttime(

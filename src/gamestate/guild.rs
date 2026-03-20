@@ -32,7 +32,7 @@ pub struct Guild {
     /// The rank in the Hall of Fame this guild has
     pub rank: u32,
     /// The date at which the character joined this guild
-    pub joined: DateTime<Local>,
+    pub joined: Option<DateTime<Local>>,
 
     /// The skill you yourself contribute to the guild
     pub own_treasure_skill: u16,
@@ -60,6 +60,9 @@ pub struct Guild {
 
     /// The id of the pet, that is currently selected as the guild pet
     pub pet_id: u32,
+    /// The level of your guild pet
+    pub own_pet_lvl: u16,
+    /// The level of your guild pet
     /// The maximum level, that the pet can be at
     pub pet_max_lvl: u16,
     /// All information about the hydra the guild pet can fight
@@ -76,7 +79,6 @@ pub struct Guild {
     pub chat: Vec<ChatMessage>,
     /// The whisper messages, that a player can receive
     pub whispers: Vec<ChatMessage>,
-
     /// A list of guilds which can be fought, must first be fetched by sending
     /// `Command::GuildGetFightableTargets`
     pub fightable_guilds: Vec<FightableGuild>,

@@ -12,7 +12,6 @@ use super::{
 use crate::{
     PlayerId,
     gamestate::{CGet, EnumMapGet},
-    misc::soft_into,
 };
 
 /// The information about a characters fortress
@@ -72,11 +71,6 @@ pub struct Fortress {
     pub attack_free_reroll: Option<DateTime<Local>>,
     /// The price in silver re-rolling costs
     pub opponent_reroll_price: u64,
-
-    /// The amount of stone currently in your secret storage
-    pub secret_storage_stone: u64,
-    /// The amount of wood currently in your secret storage
-    pub secret_storage_wood: u64,
 }
 
 /// The price an upgrade, or building something in the fortress costs. These
@@ -116,8 +110,20 @@ pub struct FortressResource {
     /// The maximum amount of this resource, that you can store. If `current ==
     /// limit`, you will not be able to collect resources from buildings
     pub limit: u64,
+    /// The maximum amount of this resource, that you can store in the fortress
+    /// after you upgrade the Heart of Darkness
+    pub limit_next_level: u64,
     /// Information about the production building, that produces this resource.
     pub production: FortressProduction,
+    /// The secret storage, available in the treasury
+    pub secret_storage: FortressSecretStorage,
+}
+
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FortressSecretStorage {
+    pub amount: u64,
+    pub limit: u64,
 }
 
 /// Information about the production of a resource in the fortress.  Note that
@@ -360,119 +366,30 @@ impl Fortress {
         }
     }
 
-    pub(crate) fn update(
+    pub(crate) fn update_resources(
         &mut self,
         data: &[i64],
         server_time: ServerTime,
     ) -> Result<(), SFError> {
-        // Buildings
-        for (idx, typ) in FortressBuildingType::iter().enumerate() {
-            self.buildings.get_mut(typ).level =
-                data.csiget(524 + idx, "building lvl", 0)?;
-        }
-        self.hall_of_knights_level =
-            data.csiget(598, "hall of knights level", 0)?;
+        for (idx, (typ, resource)) in self.resources.iter_mut().enumerate() {
+            resource.production.last_collectable =
+                data.csiget(idx, "ft resource last collectable", 0)?;
+            resource.production.limit =
+                data.csiget(3 + idx, "ft resource production limit", 0)?;
+            resource.production.per_hour =
+                data.csiget(8 + idx, "ft resource per hour", 0)?;
 
-        // Units
-        for (idx, typ) in FortressUnitType::iter().enumerate() {
-            let msg = "fortress unit training start";
-            self.units.get_mut(typ).training.start =
-                server_time.convert_to_local(data.cget(550 + idx, msg)?, msg);
-            let msg = "fortress unit training finish";
-            self.units.get_mut(typ).training.finish =
-                server_time.convert_to_local(data.cget(553 + idx, msg)?, msg);
-        }
-
-        #[allow(clippy::enum_glob_use)]
-        {
-            use FortressBuildingType::*;
-            use FortressUnitType::*;
-            self.units.get_mut(Soldier).limit = soft_into(
-                self.buildings.get_mut(Barracks).level * 3,
-                "soldier max count",
-                0,
-            );
-            self.units.get_mut(Magician).limit = soft_into(
-                self.buildings.get_mut(MagesTower).level,
-                "magician max count",
-                0,
-            );
-            self.units.get_mut(Archer).limit = soft_into(
-                self.buildings.get_mut(ArcheryGuild).level * 2,
-                "archer max count",
-                0,
-            );
-
-            self.units.get_mut(Soldier).count =
-                data.csimget(547, "soldier count", 0, |x| x & 0xFFFF)?;
-            self.units.get_mut(Soldier).in_training =
-                data.csimget(548, "soldier in que", 0, |x| x >> 16)?;
-
-            self.units.get_mut(Magician).count =
-                data.csimget(547, "magician count", 0, |x| x >> 16)?;
-            self.units.get_mut(Magician).in_training =
-                data.csimget(549, "magicians in que", 0, |x| x & 0xFFFF)?;
-
-            self.units.get_mut(Archer).count =
-                data.csimget(548, "archer count", 0, |x| x & 0xFFFF)?;
-            self.units.get_mut(Archer).in_training =
-                data.csimget(549, "archer in que", 0, |x| x >> 16)?;
-        }
-
-        // Items
-        for (idx, typ) in FortressResourceType::iter().enumerate() {
             if typ != FortressResourceType::Experience {
-                self.resources.get_mut(typ).production.per_hour_next_lvl =
-                    data.csiget(584 + idx, "max saved next resource", 0)?;
+                resource.limit =
+                    data.csiget(6 + idx, "ft resource limit", 0)?;
+                resource.limit_next_level =
+                    data.csiget(12 + idx, "ft resource per hour", 0)?;
+                resource.secret_storage.limit =
+                    data.csiget(14 + idx, "ft secret storage limit", 0)?;
             }
-
-            self.resources.get_mut(typ).limit =
-                data.csiget(568 + idx, "resource max save", 0)?;
-            self.resources.get_mut(typ).production.last_collectable =
-                data.csiget(562 + idx, "resource in collectable", 0)?;
-            self.resources.get_mut(typ).production.limit =
-                data.csiget(565 + idx, "resource max in store", 0)?;
-            self.resources.get_mut(typ).production.per_hour =
-                data.csiget(574 + idx, "resource per hour", 0)?;
         }
-
         self.last_collectable_updated =
-            data.cstget(577, "fortress collection update", server_time)?;
-
-        self.building_upgrade = FortressAction {
-            start: data.cstget(573, "fortress upgrade begin", server_time)?,
-            finish: data.cstget(572, "fortress upgrade end", server_time)?,
-            cost: FortressCost::default(),
-            target: data.cfpget(571, "fortress building upgrade", |x| x - 1)?,
-        };
-
-        self.upgrades = data.csiget(581, "fortress lvl", 0)?;
-        self.honor = data.csiget(582, "fortress honor", 0)?;
-        let fortress_rank: i64 = data.csiget(583, "fortress rank", 0)?;
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        if fortress_rank > 0 {
-            self.rank = Some(fortress_rank as u32);
-        } else {
-            self.rank = None;
-        }
-
-        self.gem_search.start =
-            data.cstget(596, "gem search start", server_time)?;
-        self.gem_search.finish =
-            data.cstget(595, "gem search end", server_time)?;
-        self.gem_search.target =
-            GemType::parse(data.cget(594, "gem target")?, 0);
-
-        self.attack_target = data.cwiget(587, "fortress enemy")?;
-        self.attack_free_reroll =
-            data.cstget(586, "fortress attack reroll", server_time)?;
-
-        // Secret storage
-        self.secret_storage_wood =
-            data.csiget(698, "secret storage wood", 0)?;
-        self.secret_storage_stone =
-            data.csiget(700, "secret storage stone", 0)?;
-
+            data.cstget(11, "ft resource update", server_time)?;
         Ok(())
     }
 
@@ -525,6 +442,81 @@ impl Fortress {
         }
         self.gem_search.cost =
             FortressCost::parse(data.skip(48, "gem_search_cost")?)?;
+        Ok(())
+    }
+
+    pub(crate) fn update_units(
+        &mut self,
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<(), SFError> {
+        for (idx, (typ, unit)) in self.units.iter_mut().enumerate() {
+            unit.count = data.csiget(idx, "ft unit count", 0)?;
+            unit.in_training = data.csiget(3 + idx, "ft unit in que", 0)?;
+            unit.training.start =
+                data.cstget(6 + idx, "ft training start", server_time)?;
+            unit.training.finish =
+                data.cstget(9 + idx, "ft training end", server_time)?;
+            let base_limit = data.csiget(12 + idx, "ft unit in que", 0)?;
+            unit.limit = base_limit
+                * match typ {
+                    FortressUnitType::Magician => 1,
+                    FortressUnitType::Archer => 2,
+                    FortressUnitType::Soldier => 3,
+                };
+        }
+        Ok(())
+    }
+
+    pub(crate) fn update(
+        &mut self,
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<(), SFError> {
+        // Buildings
+        for (idx, (_, building)) in self.buildings.iter_mut().enumerate() {
+            building.level = data.csiget(idx, "building lvl", 0)?;
+        }
+        let upgrade = &mut self.building_upgrade;
+        upgrade.target =
+            data.cfpget(12, "fortress building upgrade", |x| x - 1)?;
+        upgrade.finish =
+            data.cstget(13, "fortress upgrade end", server_time)?;
+        upgrade.start =
+            data.cstget(14, "fortress upgrade begin", server_time)?;
+
+        self.upgrades = data.csiget(15, "fortress lvl", 0)?;
+        self.honor = data.csiget(16, "fortress honor", 0)?;
+        let fortress_rank: i64 = data.csiget(17, "fortress rank", 0)?;
+
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        if fortress_rank > 0 {
+            self.rank = Some(fortress_rank as u32);
+        } else {
+            self.rank = None;
+        }
+        self.attack_free_reroll =
+            data.cstget(18, "fortress attack reroll", server_time)?;
+        self.attack_target = data.cwiget(19, "fortress enemy")?;
+
+        // 20 = 1541425816 ???
+        // 21 = 1751042620 ???
+
+        self.gem_search.target =
+            GemType::parse(data.cget(22, "gem target")?, 0);
+        self.gem_search.finish =
+            data.cstget(23, "gem search end", server_time)?;
+        self.gem_search.start =
+            data.cstget(24, "gem search start", server_time)?;
+        self.hall_of_knights_level =
+            data.csiget(25, "hall of knights level", 0)?;
+
+        // 26 = 14309
+
+        if data.len() > 27 {
+            log::warn!("fortress update has new values: {data:?}");
+        }
+
         Ok(())
     }
 }

@@ -1025,24 +1025,6 @@ impl ItemType {
             .is_some_and(|e| e.enchantment().is_some())
     }
 
-    pub(crate) fn parse_active_potions(
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> [Option<Potion>; 3] {
-        if data.len() < 6 {
-            return Default::default();
-        }
-        #[allow(clippy::indexing_slicing)]
-        core::array::from_fn(move |i| {
-            Some(Potion {
-                typ: PotionType::parse(data[i])?,
-                size: PotionSize::parse(data[i])?,
-                expires: server_time
-                    .convert_to_local(data[3 + i], "potion exp"),
-            })
-        })
-    }
-
     pub(crate) fn parse(
         data: &[i64],
         _server_time: ServerTime,
@@ -1407,4 +1389,22 @@ impl PetItem {
             _ => return None,
         })
     }
+}
+
+pub(crate) fn parse_active_potions(
+    data: &[i64],
+    server_time: ServerTime,
+) -> [Option<Potion>; 3] {
+    if data.len() < 10 {
+        return Default::default();
+    }
+    #[allow(clippy::indexing_slicing)]
+    core::array::from_fn(move |i| {
+        Some(Potion {
+            typ: PotionType::parse(data[i + 1])?,
+            size: PotionSize::parse(data[i + 1])?,
+            expires: server_time.convert_to_local(data[4 + i], "potion exp"),
+            // 6 => effect, but no idea why we would want to use that
+        })
+    })
 }
