@@ -31,8 +31,7 @@ use crate::{
         unlockables::*,
     },
     misc::*,
-    response::Response,
-    session::ResponseVal,
+    response::{Response, ResponseVal},
 };
 
 /// Represent the full state of the game at some point in time
