@@ -21,7 +21,10 @@ pub enum SFError {
     ConnectionError,
     /// Whatever the server sent back was invalid. Could be because of features
     /// not yet supported, or a bug in the API
-    #[error("Error parsing the server response because {0} had an unexpected value of: {1}")]
+    #[error(
+        "Error parsing the server response because {0} had an unexpected \
+         value of: {1}"
+    )]
     ParsingError(&'static str, String),
     /// The server responded with an error. If you are already logged in, this
     /// is likely recoverable,  i.e you are able to reuse your session. You
@@ -36,8 +39,8 @@ pub enum SFError {
     UnsupportedVersion(u32),
     /// The server responded with a response, that was too short
     #[error(
-        "Tried to access the response for {name} at [{pos}] , but the response \
-         is too short. The response is: {array}"
+        "Tried to access the response for {name} at [{pos}] , but the \
+         response is too short. The response is: {array}"
     )]
     TooShortResponse {
         /// The name of the item, that was accessed
