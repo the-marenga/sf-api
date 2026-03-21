@@ -274,6 +274,18 @@ pub enum FortressUnitType {
     Archer = 2,
 }
 
+impl FortressUnitType {
+    /// The building, that trains this unit type
+    #[must_use]
+    pub fn training_building(&self) -> FortressBuildingType {
+        match self {
+            FortressUnitType::Archer => FortressBuildingType::ArcheryGuild,
+            FortressUnitType::Magician => FortressBuildingType::MagesTower,
+            FortressUnitType::Soldier => FortressBuildingType::Barracks,
+        }
+    }
+}
+
 /// Generic information about a building in the fortress. If you want
 /// information about a production building, you should look at the resources
 #[derive(Debug, Default, Clone, Copy)]
@@ -450,20 +462,16 @@ impl Fortress {
         data: &[i64],
         server_time: ServerTime,
     ) -> Result<(), SFError> {
-        for (idx, (typ, unit)) in self.units.iter_mut().enumerate() {
+        for (idx, unit) in self.units.values_mut().enumerate() {
             unit.count = data.csiget(idx, "ft unit count", 0)?;
             unit.in_training = data.csiget(3 + idx, "ft unit in que", 0)?;
             unit.training.start =
                 data.cstget(6 + idx, "ft training start", server_time)?;
             unit.training.finish =
                 data.cstget(9 + idx, "ft training end", server_time)?;
-            let base_limit = data.csiget(12 + idx, "ft unit in que", 0)?;
-            unit.limit = base_limit
-                * match typ {
-                    FortressUnitType::Magician => 1,
-                    FortressUnitType::Archer => 2,
-                    FortressUnitType::Soldier => 3,
-                };
+            // NOTE: 12 + idx has another value, which I can not associate with
+            // anything. It is similar to the base amount of units you can have
+            // max, but it diverges after a few levels
         }
         Ok(())
     }
