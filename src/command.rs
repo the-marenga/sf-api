@@ -1285,7 +1285,7 @@ impl Command {
                 format!("FortressGroupBonusUpgrade:")
             }
             Command::FortressUpgradeUnit { unit } => {
-                format!("FortressGroupBonusUpgrade:{}", *unit as u8 + 1)
+                format!("FortressUpgrade:{}", *unit as u8 + 1)
             }
             Command::Whisper {
                 player_name: player,
