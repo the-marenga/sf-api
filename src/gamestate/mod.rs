@@ -277,19 +277,6 @@ impl GameState {
         if self.fortress.is_some() && self.character.level < 25 {
             self.fortress = None;
         }
-        if let Some(fortress) = &mut self.fortress {
-            for (typ, unit) in &mut fortress.units {
-                let building_lvl =
-                    fortress.buildings.get(typ.training_building()).level;
-                let limit_modifier = match typ {
-                    FortressUnitType::Magician => 1,
-                    FortressUnitType::Archer => 2,
-                    FortressUnitType::Soldier => 3,
-                };
-                unit.limit = building_lvl * limit_modifier;
-            }
-        }
-
         if let Some(t) = &self.underworld
             && t.buildings[UnderworldBuildingType::HeartOfDarkness].level < 1
         {
