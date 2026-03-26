@@ -7,6 +7,7 @@ use strum::EnumIter;
 use crate::{
     PlayerId,
     gamestate::{
+        ShopPosition,
         character::*,
         dungeons::{CompanionClass, Dungeon},
         fortress::*,
@@ -20,10 +21,10 @@ use crate::{
     },
 };
 
+/// A command, that can be sent to the sf server
 #[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A command, that can be send to the sf server
 pub enum Command {
     /// If there is a command you somehow know/reverse engineered, or need to
     /// extend the functionality of one of the existing commands, this is the
@@ -31,12 +32,12 @@ pub enum Command {
     Custom {
         /// The thing in the command, that comes before the ':'
         cmd_name: String,
-        /// The values this command gets as arguments. These will be joines
+        /// The values this command gets as arguments. These will be joined
         /// with '/'
         arguments: Vec<String>,
     },
     /// Manually sends a login request to the server.
-    /// **WARN:** The behaviour for a credentials mismatch, with the
+    /// **WARN:** The behavior for a credentials mismatch, with the
     /// credentials in the user is undefined. Use the login method instead
     /// for a safer abstraction
     #[deprecated = "Use the login method instead"]
@@ -46,18 +47,18 @@ pub enum Command {
         /// The sha1 hashed password of the player
         pw_hash: String,
         /// Honestly, I am not 100% sure what this is anymore, but it is
-        /// related to the maount of times you have logged in. Might be useful
+        /// related to the amount of times you have logged in. Might be useful
         /// for logging in again after error
         login_count: u32,
     },
-    #[cfg(feature = "sso")]
     /// Manually sends a login request to the server.
-    /// **WARN:** The behaviour for a credentials mismatch, with the
+    /// **WARN:** The behavior for a credentials mismatch, with the
     /// credentials in the user is undefined. Use the login method instead for
     /// a safer abstraction
+    #[cfg(feature = "sso")]
     #[deprecated = "Use a login method instead"]
     SSOLogin {
-        /// The Identifies the S&F account, that has this character
+        /// Identifies the S&F account, that has this character
         uuid: String,
         /// Identifies the specific character an account has
         character_id: String,
@@ -81,12 +82,12 @@ pub enum Command {
         class: Class,
     },
     /// Updates the current state of the entire gamestate. Also notifies the
-    /// guild, that the player is logged in. Should therefore be send
-    /// regularely
+    /// guild, that the player is logged in. Should therefore be sent
+    /// regularly
     Update,
     /// Queries 51 Hall of Fame entries starting from the top. Starts at 0
     ///
-    /// **NOTE:** The server might return less then 51, if there is a "broken"
+    /// **NOTE:** The server might return less than 51, if there is a "broken"
     /// player encountered. This is NOT a library bug, this is a S&F bug and
     /// will glitch out the UI, when trying to view the page in a browser.
     // I assume this is because the player name contains some invalid
@@ -164,7 +165,7 @@ pub enum Command {
     },
     /// Removes the currently active potion 0,1,2
     RemovePotion {
-        /// The position of the posion you want to remove
+        /// The position of the potion you want to remove
         pos: usize,
     },
     /// Queries the currently available enemies in the arena
@@ -183,6 +184,8 @@ pub enum Command {
     },
     /// Collects the current reward from the calendar
     CollectCalendar,
+    /// Collects the current door from the advent calendar
+    CollectAdventsCalendar,
     /// Queries information about another guild. The information can bet found
     /// in `hall_of_fames.other_guilds`
     ViewGuild {
@@ -245,60 +248,73 @@ pub enum Command {
     ToiletOpen,
     /// Drops an item from one of the inventories into the toilet
     ToiletDrop {
-        /// The inventory you want to take the item from
-        inventory: PlayerItemPlace,
-        /// The position of the item in the inventory. Starts at 0
-        pos: usize,
+        /// The place of the item, that you want to throw into the toilet.
+        /// You can use `BagPosition` and `EquipmentSlot` here by calling
+        /// `pos.into()`
+        item_pos: PlayerItemPosition,
     },
-    /// Buys an item from the shop and puts it in the inventoy slot specified
+    /// Buys an item from the shop and puts it in the inventory slot specified
     BuyShop {
-        /// The shop you want to buy from
-        shop_type: ShopType,
-        /// the position of the item you want to buy from the shop
-        shop_pos: usize,
-        /// The inventory you want to put the new item into
-        inventory: PlayerItemPlace,
-        /// The position in the chosen inventory you
-        inventory_pos: usize,
+        /// The position of the item you want to buy. You get this from
+        /// `.iter()` on shop, or by constructing it yourself
+        shop_pos: ShopPosition,
+        /// The place where the new item should end up.
+        /// You can use `BagPosition` and `EquipmentSlot` here by calling
+        /// `pos.into()`
+        new_pos: PlayerItemPosition,
+        /// Identifies the source item to ensure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
     },
     /// Sells an item from the players inventory. To make this more convenient,
     /// this picks a shop&item position to sell to for you
     SellShop {
-        /// The inventory you want to sell an item from
-        inventory: PlayerItemPlace,
-        /// The position of the item you want to sell
-        inventory_pos: usize,
+        /// The position of the item you want to sell in the shop
+        /// You can use `BagPosition` and `EquipmentSlot` here by calling
+        /// `pos.into()`
+        item_pos: PlayerItemPosition,
+        /// Identifies the source item to ensure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
     },
-    /// Moves an item from one inventory position to another
-    InventoryMove {
-        /// The inventory you move the item from
-        inventory_from: PlayerItemPlace,
-        /// The position of the item you want to move
-        inventory_from_pos: usize,
-        /// The inventory you move the item to
-        inventory_to: PlayerItemPlace,
-        /// The inventory you move the item from
-        inventory_to_pos: usize,
+    /// Moves an item from one player owned position to another
+    PlayerItemMove {
+        /// The position that you want to move the item from
+        /// You can use `BagPosition` and `EquipmentSlot` here by calling
+        /// `pos.into()`
+        from: PlayerItemPosition,
+        /// The position that you want to move the item to
+        /// You can use `BagPosition` and `EquipmentSlot` here by calling
+        /// `pos.into()`
+        to: PlayerItemPosition,
+        /// Identifies the source item to ensure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
     },
     /// Allows moving items from any position to any other position items can
     /// be at. You should make sure, that the move makes sense (do not move
     /// items from shop to shop)
     ItemMove {
         /// The place of thing you move the item from
-        from: ItemPlace,
-        /// The position of the item you want to move
-        from_pos: usize,
-        /// The place of thing you move the item to
-        to: ItemPlace,
-        /// The position of the item you want to move
-        to_pos: usize,
+        from: ItemPosition,
+        /// The position of the item you want to move to
+        to: ItemPosition,
+        /// Identifies the source item to ensure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
     },
-    /// Allows using an potion from any position
+    /// Allows using a potion from any position
     UsePotion {
         /// The place of the potion you use from
-        from: ItemPlace,
-        /// The position of the potion you want to use
-        from_pos: usize,
+        from: ItemPosition,
+        /// Identifies the source item to ensure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
     },
     /// Opens the message at the specified index [0-100]
     MessageOpen {
@@ -327,6 +343,14 @@ pub enum Command {
     },
     /// Starts a fight against the enemy in the players portal
     FightPortal,
+    /// Updates the current state of the dungeons. This is equivalent to
+    /// clicking the Dungeon-Button in the game. It is strongly recommended to
+    /// call this before fighting, since `next_free_fight` and the dungeon
+    /// floors may not be updated otherwise. Notably, `FightDungeon` and
+    /// `Update` do NOT update these values, so you can end up in an endless
+    /// loop, if you are just relying on `next_free_fight` without calling
+    /// `UpdateDungeons`
+    UpdateDungeons,
     /// Enters a specific dungeon. This works for all dungeons, except the
     /// Tower, which you must enter via the `FightTower` command
     FightDungeon {
@@ -371,6 +395,11 @@ pub enum Command {
         /// trying
         player_pet_id: u32,
     },
+    /// Brews a potion at the witch. This will consume 10 fruit from the given
+    /// habitat
+    BrewPotion {
+        fruit_type: HabitatType,
+    },
     /// Sets the guild info. Note the info about length limit from
     /// `SetDescription` for the description
     GuildSetInfo {
@@ -402,11 +431,11 @@ pub enum Command {
     },
     /// The description may only be 240 chars long, when it reaches the
     /// server. The problem is, that special chars like '/' have to get
-    /// escaped into two chars "$s" before getting send to the server.
+    /// escaped into two chars "$s" before getting sent to the server.
     /// That means this string can be 120-240 chars long depending on the
     /// amount of escaped chars. We 'could' truncate the response, but
     /// that could get weird with character boundaries in UTF8 and split the
-    /// escapes themself, so just make sure you provide a valid value here
+    /// escapes themselves, so just make sure you provide a valid value here
     /// to begin with and be prepared for a server error
     SetDescription {
         /// The description to set
@@ -414,19 +443,23 @@ pub enum Command {
     },
     /// Drop the item from the specified position into the witches cauldron
     WitchDropCauldron {
-        /// The inventory you want to move an item from
-        inventory_t: PlayerItemPlace,
-        /// The position of the item to move
-        position: usize,
+        /// The place of the item, that you want to drop into the cauldron.
+        /// You can use `BagPosition` and `EquipmentSlot` here by calling
+        /// `pos.into()`
+        item_pos: PlayerItemPosition,
     },
     /// Uses the blacksmith with the specified action on the specified item
     Blacksmith {
-        /// The inventory the item you want to act upon is in
-        inventory_t: PlayerItemPlace,
-        /// The position of the item in the inventory
-        position: u8,
+        /// The place of the item, that you want to use at the blacksmith.
+        /// You can use `BagPosition` and `EquipmentSlot` here by calling
+        /// `pos.into()`
+        item_pos: PlayerItemPosition,
         /// The action you want to use on the item
         action: BlacksmithAction,
+        /// Identifies the source item to ensure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
     },
     /// Sends the specified message in the guild chat
     GuildSendChat {
@@ -438,6 +471,26 @@ pub enum Command {
     WitchEnchant {
         /// The enchantment to apply
         enchantment: EnchantmentIdent,
+    },
+    /// Enchants the item the companion has equipped, which is associated with
+    /// this enchantment.
+    WitchEnchantCompanion {
+        /// The enchantment to apply
+        enchantment: EnchantmentIdent,
+        /// The companion you want to enchant the item of
+        companion: CompanionClass,
+    },
+    /// The recommended underworld enemy is dynamically fetched by the game
+    /// by querying the Hall of Fame with a special command. As such, the
+    /// result of this command will be parsed as a normal Hall of Fame lookup
+    /// in the `GameState`
+    UpdateLureSuggestion,
+    /// Looks up who the suggested player for the underworld actually is. The
+    /// result will be in `hall_of_fames.players`, since this command basically
+    /// just queries the Hall of Fame
+    ViewLureSuggestion {
+        /// The suggested enemy fetched using `UpdateLureSuggestion`
+        suggestion: LureSuggestion,
     },
     /// Spins the wheel. All information about when you can spin, or what you
     /// won are in `game_state.specials.wheel`
@@ -455,24 +508,47 @@ pub enum Command {
         /// One of [0,1,2], depending on which chest you want to collect
         pos: usize,
     },
+    /// Moves an item from a normal inventory, into the equipmentslot of the
+    /// player. This can be used to equip items, but also to socket/replace
+    /// gems
+    Equip {
+        /// The position in the inventory, that you want to equip in the
+        /// equipment slot
+        from_pos: PlayerItemPosition,
+        /// The slot of the item you want to equip
+        to_slot: EquipmentSlot,
+        /// Identifies the source item to ensure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
+    },
     /// Moves an item from a normal inventory, onto one of the companions
     EquipCompanion {
-        /// The inventory of your character you take the item from
-        from_inventory: InventoryType,
-        /// The position in the inventory, that you
-        from_pos: u8,
-        /// The companion you want to equip
-        to_companion: CompanionClass,
+        /// The position in the inventory, that you want to equip in the
+        /// companion equipment slot
+        from_pos: PlayerItemPosition,
         /// The slot of the companion you want to equip
         to_slot: EquipmentSlot,
+        /// Identifies the source item to ensure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
+        /// The companion you want to equip
+        to_companion: CompanionClass,
     },
     /// Collects a specific resource from the fortress
     FortressGather {
         /// The type of resource you want to collect
         resource: FortressResourceType,
     },
+    /// Changes the fortress enemy to the counterattackable enemy
+    FortressChangeEnemy {
+        /// The id of the counter attack notification mail of the enemy, that
+        /// you want to change to
+        msg_id: i64,
+    },
     /// Collects resources from the fortress secret storage
-    /// Note that the official client only ever collect either stone or wood
+    /// Note that the official client only ever collects either stone or wood
     /// but not both at the same time
     FortressGatherSecretStorage {
         /// The amount of stone you want to collect
@@ -530,6 +606,11 @@ pub enum Command {
     },
     /// Upgrades the Hall of Knights to the next level
     FortressUpgradeHallOfKnights,
+    /// Upgrades the given unit in the fortress using the smith
+    FortressUpgradeUnit {
+        /// The unit you want to upgrade
+        unit: FortressUnitType,
+    },
     /// Sends a whisper message to another player
     Whisper {
         player_name: String,
@@ -580,7 +661,7 @@ pub enum Command {
     /// Upgrades an idle building by the requested amount
     IdleUpgrade {
         typ: IdleBuildingType,
-        amount: u64,
+        amount: IdleUpgradeAmount,
     },
     /// Sacrifice all the money in the idle game for runes
     IdleSacrifice,
@@ -605,8 +686,8 @@ pub enum Command {
     HallOfFamePetsPage {
         page: u32,
     },
-    /// Switch equipment with the manequin, if it is unlocked
-    SwapManequin,
+    /// Switch equipment with the mannequin, if it is unlocked
+    SwapMannequin,
     /// Updates your flag in the Hall of Fame
     UpdateFlag {
         flag: Option<Flag>,
@@ -615,7 +696,7 @@ pub enum Command {
     BlockGuildInvites {
         block_invites: bool,
     },
-    /// Changes if you want to gets tips in the gui. Does nothing for the API
+    /// Changes if you want to get tips in the gui. Does nothing for the API
     ShowTips {
         show_tips: bool,
     },
@@ -635,7 +716,7 @@ pub enum Command {
     },
     /// Sets the language of the character. This should be basically
     /// irrelevant, but is still included for completeness sake. Expects a
-    /// valid county code. I have not tested all, but it should be one of:
+    /// valid country code. I have not tested all, but it should be one of:
     /// `ru,fi,ar,tr,nl,ja,it,sk,fr,ko,pl,cs,el,da,en,hr,de,zh,sv,hu,pt,es,
     /// pt-br, ro`
     SetLanguage {
@@ -661,7 +742,7 @@ pub enum Command {
     /// Changes the look of the item to the selected `raw_model_id` for 10
     /// mushrooms. Note that this is NOT the normal model id. it is the
     /// `model_id + (class as usize) * 1000` if I remember correctly. Pretty
-    /// sure nobody will ever uses this though, as it is only for looks.
+    /// sure nobody will ever use this though, as it is only for looks.
     ChangeItemLook {
         inv: ItemPlace,
         pos: usize,
@@ -787,9 +868,9 @@ pub enum Command {
     LegendaryDungeonMonsterEscape,
 }
 
+/// This is the "Questing instead of expeditions" value in the settings
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// This is the "Questing instead of expeditions" value in the settings
 pub enum ExpeditionSetting {
     /// When expeditions are available, this setting will enable expeditions to
     /// be started. This will disable questing, until either this setting is
@@ -822,19 +903,19 @@ pub enum FortunePayment {
     FreeTurn,
 }
 
+/// The price you have to pay to roll the dice
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The price you have to pay to roll the dice
 pub enum RollDicePrice {
     Free = 0,
     Mushrooms,
     Hourglass,
 }
 
+/// The type of dice you want to play with.
 #[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The type of dice you want to play with.
 pub enum DiceType {
     /// This means you want to discard whatever dice was previously at this
     /// position. This is also the type you want to fill the array with, if you
@@ -847,6 +928,7 @@ pub enum DiceType {
     Arcane,
     Hourglass,
 }
+
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DiceReward {
@@ -856,12 +938,12 @@ pub struct DiceReward {
     pub amount: u32,
 }
 
+/// A type of attribute
 #[derive(
     Debug, Copy, Clone, PartialEq, Eq, Enum, FromPrimitive, Hash, EnumIter,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// A type of attribute
 pub enum AttributeType {
     Strength = 1,
     Dexterity = 2,
@@ -870,34 +952,51 @@ pub enum AttributeType {
     Luck = 5,
 }
 
+/// A type of shop. This is a subset of `ItemPlace`
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Enum, EnumIter, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// A type of shop. This is a subset of `ItemPlace`
 pub enum ShopType {
     #[default]
     Weapon = 3,
     Magic = 4,
 }
 
+/// The "currency" you want to use to skip a quest
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The "currency" you want to use to skip a quest
 pub enum TimeSkip {
     Mushroom = 1,
     Glass = 2,
 }
 
+/// The allowed amounts, that you can upgrade idle buildings by
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(missing_docs)]
+pub enum IdleUpgradeAmount {
+    /// Upgrades as much as we can afford to
+    Max = -1,
+    /// Upgrades one building
+    One = 1,
+    /// Upgrades the building ten times
+    Ten = 10,
+    /// Upgrades the building twenty-five times
+    TwentyFive = 25,
+    /// Upgrades the building one hundred times
+    Hundred = 100,
+}
+
 impl Command {
-    /// Returns the unencrypted string, that has to be send to the server to to
+    /// Returns the unencrypted string, that has to be sent to the server to
     /// perform the request
     #[allow(deprecated, clippy::useless_format)]
     #[cfg(feature = "session")]
     pub(crate) fn request_string(
         &self,
     ) -> Result<String, crate::error::SFError> {
-        const APP_VERSION: &str = "2700000000000";
+        const APP_VERSION: &str = "295000000000";
         use crate::{
             error::SFError,
             gamestate::dungeons::{LightDungeon, ShadowDungeon},
@@ -987,7 +1086,7 @@ impl Command {
             Command::FinishQuest { skip } => {
                 format!(
                     "PlayerAdventureFinished:{}",
-                    skip.map(|a| a as u8).unwrap_or(0)
+                    skip.map_or(0, |a| a as u8)
                 )
             }
             Command::StartWork { hours } => format!("PlayerWorkStart:{hours}"),
@@ -1060,8 +1159,8 @@ impl Command {
             } => {
                 format!("PlayerTowerBattle:{progress}/{}", u8::from(*use_mush))
             }
-            Command::ToiletDrop { inventory, pos } => {
-                format!("PlayerToilettLoad:{}/{}", *inventory as usize, pos + 1)
+            Command::ToiletDrop { item_pos } => {
+                format!("PlayerToilettLoad:{item_pos}")
             }
             Command::GuildPortalBattle => format!("GroupPortalBattle:"),
             Command::GuildGetFightableTargets => {
@@ -1083,20 +1182,13 @@ impl Command {
                 format!("PetsGetStats:{pet_index}")
             }
             Command::BuyShop {
-                shop_type,
                 shop_pos,
-                inventory,
-                inventory_pos,
-            } => format!(
-                "PlayerItemMove:{}/{}/{}/{}",
-                *shop_type as usize,
-                *shop_pos + 1,
-                *inventory as usize,
-                *inventory_pos + 1
-            ),
+                new_pos,
+                item_ident,
+            } => format!("PlayerItemMove:{shop_pos}/{new_pos}/{item_ident}"),
             Command::SellShop {
-                inventory,
-                inventory_pos,
+                item_pos,
+                item_ident,
             } => {
                 let mut rng = fastrand::Rng::new();
                 let shop = if rng.bool() {
@@ -1106,43 +1198,23 @@ impl Command {
                 };
                 let shop_pos = rng.u32(0..6);
                 format!(
-                    "PlayerItemMove:{}/{}/{}/{}",
-                    *inventory as usize,
-                    *inventory_pos + 1,
+                    "PlayerItemMove:{item_pos}/{}/{}/{item_ident}",
                     shop as usize,
                     shop_pos + 1,
                 )
             }
-            Command::InventoryMove {
-                inventory_from,
-                inventory_from_pos,
-                inventory_to,
-                inventory_to_pos,
-            } => format!(
-                "PlayerItemMove:{}/{}/{}/{}",
-                *inventory_from as usize,
-                *inventory_from_pos + 1,
-                *inventory_to as usize,
-                *inventory_to_pos + 1
-            ),
+            Command::PlayerItemMove {
+                from,
+                to,
+                item_ident,
+            } => format!("PlayerItemMove:{from}/{to}/{item_ident}"),
             Command::ItemMove {
                 from,
-                from_pos,
                 to,
-                to_pos,
-            } => format!(
-                "PlayerItemMove:{}/{}/{}/{}",
-                *from as usize,
-                *from_pos + 1,
-                *to as usize,
-                *to_pos + 1
-            ),
-            Command::UsePotion { from, from_pos } => {
-                format!(
-                    "PlayerItemMove:{}/{}/1/0/",
-                    *from as usize,
-                    *from_pos + 1
-                )
+                item_ident,
+            } => format!("PlayerItemMove:{from}/{to}/{item_ident}"),
+            Command::UsePotion { from, item_ident } => {
+                format!("PlayerItemMove:{from}/1/0/{item_ident}")
             }
             Command::UnlockFeature { unlockable } => format!(
                 "UnlockFeature:{}/{}",
@@ -1171,26 +1243,32 @@ impl Command {
             Command::SendMessage { to, msg } => {
                 format!("PlayerMessageSend:{to}/{}", to_sf_string(msg))
             }
-            Command::WitchDropCauldron {
-                inventory_t,
-                position,
-            } => format!(
-                "PlayerWitchSpendItem:{}/{}",
-                *inventory_t as usize,
-                position + 1
-            ),
+            Command::WitchDropCauldron { item_pos } => {
+                format!("PlayerWitchSpendItem:{item_pos}")
+            }
             Command::Blacksmith {
-                inventory_t,
-                position,
+                item_pos,
                 action,
+                item_ident,
             } => format!(
-                "PlayerItemMove:{}/{}/{}/-1",
-                *inventory_t as usize,
-                position + 1,
+                "PlayerItemMove:{item_pos}/{}/-1/{item_ident}",
                 *action as usize
             ),
             Command::WitchEnchant { enchantment } => {
                 format!("PlayerWitchEnchantItem:{}/1", enchantment.0)
+            }
+            Command::WitchEnchantCompanion {
+                enchantment,
+                companion,
+            } => {
+                format!(
+                    "PlayerWitchEnchantItem:{}/{}",
+                    enchantment.0,
+                    *companion as u8 + 101,
+                )
+            }
+            Command::UpdateLureSuggestion => {
+                format!("PlayerGetHallOfFame:-4//0/0")
             }
             Command::SpinWheelOfFortune {
                 payment: fortune_payment,
@@ -1203,15 +1281,21 @@ impl Command {
             Command::FortressGatherSecretStorage { stone, wood } => {
                 format!("FortressGatherTreasure:{wood}/{stone}")
             }
-            Command::EquipCompanion {
-                from_inventory,
+            Command::Equip {
                 from_pos,
                 to_slot,
-                to_companion,
+                item_ident,
             } => format!(
-                "PlayerItemMove:{}/{}/{}/{}",
-                *from_inventory as usize,
-                *from_pos,
+                "PlayerItemMove:{from_pos}/1/{}/{item_ident}",
+                *to_slot as usize
+            ),
+            Command::EquipCompanion {
+                from_pos,
+                to_companion,
+                item_ident,
+                to_slot,
+            } => format!(
+                "PlayerItemMove:{from_pos}/{}/{}/{item_ident}",
                 *to_companion as u8 + 101,
                 *to_slot as usize
             ),
@@ -1229,13 +1313,13 @@ impl Command {
                 format!("FortressBuildUnitStart:{}/{count}", *unit as usize + 1)
             }
             Command::FortressGemStoneSearch => {
-                format!("FortressGemstoneStart:",)
+                format!("FortressGemstoneStart:")
             }
             Command::FortressGemStoneSearchCancel => {
-                format!("FortressGemStoneStop:0")
+                format!("FortressGemStoneStop:")
             }
             Command::FortressGemStoneSearchFinish { mushrooms } => {
-                format!("FortressGemstoneFinished:{mushrooms}",)
+                format!("FortressGemstoneFinished:{mushrooms}")
             }
             Command::FortressAttack { soldiers } => {
                 format!("FortressAttack:{soldiers}")
@@ -1249,6 +1333,9 @@ impl Command {
             Command::FortressUpgradeHallOfKnights => {
                 format!("FortressGroupBonusUpgrade:")
             }
+            Command::FortressUpgradeUnit { unit } => {
+                format!("FortressUpgrade:{}", *unit as u8 + 1)
+            }
             Command::Whisper {
                 player_name: player,
                 message,
@@ -1257,10 +1344,8 @@ impl Command {
                 player,
                 to_sf_string(message)
             ),
-            Command::UnderworldCollect {
-                resource: resource_t,
-            } => {
-                format!("UnderworldGather:{}", *resource_t as usize + 1)
+            Command::UnderworldCollect { resource } => {
+                format!("UnderworldGather:{}", *resource as usize + 1)
             }
             Command::UnderworldUnitUpgrade { unit: unit_t } => {
                 format!("UnderworldUpgradeUnit:{}", *unit_t as usize + 1)
@@ -1309,10 +1394,10 @@ impl Command {
                 format!("GroupPetBattle:{}", usize::from(*use_mushroom))
             }
             Command::IdleUpgrade { typ: kind, amount } => {
-                format!("IdleIncrease:{}/{}", *kind as usize, amount)
+                format!("IdleIncrease:{}/{}", *kind as usize, *amount as i32)
             }
             Command::IdleSacrifice => format!("IdlePrestige:0"),
-            Command::SwapManequin => format!("PlayerDummySwap:301/1"),
+            Command::SwapMannequin => format!("PlayerDummySwap:301/1"),
             Command::UpdateFlag { flag } => format!(
                 "PlayerSetFlag:{}",
                 flag.map(Flag::code).unwrap_or_default()
@@ -1503,6 +1588,9 @@ impl Command {
             } => {
                 format!("PetsPvPFight:0/{opponent_id}/{}", *element as u32 + 1)
             }
+            Command::BrewPotion { fruit_type } => {
+                format!("PlayerWitchBrewPotion:{}", *fruit_type as u8)
+            }
             Command::FightPetDungeon {
                 use_mush,
                 habitat: element,
@@ -1581,16 +1669,26 @@ impl Command {
             Command::BuyGoldFrame => {
                 format!("PlayerGoldFrameBuy:")
             }
+            Command::UpdateDungeons => format!("PlayerDungeonOpen:"),
+            Command::CollectAdventsCalendar => {
+                format!("AdventsCalendarClaimReward:")
+            }
+            Command::ViewLureSuggestion { suggestion } => {
+                format!("PlayerGetHallOfFame:{}//0/0", suggestion.0)
+            }
+            Command::FortressChangeEnemy { msg_id } => {
+                format!("FortressEnemy:0/{msg_id}")
+            }
         })
     }
 }
 
 macro_rules! generate_flag_enum {
     ($($variant:ident => $code:expr),*) => {
+        /// The flag of a country, that will be visible in the Hall of Fame
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         #[allow(missing_docs)]
-        /// The flag of a country, that will be visible in the Hall of Fame
         pub enum Flag {
             $(
                 $variant,

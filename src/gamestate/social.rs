@@ -5,16 +5,13 @@ use enum_map::EnumMap;
 use log::warn;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use strum::IntoEnumIterator;
 
 use super::{
     AttributeType, Class, Emblem, Flag, Item, Potion, Race, Reward, SFError,
     ServerTime,
     character::{Mount, Portrait},
-    fortress::FortressBuildingType,
     guild::GuildRank,
-    items::{Equipment, ItemType},
-    unlockables::Mirror,
+    items::Equipment,
 };
 use crate::{PlayerId, misc::*};
 
@@ -37,10 +34,10 @@ pub struct Mail {
     pub open_claimable: Option<ClaimablePreview>,
 }
 
-#[derive(Debug, Clone, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Contains information about everything involving other players on the server.
 /// This mainly revolves around the Hall of Fame
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HallOfFames {
     /// The amount of accounts on the server
     pub players_total: u32,
@@ -83,10 +80,10 @@ pub struct HallOfFameHellevator {
     pub tokens: u64,
 }
 
-#[derive(Debug, Clone, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Contains the results of `ViewGuild` & `ViewPlayer` commands. You can access
 /// the player info via functions and the guild data directly
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Lookup {
     /// This can be accessed by using the `lookup_pid()`/`lookup_name()`
     /// methods on `Lookup`
@@ -140,10 +137,10 @@ impl Lookup {
     }
 }
 
-#[derive(Debug, Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Basic information about one character on the server. To get more
 /// information, you need to query this player via the `ViewPlayer` command
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HallOfFamePlayer {
     /// The rank of this player
     pub rank: u32,
@@ -195,10 +192,10 @@ impl HallOfFamePlayer {
     }
 }
 
-#[derive(Debug, Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Basic information about one guild on the server. To get more information,
 /// you need to query this player via the `ViewGuild` command
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HallOfFameGuild {
     /// The name of the guild
     pub name: String,
@@ -299,9 +296,9 @@ impl HallOfFameUnderworld {
     }
 }
 
+/// Basic information about one guild on the server
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Basic information about one guild on the server
 pub struct HallOfFameFortress {
     /// The name of the person, that owns this fort
     pub name: String,
@@ -316,9 +313,9 @@ pub struct HallOfFameFortress {
     pub honor: u32,
 }
 
+/// Basic information about one players pet collection on the server
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Basic information about one players pet collection on the server
 pub struct HallOfFamePets {
     /// The name of the player, that has these pets
     pub name: String,
@@ -336,9 +333,9 @@ pub struct HallOfFamePets {
     pub unknown: i64,
 }
 
+/// Basic information about one players underworld on the server
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Basic information about one players underworld on the server
 pub struct HallOfFameUnderworld {
     /// The rank this underworld has
     pub rank: u32,
@@ -356,10 +353,10 @@ pub struct HallOfFameUnderworld {
     pub unknown: i64,
 }
 
-#[derive(Debug, Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// All information about another player, that was queried via the `ViewPlayer`
 /// command
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OtherPlayer {
     /// The id of this player. This is mainly just useful to lookup this player
     /// in `Lookup`, if you do not know the name
@@ -372,8 +369,16 @@ pub struct OtherPlayer {
     pub description: String,
     /// If the player is in a guild, this will contain the name
     pub guild: Option<String>,
+    /// The time at which this player joined their guild, if any
+    #[deprecated = "v29.500 overhauled the parsing of normal & other players. \
+                    This field is not longer available in the new data. As \
+                    such, this field may become unavailable at any point, \
+                    once the old data is on longer served by the server"]
+    pub guild_joined: Option<DateTime<Local>>,
     /// The mount the player currently ahs rented
     pub mount: Option<Mount>,
+    /// The time at which the others mount will expire
+    pub mount_end: Option<DateTime<Local>>,
     /// Information about the players visual apperarence
     pub portrait: Portrait,
     /// The relation the own character has set towards this player
@@ -388,51 +393,61 @@ pub struct OtherPlayer {
 
     pub honor: u32,
     pub rank: u32,
-    pub fortress_rank: Option<u32>,
     /// The hp bonus in percent this player has from the personal demon portal
     pub portal_hp_bonus: u32,
     /// The damage bonus in percent this player has from the guild demon portal
     pub portal_dmg_bonus: u32,
-
-    pub base_attributes: EnumMap<AttributeType, u32>,
-    pub bonus_attributes: EnumMap<AttributeType, u32>,
-    /// This should be the percentage bonus to skills from pets
-    pub pet_attribute_bonus_perc: EnumMap<AttributeType, u32>,
-
+    /// The base level of attributes, if no armor & other bonuses are
+    /// considered
+    pub attribute_basis: EnumMap<AttributeType, u32>,
+    /// The amount of bonus attribuets from equipment & other things
+    pub attribute_additions: EnumMap<AttributeType, u32>,
+    /// The amount of times the player has manually bought an attribute
+    pub attribute_times_bought: EnumMap<AttributeType, u32>,
+    /// The bonus to attributes from pets
+    pub attribute_pet_bonus: EnumMap<AttributeType, u32>,
+    /// The class of this player
     pub class: Class,
+    /// The race this player is of
     pub race: Race,
-
-    pub mirror: Mirror,
-
     /// None if they do not have a scrapbook
     pub scrapbook_count: Option<u32>,
+    /// The potions this player has currently equipped
     pub active_potions: [Option<Potion>; 3],
+    /// The total amount of armor
     pub armor: u64,
-    pub min_damage_base: u32,
-    pub max_damage_base: u32,
-    pub soldier_advice: Option<u16>,
+    /// The minimum base damage (from their weapon)
+    pub min_damage: u32,
+    /// The maximum base damage (from their weapon)
+    pub max_damage: u32,
+    /// All available data about their fortress, if any
     pub fortress: Option<OtherFortress>,
+    /// The level of their gladiator in the underworld
+    pub gladiator_lvl: u32,
+    /// Is the player considered to be a VIP by the game
+    pub is_vip: bool,
 }
 
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OtherFortress {
-    pub fortress_stone: u64,
-    pub fortress_wood: u64,
-
-    pub fortress_archers: u16,
-    pub fortress_has_mages: bool,
-    pub fortress_soldiers: u16,
-    pub fortress_building_level: EnumMap<FortressBuildingType, u16>,
-
-    pub wood_in_cutter: u64,
-    pub stone_in_quary: u64,
-    pub max_wood_in_cutter: u64,
-    pub max_stone_in_quary: u64,
-
-    pub fortress_soldiers_lvl: u16,
-    pub fortress_mages_lvl: u16,
-    pub fortress_archers_lvl: u16,
+    /// The total amount of upgrades this player has for their fortress
+    pub upgrade_count: u32,
+    /// The amount of soldiers suggested to use when attacking this players
+    /// fortress
+    pub soldier_advice: u16,
+    /// The amount of stone we are expected to gain from raiding this players
+    /// fortress
+    pub lootable_wood: u64,
+    /// The amount of stone we are expected to gain from raiding this players
+    /// fortress
+    pub lootable_stone: u64,
+    /// The amount of archers defending this players fortress
+    pub archer_count: u16,
+    /// The amount of mages defending this players fortress
+    pub mage_count: u16,
+    /// The rank this player has achieved in the fortress
+    pub rank: u32,
 }
 
 #[derive(Debug, Default, Clone, FromPrimitive, Copy, PartialEq)]
@@ -449,107 +464,115 @@ impl OtherPlayer {
         &mut self,
         data: &[u32],
     ) -> Result<(), SFError> {
-        let atr = &mut self.pet_attribute_bonus_perc;
+        let atr = &mut self.attribute_pet_bonus;
         // The order of these makes no sense. It is neither pet,
         // nor attribute order
         *atr.get_mut(AttributeType::Constitution) = data.cget(1, "pet con")?;
         *atr.get_mut(AttributeType::Dexterity) = data.cget(2, "pet dex")?;
         *atr.get_mut(AttributeType::Intelligence) = data.cget(3, "pet int")?;
-        *atr.get_mut(AttributeType::Luck) = data.cget(3, "pet luck")?;
+        *atr.get_mut(AttributeType::Luck) = data.cget(4, "pet luck")?;
         *atr.get_mut(AttributeType::Strength) = data.cget(5, "pet str")?;
         Ok(())
     }
 
-    pub(crate) fn parse(
+    pub(crate) fn update_fortress(
+        &mut self,
+        data: &[i64],
+    ) -> Result<(), SFError> {
+        let ft = self.fortress.get_or_insert_default();
+        ft.upgrade_count = data.csiget(0, "other ft upgrades", 0)?;
+        ft.soldier_advice = data.csiget(1, "other soldier advice", 0)?;
+        ft.mage_count = data.csiget(2, "other mage count", 0)?;
+        ft.archer_count = data.csiget(3, "other soldier advice", 0)?;
+        ft.lootable_wood = data.csiget(4, "other lootable wood", 0)?;
+        ft.lootable_stone = data.csiget(5, "other lootable stone", 0)?;
+        Ok(())
+    }
+
+    pub(crate) fn update(
+        &mut self,
         data: &[i64],
         server_time: ServerTime,
-    ) -> Result<OtherPlayer, SFError> {
-        let mut op = OtherPlayer::default();
-        op.player_id = data.ciget(0, "other player id")?;
-        op.level = data.ciget(2, "other level")?;
-        op.experience = data.ciget(3, "other exp")?;
-        op.next_level_xp = data.ciget(4, "other next lvl exp")?;
-        op.honor = data.ciget(5, "other honor")?;
-        op.rank = data.ciget(6, "other rank")?;
-        op.race = data.cfpuget(18, "other race", |a| a)?;
-        op.portrait = Portrait::parse(data.skip(8, "other portrait")?)?;
-        op.mirror = Mirror::parse(data.cget(19, "other mirror")?);
-        op.class = data.cfpuget(20, "other class", |a| a - 1)?;
+    ) -> Result<(), SFError> {
+        // 0
+        self.player_id = data.csiget(1, "player id", 0)?;
+        // 0
+        self.level = data.csimget(3, "level", 0, |a| a & 0xFFFF)?;
+        self.experience = data.csiget(4, "experience", 0)?;
+        self.next_level_xp = data.csiget(5, "xp to next lvl", 0)?;
+        self.honor = data.csiget(6, "honor", 0)?;
+        self.rank = data.csiget(7, "rank", 0)?;
+        self.portrait =
+            Portrait::parse(data.skip(8, "portrait")?).unwrap_or_default();
+        //////// portrait
+        // 4
+        // 206
+        // 203
+        // 2
+        // 0
+        // 2
+        // 7
+        // 2
+        // 0
+        // 0
+        self.race = data.cfpuget(18, "char race", |a| a)?;
+        // 2
+        //////
+        self.class = data.cfpuget(20, "character class", |a| a - 1)?;
+        self.mount = data.cfpget(21, "character mount", |a| a & 0xFF)?;
+        // 3
+        // 0
+        self.armor = data.csiget(23, "total armor", 0)?;
+        self.min_damage = data.csiget(24, "min damage", 0)?;
+        self.max_damage = data.csiget(25, "max damage", 0)?;
+        self.portal_dmg_bonus = data.cimget(26, "portal dmg bonus", |a| a)?;
+        // 4280492      // ???
+        self.portal_hp_bonus = data.csimget(28, "portal hp bonus", 0, |a| a)?;
+        self.mount_end = data.cstget(29, "mount end", server_time)?;
         update_enum_map(
-            &mut op.base_attributes,
-            data.skip(21, "other base attrs")?,
+            &mut self.attribute_basis,
+            data.skip(30, "char attr basis")?,
         );
         update_enum_map(
-            &mut op.bonus_attributes,
-            data.skip(26, "other base attrs")?,
+            &mut self.attribute_additions,
+            data.skip(35, "char attr adds")?,
         );
-        op.mount = data.cfpget(159, "other mount", |x| x)?;
+        update_enum_map(
+            &mut self.attribute_times_bought,
+            data.skip(40, "char attr tb")?,
+        );
+        // 0
+        // 0
+        // 0
+        // 0
+        // 0
+        // 17
+        // 0
+        // 0
+        // 0
+        // 66
+        // 0
+        // 7
+        // 18
+        // 0
+        // 0
+        // 0
+        // 0
+        // 0
+        // 0
+        // 0
 
-        let sb_count = data.cget(163, "scrapbook count")?;
+        // 80315 // guild id
+        let sb_count = data.cget(66, "scrapbook count")?;
         if sb_count >= 10000 {
-            op.scrapbook_count =
+            self.scrapbook_count =
                 Some(soft_into(sb_count - 10000, "scrapbook count", 0));
         }
+        // 0
+        // 31
+        self.gladiator_lvl = data.csiget(69, "gladiator lvl", 0)?;
 
-        op.active_potions = ItemType::parse_active_potions(
-            data.skip(194, "other potions")?,
-            server_time,
-        );
-        op.portal_hp_bonus =
-            data.csimget(252, "other portal hp bonus", 0, |a| a >> 24)?;
-        op.portal_dmg_bonus =
-            data.csimget(252, "other portal dmg bonus", 0, |a| {
-                (a >> 16) & 0xFF
-            })?;
-
-        op.armor = data.csiget(168, "other armor", 0)?;
-        op.min_damage_base = data.csiget(169, "other min damage", 0)?;
-        op.max_damage_base = data.csiget(170, "other max damage", 0)?;
-
-        if op.level >= 25 {
-            let mut fortress = OtherFortress {
-                // TODO: These can be 0... why?
-                fortress_wood: data.csiget(228, "other s wood", 0)?,
-                fortress_stone: data.csiget(229, "other f stone", 0)?,
-                fortress_soldiers: data.csimget(
-                    230,
-                    "other f soldiers",
-                    0,
-                    |a| a & 0xFF,
-                )?,
-                fortress_has_mages: data.cget(230, "fortress mages")? >> 16 > 0,
-                fortress_archers: data.csimget(
-                    231,
-                    "other f archer",
-                    0,
-                    |a| a & 0xFF,
-                )?,
-                wood_in_cutter: data.csiget(239, "other wood cutter", 0)?,
-                stone_in_quary: data.csiget(240, "other stone q", 0)?,
-                max_wood_in_cutter: data.csiget(241, "other max wood c", 0)?,
-                max_stone_in_quary: data.csiget(242, "other max stone q", 0)?,
-                fortress_soldiers_lvl: data.csiget(
-                    249,
-                    "fortress soldiers lvl",
-                    0,
-                )?,
-                fortress_mages_lvl: data.csiget(250, "other f mages lvl", 0)?,
-                fortress_archers_lvl: data.csiget(
-                    251,
-                    "other f archer lvl",
-                    0,
-                )?,
-                fortress_building_level: EnumMap::default(),
-            };
-
-            for (pos, typ) in FortressBuildingType::iter().enumerate() {
-                *fortress.fortress_building_level.get_mut(typ) =
-                    data.csiget(208 + pos, "o f building lvl", 0)?;
-            }
-            op.fortress = Some(fortress);
-        }
-
-        Ok(op)
+        Ok(())
     }
 }
 
@@ -566,10 +589,12 @@ pub enum CombatMessageType {
     WonFight = 7,
     FortressFight = 8,
     FortressDefense = 9,
+    ShadowWorld = 12,
     FortressDefenseAlreadyCountered = 109,
     PetAttack = 14,
     PetDefense = 15,
     Underworld = 16,
+    Twister = 25,
     GuildFightLost = 26,
     GuildFightWon = 27,
 }
@@ -599,15 +624,16 @@ impl CombatLogEntry {
     ) -> Result<CombatLogEntry, SFError> {
         let msg_id = data.cfsuget(0, "combat msg_id")?;
         let battle_t: i64 = data.cfsuget(3, "battle t")?;
-        let mt = FromPrimitive::from_i64(battle_t).ok_or_else(|| {
-            SFError::ParsingError("combat mt", battle_t.to_string())
-        })?;
         let time_stamp: i64 = data.cfsuget(4, "combat log time")?;
         let time = server_time
             .convert_to_local(time_stamp, "combat time")
             .ok_or_else(|| {
                 SFError::ParsingError("combat time", time_stamp.to_string())
             })?;
+
+        let mt = FromPrimitive::from_i64(battle_t).ok_or_else(|| {
+            SFError::ParsingError("combat mt", format!("{battle_t} @ {time:?}"))
+        })?;
 
         Ok(CombatLogEntry {
             msg_id,

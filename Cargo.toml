@@ -1,6 +1,6 @@
 [package]
 name = "sf-api"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 license = "MIT"
 description = "A simple API to send commands to the Shakes & Fidget servers and parse their responses into characters"
@@ -12,26 +12,41 @@ base64 = "0.22"
 chrono = "0.4"
 enum-map = "2.7"
 fastrand = "2.3"
-libaes = "0.7"
 log = "0.4"
 num-bigint = "0.4"
 num-derive = "0.4"
 num-traits = "0.2"
 ouroboros = "0.18"
-reqwest = { version = "0.12", features = ["gzip", "deflate"], optional = true }
+reqwest = { version = "0.13", features = ["gzip", "deflate", "form"], optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
 sha1 = "0.10"
-strum = { version = "0.27", features = ["strum_macros", "derive"] }
-tokio = { version = "1.47", features = ["sync", "time"], optional = true }
+strum = { version = "0.28", features = ["strum_macros", "derive"] }
+thiserror = "2.0.18"
+tokio = { version = "1.50", features = ["sync", "time"], optional = true }
 url = { version = "2.5", optional = true }
 
 [features]
-default = ["sso", "serde"]
+default = ["sso", "serde", "simulation"]
 session = ["dep:reqwest", "dep:tokio", "dep:url"]
+simulation = []
 sso = ["session", "dep:serde", "dep:serde_json"]
 serde = ["dep:serde", "num-bigint/serde", "chrono/serde", "enum-map/serde"]
 
+[build-dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
 [dev-dependencies]
-tokio = { version = "1.47", features = ["full"] }
-env_logger = "0.11.8"
+criterion = "0.8"
+enum-map = "2.7"
+env_logger = "0.11.9"
+rstest = "0.26.1"
+tokio = { version = "1.50", features = ["full"] }
+
+[[bench]]
+name = "battle_benchmark"
+harness = false
+
+[profile.bench]
+debug = true

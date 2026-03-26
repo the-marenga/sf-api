@@ -9,10 +9,10 @@ use strum::EnumIter;
 use super::*;
 use crate::{PlayerId, gamestate::items::*, misc::*};
 
-#[derive(Debug, Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Information about the Hellevator event on the server. If it is active, you
 /// can get more detailed info via `active()`
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorEvent {
     /// The time the hellevator event was enabled at
     pub start: Option<DateTime<Local>>,
@@ -392,31 +392,33 @@ pub struct Witch {
     pub enchantments: EnumMap<Enchantment, Option<EnchantmentIdent>>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// The S&F server needs a character specific value for enchanting items. This
 /// is that value
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnchantmentIdent(pub(crate) NonZeroU8);
 
 impl Witch {
-    pub(crate) fn update(
-        &mut self,
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<(), SFError> {
+    pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
+        self.enchantment_price = data.csiget(35, "witch price", u64::MAX)?;
         self.required_item = None;
-        if data.cget(5, "w current item")? == 0 {
-            self.required_item =
-                ItemType::parse(data.skip(3, "witch item")?, server_time)?
-                    .and_then(|a| a.equipment_slot());
+        if data.cget(33, "w needs more")? == 0 {
+            let raw_required = data.cget(34, "w required")?;
+            for slot in EquipmentSlot::iter() {
+                let id = i64::from(slot.raw_id());
+                if id == raw_required {
+                    self.required_item = Some(slot);
+                    break;
+                }
+            }
         }
         if self.required_item.is_none() {
             self.cauldron_bubbling = true;
         } else {
             // I would like to offer the raw values here, but the -1 just
             // makes this annoying. A Option<(u32, u32)> is also weird
-            let current: i32 = data.ciget(1, "witch current")?;
-            let target: i32 = data.ciget(2, "witch target")?;
+            let current: i32 = data.ciget(2, "witch current")?;
+            let target: i32 = data.ciget(3, "witch target")?;
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
             if current < 0 || target <= 0 {
                 self.progress = 100;
@@ -427,9 +429,9 @@ impl Witch {
             }
         }
 
-        let e_count: u8 = data.ciget(7, "enchant count")?;
+        let e_count: u8 = data.ciget(4, "enchant count")?;
         for i in 0..e_count {
-            let iid = data.cget(9 + 3 * i as usize, "iid")? - 1;
+            let iid = data.cget(6 + 3 * i as usize, "iid")? - 1;
             let key = match iid {
                 0 => continue,
                 10 => Enchantment::SwordOfVengeance,
@@ -487,6 +489,160 @@ pub struct Pets {
     pub atr_bonus: EnumMap<AttributeType, u32>,
 }
 
+/// Maps the index of the pet in their habitat to their base stats
+#[cfg(feature = "simulation")]
+static PET_BASE_STAT_ARRAY: [u32; 20] = [
+    10, 11, 12, 13, 14, 16, 18, 20, 25, 30, 35, 40, 50, 60, 70, 80, 100, 130,
+    160, 160,
+];
+
+/// Maps the habitat relativ eindex of the pet to their class
+#[cfg(feature = "simulation")]
+#[rustfmt::skip]
+static PET_CLASS_LOOKUP: EnumMap<HabitatType, [Class; 20]> =
+    EnumMap::from_array([
+        // Shadow
+        [
+            Class::Scout,   Class::Warrior, Class::Warrior, Class::Mage,
+            Class::Mage,    Class::Mage,    Class::Scout,   Class::Scout,
+            Class::Scout,   Class::Warrior, Class::Mage,    Class::Mage,
+            Class::Scout,   Class::Scout,   Class::Warrior, Class::Warrior,
+            Class::Mage,    Class::Warrior, Class::Warrior, Class::Scout,
+        ],
+        // Light
+        [
+            Class::Warrior, Class::Warrior, Class::Mage,    Class::Mage,
+            Class::Scout,   Class::Scout,   Class::Mage,    Class::Warrior,
+            Class::Warrior, Class::Mage,    Class::Mage,    Class::Scout,
+            Class::Scout,   Class::Mage,    Class::Mage,    Class::Warrior,
+            Class::Warrior, Class::Warrior, Class::Mage,    Class::Scout,
+        ],
+        // Earth
+        [
+            Class::Warrior, Class::Warrior, Class::Scout,   Class::Scout,
+            Class::Warrior, Class::Scout,   Class::Mage,    Class::Mage,
+            Class::Warrior, Class::Warrior, Class::Scout,   Class::Warrior,
+            Class::Scout,   Class::Scout,   Class::Mage,    Class::Mage,
+            Class::Mage,    Class::Warrior, Class::Warrior, Class::Warrior,
+        ],
+        // Fire
+        [
+            Class::Scout,   Class::Scout,   Class::Warrior, Class::Mage,
+            Class::Mage,    Class::Scout,   Class::Scout,   Class::Mage,
+            Class::Warrior, Class::Mage,    Class::Mage,    Class::Scout,
+            Class::Scout,   Class::Scout,   Class::Scout,   Class::Scout,
+            Class::Mage,    Class::Warrior, Class::Mage,    Class::Warrior,
+        ],
+        // Water
+        [   Class::Mage,    Class::Warrior, Class::Warrior, Class::Warrior,
+            Class::Warrior, Class::Scout,   Class::Warrior, Class::Scout,
+            Class::Scout,   Class::Warrior, Class::Mage,    Class::Mage,
+            Class::Mage,    Class::Warrior, Class::Mage,    Class::Mage,
+            Class::Warrior, Class::Mage,    Class::Warrior, Class::Scout,
+        ],
+    ]);
+
+impl Pets {
+    /// Get the current monster we would be fighting, when
+    #[cfg(feature = "simulation")]
+    pub fn get_exploration_enemy(
+        &self,
+        habitat: HabitatType,
+    ) -> Option<crate::simulate::Monster> {
+        let h = &self.habitats[habitat];
+        let stage = match h.exploration {
+            HabitatExploration::Finished => return None,
+            HabitatExploration::Exploring { fights_won, .. } => fights_won,
+        };
+        crate::simulate::constants::PET_MONSTER
+            .get(&habitat)
+            .and_then(|a| a.get((stage) as usize))
+            .cloned()
+    }
+
+    /// Converts the given player pet into a fighter, usable in the simulation.
+    /// The given pet does not need to have stats populated to work, since all
+    /// stats will be dynamically calculated
+    #[cfg(feature = "simulation")]
+    #[must_use]
+    pub fn pet_to_fighter(
+        &self,
+        pet: &Pet,
+        gladiator: u32,
+    ) -> crate::simulate::Fighter {
+        let habitat_pets = &self.habitats[pet.element].pets;
+        let pack_bonus = habitat_pets
+            .iter()
+            .map(|a| match a.level {
+                0 => 0.0,
+                _ => 0.05,
+            })
+            .sum::<f64>();
+
+        let level_bonus = habitat_pets
+            .iter()
+            .map(|p| match p.level {
+                ..100 => 0.0,
+                100..150 => 0.05,
+                150..200 => 0.75,
+                200.. => 0.1,
+            })
+            .sum::<f64>();
+
+        let habitat_idx = habitat_pets
+            .iter()
+            .position(|a| a.id == pet.id)
+            .unwrap_or(0);
+
+        let base_stat =
+            PET_BASE_STAT_ARRAY.get(habitat_idx).copied().unwrap_or(0);
+        let high_stat = (f64::from(base_stat * (u32::from(pet.level) + 1))
+            * (1.0 + pack_bonus + level_bonus))
+            .floor();
+        let low_stat = (0.5 * high_stat).round();
+        let luck = (0.75 * high_stat).round();
+        let con = high_stat;
+
+        let class = *PET_CLASS_LOOKUP[pet.element]
+            .get(habitat_idx)
+            .unwrap_or(&Class::Warrior);
+
+        let (str, dex, int) = match class {
+            Class::Warrior => (high_stat, low_stat, low_stat),
+            Class::Mage => (low_stat, low_stat, high_stat),
+            _ => (low_stat, high_stat, low_stat),
+        };
+
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        let pet_fighter = crate::simulate::UpgradeableFighter {
+            name: format!(
+                "{:?} pet #{} ({}) ",
+                pet.element,
+                pet.id,
+                habitat_idx + 1
+            )
+            .into(),
+            class,
+            level: pet.level,
+            attribute_basis: EnumMap::from_array([
+                str as u32,
+                dex as u32,
+                int as u32,
+                con as u32,
+                luck as u32,
+            ]),
+            is_companion: false,
+            pet_attribute_bonus_perc: EnumMap::default(),
+            equipment: Equipment::default(),
+            active_potions: Default::default(),
+            portal_hp_bonus: 0,
+            portal_dmg_bonus: 0,
+            gladiator,
+        };
+        (&pet_fighter).into()
+    }
+}
+
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Habitat {
@@ -501,9 +657,9 @@ pub struct Habitat {
     pub pets: [Pet; PETS_PER_HABITAT],
 }
 
+/// Represents the current state of the habitat exploration
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Represents the current state of the habitat exploration
 pub enum HabitatExploration {
     #[default]
     /// Explored/won all 20 habitat battles. This means you can no longer fight
@@ -613,6 +769,7 @@ impl Pets {
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pet {
+    /// The unique id of this pet accross all habitats (1..=101)
     pub id: u32,
     pub level: u16,
     /// The amount of fruits this pet got today
@@ -712,38 +869,6 @@ impl PetStats {
     }
 }
 
-#[derive(Debug, Clone, Copy, strum::EnumCount, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The current state of the mirror
-pub enum Mirror {
-    /// The player is still collecting the mirror pieces
-    Pieces {
-        /// The amount of pieces the character has found
-        amount: u8,
-    },
-    /// The player has found all mirror pieces and thus has a working mirror
-    #[default]
-    Full,
-}
-
-impl Mirror {
-    pub(crate) fn parse(i: i64) -> Mirror {
-        /// Bitmask to cover bits 20 to 32, which is where each bit set is one
-        /// mirror piece found
-        const MIRROR_PIECES_MASK: i64 = 0xFFF8_0000;
-
-        if i & (1 << 8) != 0 {
-            return Mirror::Full;
-        }
-        Mirror::Pieces {
-            amount: (i & MIRROR_PIECES_MASK)
-                .count_ones()
-                .try_into()
-                .unwrap_or(0),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Unlockable {
@@ -767,9 +892,9 @@ impl Unlockable {
     }
 }
 
+/// The current progress towards all achievements
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The current progress towards all achievements
 pub struct Achievements(pub Vec<Achievement>);
 
 impl Achievements {
@@ -797,9 +922,9 @@ impl Achievements {
     }
 }
 
+/// A small challenge you can complete in the game
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A small challenge you can complete in the game
 pub struct Achievement {
     /// Whether or not this achievement has been completed
     pub achieved: bool,
@@ -807,9 +932,9 @@ pub struct Achievement {
     pub progress: i64,
 }
 
+/// Contains all the items & monsters you have found in the scrapbook
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Contains all the items & monsters you have found in the scrapbook
 pub struct ScrapBook {
     /// All the items, that this player has already collected. To check if an
     /// item is in this, you should call `equipment_ident()` on an item and see
@@ -852,7 +977,8 @@ impl ScrapBook {
                     // Items
                     if !items.insert(ident) {
                         error!(
-                            "Two scrapbook positions parsed to the same ident"
+                            "Two scrapbook positions parsed to the same \
+                             ident: {index}"
                         );
                     }
                 } else {
@@ -864,9 +990,9 @@ impl ScrapBook {
     }
 }
 
+/// The identification of items in the scrapbook
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The identification of items in the scrapbook
 pub struct EquipmentIdent {
     /// The class the item has and thus the wearer must have
     pub class: Option<Class>,
@@ -895,7 +1021,7 @@ impl ToString for EquipmentIdent {
 }
 
 #[allow(clippy::enum_glob_use)]
-fn parse_scrapbook_item(index: i64) -> Option<EquipmentIdent> {
+fn parse_scrapbook_item(item_idx: i64) -> Option<EquipmentIdent> {
     use Class::*;
     use EquipmentSlot::*;
     let slots: [(_, _, _, &[_]); 44] = [
@@ -945,18 +1071,17 @@ fn parse_scrapbook_item(index: i64) -> Option<EquipmentIdent> {
         (4185..4225, Belt, Some(Scout), &[4194, 4195]),
     ];
 
-    let mut is_epic = true;
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    for (range, typ, class, ignore) in slots {
-        is_epic = !is_epic;
-        if !range.contains(&index) {
+    for (pos, (range, typ, class, ignore)) in slots.into_iter().enumerate() {
+        if !range.contains(&item_idx) {
             continue;
         }
-        if ignore.contains(&index) {
+        if ignore.contains(&item_idx) {
             return None;
         }
 
-        let relative_pos = index - range.start + 1;
+        let is_epic = pos % 2 == 1;
+        let relative_pos = item_idx - range.start + 1;
 
         let color = match relative_pos % 10 {
             _ if typ == Talisman || is_epic => 1,

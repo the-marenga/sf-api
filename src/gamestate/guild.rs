@@ -1,8 +1,9 @@
 #![allow(clippy::module_name_repetitions)]
 use chrono::{DateTime, Local, NaiveTime};
-use enum_map::EnumMap;
+use enum_map::{Enum, EnumMap};
 use log::warn;
 use num_derive::FromPrimitive;
+use strum::{EnumIter, IntoEnumIterator};
 
 use super::{
     ArrSkip, AttributeType, CCGet, CFPGet, CGet, CSTGet, NormalCost, Potion,
@@ -12,9 +13,9 @@ use super::{
 };
 use crate::misc::{from_sf_string, soft_into, warning_parse};
 
+/// Information about the characters current guild
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Information about the characters current guild
 pub struct Guild {
     /// The internal server id of this guild
     pub id: u32,
@@ -31,21 +32,19 @@ pub struct Guild {
     /// The rank in the Hall of Fame this guild has
     pub rank: u32,
     /// The date at which the character joined this guild
-    pub joined: DateTime<Local>,
+    pub joined: Option<DateTime<Local>>,
 
     /// The skill you yourself contribute to the guild
     pub own_treasure_skill: u16,
-    /// The price to pay to upgrade your treasure by one rank
-    pub own_treasure_upgrade: NormalCost,
     /// The total amount of treasure skill the guild has
     pub total_treasure_skill: u16,
-
     /// The skill you yourself contribute to the guild
     pub own_instructor_skill: u16,
-    /// The price to pay to upgrade your instructor by one rank
-    pub own_instructor_upgrade: NormalCost,
     /// The total amount of instructor skill the guild has
     pub total_instructor_skill: u16,
+
+    /// The price to pay to upgrade the given skill
+    pub upgrade_price: EnumMap<GuildSkill, NormalCost>,
 
     /// How many raids this guild has completed already
     pub finished_raids: u16,
@@ -61,6 +60,9 @@ pub struct Guild {
 
     /// The id of the pet, that is currently selected as the guild pet
     pub pet_id: u32,
+    /// The level of your guild pet
+    pub own_pet_lvl: u16,
+    /// The level of your guild pet
     /// The maximum level, that the pet can be at
     pub pet_max_lvl: u16,
     /// All information about the hydra the guild pet can fight
@@ -73,19 +75,18 @@ pub struct Guild {
     member_count: u8,
     /// Information about the members of the guild. This includes the player
     pub members: Vec<GuildMemberData>,
-    /// The chat messages, that get send in the guild chat
+    /// The chat messages, that get sent in the guild chat
     pub chat: Vec<ChatMessage>,
     /// The whisper messages, that a player can receive
     pub whispers: Vec<ChatMessage>,
-
     /// A list of guilds which can be fought, must first be fetched by sending
     /// `Command::GuildGetFightableTargets`
     pub fightable_guilds: Vec<FightableGuild>,
 }
 
+/// The hydra, that the guild pet can fight
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The hydra, that the guild pet can fight
 pub struct GuildHydra {
     /// The last time the hydra has been fought
     pub last_battle: Option<DateTime<Local>>,
@@ -129,15 +130,15 @@ pub struct FightableGuild {
     pub honor: u32,
 }
 
+/// The customizable emblem each guild has
 #[derive(Debug, Clone, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The customizable emblem each guild has
 pub struct Emblem {
     raw: String,
 }
 
 impl Emblem {
-    /// Returns the guild emblem in it's server encoded form
+    /// Returns the guild emblem in its server encoded form
     #[must_use]
     pub fn server_encode(&self) -> String {
         // TODO: Actually parse this
@@ -150,9 +151,9 @@ impl Emblem {
     }
 }
 
+/// A message, that the player has received, or has sent to others via the chat
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A message, that the player has received, or has send to others via the chat
 pub struct ChatMessage {
     /// The user this message originated from. Note that this might not be in
     /// the guild member list in some cases
@@ -160,7 +161,7 @@ pub struct ChatMessage {
     /// The time at which this message has been sent. I have not checked the
     /// timezone here. Might be UTC/Your TZ/Server TZ
     pub time: NaiveTime,
-    /// The actual bessage, that got send
+    /// The actual message, that got sent
     pub message: String,
 }
 
@@ -347,14 +348,13 @@ impl Guild {
         &mut self,
         data: &[i64],
     ) -> Result<(), SFError> {
-        self.own_treasure_upgrade.silver =
-            data.csiget(0, "treasure upgr. silver", 0)?;
-        self.own_treasure_upgrade.mushrooms =
-            data.csiget(1, "treasure upgr. mush", 0)?;
-        self.own_instructor_upgrade.silver =
-            data.csiget(2, "instr upgr. silver", 0)?;
-        self.own_instructor_upgrade.mushrooms =
-            data.csiget(3, "instr upgr. mush", 0)?;
+        for (idx, skill) in GuildSkill::iter().enumerate() {
+            let skill = &mut self.upgrade_price[skill];
+            skill.silver =
+                data.csiget(idx * 2, "guild upgr. silver", u64::MAX)?;
+            skill.mushrooms =
+                data.csiget(1 + idx * 2, "guild upgr. mush", u16::MAX)?;
+        }
         Ok(())
     }
 
@@ -414,9 +414,9 @@ impl Guild {
     }
 }
 
+/// A guild battle, that is scheduled to take place at a certain place and time
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A guild battle, that is scheduled to take place at a certain place and time
 pub struct PlanedBattle {
     /// The guild this battle will be against
     pub other: u32,
@@ -450,9 +450,9 @@ impl PlanedBattle {
     }
 }
 
+/// The portal a guild has
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// The portal a guild has
 pub struct GuildPortal {
     /// The damage bonus in percent the guild portal gives to its members
     pub damage_bonus: u8,
@@ -462,9 +462,10 @@ pub struct GuildPortal {
     /// The percentage of life the portal enemy still has
     pub life_percentage: u8,
 }
+
+/// Which battles a member will participate in
 #[derive(Debug, Copy, Clone, FromPrimitive)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Which battles a member will participate in
 pub enum BattlesJoined {
     /// The player has only joined the defense of the guild
     Defense = 1,
@@ -475,9 +476,9 @@ pub enum BattlesJoined {
     Both = 11,
 }
 
+/// A member of a guild
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// A member of a guild
 pub struct GuildMemberData {
     /// The name of the member
     pub name: String,
@@ -485,7 +486,7 @@ pub struct GuildMemberData {
     pub battles_joined: Option<BattlesJoined>,
     /// The level of this member
     pub level: u16,
-    /// The last time this player was online (last time they send an update
+    /// The last time this player was online (last time they sent an update
     /// command)
     pub last_online: Option<DateTime<Local>>,
     /// The level, that this member has upgraded their treasure to
@@ -508,10 +509,10 @@ pub struct GuildMemberData {
     pub knights: u8,
 }
 
+/// The rank a member can have in a guild
 #[derive(Debug, Clone, Copy, FromPrimitive, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
-/// The rank a member can have in a guild
 pub enum GuildRank {
     Leader = 1,
     Officer = 2,
@@ -520,9 +521,9 @@ pub enum GuildRank {
     Invited = 4,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Something the player can upgrade in the guild
+#[derive(Debug, Clone, Copy, PartialEq, Enum, Eq, EnumIter)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 pub enum GuildSkill {
     Treasure = 0,
