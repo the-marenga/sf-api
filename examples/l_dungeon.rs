@@ -24,25 +24,24 @@ pub async fn main() {
 
         match status {
             LegendaryDungeonStatus::TakeItem { .. } => {
-                if let Some(slot) = gs.character.inventory.free_slot() {
-                    let (inv, pos) = slot.inventory_pos();
-                    info!("Taking new item");
-                    session
-                        .send_command(Command::LegendaryDungeonTakeItem {
-                            item_idx: 0,
-                            inventory_to: inv.player_item_position(),
-                            inventory_to_pos: pos,
-                        })
-                        .await
-                        .unwrap();
-                } else {
+                let Some(slot) = gs.character.inventory.free_slot() else {
                     error!(
                         "We do not have an inventory slot to take the new \
                          item to"
                     );
                     // Either make free slot, sell somehow
                     return;
-                }
+                };
+                let (inv, pos) = slot.inventory_pos();
+                info!("Taking new item");
+                session
+                    .send_command(Command::LegendaryDungeonTakeItem {
+                        item_idx: 0,
+                        inventory_to: inv.player_item_position(),
+                        inventory_to_pos: pos,
+                    })
+                    .await
+                    .unwrap();
             }
             LegendaryDungeonStatus::Unavailable => {
                 info!("The event is not ongoing");
@@ -63,7 +62,7 @@ pub async fn main() {
                     info!("We are dead. Waiting until we can continue..");
                     sleep(Duration::from_secs(60 * 60)).await;
                     session.send_command(Command::Update).await.unwrap();
-                    return;
+                    continue;
                 }
                 // MS8w
                 todo!("Start a new dungeon run / continue it")

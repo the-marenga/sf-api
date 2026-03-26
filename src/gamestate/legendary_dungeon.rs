@@ -261,7 +261,7 @@ pub enum LegendaryDungeonStatus<'a> {
     /// `LegendaryDungeonStart` command
     NotEntered,
     /// The event has ended, so you are not allowed to start another attempt,
-    /// but you may look at the your stats
+    /// but you may look at your stats
     Ended(&'a TotalStats),
     /// You are in the door select screen and must either pick the left, or
     /// right door. You do so with the `LegendaryDungeonPickDoor` command with
