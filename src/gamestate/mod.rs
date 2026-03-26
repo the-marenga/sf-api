@@ -1972,6 +1972,7 @@ impl GameState {
                 // Information about the currently ongoing major event
                 // (I think)
             }
+
             // Legendary Dungeons
             "iadungeontime" => {
                 let dungeons = &mut self.legendary_dungeon;

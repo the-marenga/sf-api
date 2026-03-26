@@ -1,3 +1,4 @@
+use clap::Parser;
 use sf_api::{gamestate::GameState, session::*, sso::SFAccount};
 
 #[tokio::main]
@@ -6,18 +7,18 @@ pub async fn main() {
         .filter_level(log::LevelFilter::Debug)
         .init();
 
-    const SSO: bool = false;
-    const USE_CACHE: bool = true;
+    let args = Args::parse();
 
     let custom_resp: Option<&str> = None;
     let command = None;
 
-    let username = std::env::var("USERNAME").unwrap();
+    let username = args.username;
 
-    let mut session = match SSO {
+    let mut session = match args.sso {
         true => SFAccount::login(
-            std::env::var("SSO_USERNAME").unwrap(),
-            std::env::var("PASSWORD").unwrap(),
+            args.sso_username
+                .expect("SSO_USERNAME or --sso-username is required for SSO"),
+            args.password,
         )
         .await
         .unwrap()
@@ -30,15 +31,20 @@ pub async fn main() {
         .unwrap(),
         false => Session::new(
             &username,
-            &std::env::var("PASSWORD").unwrap(),
-            ServerConnection::new(&std::env::var("SERVER").unwrap()).unwrap(),
+            &args.password,
+            ServerConnection::new(
+                &args
+                    .server
+                    .expect("SERVER or --server is required for non-SSO"),
+            )
+            .unwrap(),
         ),
     };
 
     _ = std::fs::create_dir("cache");
     let cache_name = format!("cache/{username}.login");
 
-    let login_data = match (USE_CACHE, std::fs::read_to_string(&cache_name)) {
+    let login_data = match (args.cache, std::fs::read_to_string(&cache_name)) {
         (true, Ok(s)) => serde_json::from_str(&s).unwrap(),
         _ => {
             let login_data = session.login().await.unwrap();
@@ -69,7 +75,7 @@ pub async fn main() {
         serde_json::to_string(&command).unwrap()
     );
 
-    let resp = match (USE_CACHE, std::fs::read_to_string(&cache_name)) {
+    let resp = match (args.cache, std::fs::read_to_string(&cache_name)) {
         (true, Ok(s)) => serde_json::from_str(&s).unwrap(),
         _ => {
             let resp = session.send_command_raw(&command).await.unwrap();
@@ -82,4 +88,32 @@ pub async fn main() {
     gs.update(&resp).unwrap();
     let js = serde_json::to_string_pretty(&gs).unwrap();
     std::fs::write("character.json", js).unwrap();
+}
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    /// Whether to use SSO login
+    #[arg(short, long)]
+    sso: bool,
+
+    /// Whether to use cached responses
+    #[arg(short, long)]
+    cache: bool,
+
+    /// Character username
+    #[arg(short, long, env = "USERNAME")]
+    username: String,
+
+    /// Character password
+    #[arg(short, long, env = "PASSWORD")]
+    password: String,
+
+    /// Game server (required if not using SSO)
+    #[arg(long, env = "SERVER")]
+    server: Option<String>,
+
+    /// SSO username / Email (required if using SSO)
+    #[arg(long, env = "SSO_USERNAME")]
+    sso_username: Option<String>,
 }
