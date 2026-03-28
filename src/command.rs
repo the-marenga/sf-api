@@ -14,7 +14,10 @@ use crate::{
         guild::{Emblem, GuildSkill},
         idle::IdleBuildingType,
         items::*,
-        legendary_dungeon::{DungeonEffectType, GemOfFateType, RPCChoice},
+        legendary_dungeon::{
+            DungeonEffectType, GemOfFateType, LegendaryDungeonEventTheme,
+            RPCChoice,
+        },
         social::Relationship,
         underworld::*,
         unlockables::*,
@@ -770,7 +773,9 @@ pub enum Command {
         pos: usize,
     },
     /// Starts the normal (not the ultimate) legendary dungeon
-    LegendaryDungeonEnter,
+    LegendaryDungeonEnter {
+        theme: LegendaryDungeonEventTheme,
+    },
     LegendaryDungeonMerchantBuy {
         effect: DungeonEffectType,
         keys: u32,
@@ -1484,7 +1489,9 @@ impl Command {
             Command::ExpeditionStart { pos } => {
                 format!("ExpeditionStart:{}", pos + 1)
             }
-            Command::LegendaryDungeonEnter => "IADungeonStart:1/0".into(),
+            Command::LegendaryDungeonEnter { theme } => {
+                format!("IADungeonStart:{}/0", *theme as usize)
+            }
             Command::LegendaryDungeonMerchantBuy { effect, keys } => {
                 format!("IADungeonMerchantBuy:{}/{}", *effect as i32, *keys)
             }
