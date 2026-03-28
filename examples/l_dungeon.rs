@@ -32,13 +32,11 @@ pub async fn main() {
                     // Either make free slot, sell somehow
                     return;
                 };
-                let (inv, pos) = slot.inventory_pos();
                 info!("Taking new item");
                 session
                     .send_command(Command::LegendaryDungeonTakeItem {
                         item_idx: 0,
-                        inventory_to: inv.player_item_position(),
-                        inventory_to_pos: pos,
+                        inventory_to: slot.into(),
                     })
                     .await
                     .unwrap();
