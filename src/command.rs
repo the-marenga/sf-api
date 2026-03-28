@@ -789,9 +789,8 @@ pub enum Command {
         /// are multiple. Should just be 0 in most cases
         item_idx: usize,
         /// The inventory you move the item to
-        inventory_to: PlayerItemPlace,
-        /// The inventory you move the item from
-        inventory_to_pos: usize,
+        inventory_to: PlayerItemPosition,
+        // TODO: ItemCommandIdent?
     },
     /// You are in a (golden) room, that has some sort of gimmick. This could
     /// be the locker room, or smth. else. In those cases you can either
@@ -1539,14 +1538,8 @@ impl Command {
             Command::LegendaryDungeonTakeItem {
                 item_idx,
                 inventory_to,
-                inventory_to_pos,
             } => {
-                format!(
-                    "PlayerItemMove:401/{}/{}/{}",
-                    item_idx + 1,
-                    *inventory_to as usize,
-                    *inventory_to_pos + 1
-                )
+                format!("PlayerItemMove:401/{}/{inventory_to}", item_idx + 1)
             }
             // Buy merchant 1. item: IADungeonMerchantBuy: 2/0
             Command::FightDungeon {
