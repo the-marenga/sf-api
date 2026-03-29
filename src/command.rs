@@ -795,7 +795,10 @@ pub enum Command {
         item_idx: usize,
         /// The inventory you move the item to
         inventory_to: PlayerItemPosition,
-        // TODO: ItemCommandIdent?
+        /// Identifies the source item to ensure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
     },
     /// You are in a (golden) room, that has some sort of gimmick. This could
     /// be the locker room, or smth. else. In those cases you can either
@@ -1545,8 +1548,12 @@ impl Command {
             Command::LegendaryDungeonTakeItem {
                 item_idx,
                 inventory_to,
+                item_ident,
             } => {
-                format!("PlayerItemMove:401/{}/{inventory_to}", item_idx + 1)
+                format!(
+                    "PlayerItemMove:401/{}/{inventory_to}/{item_ident}",
+                    item_idx + 1
+                )
             }
             // Buy merchant 1. item: IADungeonMerchantBuy: 2/0
             Command::FightDungeon {

@@ -23,7 +23,8 @@ pub async fn main() {
         sleep(Duration::from_secs(10)).await;
 
         match status {
-            LegendaryDungeonStatus::TakeItem { .. } => {
+            LegendaryDungeonStatus::TakeItem { items, .. } => {
+                let item = items.iter().next().unwrap().command_ident();
                 let Some(slot) = gs.character.inventory.free_slot() else {
                     error!(
                         "We do not have an inventory slot to take the new \
@@ -37,6 +38,7 @@ pub async fn main() {
                     .send_command(Command::LegendaryDungeonTakeItem {
                         item_idx: 0,
                         inventory_to: slot.into(),
+                        item_ident: item,
                     })
                     .await
                     .unwrap();
