@@ -711,11 +711,11 @@ impl TotalStats {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GemOfFate {
     pub typ: GemOfFateType,
-    pub advantage: Option<GemOfFateAdvantage>,
+    pub advantage: Option<GemOfFateEffect>,
     pub advantage_pwr: i64,
-    pub disadvantage: Option<GemOfFateDisadvantage>,
+    pub disadvantage: Option<GemOfFateEffect>,
     pub disadvantage_pwr: i64,
-    pub disadvantage_effect: Option<GemOfFateDisadvantageEffect>,
+    pub disadvantage_effect: Option<GemOfFateSpecialDisadvantage>,
 }
 
 impl GemOfFate {
@@ -743,6 +743,23 @@ pub enum GemOfFateType {
     EmeraldOfTheExplorer = 4,
     PearlOfTheMasochist = 5,
     PendantOfTheKeyMaster = 6,
+    PebbleOfDeceit = 7,
+    GreasyHealingStone = 8,
+    SpyingGem = 9,
+    LodeStone = 10,
+    BoulderOfTheGambler = 11,
+    OldSacrificialStone = 12,
+    BloodDropOfSacrifice = 13,
+    KidneyStoneOfDetermination = 14,
+    HopeOfTheThirstyOne = 15,
+    ErraticBoulderOfTheHip = 16,
+    SaphireOfTheMisadventurer = 17,
+    CursedMoonstone = 18,
+    DiamondOfTheTimetraveler = 19,
+    TreasureOfTheHero = 20,
+    CrownJewelOfTheDevil = 21,
+    CursedPearl = 22,
+    RustyHealingStone = 23,
 
     // TODO:
     #[default]
@@ -751,17 +768,39 @@ pub enum GemOfFateType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum GemOfFateAdvantage {
-    // TODO:
-    IncreasedChanceOfKeys = 1,
-    IncreasedEscapeChance = 10,
-    IncreasedDurationOfBlessings = 30,
-    ReduceDamageFromMonsters = 40,
-    IncreasedBlessingsInBarrels = 50,
-    ReducedDamageFromSacDoors = 70,
-    ReducedDamageFromTraps = 90,
-    IncreasedBlessingsInBarrelsChestsCorpses = 110,
-    MoreHealingFromBlessings = 130,
+pub enum GemOfFateEffect {
+    // Key related effects
+    ChanceOfKeys = 1,
+
+    // Escape effects
+    EscapeChance = 10,
+    DamageFromEscape = 11,
+    ChanceOfKeyAfterEscape = 12,
+    ChanceOfCurseAfterEscape = 13,
+
+    // Blessings & Curses
+    DurationOfBlessings = 30,
+    DurationOfCurses = 31,
+    ChanceOfStrongerCurses = 32,
+
+    // Fights
+    DamageFromMonsters = 40,
+    ChanceOfBlessingAfterFight = 41,
+    ChanceOfCurseAfterFight = 42,
+
+    // Barrels
+    ChanceOfBlessingsInBarrels = 50,
+    ChanceOfBetterBlessingsInBarrels = 51,
+
+    // Damage
+    DamageFromSacDoors = 70,
+    DamageFromChests = 71,
+
+    DamageFromTraps = 90,
+
+    BlessingOrCurseAfterRevive = 100,
+    BlessingsInBarrelsChestsCorpses = 110,
+    HealingFromBlessings = 130,
 
     #[default]
     Unknown = -1,
@@ -769,22 +808,7 @@ pub enum GemOfFateAdvantage {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum GemOfFateDisadvantage {
-    // TODO:
-    ReduceEscapeChance = 10,
-    ReduceBlessingDuration = 30,
-    IncreaseCurseDuration = 31,
-    IncreaseStrongCurseChance = 32,
-
-    IncreasedMonsterDamage = 40,
-
-    #[default]
-    Unknown = -1,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum GemOfFateDisadvantageEffect {
+pub enum GemOfFateSpecialDisadvantage {
     WeakerMonstersSpawn = 1,
     StrongerMonstersSpawn = 2,
     MoreTrapsSpawn = 3,

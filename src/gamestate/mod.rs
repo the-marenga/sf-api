@@ -1900,7 +1900,6 @@ impl GameState {
                     data.cfpuget(20, "character class", |a| a - 1)?;
                 self.character.mount =
                     data.cfpget(21, "character mount", |a| a & 0xFF)?;
-                // 3
                 // 0
                 self.character.armor = data.csiget(23, "total armor", 0)?;
                 self.character.min_damage = data.csiget(24, "min damage", 0)?;
@@ -1974,6 +1973,9 @@ impl GameState {
             }
 
             // Legendary Dungeons
+            "iadungeonchances" => {
+                // IDK
+            }
             "iadungeontime" => {
                 let dungeons = &mut self.legendary_dungeon;
 

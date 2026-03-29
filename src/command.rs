@@ -1000,9 +1000,7 @@ impl Command {
     /// perform the request
     #[allow(deprecated, clippy::useless_format)]
     #[cfg(feature = "session")]
-    pub fn request_string(
-        &self,
-    ) -> Result<String, crate::error::SFError> {
+    pub fn request_string(&self) -> Result<String, crate::error::SFError> {
         const APP_VERSION: &str = "295000000000";
         use crate::{
             error::SFError,
