@@ -45,6 +45,41 @@ pub async fn main() {
     let cache_name = format!("cache/{username}.login");
 
     let login_data = match (args.cache, std::fs::read_to_string(&cache_name)) {
+        (_, Ok(s)) if args.diff => {
+            let old: Response = serde_json::from_str(&s).unwrap();
+            let new = session.login().await.unwrap();
+            // TODO: Diff the two values
+            for (&key, new_val) in new.values() {
+                if key.ends_with("id")
+                    || key == "timestamp"
+                    || key == "expeditionevent"
+                    || key == "idle"
+                {
+                    continue;
+                }
+                let Some(old_val) = old.values().get(key) else {
+                    println!("New key: {key}");
+                    continue;
+                };
+                let old_val: Vec<_> = old_val.as_str().split("/").collect();
+                let new_val: Vec<_> = new_val.as_str().split("/").collect();
+                for (idx, (new, old)) in
+                    new_val.into_iter().zip(old_val).enumerate()
+                {
+                    if new.starts_with("17") && new.len() == "1774765933".len()
+                    {
+                        continue;
+                    }
+                    if key == "ownplayersave" && idx == 478 {
+                        continue;
+                    }
+                    if new != old {
+                        println!("{key}[{idx}] {old} => {new}");
+                    }
+                }
+            }
+            return;
+        }
         (true, Ok(s)) => serde_json::from_str(&s).unwrap(),
         _ => {
             let login_data = session.login().await.unwrap();
@@ -53,6 +88,17 @@ pub async fn main() {
             login_data
         }
     };
+
+    // for (key, value) in login_data.values() {
+    //     if !key.starts_with("event") {
+    //         continue;
+    //     }
+    //     println!("resp.start_section(\"{key}\");");
+    //     let values:Vec<i64> = value.into_list("test").unwrap();
+    //     for num in values {
+    //         println!("resp.add_val({num});");
+    //     }
+    // }
 
     let mut gs = GameState::new(login_data).unwrap();
 
@@ -100,6 +146,9 @@ struct Args {
     /// Whether to use cached responses
     #[arg(short, long)]
     cache: bool,
+
+    #[arg(short, long)]
+    diff: bool,
 
     /// Character username
     #[arg(short, long, env = "USERNAME")]
