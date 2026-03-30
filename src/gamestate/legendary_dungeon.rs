@@ -451,7 +451,7 @@ pub struct LegendaryDungeon {
     health_status: i64,
 
     /// The time at which the healing process started after dropping hp to 0
-    healing_start: Option<DateTime<Local>>,
+    pub(crate) healing_start: Option<DateTime<Local>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, Default)]

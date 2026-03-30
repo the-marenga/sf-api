@@ -1856,6 +1856,14 @@ impl GameState {
                     data.cstget(20, "pet next free exp", server_time)?;
                 self.dungeons.next_free_fight =
                     data.cstget(21, "dungeon timer", server_time)?;
+                if let Some(start) =
+                    data.cstget(22, "dungeon timer", server_time)?
+                {
+                    self.legendary_dungeon
+                        .active
+                        .get_or_insert_default()
+                        .healing_start = Some(start);
+                }
                 // 0
                 // 1
                 // 0
