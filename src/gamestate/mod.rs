@@ -2013,7 +2013,10 @@ impl GameState {
                     self.legendary_dungeon.active.get_or_insert_default();
                 dungeons.pending_items.clear();
                 let data: Vec<i64> = val.into_list("iapendingitems")?;
-
+                let amount: i64 = data.cget(0, "pending amount")?;
+                if amount < 1 {
+                    return Ok(());
+                }
                 for slice in
                     data.skip(1, "ld items")?.chunks_exact(ITEM_PARSE_LEN)
                 {

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Debug, str::FromStr};
 
 use chrono::NaiveDateTime;
-use log::{error, trace, warn};
+use log::{debug, error, trace, warn};
 
 use crate::error::SFError;
 
@@ -227,7 +227,7 @@ impl Response {
                         res.insert(key, ResponseVal { value, sub_key });
                     if let Some(old_val) = old_val {
                         let old = old_val.as_str();
-                        warn!("Overwrote [{key}]: {old} => {value}",);
+                        debug!("Overwrote [{key}]: {old} => {value}",);
                     }
                 }
                 res

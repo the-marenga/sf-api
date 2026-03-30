@@ -58,15 +58,15 @@ pub async fn main() {
                 info!("The event has ended. Your stats are: \n{stats:#?}");
                 return;
             }
-            LegendaryDungeonStatus::Healing { can_continue, .. } => {
-                if !can_continue {
-                    info!("We are dead. Waiting until we can continue..");
-                    sleep(Duration::from_secs(60 * 60)).await;
-                    session.send_command(Command::Update).await.unwrap();
-                    continue;
-                }
-                // MS8w
-                todo!("Start a new dungeon run / continue it")
+            LegendaryDungeonStatus::Healing { .. } => {
+                // if !can_continue {
+                //     info!("We are dead. Waiting until we can continue..");
+                //     sleep(Duration::from_secs(60 * 60)).await;
+                //     session.send_command(Command::Update).await.unwrap();
+                //     continue;
+                // }
+                // // MS8w
+                // todo!("Start a new dungeon run / continue it")
             }
             LegendaryDungeonStatus::PickGem { available_gems, .. } => {
                 log::info!("We have gems to pick from:\n{available_gems:#?}");

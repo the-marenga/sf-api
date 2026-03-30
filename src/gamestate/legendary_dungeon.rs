@@ -283,7 +283,7 @@ pub enum LegendaryDungeonStatus<'a> {
         dungeon: &'a LegendaryDungeon,
         /// The time at which we started to heal (last time we died)
         started: DateTime<Local>,
-        /// [0-100]. Will be updated based on the current DateTime, so this
+        /// [0-100]. Will be updated based on the current `DateTime`, so this
         /// will change inbetween invocations
         current_health_percent: u8,
     },
