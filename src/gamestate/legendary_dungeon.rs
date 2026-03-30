@@ -132,7 +132,8 @@ pub enum LegendaryDungeonStage {
 
     RoomEntered = 10,
     RoomInteracted = 11,
-    PickGem = 12,
+    RoomSpecial = 12,
+
     RoomFinished = 100,
     Healing = 101,
 
@@ -259,7 +260,7 @@ pub enum LegendaryDungeonStatus<'a> {
     Unavailable,
     /// You have not yet entered the dungeon. Start the dungeon by sending a
     /// `LegendaryDungeonStart` command
-    NotEntered,
+    NotEntered(LegendaryDungeonEventTheme),
     /// The event has ended, so you are not allowed to start another attempt,
     /// but you may look at your stats
     Ended(&'a TotalStats),
@@ -327,9 +328,16 @@ impl LegendaryDungeonEvent {
             return Status::Unavailable;
         }
 
+        let Some(theme) = self
+            .theme
+            .filter(|a| !matches!(a, LegendaryDungeonEventTheme::Unknown))
+        else {
+            return Status::Unavailable;
+        };
+
         let Some(active) = &self.active else {
             return if self.end.is_some_and(|a| a > now) {
-                Status::NotEntered
+                Status::NotEntered(theme)
             } else {
                 Status::Unavailable
             };
@@ -344,18 +352,20 @@ impl LegendaryDungeonEvent {
 
         match active.stage {
             Stage::NotEntered => {
-                // TODO: Do we need to provide the amount of runs already
+                // TODO: Do we need to provide the amount of runes already
                 // done or smth. here?
-                Status::NotEntered
+                Status::NotEntered(theme)
             }
             Stage::DoorSelect => Status::DoorSelect {
                 dungeon: active,
                 doors: &active.doors,
             },
-            Stage::PickGem => Status::PickGem {
-                dungeon: active,
-                available_gems: &active.available_gems,
-            },
+            Stage::RoomSpecial if active.room_type == RoomType::BossRoom => {
+                Status::PickGem {
+                    dungeon: active,
+                    available_gems: &active.available_gems,
+                }
+            }
             #[allow(clippy::pedantic)]
             Stage::Healing => {
                 let started = active.healing_start.unwrap_or_default();
@@ -386,6 +396,12 @@ impl LegendaryDungeonEvent {
             Stage::RoomInteracted => Status::Room {
                 dungeon: active,
                 status: RoomStatus::Interacted,
+                encounter: active.encounter,
+                typ: active.room_type,
+            },
+            Stage::RoomSpecial => Status::Room {
+                dungeon: active,
+                status: RoomStatus::Special,
                 encounter: active.encounter,
                 typ: active.room_type,
             },
@@ -687,6 +703,7 @@ impl LegendaryDungeon {
 pub enum RoomStatus {
     Entered,
     Interacted,
+    Special,
     Finished,
 }
 

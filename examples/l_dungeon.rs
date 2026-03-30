@@ -47,8 +47,7 @@ pub async fn main() {
                 info!("The event is not ongoing");
                 return;
             }
-            LegendaryDungeonStatus::NotEntered => {
-                let theme = gs.legendary_dungeon.theme.unwrap();
+            LegendaryDungeonStatus::NotEntered(theme) => {
                 session
                     .send_command(Command::LegendaryDungeonEnter { theme })
                     .await
@@ -130,6 +129,9 @@ pub async fn main() {
                 match status {
                     RoomStatus::Entered => {
                         // Interact with the room normally, we just entered
+                    }
+                    RoomStatus::Special => {
+                        todo!()
                     }
                     RoomStatus::Interacted => {
                         // can lead to 60, or 70 I think. 60 should be
