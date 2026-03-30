@@ -223,7 +223,12 @@ impl Response {
                         continue;
                     }
 
-                    res.insert(key, ResponseVal { value, sub_key });
+                    let old_val =
+                        res.insert(key, ResponseVal { value, sub_key });
+                    if let Some(old_val) = old_val {
+                        let old = old_val.as_str();
+                        warn!("Overwrote [{key}]: {old} => {value}",);
+                    }
                 }
                 res
             },

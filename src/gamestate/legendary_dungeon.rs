@@ -281,7 +281,11 @@ pub enum LegendaryDungeonStatus<'a> {
     // TODO: Do we continue with `LegendaryDungeonStart`?
     Healing {
         dungeon: &'a LegendaryDungeon,
-        can_continue: bool,
+        /// The time at which we started to heal (last time we died)
+        started: DateTime<Local>,
+        /// [0-100]. Will be updated based on the current DateTime, so this
+        /// will change inbetween invocations
+        current_health_percent: u8,
     },
     Room {
         dungeon: &'a LegendaryDungeon,
@@ -352,10 +356,26 @@ impl LegendaryDungeonEvent {
                 dungeon: active,
                 available_gems: &active.available_gems,
             },
-            Stage::Healing => Status::Healing {
-                dungeon: active,
-                can_continue: active.health_status == 2,
-            },
+            #[allow(clippy::pedantic)]
+            Stage::Healing => {
+                let started = active.healing_start.unwrap_or_default();
+                let now = Local::now();
+                let elapsed = now - started;
+                let elapsed_minuted = elapsed.num_minutes() as f64;
+
+                let heal_per_day = 100.0;
+                let heal_per_hour = heal_per_day / 24.0;
+                let heal_per_minute = heal_per_hour / 60.0;
+
+                let healed = elapsed_minuted * heal_per_minute;
+                let current_health_percent = healed.clamp(0.0, 100.0) as u8;
+
+                Status::Healing {
+                    dungeon: active,
+                    started,
+                    current_health_percent,
+                }
+            }
             Stage::RoomEntered => Status::Room {
                 dungeon: active,
                 status: RoomStatus::Entered,
@@ -429,6 +449,9 @@ pub struct LegendaryDungeon {
     // 1 = ?
     // 0 = dead (healing)
     health_status: i64,
+
+    /// The time at which the healing process started after dropping hp to 0
+    healing_start: Option<DateTime<Local>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, FromPrimitive, Default)]
