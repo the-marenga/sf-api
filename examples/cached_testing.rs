@@ -1,4 +1,5 @@
 use clap::Parser;
+use regex::Regex;
 use sf_api::{gamestate::GameState, session::*, sso::SFAccount};
 
 #[tokio::main]
@@ -89,16 +90,24 @@ pub async fn main() {
         }
     };
 
-    // for (key, value) in login_data.values() {
-    //     if !key.starts_with("event") {
-    //         continue;
-    //     }
-    //     println!("resp.start_section(\"{key}\");");
-    //     let values:Vec<i64> = value.into_list("test").unwrap();
-    //     for num in values {
-    //         println!("resp.add_val({num});");
-    //     }
-    // }
+    if let Some(re) = args.search {
+        for (&key, value) in login_data.values() {
+            if key == "ownplayersave" {
+                continue;
+            }
+            if let Some(key_re) = &args.search_key
+                && !key_re.is_match(key)
+            {
+                continue;
+            }
+            let values: Vec<_> = value.as_str().split('/').collect();
+            for (pos, num) in values.into_iter().enumerate() {
+                if re.is_match(num) {
+                    println!("{key}[{pos}] = {num}")
+                }
+            }
+        }
+    }
 
     let mut gs = GameState::new(login_data).unwrap();
 
@@ -165,4 +174,12 @@ struct Args {
     /// SSO username / Email (required if using SSO)
     #[arg(long, env = "SSO_USERNAME")]
     sso_username: Option<String>,
+
+    /// Searches for values, that matches the given regex
+    #[arg(long)]
+    search: Option<Regex>,
+
+    /// Only print keys during the search, that match this regex
+    #[arg(long)]
+    search_key: Option<Regex>,
 }
