@@ -780,9 +780,17 @@ pub enum Command {
         effect: DungeonEffectType,
         keys: u32,
     },
+    /// Interacts with the encounter. This is the default, just entered the
+    /// room and click on the thing, action for anything, that is not a fight
     LegendaryDungeonEncounterInteract,
+    /// Escapes from an encounter, that is willing to fight and may attack you
+    /// for escaping
     LegendaryDungeonEncounterEscape,
+    /// Leaves the encounter room without interacting with ever having
+    /// interacted with the encounter
+    LegendaryDungeonEncounterLeave,
     LegendaryDungeonMerchantNewGoods,
+    /// Leaves non-encounter rooms
     LegendaryDungeonRoomLeave,
     /// Play Rock, Paper, Scissors with your provided choice. I don't think
     /// this makes a difference, but you still have the option to choose one
@@ -1525,6 +1533,9 @@ impl Command {
             }
             Command::LegendaryDungeonEncounterEscape => {
                 format!("IADungeonInteract:41")
+            }
+            Command::LegendaryDungeonEncounterLeave => {
+                format!("IADungeonInteract:42")
             }
             Command::LegendaryDungeonRoomInteract => {
                 format!("IADungeonInteract:50")
