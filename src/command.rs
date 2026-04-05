@@ -15,8 +15,8 @@ use crate::{
         idle::IdleBuildingType,
         items::*,
         legendary_dungeon::{
-            DungeonEffectType, GemOfFateType, LegendaryDungeonEventTheme,
-            RPCChoice,
+            DoorType, DungeonEffectType, GemOfFateType,
+            LegendaryDungeonEventTheme, RPCChoice,
         },
         social::Relationship,
         underworld::*,
@@ -825,6 +825,8 @@ pub enum Command {
     LegendaryDungeonPickDoor {
         /// 0 => left, 1 => right
         pos: usize,
+        /// The type of the door, that you want to enter
+        typ: DoorType,
     },
     LegendaryDungeonPickGem {
         gem_type: GemOfFateType,
@@ -1546,13 +1548,19 @@ impl Command {
             Command::LegendaryDungeonForcedContinue => {
                 format!("IADungeonInteract:70")
             }
-            Command::LegendaryDungeonPickDoor { pos } => {
-                format!("IADungeonInteract:{}", pos + 1)
+            Command::LegendaryDungeonPickDoor { pos, typ } => {
+                let mut id = pos + 1;
+                if matches!(
+                    typ,
+                    DoorType::LockedDoor | DoorType::DoubleLockedDoor
+                ) {
+                    id += 4;
+                }
+                format!("IADungeonInteract:{id}")
             }
             Command::LegendaryDungeonPlayRPC { choice } => {
                 format!("IADungeonInteract:{}", *choice as i32)
             }
-            // Take item reward: : 401/1/2/3 /3/2009/133681367/0
             Command::LegendaryDungeonPickGem { gem_type } => {
                 format!("IADungeonSelectSoulStone:{}", *gem_type as u32)
             }
@@ -1566,7 +1574,6 @@ impl Command {
                     item_idx + 1
                 )
             }
-            // Buy merchant 1. item: IADungeonMerchantBuy: 2/0
             Command::FightDungeon {
                 dungeon,
                 use_mushroom,
