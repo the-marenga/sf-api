@@ -16,7 +16,7 @@ use crate::{
         items::*,
         legendary_dungeon::{
             DoorType, DungeonEffectType, GemOfFateType,
-            LegendaryDungeonEventTheme, RPCChoice,
+            LegendaryDungeonEventTheme, RPSChoice,
         },
         social::Relationship,
         underworld::*,
@@ -795,7 +795,7 @@ pub enum Command {
     /// Play Rock, Paper, Scissors with your provided choice. I don't think
     /// this makes a difference, but you still have the option to choose one
     LegendaryDungeonPlayRPC {
-        choice: RPCChoice,
+        choice: RPSChoice,
     },
     LegendaryDungeonTakeItem {
         /// The idx of the item in the dungeon, that you want to take, if there
