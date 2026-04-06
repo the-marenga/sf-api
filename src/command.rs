@@ -1564,7 +1564,9 @@ impl Command {
                 let mut id = pos + 1;
                 if matches!(
                     typ,
-                    DoorType::LockedDoor | DoorType::DoubleLockedDoor
+                    DoorType::LockedDoor
+                        | DoorType::DoubleLockedDoor
+                        | DoorType::EpicDoor
                 ) {
                     id += 4;
                 }
