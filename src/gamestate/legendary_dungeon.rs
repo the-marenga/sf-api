@@ -475,6 +475,7 @@ pub struct LegendaryDungeon {
 pub enum RoomType {
     Generic = 1,
     BossRoom = 4,
+    FinalBossRoom = 5,
 
     Encounter = 100,
     Empty = 200,
@@ -578,7 +579,7 @@ pub enum RoomType {
     AuctionHouse = 326,
     // 327 => normal
     // 328 => normal
-    Armory = 329, 
+    Armory = 329,
     #[default]
     Unknown = -1,
 }
