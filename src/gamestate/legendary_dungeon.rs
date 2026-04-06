@@ -578,7 +578,7 @@ pub enum RoomType {
     AuctionHouse = 326,
     // 327 => normal
     // 328 => normal
-    // 329 => normal, no enemy
+    Armory = 329, 
     #[default]
     Unknown = -1,
 }
