@@ -136,6 +136,7 @@ pub enum LegendaryDungeonStage {
 
     RoomFinished = 100,
     Healing = 101,
+    Finished = 102,
 
     #[default]
     Unknown = -1,
@@ -413,6 +414,7 @@ impl LegendaryDungeonEvent {
                 typ: active.room_type,
             },
             Stage::Unknown => Status::Unknown,
+            Stage::Finished => Status::Ended(&active.total_stats),
         }
     }
 }
