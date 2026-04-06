@@ -776,7 +776,13 @@ pub enum Command {
     LegendaryDungeonEnter {
         theme: LegendaryDungeonEventTheme,
     },
-    LegendaryDungeonMerchantBuy {
+    /// Buy a curse in the `KeyToFailureShop`
+    LegendaryDungeonBuyCurse {
+        effect: DungeonEffectType,
+        keys: u32,
+    },
+    /// Buy a blessing in the `KeyMasterShop`
+    LegendaryDungeonBuyBlessing {
         effect: DungeonEffectType,
         keys: u32,
     },
@@ -1505,8 +1511,14 @@ impl Command {
             Command::LegendaryDungeonEnter { theme } => {
                 format!("IADungeonStart:{}/0", *theme as usize)
             }
-            Command::LegendaryDungeonMerchantBuy { effect, keys } => {
+            Command::LegendaryDungeonBuyBlessing { effect, keys } => {
                 format!("IADungeonMerchantBuy:{}/{}", *effect as i32, *keys)
+            }
+            Command::LegendaryDungeonBuyCurse { effect, keys } => {
+                format!(
+                    "IADungeonDebuffMerchantBuy:{}/{}",
+                    *effect as i32, *keys
+                )
             }
             Command::LegendaryDungeonMonsterCollectKey => {
                 "IADungeonInteract:60".into()
