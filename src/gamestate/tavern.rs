@@ -253,22 +253,26 @@ impl CurrentAction {
     pub(crate) fn parse(
         id: i64,
         sec: i64,
-        busy: Option<DateTime<Local>>,
+        busy_until: Option<DateTime<Local>>,
     ) -> Self {
-        match (id, busy) {
-            (0, None) => CurrentAction::Idle,
-            (1, Some(busy_until)) => CurrentAction::CityGuard {
+        // XXX: Sometimes the game "forgets" when an action was supposed to end.
+        // This only happens when the action is very old, so falling back to a
+        // busy_until that is super old is fine here
+        let busy_until = busy_until.unwrap_or_default();
+        match id {
+            0 => CurrentAction::Idle,
+            1 => CurrentAction::CityGuard {
                 hours: soft_into(sec, "city guard time", 10),
                 busy_until,
             },
-            (2, Some(busy_until)) => CurrentAction::Quest {
+            2 => CurrentAction::Quest {
                 quest_idx: soft_into(sec, "quest index", 0),
                 busy_until,
             },
-            (4, None) => CurrentAction::Expedition,
+            4 => CurrentAction::Expedition,
             _ => {
-                error!("Unknown action id combination: {id}, {busy:?}");
-                CurrentAction::Unknown(busy)
+                error!("Unknown action id combination: {id}, {busy_until:?}");
+                CurrentAction::Unknown(Some(busy_until))
             }
         }
     }

@@ -14,11 +14,13 @@ use crate::{
         guild::{Emblem, GuildSkill},
         idle::IdleBuildingType,
         items::*,
+        legendary_dungeon::{
+            DoorType, DungeonEffectType, GemOfFateType,
+            LegendaryDungeonEventTheme, RPSChoice,
+        },
         social::Relationship,
         underworld::*,
-        unlockables::{
-            EnchantmentIdent, HabitatType, HellevatorTreatType, Unlockable,
-        },
+        unlockables::*,
     },
 };
 
@@ -770,6 +772,74 @@ pub enum Command {
         /// The index of the expedition to start
         pos: usize,
     },
+    /// Starts the normal (not the ultimate) legendary dungeon
+    LegendaryDungeonEnter {
+        theme: LegendaryDungeonEventTheme,
+    },
+    /// Buy a curse in the `KeyToFailureShop`
+    LegendaryDungeonBuyCurse {
+        effect: DungeonEffectType,
+        keys: u32,
+    },
+    /// Buy a blessing in the `KeyMasterShop`
+    LegendaryDungeonBuyBlessing {
+        effect: DungeonEffectType,
+        keys: u32,
+    },
+    /// Interacts with the encounter. This is the default, just entered the
+    /// room and click on the thing, action for anything, that is not a fight
+    LegendaryDungeonEncounterInteract,
+    /// Escapes from an encounter, that is willing to fight and may attack you
+    /// for escaping
+    LegendaryDungeonEncounterEscape,
+    /// Leaves the encounter room without interacting with ever having
+    /// interacted with the encounter
+    LegendaryDungeonEncounterLeave,
+    LegendaryDungeonMerchantNewGoods,
+    /// Leaves non-encounter rooms
+    LegendaryDungeonRoomLeave,
+    /// Play Rock, Paper, Scissors with your provided choice. I don't think
+    /// this makes a difference, but you still have the option to choose one
+    LegendaryDungeonPlayRPC {
+        choice: RPSChoice,
+    },
+    LegendaryDungeonTakeItem {
+        /// The idx of the item in the dungeon, that you want to take, if there
+        /// are multiple. Should just be 0 in most cases
+        item_idx: usize,
+        /// The inventory you move the item to
+        inventory_to: PlayerItemPosition,
+        /// Identifies the source item to ensure it has not changed since
+        /// you looked at it (shop reroll, etc.). You can get this ident by
+        /// calling `.command_ident()` on any Item
+        item_ident: ItemCommandIdent,
+    },
+    /// You are in a (golden) room, that has some sort of gimmick. This could
+    /// be the locker room, or smth. else. In those cases you can either
+    /// interact, or leave
+    LegendaryDungeonRoomInteract,
+    /// The dungeon is in a state, that there is only one option, which the
+    /// official client will automatically do. This mainly happens, when you
+    /// Have interacted with the room and the game "automatically" continues,
+    /// because otherwise you would just awkwardly stand in the same room until
+    /// you "flee"
+    LegendaryDungeonForcedContinue,
+    /// You have defeated the monster. Collect the key, that it dropped to
+    /// continue
+    LegendaryDungeonMonsterCollectKey,
+    /// Picks either the left, or the right door
+    LegendaryDungeonPickDoor {
+        /// 0 => left, 1 => right
+        pos: usize,
+        /// The type of the door, that you want to enter
+        typ: DoorType,
+    },
+    LegendaryDungeonPickGem {
+        gem_type: GemOfFateType,
+    },
+    LegendaryDungeonInteract {
+        val: usize,
+    },
     /// Skips the waiting period of the current expedition. Note that mushroom
     /// may not always be possible
     ExpeditionSkipWait {
@@ -817,6 +887,8 @@ pub enum Command {
     },
     /// Spend 1000 mushrooms to buy a gold frame
     BuyGoldFrame,
+    LegendaryDungeonMonsterFight,
+    LegendaryDungeonMonsterEscape,
 }
 
 /// This is the "Questing instead of expeditions" value in the settings
@@ -1435,6 +1507,86 @@ impl Command {
             }
             Command::ExpeditionStart { pos } => {
                 format!("ExpeditionStart:{}", pos + 1)
+            }
+            Command::LegendaryDungeonEnter { theme } => {
+                format!("IADungeonStart:{}/0", *theme as usize)
+            }
+            Command::LegendaryDungeonBuyBlessing { effect, keys } => {
+                format!("IADungeonMerchantBuy:{}/{}", *effect as i32, *keys)
+            }
+            Command::LegendaryDungeonBuyCurse { effect, keys } => {
+                format!(
+                    "IADungeonDebuffMerchantBuy:{}/{}",
+                    *effect as i32, *keys
+                )
+            }
+            Command::LegendaryDungeonMonsterCollectKey => {
+                "IADungeonInteract:60".into()
+            }
+            Command::LegendaryDungeonMerchantNewGoods => {
+                "IADungeonInteract:50".into()
+            }
+            Command::LegendaryDungeonInteract { val } => {
+                // Left door = 1
+                // Fight Monster => 20
+                // Open Chest => 40
+                // Interact Special => 50
+                // Run Special => 51
+                // FinishFight? => 60
+                // Finish Stage => 70
+                format!("IADungeonInteract:{val}")
+            }
+            Command::LegendaryDungeonMonsterFight => {
+                format!("IADungeonInteract:20")
+            }
+            Command::LegendaryDungeonMonsterEscape => {
+                format!("IADungeonInteract:21")
+            }
+            Command::LegendaryDungeonEncounterInteract => {
+                format!("IADungeonInteract:40")
+            }
+            Command::LegendaryDungeonEncounterEscape => {
+                format!("IADungeonInteract:41")
+            }
+            Command::LegendaryDungeonEncounterLeave => {
+                format!("IADungeonInteract:42")
+            }
+            Command::LegendaryDungeonRoomInteract => {
+                format!("IADungeonInteract:50")
+            }
+            Command::LegendaryDungeonRoomLeave => {
+                format!("IADungeonInteract:51")
+            }
+            Command::LegendaryDungeonForcedContinue => {
+                format!("IADungeonInteract:70")
+            }
+            Command::LegendaryDungeonPickDoor { pos, typ } => {
+                let mut id = pos + 1;
+                if matches!(
+                    typ,
+                    DoorType::LockedDoor
+                        | DoorType::DoubleLockedDoor
+                        | DoorType::EpicDoor
+                ) {
+                    id += 4;
+                }
+                format!("IADungeonInteract:{id}")
+            }
+            Command::LegendaryDungeonPlayRPC { choice } => {
+                format!("IADungeonInteract:{}", *choice as i32)
+            }
+            Command::LegendaryDungeonPickGem { gem_type } => {
+                format!("IADungeonSelectSoulStone:{}", *gem_type as u32)
+            }
+            Command::LegendaryDungeonTakeItem {
+                item_idx,
+                inventory_to,
+                item_ident,
+            } => {
+                format!(
+                    "PlayerItemMove:401/{}/{inventory_to}/{item_ident}",
+                    item_idx + 1
+                )
             }
             Command::FightDungeon {
                 dungeon,
