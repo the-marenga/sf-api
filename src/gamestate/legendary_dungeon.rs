@@ -474,8 +474,10 @@ pub enum RoomType {
     /// If you click on the offer board, you receive an item that can be epic.
     /// You can also simply leave the room without anything happening.
     AuctionHouse = 326,
-    // 327 => normal
-    // 328 => normal
+    /// A hostile cat is blocking your way
+    MonsterCat1 = 327,
+    /// A hostile cat is blocking your way
+    MonsterCat2 = 328,
     /// A room with weapons and armor
     Armory = 329,
     /// A room type that has not yet been implemented
