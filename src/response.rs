@@ -227,7 +227,7 @@ impl Response {
                         res.insert(key, ResponseVal { value, sub_key });
                     if let Some(old_val) = old_val {
                         let old = old_val.as_str();
-                        debug!("Overwrote [{key}]: {old} => {value}",);
+                        debug!("Overwrote [{key}]: {old} => {value}");
                     }
                 }
                 res
