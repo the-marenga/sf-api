@@ -512,6 +512,23 @@ pub enum ExpeditionThing {
     Key = 131,
     Suitcase = 132,
 
+    FishingRod = 141,
+    FishingBait = 142,
+    Merman = 143,
+
+    WineBarrels = 151,
+    BigWineBarrel = 152,
+    Barkeeper = 153,
+
+    Chicken = 161,
+    Tiger = 162,
+    RidingStan = 163,
+
+    // These may just be the event ones
+    Cupid = 171,
+    LovestruckShakes = 172,
+    LoveBirds = 173,
+
     // Dont know if they all exist tbh
     DummyBounty = 1000,
     ToiletPaperBounty = 1001,
@@ -524,6 +541,11 @@ pub enum ExpeditionThing {
     BaloonBounty = 1010,
     FrogBounty = 1011,
     KlausBounty = 1012,
+    // 1013 has to be a bounty for something, right?
+    MermanBounty = 1014,
+    BarkeeperBounty = 1015,
+    StanBounty = 1016,
+    LoveBirdBounty = 1017,
 }
 
 impl ExpeditionThing {
@@ -545,6 +567,10 @@ impl ExpeditionThing {
             Balloons => BaloonBounty,
             RoyalFrog => FrogBounty,
             Klaus => KlausBounty,
+            Merman => MermanBounty,
+            RidingStan => StanBounty,
+            Barkeeper => BarkeeperBounty,
+            LoveBirds => LoveBirdBounty,
             _ => return None,
         })
     }
@@ -567,6 +593,10 @@ impl ExpeditionThing {
             BaloonBounty => &[Balloons],
             FrogBounty => &[RoyalFrog],
             KlausBounty => &[Klaus],
+            MermanBounty => &[Merman],
+            StanBounty => &[RidingStan],
+            BarkeeperBounty => &[Barkeeper],
+            LoveBirdBounty => &[LoveBirds],
             _ => return None,
         })
     }
