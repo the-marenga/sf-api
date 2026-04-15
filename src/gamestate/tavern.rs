@@ -516,8 +516,8 @@ pub enum ExpeditionThing {
     FishingBait = 142,
     Merman = 143,
 
-    WineBarrels = 151,
-    BigWineBarrel = 152,
+    Mugs = 151,
+    DraftBeer = 152,
     Barkeeper = 153,
 
     Chicken = 161,
