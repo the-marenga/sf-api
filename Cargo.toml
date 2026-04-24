@@ -1,6 +1,6 @@
 [package]
 name = "sf-api"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
 license = "MIT"
 description = "A simple API to send commands to the Shakes & Fidget servers and parse their responses into characters"
@@ -20,9 +20,10 @@ ouroboros = "0.18"
 reqwest = { version = "0.13", features = ["gzip", "deflate", "form"], optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
-sha1 = "0.10"
+sha1 = "0.11"
 strum = { version = "0.28", features = ["strum_macros", "derive"] }
-tokio = { version = "1.49", features = ["sync", "time"], optional = true }
+thiserror = "2.0.18"
+tokio = { version = "1.51", features = ["sync", "time"], optional = true }
 url = { version = "2.5", optional = true }
 
 [features]
@@ -37,11 +38,13 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 [dev-dependencies]
+clap = { version = "4.6", features = ["derive", "env"] }
 criterion = "0.8"
 enum-map = "2.7"
-env_logger = "0.11.9"
+env_logger = "0.11.10"
+regex = "1.12.3"
 rstest = "0.26.1"
-tokio = { version = "1.49", features = ["full"] }
+tokio = { version = "1.51", features = ["full"] }
 
 [[bench]]
 name = "battle_benchmark"

@@ -4,8 +4,7 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
 use super::{
-    ArrSkip, CCGet, CFPGet, CGet, CSTGet, ExpeditionSetting, SFError,
-    ServerTime, items::Item,
+    CCGet, CFPGet, CSTGet, ExpeditionSetting, SFError, ServerTime, items::Item,
 };
 use crate::{
     command::{DiceReward, DiceType},
@@ -149,27 +148,6 @@ impl Tavern {
     pub fn can_change_questing_preference(&self) -> bool {
         self.thirst_for_adventure_sec == 6000 && self.beer_drunk == 0
     }
-
-    pub(crate) fn update(
-        &mut self,
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<(), SFError> {
-        self.current_action = CurrentAction::parse(
-            data.cget(45, "action id")? & 0xFF,
-            data.cget(46, "action sec")? & 0xFF,
-            data.cstget(47, "current action time", server_time)?,
-        );
-        self.thirst_for_adventure_sec = data.csiget(456, "remaining ALU", 0)?;
-        self.beer_drunk = data.csiget(457, "beer drunk count", 0)?;
-        self.beer_max = data.csiget(13, "beer total", 0)?;
-
-        for (qidx, quest) in self.quests.iter_mut().enumerate() {
-            let quest_start = data.skip(235 + qidx, "tavern quest")?;
-            quest.update(quest_start)?;
-        }
-        Ok(())
-    }
 }
 
 /// One of the three possible quests in the tavern
@@ -228,13 +206,14 @@ impl Quest {
     }
 
     pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
-        self.base_length = data.csiget(6, "quest length", 100_000)?;
-        self.base_silver = data.csiget(48, "quest silver", 0)?;
-        self.base_experience = data.csiget(45, "quest xp", 0)?;
+        // NOTE: I think [0], [1] was just flavor text
+        self.monster_id = data.csimget(2, "quest monster id", 0, |a| -a)?;
         self.location_id = data
             .cfpget(3, "quest location id", |a| a)?
             .unwrap_or_default();
-        self.monster_id = data.csimget(0, "quest monster id", 0, |a| -a)?;
+        self.base_length = data.csiget(4, "quest length", 100_000)?;
+        self.base_experience = data.csiget(5, "quest xp", 0)?;
+        self.base_silver = data.csiget(6, "quest silver", 0)?;
         Ok(())
     }
 }
@@ -274,22 +253,26 @@ impl CurrentAction {
     pub(crate) fn parse(
         id: i64,
         sec: i64,
-        busy: Option<DateTime<Local>>,
+        busy_until: Option<DateTime<Local>>,
     ) -> Self {
-        match (id, busy) {
-            (0, None) => CurrentAction::Idle,
-            (1, Some(busy_until)) => CurrentAction::CityGuard {
+        // XXX: Sometimes the game "forgets" when an action was supposed to end.
+        // This only happens when the action is very old, so falling back to a
+        // busy_until that is super old is fine here
+        let busy_until = busy_until.unwrap_or_default();
+        match id {
+            0 => CurrentAction::Idle,
+            1 => CurrentAction::CityGuard {
                 hours: soft_into(sec, "city guard time", 10),
                 busy_until,
             },
-            (2, Some(busy_until)) => CurrentAction::Quest {
+            2 => CurrentAction::Quest {
                 quest_idx: soft_into(sec, "quest index", 0),
                 busy_until,
             },
-            (4, None) => CurrentAction::Expedition,
+            4 => CurrentAction::Expedition,
             _ => {
-                error!("Unknown action id combination: {id}, {busy:?}");
-                CurrentAction::Unknown(busy)
+                error!("Unknown action id combination: {id}, {busy_until:?}");
+                CurrentAction::Unknown(Some(busy_until))
             }
         }
     }
@@ -299,9 +282,6 @@ impl CurrentAction {
 #[derive(Debug, Clone, Default, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Toilet {
-    // Checks if all sacrifices today have been used up
-    #[deprecated(note = "You should use sacrifices_left instead")]
-    pub used: bool,
     /// The level the aura is at currently
     pub aura: u32,
     /// The amount of mana currently in the toilet
@@ -313,10 +293,16 @@ pub struct Toilet {
 }
 
 impl Toilet {
-    pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
-        self.aura = data.csiget(491, "aura level", 0)?;
-        self.mana_currently = data.csiget(492, "mana now", 0)?;
-        self.mana_total = data.csiget(515, "mana missing", 1000)?;
+    pub(crate) fn update(
+        &mut self,
+        data: &[i64],
+        server_time: ServerTime,
+    ) -> Result<(), SFError> {
+        self.aura = data.csiget(0, "aura level", 0)?;
+        self.mana_currently = data.csiget(1, "mana now", 0)?;
+        // TODO: What is this? Last time we flushed/got an item?
+        let _unknown_time = data.cstget(2, "mana time", server_time)?;
+        self.mana_total = data.csiget(3, "mana missing", 1000)?;
         Ok(())
     }
 }
@@ -526,6 +512,23 @@ pub enum ExpeditionThing {
     Key = 131,
     Suitcase = 132,
 
+    FishingRod = 141,
+    FishingBait = 142,
+    Merman = 143,
+
+    Mugs = 151,
+    DraftBeer = 152,
+    Barkeeper = 153,
+
+    Chicken = 161,
+    Tiger = 162,
+    RidingStan = 163,
+
+    // These may just be the event ones
+    Cupid = 171,
+    LovestruckShakes = 172,
+    LoveBirds = 173,
+
     // Dont know if they all exist tbh
     DummyBounty = 1000,
     ToiletPaperBounty = 1001,
@@ -538,6 +541,11 @@ pub enum ExpeditionThing {
     BaloonBounty = 1010,
     FrogBounty = 1011,
     KlausBounty = 1012,
+    // 1013 has to be a bounty for something, right?
+    MermanBounty = 1014,
+    BarkeeperBounty = 1015,
+    StanBounty = 1016,
+    LoveBirdBounty = 1017,
 }
 
 impl ExpeditionThing {
@@ -559,6 +567,10 @@ impl ExpeditionThing {
             Balloons => BaloonBounty,
             RoyalFrog => FrogBounty,
             Klaus => KlausBounty,
+            Merman => MermanBounty,
+            RidingStan => StanBounty,
+            Barkeeper => BarkeeperBounty,
+            LoveBirds => LoveBirdBounty,
             _ => return None,
         })
     }
@@ -581,6 +593,10 @@ impl ExpeditionThing {
             BaloonBounty => &[Balloons],
             FrogBounty => &[RoyalFrog],
             KlausBounty => &[Klaus],
+            MermanBounty => &[Merman],
+            StanBounty => &[RidingStan],
+            BarkeeperBounty => &[Barkeeper],
+            LoveBirdBounty => &[LoveBirds],
             _ => return None,
         })
     }

@@ -5,7 +5,7 @@ use enum_map::EnumMap;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use super::{Mirror, NormalCost, RelationEntry, SFError, ScrapBook};
+use super::{NormalCost, RelationEntry, SFError, ScrapBook};
 use crate::{PlayerId, command::*, gamestate::items::*, misc::*};
 
 /// Everything, that can be considered part of the character and not the rest
@@ -83,9 +83,6 @@ pub struct Character {
     /// The silver you get for buying a dragon
     pub mount_dragon_refund: u64,
 
-    /// Whether this character has the mirror completed, or is still collecting
-    /// pieces
-    pub mirror: Mirror,
     /// If the scrapbook has been unlocked, it can be found here
     pub scrapbook: Option<ScrapBook>,
 

@@ -1,8 +1,9 @@
 #![allow(clippy::module_name_repetitions)]
 use chrono::{DateTime, Local, NaiveTime};
-use enum_map::EnumMap;
+use enum_map::{Enum, EnumMap};
 use log::warn;
 use num_derive::FromPrimitive;
+use strum::{EnumIter, IntoEnumIterator};
 
 use super::{
     ArrSkip, AttributeType, CCGet, CFPGet, CGet, CSTGet, NormalCost, Potion,
@@ -31,21 +32,19 @@ pub struct Guild {
     /// The rank in the Hall of Fame this guild has
     pub rank: u32,
     /// The date at which the character joined this guild
-    pub joined: DateTime<Local>,
+    pub joined: Option<DateTime<Local>>,
 
     /// The skill you yourself contribute to the guild
     pub own_treasure_skill: u16,
-    /// The price to pay to upgrade your treasure by one rank
-    pub own_treasure_upgrade: NormalCost,
     /// The total amount of treasure skill the guild has
     pub total_treasure_skill: u16,
-
     /// The skill you yourself contribute to the guild
     pub own_instructor_skill: u16,
-    /// The price to pay to upgrade your instructor by one rank
-    pub own_instructor_upgrade: NormalCost,
     /// The total amount of instructor skill the guild has
     pub total_instructor_skill: u16,
+
+    /// The price to pay to upgrade the given skill
+    pub upgrade_price: EnumMap<GuildSkill, NormalCost>,
 
     /// How many raids this guild has completed already
     pub finished_raids: u16,
@@ -61,6 +60,9 @@ pub struct Guild {
 
     /// The id of the pet, that is currently selected as the guild pet
     pub pet_id: u32,
+    /// The level of your guild pet
+    pub own_pet_lvl: u16,
+    /// The level of your guild pet
     /// The maximum level, that the pet can be at
     pub pet_max_lvl: u16,
     /// All information about the hydra the guild pet can fight
@@ -77,7 +79,6 @@ pub struct Guild {
     pub chat: Vec<ChatMessage>,
     /// The whisper messages, that a player can receive
     pub whispers: Vec<ChatMessage>,
-
     /// A list of guilds which can be fought, must first be fetched by sending
     /// `Command::GuildGetFightableTargets`
     pub fightable_guilds: Vec<FightableGuild>,
@@ -347,14 +348,13 @@ impl Guild {
         &mut self,
         data: &[i64],
     ) -> Result<(), SFError> {
-        self.own_treasure_upgrade.silver =
-            data.csiget(0, "treasure upgr. silver", 0)?;
-        self.own_treasure_upgrade.mushrooms =
-            data.csiget(1, "treasure upgr. mush", 0)?;
-        self.own_instructor_upgrade.silver =
-            data.csiget(2, "instr upgr. silver", 0)?;
-        self.own_instructor_upgrade.mushrooms =
-            data.csiget(3, "instr upgr. mush", 0)?;
+        for (idx, skill) in GuildSkill::iter().enumerate() {
+            let skill = &mut self.upgrade_price[skill];
+            skill.silver =
+                data.csiget(idx * 2, "guild upgr. silver", u64::MAX)?;
+            skill.mushrooms =
+                data.csiget(1 + idx * 2, "guild upgr. mush", u16::MAX)?;
+        }
         Ok(())
     }
 
@@ -522,7 +522,7 @@ pub enum GuildRank {
 }
 
 /// Something the player can upgrade in the guild
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Enum, Eq, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 pub enum GuildSkill {
