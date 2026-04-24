@@ -4,3 +4,4 @@ src/main.rs
 /cache
 /.cargo
 /character.json
+.DS_Store
