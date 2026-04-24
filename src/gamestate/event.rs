@@ -434,7 +434,7 @@ impl WorldBossCatapult {
                     .unwrap_or_default(),
                 restriction: chunk.cfpget(1, "wb upgrade restrict", |a| a)?,
                 amount: chunk.csiget(2, "wb upgrade amount", 0)?,
-                effect_val: chunk.cget(3, "wb upgrade amount")?,
+                effect_val: chunk.cget(3, "wb upgrade value")?,
             });
         }
 
@@ -514,9 +514,9 @@ impl UpgradeOffer {
         Ok(UpgradeOffer {
             typ: data.cfpget(0, "wb upgrade typ", |a| a)?.unwrap_or_default(),
             restriction: data.cfpget(1, "wb ug restrict", |a| a)?,
-            effect_value: data.cget(2, "wb ug effect type")?,
+            effect_value: data.cget(2, "wb ug effect value")?,
             raw_main_price: data.csiget(3, "wb ug price", u64::MAX)?,
-            main_price_type: RewardType::parse(data.cget(4, "wb ug typ")? - 1),
+            main_price_type: RewardType::parse(data.cget(4, "wb ug typ")?),
             raw_catalyst_price: data.csiget(5, "wb sec ug price", u64::MAX)?,
             raw_mushroom_price: data.csiget(6, "wb mush ug price", u64::MAX)?,
         })

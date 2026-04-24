@@ -86,7 +86,8 @@ pub struct GameState {
     pub lookup: Lookup,
     /// Anything you can find in the mail tab of the official client
     pub mail: Mail,
-    /// Information about an upcoming, or currently running event
+    /// Information about an upcoming, or currently running event. Basically
+    /// the tab above Tavern in the official GUI
     pub special_event: Option<EventStatus>,
     /// The current state of the world boss. Note that this here does not
     /// remove itself. You should always make sure `special_event` is ongoing
