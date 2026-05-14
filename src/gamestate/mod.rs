@@ -685,9 +685,6 @@ impl GameState {
                     .get_or_insert_with(Default::default)
                     .update(&val.into_list("portal progress")?, server_time)?;
             }
-            "tavernspecialend" | "tavernspecialsub" | "tavernspecial" => {
-                // Removed old way to serve events
-            }
             "owntowerlevel" => {
                 // Already in dungeons
             }
@@ -1982,6 +1979,9 @@ impl GameState {
                     data.cstget(4, "event end", server_time)?;
 
                 // [3],[5],[6],[7] are just 0, so no idea what they could be
+            }
+            "tavernspecialend" | "tavernspecialsub" | "tavernspecial" => {
+                // Removed old way to serve events
             }
             "subscriptionstatus" => {}
             // Legendary Dungeons

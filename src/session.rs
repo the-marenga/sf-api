@@ -251,7 +251,7 @@ impl Session {
             "{}cmd.php?req={cmd_name}&params={}&sid={}",
             self.server_url,
             base64::engine::general_purpose::URL_SAFE.encode(cmd_args),
-            &self.crypto_id,
+            self.crypto_id,
         );
 
         trace!("Full request url: {url}");
