@@ -477,15 +477,6 @@ impl GameState {
                 .get_or_insert_with(Default::default)
                 .name
                 .set(val.as_str()),
-            "tavernspecialsub" => {
-                self.specials.events.active.clear();
-                let flags = val.into::<i32>("tavern special sub")?;
-                for (idx, event) in Event::iter().enumerate() {
-                    if (flags & (1 << idx)) > 0 {
-                        self.specials.events.active.insert(event);
-                    }
-                }
-            }
             "sfhomeid" => {}
             "backpack" => {
                 let data: Vec<i64> = val.into_list("backpack")?;
@@ -693,10 +684,6 @@ impl GameState {
                     .portal
                     .get_or_insert_with(Default::default)
                     .update(&val.into_list("portal progress")?, server_time)?;
-            }
-            "tavernspecialend" => {
-                self.specials.events.ends = server_time
-                    .convert_to_local(val.into("event end")?, "event end");
             }
             "owntowerlevel" => {
                 // Already in dungeons
@@ -971,9 +958,6 @@ impl GameState {
 
                 bs.dismantle_left = data.csiget(0, "dismantles left", 0)?;
                 bs.last_dismantled = data.cstget(1, "bs time", server_time)?;
-            }
-            "tavernspecial" => {
-                // Pretty sure this has been replaced
             }
             "fortressGroupPrice" => {
                 self.fortress
@@ -1976,10 +1960,30 @@ impl GameState {
                 }
             }
             "events" => {
-                // Information about the currently ongoing major event
-                // (I think)
-            }
+                let data: Vec<i64> = val.into_list("events")?;
+                if data.len() < 8 {
+                    return Ok(());
+                }
+                // [0] might be the events theme (tavern decoration)?
+                self.specials.events.active.clear();
+                let flags = data.cget(1, "events")?;
+                for (idx, event) in Event::iter().enumerate() {
+                    if (flags & (1 << idx)) > 0 {
+                        self.specials.events.active.insert(event);
+                    }
+                }
+                // NOTE: there are two end times, that seem to be identical.
+                // I will just guess, that [4] is the correct one and [2] is
+                // for the theme
+                self.specials.events.ends =
+                    data.cstget(4, "event end", server_time)?;
 
+                // [3],[5],[6],[7] are just 0, so no idea what they could be
+            }
+            "tavernspecialend" | "tavernspecialsub" | "tavernspecial" => {
+                // Removed old way to serve events
+            }
+            "subscriptionstatus" => {}
             // Legendary Dungeons
             "iadungeonchances" => {
                 // IDK

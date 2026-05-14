@@ -370,10 +370,8 @@ pub struct OtherPlayer {
     /// If the player is in a guild, this will contain the name
     pub guild: Option<String>,
     /// The time at which this player joined their guild, if any
-    #[deprecated = "v29.500 overhauled the parsing of normal & other players. \
-                    This field is not longer available in the new data. As \
-                    such, this field may become unavailable at any point, \
-                    once the old data is on longer served by the server"]
+    #[deprecated = "Since server update v30.500, this field is no longer \
+                    available and will be removed from the API in the future"]
     pub guild_joined: Option<DateTime<Local>>,
     /// The mount the player currently ahs rented
     pub mount: Option<Mount>,
