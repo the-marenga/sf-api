@@ -733,6 +733,14 @@ impl GameState {
                     )?;
             }
             "soldieradvice" => {
+                let advice: u16 = val.into("soldier advice")?;
+                if advice > 0 {
+                    other_player
+                        .get_or_insert_default()
+                        .fortress
+                        .get_or_insert_default()
+                        .soldier_advice = advice;
+                }
                 // Replaced
             }
             "owngroupdescription" => self
