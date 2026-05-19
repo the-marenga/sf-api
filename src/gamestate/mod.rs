@@ -1727,12 +1727,30 @@ impl GameState {
             }
             "deedsandtitlesplayersave" => {
                 // The deeds of glory of the player
-                // rank?/110/3199/14/4/0/0/0/0/1/118/0/119/0/94/0/0/0/0/0/0/
-                // 0
+                // {pid}/{glory}/{rank}/{bronze}/{silver}/{gold}/2/2/0/1/58/0/
+                // 59/0/60/0/0/0/0/0/0/0
             }
             "deedshelves" => {
                 // deedshelves (subkey => 1)
                 // 1
+            }
+            "titleinfos" => {
+                // let data:Vec<_> = val.as_str().split('/').collect();
+                // 1    // active title type?
+                // 2    // hero titles?
+                // 1644 // max rank?
+
+                // Top 3?
+                // for slice in data.skip(3, "titleinfos")?.chunks_exact(2) {
+                // LordBurggraf/1761696040
+                // scyth3/1761696052/
+                // Deinnachbar/1761696060
+
+                // }
+            }
+            "titleplayerinfos" => {
+
+                // {pid}/2/2/0/{rank}/1761884016/482/10/0/217/1761821390/482
             }
             "fortressstorage" => {
                 self.fortress.get_or_insert_default().update_resources(
