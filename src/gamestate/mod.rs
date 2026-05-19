@@ -485,15 +485,6 @@ impl GameState {
                 .get_or_insert_with(Default::default)
                 .name
                 .set(val.as_str()),
-            "tavernspecialsub" => {
-                self.specials.events.active.clear();
-                let flags = val.into::<i32>("tavern special sub")?;
-                for (idx, event) in Event::iter().enumerate() {
-                    if (flags & (1 << idx)) > 0 {
-                        self.specials.events.active.insert(event);
-                    }
-                }
-            }
             "sfhomeid" => {}
             "backpack" => {
                 let data: Vec<i64> = val.into_list("backpack")?;
@@ -702,10 +693,6 @@ impl GameState {
                     .get_or_insert_with(Default::default)
                     .update(&val.into_list("portal progress")?, server_time)?;
             }
-            "tavernspecialend" => {
-                self.specials.events.ends = server_time
-                    .convert_to_local(val.into("event end")?, "event end");
-            }
             "owntowerlevel" => {
                 // Already in dungeons
             }
@@ -835,6 +822,14 @@ impl GameState {
                     )?;
             }
             "soldieradvice" => {
+                let advice: u16 = val.into("soldier advice")?;
+                if advice > 0 {
+                    other_player
+                        .get_or_insert_default()
+                        .fortress
+                        .get_or_insert_default()
+                        .soldier_advice = advice;
+                }
                 // Replaced
             }
             "owngroupdescription" => self
@@ -1060,9 +1055,6 @@ impl GameState {
 
                 bs.dismantle_left = data.csiget(0, "dismantles left", 0)?;
                 bs.last_dismantled = data.cstget(1, "bs time", server_time)?;
-            }
-            "tavernspecial" => {
-                // Pretty sure this has been replaced
             }
             "fortressGroupPrice" => {
                 self.fortress
@@ -1824,12 +1816,30 @@ impl GameState {
             }
             "deedsandtitlesplayersave" => {
                 // The deeds of glory of the player
-                // rank?/110/3199/14/4/0/0/0/0/1/118/0/119/0/94/0/0/0/0/0/0/
-                // 0
+                // {pid}/{glory}/{rank}/{bronze}/{silver}/{gold}/2/2/0/1/58/0/
+                // 59/0/60/0/0/0/0/0/0/0
             }
             "deedshelves" => {
                 // deedshelves (subkey => 1)
                 // 1
+            }
+            "titleinfos" => {
+                // let data:Vec<_> = val.as_str().split('/').collect();
+                // 1    // active title type?
+                // 2    // hero titles?
+                // 1644 // max rank?
+
+                // Top 3?
+                // for slice in data.skip(3, "titleinfos")?.chunks_exact(2) {
+                // LordBurggraf/1761696040
+                // scyth3/1761696052/
+                // Deinnachbar/1761696060
+
+                // }
+            }
+            "titleplayerinfos" => {
+
+                // {pid}/2/2/0/{rank}/1761884016/482/10/0/217/1761821390/482
             }
             "fortressstorage" => {
                 self.fortress.get_or_insert_default().update_resources(
@@ -2065,10 +2075,30 @@ impl GameState {
                 }
             }
             "events" => {
-                // Information about the currently ongoing major event
-                // (I think)
-            }
+                let data: Vec<i64> = val.into_list("events")?;
+                if data.len() < 8 {
+                    return Ok(());
+                }
+                // [0] might be the events theme (tavern decoration)?
+                self.specials.events.active.clear();
+                let flags = data.cget(1, "events")?;
+                for (idx, event) in Event::iter().enumerate() {
+                    if (flags & (1 << idx)) > 0 {
+                        self.specials.events.active.insert(event);
+                    }
+                }
+                // NOTE: there are two end times, that seem to be identical.
+                // I will just guess, that [4] is the correct one and [2] is
+                // for the theme
+                self.specials.events.ends =
+                    data.cstget(4, "event end", server_time)?;
 
+                // [3],[5],[6],[7] are just 0, so no idea what they could be
+            }
+            "tavernspecialend" | "tavernspecialsub" | "tavernspecial" => {
+                // Removed old way to serve events
+            }
+            "subscriptionstatus" => {}
             // Legendary Dungeons
             "iadungeonchances" => {
                 // IDK

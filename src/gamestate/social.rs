@@ -370,10 +370,8 @@ pub struct OtherPlayer {
     /// If the player is in a guild, this will contain the name
     pub guild: Option<String>,
     /// The time at which this player joined their guild, if any
-    #[deprecated = "v29.500 overhauled the parsing of normal & other players. \
-                    This field is not longer available in the new data. As \
-                    such, this field may become unavailable at any point, \
-                    once the old data is on longer served by the server"]
+    #[deprecated = "Since server update v30.500, this field is no longer \
+                    available and will be removed from the API in the future"]
     pub guild_joined: Option<DateTime<Local>>,
     /// The mount the player currently ahs rented
     pub mount: Option<Mount>,
@@ -436,6 +434,8 @@ pub struct OtherFortress {
     /// The amount of soldiers suggested to use when attacking this players
     /// fortress
     pub soldier_advice: u16,
+    /// The level of the fortifications of that player
+    pub fortifications_level: u16,
     /// The amount of stone we are expected to gain from raiding this players
     /// fortress
     pub lootable_wood: u64,
@@ -481,9 +481,10 @@ impl OtherPlayer {
     ) -> Result<(), SFError> {
         let ft = self.fortress.get_or_insert_default();
         ft.upgrade_count = data.csiget(0, "other ft upgrades", 0)?;
-        ft.soldier_advice = data.csiget(1, "other soldier advice", 0)?;
-        ft.mage_count = data.csiget(2, "other mage count", 0)?;
-        ft.archer_count = data.csiget(3, "other soldier advice", 0)?;
+        ft.fortifications_level =
+            data.csiget(1, "other soldier fortifications", 0)?;
+        ft.archer_count = data.csiget(2, "other mage count", 0)?;
+        ft.mage_count = data.csiget(3, "other soldier advice", 0)?;
         ft.lootable_wood = data.csiget(4, "other lootable wood", 0)?;
         ft.lootable_stone = data.csiget(5, "other lootable stone", 0)?;
         Ok(())

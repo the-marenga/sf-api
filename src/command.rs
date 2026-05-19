@@ -1277,10 +1277,10 @@ impl Command {
                 to_sf_string(description)
             ),
             Command::SetDescription { description } => {
-                format!("PlayerSetDescription:{}", &to_sf_string(description))
+                format!("PlayerSetDescription:{}", to_sf_string(description))
             }
             Command::GuildSendChat { message } => {
-                format!("GroupChat:{}", &to_sf_string(message))
+                format!("GroupChat:{}", to_sf_string(message))
             }
             Command::GambleSilver { amount } => {
                 format!("PlayerGambleGold:{amount}")
