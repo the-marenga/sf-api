@@ -1,6 +1,7 @@
 pub mod arena;
 pub mod character;
 pub mod dungeons;
+pub mod event;
 pub mod fortress;
 pub mod guild;
 pub mod idle;
@@ -27,9 +28,9 @@ use crate::{
     command::*,
     error::*,
     gamestate::{
-        arena::*, character::*, dungeons::*, fortress::*, guild::*, idle::*,
-        items::*, legendary_dungeon::*, rewards::*, social::*, tavern::*,
-        underworld::*, unlockables::*,
+        arena::*, character::*, dungeons::*, event::*, fortress::*, guild::*,
+        idle::*, items::*, legendary_dungeon::*, rewards::*, social::*,
+        tavern::*, underworld::*, unlockables::*,
     },
     misc::*,
     response::{Response, ResponseVal},
@@ -85,6 +86,13 @@ pub struct GameState {
     pub lookup: Lookup,
     /// Anything you can find in the mail tab of the official client
     pub mail: Mail,
+    /// Information about an upcoming, or currently running event. Basically
+    /// the tab above Tavern in the official GUI
+    pub special_event: Option<EventStatus>,
+    /// The current state of the world boss. Note that this here does not
+    /// remove itself. You should always make sure `special_event` is ongoing
+    /// before acting upon any world boss information
+    pub world_boss: Option<WorldBossEvent>,
     /// The raw timestamp, that the server has sent us
     last_request_timestamp: i64,
     /// The amount of sec, that the server is ahead of us in seconds (can be
@@ -718,6 +726,87 @@ impl GameState {
                     .active
                     .get_or_insert_with(Default::default)
                     .update(&val.into_list("gtsave")?, server_time)?;
+            }
+            "eventstatus" => {
+                let data: Vec<i64> = val.into_list("event status")?;
+                self.special_event = EventStatus::parse(&data, server_time)
+                    .inspect_err(|a| {
+                        log::warn!("Could not parse event status: {a}");
+                    })
+                    .ok();
+            }
+            "wbcharacter" => {
+                let data: Vec<i64> = val.into_list("wb char")?;
+
+                self.world_boss
+                    .get_or_insert_default()
+                    .update(&data, server_time)?;
+            }
+            "wbtower" => {
+                let data: Vec<String> = val.into_list("wb ug store")?;
+                let data: Vec<_> = data.iter().map(|a| a.as_str()).collect();
+                self.world_boss.get_or_insert_default().battle =
+                    Some(WorldBossBattle::parse(&data)?);
+            }
+            "wbupgradestore" => {
+                let data: Vec<i64> = val.into_list("wb ug store")?;
+                let boss = self.world_boss.get_or_insert_default();
+                if data.iter().all(|a| *a == 0) {
+                    boss.upgrade_offers.clear();
+                    return Ok(());
+                }
+                let offers = data
+                    .chunks_exact(7)
+                    .map(UpgradeOffer::parse)
+                    .collect::<Result<_, SFError>>()?;
+                boss.upgrade_offers = offers;
+            }
+            "wbammostore" => {
+                let data: Vec<i64> = val.into_list("wb ammo store")?;
+                let boss = self.world_boss.get_or_insert_default();
+                if data.iter().all(|a| *a == 0) {
+                    boss.projectile_offers.clear();
+                    return Ok(());
+                }
+                let offers = data
+                    .chunks_exact(6)
+                    .map(ProjectileOffer::parse)
+                    .collect::<Result<_, SFError>>()?;
+                boss.projectile_offers = offers;
+            }
+            "wbammo" => {
+                // Special ammo
+                let data: Vec<i64> = val.into_list("wb ammo")?;
+                let ammo = WorldBossProjectile::parse(&data)?;
+                self.world_boss.get_or_insert_default().projectile = ammo;
+            }
+            "wbupgrade" => {
+                let data: Vec<i64> = val.into_list("wb upgrade")?;
+                self.world_boss.get_or_insert_default().catapult =
+                    WorldBossCatapult::parse(&data, server_time)?;
+            }
+            "wbrankinginternationalmax" => {
+                self.world_boss
+                    .get_or_insert_default()
+                    .max_international_ranks = val.into("wb int rank max").ok();
+            }
+            "wbrankingworldmax" => {
+                self.world_boss.get_or_insert_default().max_world_ranks =
+                    val.into("wb int rank world max").ok();
+            }
+            "wbrankingfightermax" => {
+                self.world_boss.get_or_insert_default().max_fighter_ranks =
+                    val.into("wb int rank fighter max").ok();
+            }
+            "wbdailychests" => {
+                let data: Vec<u32> = val.into_list("wb upgrade")?;
+                let chests = &mut self
+                    .world_boss
+                    .get_or_insert_default()
+                    .available_daily_chests;
+                for (old, new) in chests.values_mut().zip(data) {
+                    *old = new;
+                }
             }
             "maxrank" => {
                 self.hall_of_fames.players_total = val.into("player count")?;
