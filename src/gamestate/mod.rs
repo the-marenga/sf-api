@@ -546,7 +546,16 @@ impl GameState {
                     Equipment::parse(&data, server_time)?;
             }
             "systemmessagelist" => {}
-            "newslist" => {}
+            "newslist" => {
+                self.mail.news_inbox.clear();
+                let data = val.as_str();
+                for msg in data.split(';').filter(|a| !a.trim().is_empty()) {
+                    match NewsEntry::parse(msg, server_time) {
+                        Ok(msg) => self.mail.news_inbox.push(msg),
+                        Err(e) => warn!("Invalid msg: {msg} {e}"),
+                    }
+                }
+            }
             "dummieequipment" => {
                 let m: Vec<i64> = val.into_list("mannequin")?;
                 self.character.mannequin =

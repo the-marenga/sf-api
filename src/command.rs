@@ -330,6 +330,12 @@ pub enum Command {
         /// -1, it deletes all
         pos: i32,
     },
+    /// Fetched the full message contents for this news entry. The message
+    /// contents will be parsed into `open_msg` in `Mail`.
+    PlayerNewsView {
+        /// The id of the news entry, that you are trying to view
+        news_id: i64,
+    },
     /// Pulls up your scrapbook to reveal more info, than normal
     ViewScrapbook,
     /// Views a specific pet. This fetches its stats and places it into the
@@ -1718,6 +1724,7 @@ impl Command {
             Command::FortressChangeEnemy { msg_id } => {
                 format!("FortressEnemy:0/{msg_id}")
             }
+            Command::PlayerNewsView { news_id: id } => format!("PlayerNewsView:{id}"),
         })
     }
 }
