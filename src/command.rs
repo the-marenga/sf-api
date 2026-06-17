@@ -728,6 +728,7 @@ pub enum Command {
     /// valid country code. I have not tested all, but it should be one of:
     /// `ru,fi,ar,tr,nl,ja,it,sk,fr,ko,pl,cs,el,da,en,hr,de,zh,sv,hu,pt,es,
     /// pt-br, ro`
+    #[deprecated = "Use the 'SetClientLanguage' enum instead"]
     SetLanguage {
         language: String,
     },
@@ -861,6 +862,10 @@ pub enum Command {
     SetQuestsInsteadOfExpeditions {
         /// The value you want to set
         value: ExpeditionSetting,
+    },
+    /// Changes the language of the client
+    SetClientLanguage {
+        language: Language,
     },
     HellevatorEnter,
     HellevatorViewGuildRanking,
@@ -1724,7 +1729,12 @@ impl Command {
             Command::FortressChangeEnemy { msg_id } => {
                 format!("FortressEnemy:0/{msg_id}")
             }
-            Command::PlayerNewsView { news_id: id } => format!("PlayerNewsView:{id}"),
+            Command::PlayerNewsView { news_id: id } => {
+                format!("PlayerNewsView:{id}")
+            }
+            Command::SetClientLanguage { language } => {
+                format!("UserSettingsUpdate:1/{}", language.code())
+            }
         })
     }
 }
