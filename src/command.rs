@@ -1828,3 +1828,61 @@ generate_flag_enum! {
     Venezuela => "ve",
     Vietnam => "vn"
 }
+
+macro_rules! generate_language_enum {
+    ($($variant:ident => $code:expr),*) => {
+        /// A language that can be used for translating in-game content
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        #[allow(missing_docs)]
+        pub enum Language {
+            $(
+                $variant,
+            )*
+        }
+
+        impl Language {
+            #[allow(unused)]
+            pub(crate) fn code(self) -> &'static str {
+                match self {
+                    $(
+                        Language::$variant => $code,
+                    )*
+                }
+            }
+
+            pub(crate) fn parse(value: &str) -> Option<Self> {
+                if value.is_empty() {
+                    return None;
+                }
+
+                // Mapping from string codes to enum variants
+                match value {
+                    $(
+                        $code => Some(Language::$variant),
+                    )*
+
+                    _ => {
+                        warn!("Invalid language value: {value}");
+                        None
+                    }
+                }
+            }
+        }
+    };
+}
+
+// Use the macro to generate the Language enum and its methods
+// Source: https://en.wikipedia.org/wiki/ISO_639-1
+// Languages supported by the in-game translation system
+generate_language_enum! {
+    English => "en",
+    German => "de",
+    French => "fr",
+    Italian => "it",
+    Slovak => "sk",
+    Czech => "cs",
+    Spanish => "es",
+    Hungarian => "hu",
+    Polish => "pl"
+}
