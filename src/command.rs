@@ -1796,7 +1796,6 @@ generate_flag_enum! {
     Chile => "cl",
     China => "cn",
     Colombia => "co",
-    CostaRica => "cr",
     Czechia => "cz",
     Denmark => "dk",
     DominicanRepublic => "do",
@@ -1836,7 +1835,23 @@ generate_flag_enum! {
     UnitedStates => "us",
     Uruguay => "uy",
     Venezuela => "ve",
-    Vietnam => "vn"
+    Vietnam => "vn",
+
+    Albania => "al",
+    BosniaAndHerzegovina => "ba",
+    Croatia => "cr",
+    Luxembourg => "lu",
+
+    Morocco => "ma",
+    Norway => "no",
+    Serbia => "rs",
+    Slovenia => "sl",
+
+    England => "en",
+    Wales => "wa",
+    Scotland => "sc",
+    Europe => "em",
+    World => "wr"
 }
 
 macro_rules! generate_language_enum {
