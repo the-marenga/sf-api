@@ -85,6 +85,9 @@ pub struct GameState {
     pub lookup: Lookup,
     /// Anything you can find in the mail tab of the official client
     pub mail: Mail,
+    /// The language, that the player has set in the client. This will affect
+    /// the language of news messages in the inbox (Mail)
+    pub language: Option<Language>,
     /// The raw timestamp, that the server has sent us
     last_request_timestamp: i64,
     /// The amount of sec, that the server is ahead of us in seconds (can be
@@ -546,7 +549,16 @@ impl GameState {
                     Equipment::parse(&data, server_time)?;
             }
             "systemmessagelist" => {}
-            "newslist" => {}
+            "newslist" => {
+                self.mail.news_inbox.clear();
+                let data = val.as_str();
+                for msg in data.split(';').filter(|a| !a.trim().is_empty()) {
+                    match NewsEntry::parse(msg, server_time) {
+                        Ok(msg) => self.mail.news_inbox.push(msg),
+                        Err(e) => warn!("Invalid msg: {msg} {e}"),
+                    }
+                }
+            }
             "dummieequipment" => {
                 let m: Vec<i64> = val.into_list("mannequin")?;
                 self.character.mannequin =
@@ -827,8 +839,10 @@ impl GameState {
             }
             "usersettings" => {
                 // Contains language and flag settings
-                let vals: Vec<_> = val.as_str().split('/').collect();
-                let v = match vals.as_slice().cget(4, "questing setting")? {
+                let vals = &val.as_str().split('/').collect::<Vec<_>>();
+                self.language = Language::parse(vals.cget(0, "client lang")?);
+
+                let v = match vals.cget(4, "questing setting")? {
                     "a" => ExpeditionSetting::PreferExpeditions,
                     "0" | "b" => ExpeditionSetting::PreferQuests,
                     x => {
