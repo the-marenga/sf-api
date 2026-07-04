@@ -405,15 +405,16 @@ impl Item {
 
         attribute_val = attribute_val.round().powf(1.2).floor();
 
-        let (min_dmg, max_dmg) = match self.typ {
+        let (wmin, wmax) = match self.typ {
             ItemType::Weapon { min_dmg, max_dmg } => (min_dmg, max_dmg),
-            _ => (0, 0),
+            ItemType::Shield { .. } => (25, 0),
+            _ => (self.armor(), 0),
         };
 
         let price = (u32::from(self.typ.raw_id()) * 37)
             + (self.full_model_id * 83)
-            + (min_dmg * 1731)
-            + (max_dmg * 162);
+            + (wmin * 1731)
+            + (wmax * 162);
 
         let (metal_price, arcane_price) = match item_stats {
             1 => (75 + (price % 26), price % 2),
