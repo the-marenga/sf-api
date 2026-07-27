@@ -405,7 +405,7 @@ pub enum FightOutcome {
 /// The type of summoned minion (Necromancer)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum SummonedMinion {
+pub enum Minion {
     #[default]
     Skeleton,
     Hound,
@@ -455,7 +455,7 @@ pub enum ActiveEffect {
     /// A summoned minion
     Minion {
         /// The type of minion (Skeleton, Hound, or Golem)
-        minion_type: SummonedMinion,
+        minion_type: Minion,
         /// How many actions the minion can still take
         remaining_actions: u32,
     },
@@ -591,9 +591,9 @@ fn parse_one_effect(extras: &[i64], start: usize) -> Option<ActiveEffect> {
         },
         2 => ActiveEffect::Minion {
             minion_type: match id {
-                1 => SummonedMinion::Skeleton,
-                2 => SummonedMinion::Hound,
-                3 => SummonedMinion::Golem,
+                1 => Minion::Skeleton,
+                2 => Minion::Hound,
+                3 => Minion::Golem,
                 _ => return None,
             },
             remaining_actions: clamp_u32(remaining),
