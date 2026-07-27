@@ -344,21 +344,20 @@ impl Fighter {
         let id = data.cfsget(5, "fighter id").ok()?.unwrap_or_default();
 
         let name = match data.cget(6, "fighter name").ok()?.parse::<i64>() {
-            Ok(-770..=-740) => {
-                // This range might be too large
-                fighter_type = FighterTyp::FortressWall;
+            Ok(-719..=-710) => {
+                fighter_type = FighterTyp::FortressSoldier;
                 None
             }
-            Ok(-712) => {
-                fighter_type = FighterTyp::FortressPillager;
+            Ok(-729..=-720) => {
+                fighter_type = FighterTyp::FortressMage;
                 None
             }
-            Ok(-732) => {
+            Ok(-739..=-730) => {
                 fighter_type = FighterTyp::FortressArcher;
                 None
             }
-            Ok(-722) => {
-                fighter_type = FighterTyp::FortressMage;
+            Ok(-799..=-740) => {
+                fighter_type = FighterTyp::FortressWall;
                 None
             }
             Ok(..=-1) => None,
@@ -536,8 +535,8 @@ pub enum FighterTyp {
     Monster(u16),
     /// One of the players companions
     Companion(CompanionClass),
-    /// A pillager in a fortress attack
-    FortressPillager,
+    /// A soldier in a fortress attack
+    FortressSoldier,
     /// An archer defending a fortress
     FortressArcher,
     /// A battlemage defending a fortress

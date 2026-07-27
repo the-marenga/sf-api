@@ -10,7 +10,7 @@ pub async fn main() {
 
     let args = Args::parse();
 
-    let custom_resp: Option<&str> = Some("fightversion:2&fightheader.fighters:0/0/0/0/1/1039746/bruhbruh/52/167056/167056/98/73/987/788/439/5/303/301/3/303/1/5/16/0/0/1/1/10/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/784913/haret44 (w35net)/57/210192/210192/1243/161/148/906/216/3/109/103/4/105/4/5/7/9/0/8/1/6/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0&fightequipment:1/1010/5/0/0/0/0/1/0/0/1/24/4/0/0/0/0/1/0/0&fightdecoration:0/0/0/0&externaltoolequipment:194/246/0/0/64/160/0/0&fight.r:784913/30/0/0/0/210192/158354/0/0/784913/0/0/0/0/210192/146572/0/0/1039746/0/0/0/0/146572/198240/0/0/784913/0/0/0/0/198240/128413/0/0/1039746/0/11/0/0/128413/198240/1/2/3/4/0/1039746/0/12/0/0/128413/181542/1/2/3/3/0/784913/30/0/0/0/181542/95209/0/1/2/3/3/784913/0/0/3/0/181542/95209/0/1/2/3/3/1039746/0/0/0/0/95209/160305/1/2/3/3/0/1039746/0/12/0/0/95209/140400/1/2/3/2/0/784913/0/0/0/0/140400/43903/0/1/2/3/2/1039746/0/0/0/0/43903/119032/1/2/3/2/0/1039746/0/12/0/0/43903/92344/1/2/3/1/0/784913/30/0/0/0/92344/9840/0/1/2/3/1/784913/0/0/0/0/92344/-25186/0/1/2/3/1/&winnerid:784913&fightresult.battlereward:0/1/0/0/0/-101/0/199362/202624/0/0/0/0/0/0/0/0/0/0/0/0&battlerewarditem:0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0");
+    let custom_resp: Option<&str> = Some("fightresult.fortresspillagerv1:1/1/0/0/0/1/0/223105/222922/0/0/0/0/0/0/0/0/0/0/0/0/770/6012/1/1/0/0&fightversion:2&fightheader1.fighters:8/0/0/0/1/710/-710/40/133250/133250/650/10/10/650/415/-710/1/1/0/0/0/0/0/0/0/0/0/1/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/740/-740/10/33000/33000/200/60/60/600/0/-740/1/1/0/0/0/0/0/0/0/0/0/1/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0&fightequipment1:1/15/1/0/0/2/1/1/0/0/1/2/1/0/0/0/0/1/0/0&fightdecoration1:0/0/0/0&externaltoolequipment1:0/0/0/0/0/0/0/0&fight1.r:710/0/1/0/0/133250/22306/0/0/740/0/0/0/0/22306/133103/0/0/710/0/0/0/0/133103/16221/0/0/740/0/0/3/0/16221/133103/0/0/710/0/0/0/0/133103/6203/0/0/740/0/0/0/0/6203/132836/0/0/710/0/1/0/0/132836/-18685/0/0/&winnerid1.s:710&&fightadditionalplayers.r:");
 
     let commands: Vec<sf_api::command::Command> = vec![];
 
@@ -121,22 +121,34 @@ pub async fn main() {
         gs.update(resp).unwrap();
     }
 
-    println!("\n=== Fight against Alexander Dybala ===");
+    println!("\n=== Fortress Fight ===");
 
+    // Dump fighter info
     if let Some(fight) = &gs.last_fight {
+        println!("winner_id: {:?}, has_player_won: {}, extra: {:?}",
+            fight.fights.first().map(|f| f.winner_id),
+            fight.has_player_won,
+            fight.extra,
+        );
         for (j, sf) in fight.fights.iter().enumerate() {
             println!("--- SingleFight {j} ---");
+            if let Some(fa) = &sf.fighter_a {
+                println!("  fighter_a: type={:?} id={} name={:?} level={} life={}",
+                    fa.typ, fa.id, fa.name, fa.level, fa.life);
+            }
+            if let Some(fb) = &sf.fighter_b {
+                println!("  fighter_b: type={:?} id={} name={:?} level={} life={}",
+                    fb.typ, fb.id, fb.name, fb.level, fb.life);
+            }
             for (k, action) in sf.actions.iter().enumerate() {
                 println!(
                     "  actions[{k}]: actor={}, action={:?}, outcome={:?}, \
-                     target_hp={}, actor_hp={:?}, minion={:?}/{:?}",
+                     target_hp={}, actor_hp={:?}",
                     action.acting_id,
                     action.action,
                     action.outcome,
                     action.other_new_life,
                     action.actor_life,
-                    action.actor_minion,
-                    action.opponent_minion,
                 );
             }
         }
