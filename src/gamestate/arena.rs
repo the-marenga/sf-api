@@ -218,13 +218,14 @@ impl SingleFight {
             }
 
             // Detect stride for this chunk
-            let stride = if values.cget(i + 7, "stride_p7")? == "0"
-                && values.cget(i + 8, "stride_p8")? == "0"
-            {
+            // Check if position 7 (first extras value) is zero — it determines
+            // whether there are any extra effect values.
+            let p7 = values.cget(i + 7, "stride_p7")?;
+            let stride = if p7 == "0" && values.cget(i + 8, "stride_p8")? == "0" {
                 // 9-value: positions 7 and 8 are both 0
                 9
             } else if i + 15 <= values.len()
-                && values.cget(i + 7, "stride_p7")? != "0"
+                && p7 != "0"
                 && values.cget(i + 11, "stride_p11")? != "0"
             {
                 // 15-value: both sides have minions, all 8 extras are non-zero-ish
@@ -236,10 +237,7 @@ impl SingleFight {
                 9
             };
 
-            let raw_acting_id = values.cget(i, "acting_id")?;
-            let acting_id: i64 = raw_acting_id
-                .parse()
-                .map_err(|_| SFError::ParsingError("action pid", raw_acting_id.to_string()))?;
+            let acting_id: i64 = values.cfsuget(i, "action pid")?;
 
             let action_type: u32 =
                 values.cfsget(i + 2, "fight action")?.unwrap_or(0);
@@ -344,7 +342,10 @@ impl Fighter {
 
         let id = data.cfsget(5, "fighter id").ok()?.unwrap_or_default();
 
-        let name = match data.cget(6, "fighter name").ok()?.parse::<i64>() {
+        // Parse the name field, which doubles as fighter-type override for
+        // special NPCs (fortress units, underworld minions) and pets.
+        let raw_name = data.cget(6, "fighter name").ok()?;
+        let name = match raw_name.parse::<i64>() {
             Ok(-719..=-710) => {
                 fighter_type = FighterTyp::FortressSoldier;
                 None
@@ -363,9 +364,8 @@ impl Fighter {
             }
             Ok(..=-1) => None,
             Ok(0) => {
-                let id = data.cget(15, "fighter uwm").ok()?;
-                // No idea if this correct
-                if ["-910", "-935", "-933", "-924"].contains(&id) {
+                let uwm_id = data.cget(15, "fighter uwm").ok()?;
+                if ["-910", "-935", "-933", "-924"].contains(&uwm_id) {
                     fighter_type = FighterTyp::UnderworldMinion;
                 }
                 None
@@ -374,7 +374,7 @@ impl Fighter {
                 fighter_type = FighterTyp::Pet;
                 None
             }
-            _ => Some(data.cget(6, "fighter name").ok()?.to_string()),
+            _ => Some(raw_name.to_string()),
         };
 
         Some(Fighter {
@@ -571,6 +571,50 @@ impl FightActionType {
     }
 }
 
+/// Safely clamp an `i64` to `u32`, treating negatives as 0.
+fn clamp_u32(v: i64) -> u32 {
+    u32::try_from(v.max(0)).unwrap_or(0)
+}
+
+/// Parse a single active effect from three consecutive `extras` values.
+fn parse_one_effect(extras: &[i64], start: usize) -> Option<ActiveEffect> {
+    if start + 2 >= extras.len() {
+        return None;
+    }
+    let flag = extras.cget(start, "eff_f").unwrap_or(0);
+    let id = extras.cget(start + 1, "eff_id").unwrap_or(0);
+    let remaining = extras.cget(start + 2, "eff_rem").unwrap_or(0);
+    Some(match flag {
+        1 => ActiveEffect::Ability {
+            id: clamp_u32(id),
+            remaining_rounds: clamp_u32(remaining),
+        },
+        2 => ActiveEffect::Minion {
+            minion_type: match id {
+                1 => SummonedMinion::Skeleton,
+                2 => SummonedMinion::Hound,
+                3 => SummonedMinion::Golem,
+                _ => return None,
+            },
+            remaining_actions: clamp_u32(remaining),
+        },
+        3 => ActiveEffect::Poison {
+            id: clamp_u32(id),
+            remaining_rounds: clamp_u32(remaining),
+        },
+        _ => {
+            warn!(
+                "Unknown active effect: flag={flag}, id={id}, remaining={remaining}"
+            );
+            ActiveEffect::Unknown {
+                flag: clamp_u32(flag),
+                id: clamp_u32(id),
+                remaining: clamp_u32(remaining),
+            }
+        }
+    })
+}
+
 /// Parse the 5 (12-value) or 8 (15-value) extra values into active effects.
 /// Format: [1, `type_flag`, `type_id`, remaining, ...]
 ///   `type_flag=2`: minion  |  `type_flag=1`: class ability
@@ -586,66 +630,21 @@ fn parse_active_effect(
         return (None, None);
     }
 
-    let parse_one = |flag: i64, id: i64, remaining: i64| -> Option<ActiveEffect> {
-        Some(match flag {
-            1 => ActiveEffect::Ability {
-                id: u32::try_from(id.max(0)).unwrap_or(0),
-                remaining_rounds: u32::try_from(remaining.max(0)).unwrap_or(0),
-            },
-            2 => ActiveEffect::Minion {
-                minion_type: match id {
-                    1 => SummonedMinion::Skeleton,
-                    2 => SummonedMinion::Hound,
-                    3 => SummonedMinion::Golem,
-                    _ => return None,
-                },
-                remaining_actions: u32::try_from(remaining.max(0)).unwrap_or(0),
-            },
-            3 => ActiveEffect::Poison {
-                id: u32::try_from(id.max(0)).unwrap_or(0),
-                remaining_rounds: u32::try_from(remaining.max(0)).unwrap_or(0),
-            },
-            _ => {
-                warn!(
-                    "Unknown active effect: flag={flag}, id={id}, remaining={remaining}"
-                );
-                ActiveEffect::Unknown {
-                    flag: u32::try_from(flag.max(0)).unwrap_or(0),
-                    id: u32::try_from(id.max(0)).unwrap_or(0),
-                    remaining: u32::try_from(remaining.max(0)).unwrap_or(0),
-                }
-            }
-        })
+    // Determine offset of each side's 3-value block
+    //   15-value: mine@1, theirs@5
+    //   12-value mine: mine@1, no theirs
+    //   12-value theirs: no mine, theirs@2
+    let (mine_start, theirs_start) = if extras.len() >= 8 {
+        (Some(1), Some(5))
+    } else if extras.first().copied().unwrap_or(0) != 0 {
+        (Some(1), None)
+    } else {
+        (None, Some(2))
     };
 
-    if extras.len() >= 8 {
-        // 15-value: both sides have effects
-        let mine = parse_one(
-            extras.cget(1, "effect_flag_m").unwrap_or(0),
-            extras.cget(2, "effect_id_m").unwrap_or(0),
-            extras.cget(3, "effect_rem_m").unwrap_or(0),
-        );
-        let theirs = parse_one(
-            extras.cget(5, "effect_flag_t").unwrap_or(0),
-            extras.cget(6, "effect_id_t").unwrap_or(0),
-            extras.cget(7, "effect_rem_t").unwrap_or(0),
-        );
-        (mine, theirs)
-    } else if extras.cget(0, "effect_side").unwrap_or(0) != 0 {
-        // 12-value: acting side has an effect
-        (parse_one(
-            extras.cget(1, "effect_flag_m").unwrap_or(0),
-            extras.cget(2, "effect_id_m").unwrap_or(0),
-            extras.cget(3, "effect_rem_m").unwrap_or(0),
-        ), None)
-    } else {
-        // 12-value: opponent has an effect
-        (None, parse_one(
-            extras.cget(2, "effect_flag_t").unwrap_or(0),
-            extras.cget(3, "effect_id_t").unwrap_or(0),
-            extras.cget(4, "effect_rem_t").unwrap_or(0),
-        ))
-    }
+    let mine = mine_start.and_then(|s| parse_one_effect(extras, s));
+    let theirs = theirs_start.and_then(|s| parse_one_effect(extras, s));
+    (mine, theirs)
 }
 
 /// The type of the participant in a fight
