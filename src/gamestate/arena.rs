@@ -54,22 +54,32 @@ pub struct Fight {
     pub rank_post_fight: u32,
     /// The item this fight gave the player (if any)
     pub item_won: Option<Item>,
-    /// Fortress attack/defense result details
-    pub fortress: Option<FortressResult>,
+    /// Extra metadata specific to certain fight types
+    pub extra: FightExtra,
 }
 
-/// Details about a fortress fight result
+/// Extra metadata for specific fight types
 #[derive(Debug, Default, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct FortressResult {
-    /// Soldiers sent (attack) or deployed by enemy (defense)
-    pub soldiers: u32,
-    /// Stone looted from a fortress attack
-    pub stone: u64,
-    /// Wood looted from a fortress attack
-    pub wood: u64,
-    /// Enemies defeated in defense (archers, battlemages)
-    pub enemies_defeated: (u32, u32),
+pub enum FightExtra {
+    /// Default — no special metadata
+    #[default]
+    None,
+    /// Fortress attack or defense details
+    Fortress {
+        /// Soldiers sent (attack) or deployed by enemy (defense)
+        soldiers: u32,
+        /// Stone looted from a fortress attack
+        stone: u64,
+        /// Wood looted from a fortress attack
+        wood: u64,
+        /// Enemies defeated in defense (archers, battlemages)
+        enemies_defeated: (u32, u32),
+    },
+    /// Underworld lure — souls pillaged from another player
+    UnderworldLure {
+        souls: i64,
+    },
 }
 
 impl Fight {
@@ -81,8 +91,11 @@ impl Fight {
         self.has_player_won = data.cget(0, "has_player_won")? != 0;
         self.silver_change = data.cget(2, "fight silver change")?;
 
+        // Underworld lure (fightresult.underworldpillage) — short format
         if data.len() < 20 {
-            // Skip underworld
+            self.extra = FightExtra::UnderworldLure {
+                souls: data.csiget(3, "underworld souls", 0)?,
+            };
             return Ok(());
         }
 
@@ -97,7 +110,7 @@ impl Fight {
 
         // Extended fortress fight data (fightresult.fortresspillagerv1)
         if data.len() >= 25 {
-            self.fortress = Some(FortressResult {
+            self.extra = FightExtra::Fortress {
                 soldiers: data.csiget(24, "soldiers", 0)?,
                 stone: data.csiget(21, "fortress stone", 0)?,
                 wood: data.csiget(22, "fortress wood", 0)?,
@@ -105,7 +118,7 @@ impl Fight {
                     data.csiget(25, "archers defeated", 0)?,
                     data.csiget(26, "mages defeated", 0)?,
                 ),
-            });
+            };
         }
 
         Ok(())
