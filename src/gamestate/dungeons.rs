@@ -1,5 +1,5 @@
 use chrono::{DateTime, Local};
-use enum_map::{Enum, EnumArray, EnumMap};
+use enum_map::{Enum, EnumMap};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter};
@@ -259,7 +259,7 @@ impl From<ShadowDungeon> for Dungeon {
     }
 }
 
-fn update_progress<T: FromPrimitive + EnumArray<DungeonProgress>>(
+fn update_progress<T: FromPrimitive + enum_map::Enum>(
     data: &[i64],
     dungeons: &mut EnumMap<T, DungeonProgress>,
 ) {

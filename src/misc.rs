@@ -4,7 +4,7 @@ use std::{
 };
 
 use chrono::{DateTime, Local};
-use enum_map::{Enum, EnumArray, EnumMap};
+use enum_map::EnumMap;
 use log::warn;
 use num_traits::FromPrimitive;
 
@@ -291,10 +291,7 @@ impl<T: FromStr> CSGet<T> for [&str] {
     }
 }
 
-pub(crate) fn update_enum_map<
-    B: Default + TryFrom<i64>,
-    A: enum_map::Enum + enum_map::EnumArray<B>,
->(
+pub(crate) fn update_enum_map<B: Default + TryFrom<i64>, A: enum_map::Enum>(
     map: &mut enum_map::EnumMap<A, B>,
     vals: &[i64],
 ) {
@@ -313,7 +310,7 @@ pub trait EnumMapGet<K, V> {
     fn get_mut(&mut self, key: K) -> &mut V;
 }
 
-impl<K: Enum + EnumArray<V>, V> EnumMapGet<K, V> for EnumMap<K, V> {
+impl<K: enum_map::Enum, V> EnumMapGet<K, V> for EnumMap<K, V> {
     fn get(&self, key: K) -> &V {
         #[allow(clippy::indexing_slicing)]
         &self[key]
