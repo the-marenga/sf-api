@@ -11,7 +11,11 @@ pub async fn main() {
     let args = Args::parse();
 
     let custom_resp: Option<&str> = None;
-    let command = None;
+
+    let commands = vec![
+        sf_api::command::Command::PlayerCombatLogView { msg_id: 71712817 },
+        sf_api::command::Command::PlayerCombatLogView { msg_id: 71470287 },
+    ];
 
     let username = args.username;
 
@@ -120,27 +124,35 @@ pub async fn main() {
         gs.update(resp).unwrap();
     }
 
-    let Some(command) = command else {
-        let js = serde_json::to_string_pretty(&gs).unwrap();
-        std::fs::write("character.json", js).unwrap();
-        return;
-    };
-    let cache_name = format!(
-        "cache/{username}-{}.response",
-        serde_json::to_string(&command).unwrap()
-    );
+    for command in &commands {
+        let cache_name = format!(
+            "cache/{username}-{}.response",
+            serde_json::to_string(command).unwrap()
+        );
 
-    let resp = match (args.cache, std::fs::read_to_string(&cache_name)) {
-        (true, Ok(s)) => serde_json::from_str(&s).unwrap(),
-        _ => {
-            let resp = session.send_command_raw(&command).await.unwrap();
-            let ld = serde_json::to_string_pretty(&resp).unwrap();
-            std::fs::write(cache_name, ld).unwrap();
-            resp
+        let resp = match (args.cache, std::fs::read_to_string(&cache_name)) {
+            (true, Ok(s)) => serde_json::from_str(&s).unwrap(),
+            _ => {
+                let resp = session.send_command_raw(command).await.unwrap();
+                let ld = serde_json::to_string_pretty(&resp).unwrap();
+                std::fs::write(&cache_name, ld).unwrap();
+                println!("Cached {}", serde_json::to_string(command).unwrap());
+                resp
+            }
+        };
+
+        gs.update(&resp).unwrap();
+
+        println!("\n=== Response keys ===");
+        for (key, val) in resp.values() {
+            let vs = val.as_str();
+            if vs.len() > 150 {
+                println!("  {key}: ({} chars)", vs.len());
+            } else {
+                println!("  {key}: {vs}");
+            }
         }
-    };
-
-    gs.update(&resp).unwrap();
+    }
     let js = serde_json::to_string_pretty(&gs).unwrap();
     std::fs::write("character.json", js).unwrap();
 }

@@ -54,10 +54,22 @@ pub struct Fight {
     pub rank_post_fight: u32,
     /// The item this fight gave the player (if any)
     pub item_won: Option<Item>,
-    /// The amount of soldiers sent in a fortress attack
-    pub soldiers_sent: Option<u32>,
-    /// Resources looted from a fortress attack (wood, stone)
-    pub fortress_loot: Option<(u64, u64)>,
+    /// Fortress attack/defense result details
+    pub fortress: Option<FortressResult>,
+}
+
+/// Details about a fortress fight result
+#[derive(Debug, Default, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct FortressResult {
+    /// Soldiers sent (attack) or deployed by enemy (defense)
+    pub soldiers: u32,
+    /// Stone looted from a fortress attack
+    pub stone: u64,
+    /// Wood looted from a fortress attack
+    pub wood: u64,
+    /// Enemies defeated in defense (archers, battlemages)
+    pub enemies_defeated: (u32, u32),
 }
 
 impl Fight {
@@ -85,11 +97,15 @@ impl Fight {
 
         // Extended fortress fight data (fightresult.fortresspillagerv1)
         if data.len() >= 25 {
-            self.fortress_loot =
-                Some((data.csiget(21, "fortress wood", 0)?, 0));
-            // Index 22 appears to be stone or silver gained
-            // Index 24 is soldiers sent
-            self.soldiers_sent = Some(data.csiget(24, "soldiers sent", 0)?);
+            self.fortress = Some(FortressResult {
+                soldiers: data.csiget(24, "soldiers", 0)?,
+                stone: data.csiget(21, "fortress stone", 0)?,
+                wood: data.csiget(22, "fortress wood", 0)?,
+                enemies_defeated: (
+                    data.csiget(25, "archers defeated", 0)?,
+                    data.csiget(26, "mages defeated", 0)?,
+                ),
+            });
         }
 
         Ok(())
