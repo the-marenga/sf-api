@@ -1436,7 +1436,8 @@ impl GameState {
                     .and_then(|v| v.as_str().parse().ok())
                     .unwrap_or(1);
                 let fight = self.get_fight(x);
-                if let Err(e) = fight.update_rounds(val.as_str(), fight_version) {
+                if let Err(e) = fight.update_rounds(val.as_str(), fight_version)
+                {
                     warn!("Failed to parse fight rounds: {e}");
                 }
             }
@@ -2235,9 +2236,8 @@ impl GameState {
                 if data.len() < 1 + ITEM_PARSE_LEN {
                     return Ok(());
                 }
-                let count = usize::try_from(
-                    data.cget(0, "equip_count")?,
-                ).unwrap_or(0);
+                let count =
+                    usize::try_from(data.cget(0, "equip_count")?).unwrap_or(0);
                 let items: Vec<Vec<i64>> = data
                     .skip(1, "equip_data")?
                     .chunks_exact(ITEM_PARSE_LEN)

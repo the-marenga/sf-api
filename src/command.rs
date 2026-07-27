@@ -640,6 +640,7 @@ pub enum Command {
     },
     /// Views the replay of a combat log entry
     ReplayFight {
+        /// The id of the message
         msg_id: u32,
     },
     /// Upgrades the Hall of Knights to the next level

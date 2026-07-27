@@ -2,8 +2,10 @@ use chrono::{DateTime, Local};
 use num_traits::FromPrimitive;
 
 use super::{items::*, *};
-use crate::misc::{ArrSkip, CGet};
-use crate::PlayerId;
+use crate::{
+    PlayerId,
+    misc::{ArrSkip, CGet},
+};
 
 /// The arena, that a player can fight other players in
 #[derive(Debug, Default, Clone)]
@@ -80,9 +82,7 @@ pub enum FightExtra {
         mages_defeated: u32,
     },
     /// Underworld lure — souls pillaged from another player
-    UnderworldLure {
-        souls: i64,
-    },
+    UnderworldLure { souls: i64 },
 }
 
 impl Fight {
@@ -207,20 +207,22 @@ impl SingleFight {
         //   9-value  (no effects):
         //     actor / 0 / type / outcome / 0 / actor_hp / target_hp / 0 / 0
         //   12-value (one fighter has an effect):
-        //     actor / 0 / type / outcome / 0 / actor_hp / target_hp / [5 extras]
-        //       Actor's effect:  [who=1,  flag,       id,    rem,         trail=0]
-        //       Opponent effect: [0,      marker=1,   flag,  id,          rem]
-        //   15-value (both fighters have effects, or one has two):
-        //     actor / 0 / type / outcome / 0 / actor_hp / target_hp / [8 extras]
-        //       [who1, eff1_flag, eff1_id, eff1_rem, who2, eff2_flag, eff2_id, eff2_rem]
-        //       who={0→opponent, ≠0→actor}
+        //     actor / 0 / type / outcome / 0 / actor_hp / target_hp / [5
+        // extras]       Actor's effect:  [who=1,  flag,       id,
+        // rem,         trail=0]       Opponent effect: [0,
+        // marker=1,   flag,  id,          rem]   15-value (both
+        // fighters have effects, or one has two):     actor / 0 / type
+        // / outcome / 0 / actor_hp / target_hp / [8 extras]
+        //       [who1, eff1_flag, eff1_id, eff1_rem, who2, eff2_flag, eff2_id,
+        // eff2_rem]       who={0→opponent, ≠0→actor}
         let raw: Vec<&str> = data.split('/').collect();
         // Parse once to i64 for robust stride detection
-        let values: Vec<i64> = raw.iter().filter_map(|s| s.parse().ok()).collect();
+        let values: Vec<i64> =
+            raw.iter().filter_map(|s| s.parse().ok()).collect();
 
         let mut i = 0;
         while i + 9 <= values.len() {
-            let extras_first = values.cget(i + 7, "extras_first")?;  // 0 if none; who=0 → opponent, ≠0 → actor
+            let extras_first = values.cget(i + 7, "extras_first")?; // 0 if none; who=0 → opponent, ≠0 → actor
             let extras_second = values.cget(i + 8, "extras_second")?;
 
             // Detect stride: 9-value if both effect slots are 0
@@ -240,8 +242,10 @@ impl SingleFight {
             };
 
             let acting_id = values.cget(i, "acting_id")?;
-            let action_type: u32 = u32::try_from(values.cget(i + 2, "action_type")?).unwrap_or(0);
-            let outcome_code: u32 = u32::try_from(values.cget(i + 3, "outcome")?).unwrap_or(0);
+            let action_type: u32 =
+                u32::try_from(values.cget(i + 2, "action_type")?).unwrap_or(0);
+            let outcome_code: u32 =
+                u32::try_from(values.cget(i + 3, "outcome")?).unwrap_or(0);
 
             let action = FightActionType::parse(action_type);
             let outcome = match outcome_code {
@@ -253,12 +257,15 @@ impl SingleFight {
             let actor_life = values.cget(i + 5, "actor_life")?;
             let target_life = values.cget(i + 6, "target_life")?;
 
-            let actor_state = FighterState::from_raw(values.cget(i + 1, "actor_state")?);
-            let defender_state = FighterState::from_raw(values.cget(i + 4, "defender_state")?);
+            let actor_state =
+                FighterState::from_raw(values.cget(i + 1, "actor_state")?);
+            let defender_state =
+                FighterState::from_raw(values.cget(i + 4, "defender_state")?);
 
             let (actor_effect, opponent_effect) = if stride > 9 {
                 let extras_start = values.skip(i + 7, "extras")?;
-                let extra_vals = extras_start.get(..(stride - 7)).unwrap_or(&[]);
+                let extra_vals =
+                    extras_start.get(..(stride - 7)).unwrap_or(&[]);
                 parse_active_effect(extra_vals)
             } else {
                 (None, None)
@@ -424,7 +431,7 @@ pub enum FighterState {
     Normal,
     /// Druid in eagle form
     EagleForm,
-   /// Druid in bear form
+    /// Druid in bear form
     BearForm,
     /// Paladin in Defensive stance (value 20)
     DefensiveStance,
@@ -512,11 +519,13 @@ pub struct FightAction {
     pub actor_effect: Option<ActiveEffect>,
     /// The active effect on the opponent, if any (minion or ability)
     pub opponent_effect: Option<ActiveEffect>,
-    /// Decoded state of the acting fighter (from position 1 in 9-value format).
-    /// Non-zero when the fighter has an active stance/special ability.
+    /// Decoded state of the acting fighter (from position 1 in 9-value
+    /// format). Non-zero when the fighter has an active stance/special
+    /// ability.
     pub actor_state: FighterState,
-    /// Decoded state of the defending fighter (from position 4 in 9-value format).
-    /// Non-zero when the fighter has an active stance/special ability.
+    /// Decoded state of the defending fighter (from position 4 in 9-value
+    /// format). Non-zero when the fighter has an active stance/special
+    /// ability.
     pub defender_state: FighterState,
 }
 
@@ -563,8 +572,10 @@ impl FightActionType {
             2 => FightActionType::MushroomCatapult,
             10 => FightActionType::BattleMageFireball,
             11 => FightActionType::Summon,
-            12 => FightActionType::MinionAttack,    // minion acts alone (e.g. after summon)
-            15 => FightActionType::MinionAttack2,   // minion acts after player also attacked
+            12 => FightActionType::MinionAttack, /* minion acts alone (e.g.
+                                                   * after summon) */
+            15 => FightActionType::MinionAttack2, /* minion acts after
+                                                    * player also attacked */
             14 => FightActionType::Revive,
             17 | 18 => FightActionType::ThrowPoison,
             19 | 20 => FightActionType::PoisonTick,
@@ -611,7 +622,8 @@ fn parse_one_effect(extras: &[i64], start: usize) -> Option<ActiveEffect> {
         },
         _ => {
             warn!(
-                "Unknown active effect: flag={flag}, id={id}, remaining={remaining}"
+                "Unknown active effect: flag={flag}, id={id}, \
+                 remaining={remaining}"
             );
             ActiveEffect::Unknown {
                 flag: clamp_u32(flag),
@@ -649,8 +661,20 @@ fn parse_active_effect(
         let eff1 = parse_one_effect(extras, 1);
         let eff2 = parse_one_effect(extras, 5);
 
-        let actor_effect = if who1_actor { eff1 } else if who2_actor { eff2 } else { None };
-        let opponent_effect = if !who1_actor { eff1 } else if !who2_actor { eff2 } else { None };
+        let actor_effect = if who1_actor {
+            eff1
+        } else if who2_actor {
+            eff2
+        } else {
+            None
+        };
+        let opponent_effect = if !who1_actor {
+            eff1
+        } else if !who2_actor {
+            eff2
+        } else {
+            None
+        };
 
         (actor_effect, opponent_effect)
     } else if extras.first().copied().unwrap_or(0) != 0 {
