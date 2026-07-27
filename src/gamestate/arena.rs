@@ -2,6 +2,7 @@ use chrono::{DateTime, Local};
 use num_traits::FromPrimitive;
 
 use super::{items::*, *};
+use crate::misc::{ArrSkip, CGet};
 use crate::PlayerId;
 
 /// The arena, that a player can fight other players in
@@ -202,72 +203,63 @@ impl SingleFight {
             // Unsupported fight version
             return Ok(());
         }
-
-        // Format variants:
-        //   9-value  (no minions):
+        // Format variants (all values are i64):
+        //   9-value  (no effects):
         //     actor / 0 / type / outcome / 0 / actor_hp / target_hp / 0 / 0
-        //   12-value (one side has minions):
-        //     actor / 0 / type / outcome / 0 / actor_hp / target_hp / e1/e2/e3/e4/trail
-        //   15-value (both sides have minions):
-        //     actor / 0 / type / outcome / 0 / actor_hp / target_hp / p1/p2/p3/p4/e1/e2/e3/e4
-        let values: Vec<&str> = data.split('/').collect();
-        let mut i = 0;
-        while i < values.len() {
-            if i + 9 > values.len() {
-                break;
-            }
+        //   12-value (one fighter has an effect):
+        //     actor / 0 / type / outcome / 0 / actor_hp / target_hp / [5 extras]
+        //       Actor's effect:  [who=1,  flag,       id,    rem,         trail=0]
+        //       Opponent effect: [0,      marker=1,   flag,  id,          rem]
+        //   15-value (both fighters have effects, or one has two):
+        //     actor / 0 / type / outcome / 0 / actor_hp / target_hp / [8 extras]
+        //       [who1, eff1_flag, eff1_id, eff1_rem, who2, eff2_flag, eff2_id, eff2_rem]
+        //       who={0→opponent, ≠0→actor}
+        let raw: Vec<&str> = data.split('/').collect();
+        // Parse once to i64 for robust stride detection
+        let values: Vec<i64> = raw.iter().filter_map(|s| s.parse().ok()).collect();
 
-            // Detect stride for this chunk
-            // Check if position 7 (first extras value) is zero — it determines
-            // whether there are any extra effect values.
-            let p7 = values.cget(i + 7, "stride_p7")?;
-            let stride = if p7 == "0" && values.cget(i + 8, "stride_p8")? == "0" {
-                // 9-value: positions 7 and 8 are both 0
+        let mut i = 0;
+        while i + 9 <= values.len() {
+            let extras_first = values.cget(i + 7, "extras_first")?;  // 0 if none; who=0 → opponent, ≠0 → actor
+            let extras_second = values.cget(i + 8, "extras_second")?;
+
+            // Detect stride: 9-value if both effect slots are 0
+            let stride = if extras_first == 0 && extras_second == 0 {
                 9
             } else if i + 15 <= values.len()
-                && p7 != "0"
-                && values.cget(i + 11, "stride_p11")? != "0"
+                && matches!(values.cget(i + 12, "stride_p12")?, 1..=3)
             {
-                // 15-value: both sides have minions, all 8 extras are non-zero-ish
+                // 15-value: position 12 is the second effect-block's flag
+                // (1=Ability, 2=Minion, 3=Poison). In any other format,
+                // position 12 is the next action's actor_id (>3 or <0).
                 15
             } else if i + 12 <= values.len() {
-                // 12-value: one side has minions
                 12
             } else {
                 9
             };
 
-            let acting_id: i64 = values.cfsuget(i, "action pid")?;
-
-            let action_type: u32 =
-                values.cfsget(i + 2, "fight action")?.unwrap_or(0);
-            let raw_outcome: u32 =
-                values.cfsget(i + 3, "fight outcome")?.unwrap_or(0);
+            let acting_id = values.cget(i, "acting_id")?;
+            let action_type: u32 = u32::try_from(values.cget(i + 2, "action_type")?).unwrap_or(0);
+            let outcome_code: u32 = u32::try_from(values.cget(i + 3, "outcome")?).unwrap_or(0);
 
             let action = FightActionType::parse(action_type);
-            let outcome = match raw_outcome {
+            let outcome = match outcome_code {
                 3 => FightOutcome::Blocked,
                 4 => FightOutcome::Evaded,
                 _ => FightOutcome::Normal,
             };
 
-            let actor_life: i64 =
-                values.cfsuget(i + 5, "action actor life")?;
-            let target_life: i64 =
-                values.cfsuget(i + 6, "action target life")?;
+            let actor_life = values.cget(i + 5, "actor_life")?;
+            let target_life = values.cget(i + 6, "target_life")?;
 
-            let pos1: i64 = values.cget(i + 1, "fighter_pos1")?.parse().unwrap_or(0);
-            let pos4: i64 = values.cget(i + 4, "fighter_pos4")?.parse().unwrap_or(0);
-            let actor_state = FighterState::from_raw(pos1);
-            let defender_state = FighterState::from_raw(pos4);
+            let actor_state = FighterState::from_raw(values.cget(i + 1, "actor_state")?);
+            let defender_state = FighterState::from_raw(values.cget(i + 4, "defender_state")?);
 
             let (actor_effect, opponent_effect) = if stride > 9 {
-                let extra_vals: Vec<i64> = values
-                    .skip(i + 7, "extra_vals")?
-                    .iter()
-                    .filter_map(|s| s.parse().ok())
-                    .collect();
-                parse_active_effect(&extra_vals)
+                let extras_start = values.skip(i + 7, "extras")?;
+                let extra_vals = extras_start.get(..(stride - 7)).unwrap_or(&[]);
+                parse_active_effect(extra_vals)
             } else {
                 (None, None)
             };
@@ -285,6 +277,15 @@ impl SingleFight {
             });
 
             i += stride;
+        }
+
+        if i < values.len() {
+            let trailing = raw.get(i..).unwrap_or(&[]);
+            warn!(
+                "{} trailing unparsed values in fight.r: {:?}",
+                values.len() - i,
+                trailing,
+            );
         }
 
         Ok(())
@@ -421,10 +422,14 @@ pub enum FighterState {
     /// No special state
     #[default]
     Normal,
-    /// Druid in bear form (values 10-11, speed change after transform)
+    /// Druid in eagle form
+    EagleForm,
+   /// Druid in bear form
     BearForm,
     /// Paladin in Defensive stance (value 20)
     DefensiveStance,
+    /// Paladin in Offensive stance (value 21)
+    OffensiveStance,
     /// Berserker in frenzy mode (value 30)
     Frenzy,
     /// An unrecognized state value (raw value attached for debugging)
@@ -435,8 +440,10 @@ impl FighterState {
     pub(crate) fn from_raw(val: i64) -> Self {
         match val {
             0 => FighterState::Normal,
-            10 | 11 => FighterState::BearForm,
+            10 => FighterState::EagleForm,
+            11 => FighterState::BearForm,
             20 => FighterState::DefensiveStance,
+            21 => FighterState::OffensiveStance,
             30 => FighterState::Frenzy,
             _ => {
                 if val != 0 {
@@ -616,13 +623,17 @@ fn parse_one_effect(extras: &[i64], start: usize) -> Option<ActiveEffect> {
 }
 
 /// Parse the 5 (12-value) or 8 (15-value) extra values into active effects.
-/// Format: [1, `type_flag`, `type_id`, remaining, ...]
-///   `type_flag=2`: minion  |  `type_flag=1`: class ability
-///   12-value, acting has effect:  [1, flag, id, remaining, 0]
-///      flag=2 → [1, 2, `minion_type`, rem, 0]   flag=1 → [1, 1, `ability_id`, rem, 0]
-///   12-value, opponent has effect: [0, 1, flag, id, remaining]
-///      flag=2 → [0, 1, 2, `minion_type`, rem]   flag=1 → [0, 1, 1, `ability_id`, rem]
-///   15-value (both sides): [1, `my_f`, `my_id`, `my_rem`, 1, `their_f`, `their_id`, `their_rem`]
+///
+/// 12-value (5 extras):
+///   [who=1,    flag, id, rem, trail=0]  → (actor,   None)
+///   [0,        marker=1, flag, id, rem] → (None,    opponent)
+///
+/// 15-value (8 extras):
+///   [who1, flag1, id1, rem1, who2, flag2, id2, rem2]
+///   who=0      → that block belongs to the **opponent**
+///   who≠0      → that block belongs to the **actor**
+///   When both blocks belong to the same fighter, only the first
+///   is returned (the second is typically an expired sentinel).
 fn parse_active_effect(
     extras: &[i64],
 ) -> (Option<ActiveEffect>, Option<ActiveEffect>) {
@@ -630,21 +641,25 @@ fn parse_active_effect(
         return (None, None);
     }
 
-    // Determine offset of each side's 3-value block
-    //   15-value: mine@1, theirs@5
-    //   12-value mine: mine@1, no theirs
-    //   12-value theirs: no mine, theirs@2
-    let (mine_start, theirs_start) = if extras.len() >= 8 {
-        (Some(1), Some(5))
-    } else if extras.first().copied().unwrap_or(0) != 0 {
-        (Some(1), None)
-    } else {
-        (None, Some(2))
-    };
+    if extras.len() >= 8 {
+        // 15-value: two effect blocks, each with an ownership flag
+        let who1_actor = extras.first().copied().unwrap_or(0) != 0;
+        let who2_actor = extras.get(4).copied().unwrap_or(0) != 0;
 
-    let mine = mine_start.and_then(|s| parse_one_effect(extras, s));
-    let theirs = theirs_start.and_then(|s| parse_one_effect(extras, s));
-    (mine, theirs)
+        let eff1 = parse_one_effect(extras, 1);
+        let eff2 = parse_one_effect(extras, 5);
+
+        let actor_effect = if who1_actor { eff1 } else if who2_actor { eff2 } else { None };
+        let opponent_effect = if !who1_actor { eff1 } else if !who2_actor { eff2 } else { None };
+
+        (actor_effect, opponent_effect)
+    } else if extras.first().copied().unwrap_or(0) != 0 {
+        // 12-value, actor's effect: [who=1, flag, id, rem, trail=0]
+        (parse_one_effect(extras, 1), None)
+    } else {
+        // 12-value, opponent's effect: [0, marker=1, flag, id, rem]
+        (None, parse_one_effect(extras, 2))
+    }
 }
 
 /// The type of the participant in a fight
