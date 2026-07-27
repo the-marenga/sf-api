@@ -1,3 +1,7 @@
+// TODO: Remove this once ouroboros is updated:
+// https://github.com/someguynamedjosh/ouroboros/issues/140
+#![allow(clippy::extra_unused_lifetimes)]
+
 use std::{collections::HashMap, fmt::Debug, str::FromStr};
 
 use chrono::NaiveDateTime;

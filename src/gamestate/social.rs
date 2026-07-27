@@ -24,10 +24,12 @@ pub struct Mail {
     pub inbox_capacity: u16,
     /// Messages and notifications
     pub inbox: Vec<InboxEntry>,
+    /// News from the server
+    pub news_inbox: Vec<NewsEntry>,
     /// Items and resources from item codes/twitch drops, that you can claim
     pub claimables: Vec<ClaimableMail>,
-    /// If you open a message (via command), this here will contain the opened
-    /// message
+    /// If you open a message, or news entry (via command), this here will
+    /// contain the opened message
     pub open_msg: Option<String>,
     /// A preview of a claimable. You can get this via
     /// `Command::ClaimablePreview`
@@ -699,6 +701,44 @@ impl InboxEntry {
             msg_id: parts.cfsuget(0, "msg_id")?,
             title: from_sf_string(title.trim_end_matches('\t')),
             read: parts.cget(2, "inbox read")? == "1",
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct NewsEntry {
+    /// The id used to read the full contents of this message
+    pub news_id: i64,
+    /// The titel of this news entry
+    pub title: String,
+    /// The time at which this news entry was distributed to players
+    pub date: DateTime<Local>,
+    /// Has this news entry been opened before?
+    pub read: bool,
+    // There is an icon here as well, but we do not care
+}
+
+impl NewsEntry {
+    pub(crate) fn parse(
+        msg: &str,
+        server_time: ServerTime,
+    ) -> Result<NewsEntry, SFError> {
+        let parts = msg.splitn(4, ',').collect::<Vec<_>>();
+        let title = parts.cget(1, "news title")?;
+        let Ok(ts) = parts.cget(2, "news timestamp")?.parse::<i64>() else {
+            return Err(SFError::ParsingError("invalid news ts", msg.into()));
+        };
+
+        let Some(date) = server_time.convert_to_local(ts, "msg_date") else {
+            return Err(SFError::ParsingError("msg date", ts.to_string()));
+        };
+
+        Ok(NewsEntry {
+            news_id: ts,
+            date,
+            title: from_sf_string(title),
+            read: parts.cget(0, "inbox read")? == "1",
         })
     }
 }
