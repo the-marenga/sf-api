@@ -1436,7 +1436,9 @@ impl GameState {
                     .and_then(|v| v.as_str().parse().ok())
                     .unwrap_or(1);
                 let fight = self.get_fight(x);
-                fight.update_rounds(val.as_str(), fight_version)?;
+                if let Err(e) = fight.update_rounds(val.as_str(), fight_version) {
+                    warn!("Failed to parse fight rounds: {e}");
+                }
             }
             "othergroupname" => {
                 other_guild
