@@ -1452,7 +1452,10 @@ impl Command {
                 }
                 format!("RollDice:{}/{}", *payment as usize, dices)
             }
-            Command::PetFeed { pet_id, total_fruit_count } => {
+            Command::PetFeed {
+                pet_id,
+                total_fruit_count,
+            } => {
                 format!("PlayerPetFeed:{pet_id}/{total_fruit_count}")
             }
             Command::GuildPetBattle { use_mushroom } => {
