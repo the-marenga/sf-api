@@ -127,7 +127,19 @@ impl SingleFight {
             warn!("Fighter response too short");
             return;
         }
-        // FIXME: IIRC this should probably be split(data.len() / 2) instead
+        // Each fighter has the same number of fields (49), but the leading
+        // padding before the actual data may differ. The first fighter starts
+        // at offset 0. The second fighter starts at an offset that gives it
+        // the same number of leading zeros as the first fighter so that
+        // Fighter::parse can find the id at index 5.
+        //
+        // Empirically the data layout is:
+        //   Fighter A (49 values) | separator (1) | Fighter B (49 values)
+        // With total = 99, split_at(47) gives:
+        //   Fighter A: 47 values (indices 0-46) - loses 2 trailing zeros
+        //   Fighter B: 52 values (indices 47-98) - gains 5 leading zeros
+        //     (2 from Fighter A trailer + 1 separator + 2 Fighter B padding)
+        // This makes the id land at index 5 for both fighters.
         let (fighter_a, fighter_b) = data.split_at(47);
         self.fighter_a = Fighter::parse(fighter_a);
         self.fighter_b = Fighter::parse(fighter_b);
@@ -140,28 +152,55 @@ impl SingleFight {
     ) -> Result<(), SFError> {
         self.actions.clear();
 
-        if fight_version > 1 {
-            // TODO: Actually parse this
+        if fight_version != 2 {
+            // Unsupported fight version
             return Ok(());
         }
-        let mut iter = data.split(',');
-        while let (Some(player_id), Some(damage_typ), Some(new_life)) =
-            (iter.next(), iter.next(), iter.next())
-        {
-            let action =
-                warning_from_str(damage_typ, "fight action").unwrap_or(0);
+
+        // Format: 9 values per round, '/' separated
+        //   actor_id / 0 / action_type / outcome / 0 / actor_life / target_life / 0 / 0
+        let values: Vec<&str> = data.split('/').collect();
+        for chunk in values.chunks(9) {
+            if chunk.len() < 9 {
+                break;
+            }
+            let acting_id: i64 = chunk[0].parse().map_err(|_| {
+                SFError::ParsingError("action pid", chunk[0].to_string())
+            })?;
+
+            let action_type: u32 =
+                warning_from_str(chunk[2], "fight action").unwrap_or(0);
+            let outcome: u32 =
+                warning_from_str(chunk[3], "fight outcome").unwrap_or(0);
+
+            // outcome=3 => blocked, outcome=4 => evaded, otherwise use
+            // the action type directly
+            let action = if outcome == 3 {
+                FightActionType::Blocked
+            } else if outcome == 4 {
+                FightActionType::Evaded
+            } else {
+                FightActionType::parse(action_type)
+            };
+
+            let target_life: i64 = chunk[6].parse().map_err(|_| {
+                SFError::ParsingError(
+                    "action target life",
+                    chunk[6].to_string(),
+                )
+            })?;
+            let actor_life: i64 = chunk[5].parse().map_err(|_| {
+                SFError::ParsingError(
+                    "action actor life",
+                    chunk[5].to_string(),
+                )
+            })?;
 
             self.actions.push(FightAction {
-                acting_id: player_id.parse().map_err(|_| {
-                    SFError::ParsingError("action pid", player_id.to_string())
-                })?,
-                action: FightActionType::parse(action),
-                other_new_life: new_life.parse().map_err(|_| {
-                    SFError::ParsingError(
-                        "action new life",
-                        player_id.to_string(),
-                    )
-                })?,
+                acting_id,
+                action,
+                other_new_life: target_life,
+                actor_life: Some(actor_life),
             });
         }
 
@@ -270,6 +309,9 @@ pub struct FightAction {
     pub other_new_life: i64,
     /// The action, that the active side does
     pub action: FightActionType,
+    /// The life of the acting fighter at the time of this action. Only
+    /// available in fight_version >= 2
+    pub actor_life: Option<i64>,
 }
 
 /// An action in a fight. In the official client this determines the animation,
