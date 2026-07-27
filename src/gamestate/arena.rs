@@ -465,6 +465,13 @@ pub enum ActiveEffect {
         /// How many actions the minion can still take
         remaining_actions: u32,
     },
+    /// A poison/debuff effect (PlagueDoctor)
+    Poison {
+        /// The numeric ID of the poison type
+        id: u32,
+        /// How many rounds the poison is still active for
+        remaining_rounds: u32,
+    },
     /// A class ability (e.g. Bard melody, Druid bear form)
     Ability {
         /// The numeric ID of the ability
@@ -528,6 +535,8 @@ pub enum FightActionType {
     Summon,
     /// A minion attacks (Necromancer skeleton)
     MinionAttack,
+    /// A minion attacks after the main fighter attacked
+    MinionAttack2,
     /// BattleMage's opening fireball
     BattleMageFireball,
     /// Assassin's main hand attack
@@ -536,6 +545,10 @@ pub enum FightActionType {
     AssassinOffHand,
     /// DemonHunter's revive ability
     Revive,
+    /// PlagueDoctor throws a poison tincture
+    ThrowPoison,
+    /// PlagueDoctor's poison deals damage over time
+    PoisonTick,
     /// I have not checked all possible battle types, so whatever action I have
     /// missed will be parsed as this, with the raw integer value attached
     Unknown(u32),
@@ -549,8 +562,11 @@ impl FightActionType {
             2 => FightActionType::MushroomCatapult,
             10 => FightActionType::BattleMageFireball,
             11 => FightActionType::Summon,
-            12 | 15 => FightActionType::MinionAttack,
+            12 => FightActionType::MinionAttack,    // minion acts alone (e.g. after summon)
+            15 => FightActionType::MinionAttack2,   // minion acts after player also attacked
             14 => FightActionType::Revive,
+            17 | 18 => FightActionType::ThrowPoison,
+            19 | 20 => FightActionType::PoisonTick,
             100 => FightActionType::AssassinMainHand,
             101 => FightActionType::AssassinOffHand,
             _ => {
@@ -588,6 +604,10 @@ fn parse_active_effect(
                 remaining_actions: remaining.max(0) as u32,
             },
             1 => ActiveEffect::Ability {
+                id: id.max(0) as u32,
+                remaining_rounds: remaining.max(0) as u32,
+            },
+            3 => ActiveEffect::Poison {
                 id: id.max(0) as u32,
                 remaining_rounds: remaining.max(0) as u32,
             },
