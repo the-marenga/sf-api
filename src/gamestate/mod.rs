@@ -2233,8 +2233,11 @@ impl GameState {
                 if data.len() < 1 + ITEM_PARSE_LEN {
                     return Ok(());
                 }
-                let count = data[0] as usize;
-                let items: Vec<Vec<i64>> = data[1..]
+                let count = usize::try_from(
+                    data.cget(0, "equip_count")?,
+                ).unwrap_or(0);
+                let items: Vec<Vec<i64>> = data
+                    .skip(1, "equip_data")?
                     .chunks_exact(ITEM_PARSE_LEN)
                     .take(count)
                     .map(|c| c.to_vec())

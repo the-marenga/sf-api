@@ -159,7 +159,7 @@ pub struct SingleFight {
     /// The action this fight involved. Note that this will likely be changed
     /// in the future, as is it hard to interpret
     pub actions: Vec<FightAction>,
-    /// Raw equipment data for fighter_a. Each entry is 19 values (model_id
+    /// Raw equipment data for `fighter_a`. Each entry is 19 values (`model_id`
     /// + item stats). The encoding differs from regular Item format.
     pub equipment: Vec<Vec<i64>>,
 }
@@ -218,12 +218,14 @@ impl SingleFight {
             }
 
             // Detect stride for this chunk
-            let stride = if values[i + 7] == "0" && values[i + 8] == "0" {
+            let stride = if values.cget(i + 7, "stride_p7")? == "0"
+                && values.cget(i + 8, "stride_p8")? == "0"
+            {
                 // 9-value: positions 7 and 8 are both 0
                 9
             } else if i + 15 <= values.len()
-                && values[i + 7] != "0"
-                && values[i + 11] != "0"
+                && values.cget(i + 7, "stride_p7")? != "0"
+                && values.cget(i + 11, "stride_p11")? != "0"
             {
                 // 15-value: both sides have minions, all 8 extras are non-zero-ish
                 15
@@ -234,16 +236,15 @@ impl SingleFight {
                 9
             };
 
-            let chunk = &values[i..i + stride];
-
-            let acting_id: i64 = chunk[0].parse().map_err(|_| {
-                SFError::ParsingError("action pid", chunk[0].to_string())
-            })?;
+            let raw_acting_id = values.cget(i, "acting_id")?;
+            let acting_id: i64 = raw_acting_id
+                .parse()
+                .map_err(|_| SFError::ParsingError("action pid", raw_acting_id.to_string()))?;
 
             let action_type: u32 =
-                warning_from_str(chunk[2], "fight action").unwrap_or(0);
+                values.cfsget(i + 2, "fight action")?.unwrap_or(0);
             let raw_outcome: u32 =
-                warning_from_str(chunk[3], "fight outcome").unwrap_or(0);
+                values.cfsget(i + 3, "fight outcome")?.unwrap_or(0);
 
             let action = FightActionType::parse(action_type);
             let outcome = match raw_outcome {
@@ -252,26 +253,19 @@ impl SingleFight {
                 _ => FightOutcome::Normal,
             };
 
-            let actor_life: i64 = chunk[5].parse().map_err(|_| {
-                SFError::ParsingError(
-                    "action actor life",
-                    chunk[5].to_string(),
-                )
-            })?;
-            let target_life: i64 = chunk[6].parse().map_err(|_| {
-                SFError::ParsingError(
-                    "action target life",
-                    chunk[6].to_string(),
-                )
-            })?;
+            let actor_life: i64 =
+                values.cfsuget(i + 5, "action actor life")?;
+            let target_life: i64 =
+                values.cfsuget(i + 6, "action target life")?;
 
-            let pos1: i64 = chunk[1].parse().unwrap_or(0);
-            let pos4: i64 = chunk[4].parse().unwrap_or(0);
+            let pos1: i64 = values.cget(i + 1, "fighter_pos1")?.parse().unwrap_or(0);
+            let pos4: i64 = values.cget(i + 4, "fighter_pos4")?.parse().unwrap_or(0);
             let actor_state = FighterState::from_raw(pos1);
             let defender_state = FighterState::from_raw(pos4);
 
             let (actor_effect, opponent_effect) = if stride > 9 {
-                let extra_vals: Vec<i64> = chunk[7..]
+                let extra_vals: Vec<i64> = values
+                    .skip(i + 7, "extra_vals")?
                     .iter()
                     .filter_map(|s| s.parse().ok())
                     .collect();
@@ -465,7 +459,7 @@ pub enum ActiveEffect {
         /// How many actions the minion can still take
         remaining_actions: u32,
     },
-    /// A poison/debuff effect (PlagueDoctor)
+    /// A poison/debuff effect (`PlagueDoctor`)
     Poison {
         /// The numeric ID of the poison type
         id: u32,
@@ -505,7 +499,7 @@ pub struct FightAction {
     /// The outcome of this action (blocked, evaded, or normal)
     pub outcome: FightOutcome,
     /// The life of the acting fighter at the time of this action. Only
-    /// available in fight_version >= 2
+    /// available in `fight_version` >= 2
     pub actor_life: Option<i64>,
     /// The active effect on the acting fighter, if any (minion or ability)
     pub actor_effect: Option<ActiveEffect>,
@@ -537,17 +531,17 @@ pub enum FightActionType {
     MinionAttack,
     /// A minion attacks after the main fighter attacked
     MinionAttack2,
-    /// BattleMage's opening fireball
+    /// `BattleMage`'s opening fireball
     BattleMageFireball,
     /// Assassin's main hand attack
     AssassinMainHand,
     /// Assassin's off hand attack
     AssassinOffHand,
-    /// DemonHunter's revive ability
+    /// `DemonHunter`'s revive ability
     Revive,
-    /// PlagueDoctor throws a poison tincture
+    /// `PlagueDoctor` throws a poison tincture
     ThrowPoison,
-    /// PlagueDoctor's poison deals damage over time
+    /// `PlagueDoctor`'s poison deals damage over time
     PoisonTick,
     /// I have not checked all possible battle types, so whatever action I have
     /// missed will be parsed as this, with the raw integer value attached
@@ -578,13 +572,13 @@ impl FightActionType {
 }
 
 /// Parse the 5 (12-value) or 8 (15-value) extra values into active effects.
-/// Format: [1, type_flag, type_id, remaining, ...]
-///   type_flag=2: minion  |  type_flag=1: class ability
+/// Format: [1, `type_flag`, `type_id`, remaining, ...]
+///   `type_flag=2`: minion  |  `type_flag=1`: class ability
 ///   12-value, acting has effect:  [1, flag, id, remaining, 0]
-///      flag=2 → [1, 2, minion_type, rem, 0]   flag=1 → [1, 1, ability_id, rem, 0]
+///      flag=2 → [1, 2, `minion_type`, rem, 0]   flag=1 → [1, 1, `ability_id`, rem, 0]
 ///   12-value, opponent has effect: [0, 1, flag, id, remaining]
-///      flag=2 → [0, 1, 2, minion_type, rem]   flag=1 → [0, 1, 1, ability_id, rem]
-///   15-value (both sides): [1, my_f, my_id, my_rem, 1, their_f, their_id, their_rem]
+///      flag=2 → [0, 1, 2, `minion_type`, rem]   flag=1 → [0, 1, 1, `ability_id`, rem]
+///   15-value (both sides): [1, `my_f`, `my_id`, `my_rem`, 1, `their_f`, `their_id`, `their_rem`]
 fn parse_active_effect(
     extras: &[i64],
 ) -> (Option<ActiveEffect>, Option<ActiveEffect>) {
@@ -594,6 +588,10 @@ fn parse_active_effect(
 
     let parse_one = |flag: i64, id: i64, remaining: i64| -> Option<ActiveEffect> {
         Some(match flag {
+            1 => ActiveEffect::Ability {
+                id: u32::try_from(id.max(0)).unwrap_or(0),
+                remaining_rounds: u32::try_from(remaining.max(0)).unwrap_or(0),
+            },
             2 => ActiveEffect::Minion {
                 minion_type: match id {
                     1 => SummonedMinion::Skeleton,
@@ -601,24 +599,20 @@ fn parse_active_effect(
                     3 => SummonedMinion::Golem,
                     _ => return None,
                 },
-                remaining_actions: remaining.max(0) as u32,
-            },
-            1 => ActiveEffect::Ability {
-                id: id.max(0) as u32,
-                remaining_rounds: remaining.max(0) as u32,
+                remaining_actions: u32::try_from(remaining.max(0)).unwrap_or(0),
             },
             3 => ActiveEffect::Poison {
-                id: id.max(0) as u32,
-                remaining_rounds: remaining.max(0) as u32,
+                id: u32::try_from(id.max(0)).unwrap_or(0),
+                remaining_rounds: u32::try_from(remaining.max(0)).unwrap_or(0),
             },
             _ => {
                 warn!(
                     "Unknown active effect: flag={flag}, id={id}, remaining={remaining}"
                 );
                 ActiveEffect::Unknown {
-                    flag: flag.max(0) as u32,
-                    id: id.max(0) as u32,
-                    remaining: remaining.max(0) as u32,
+                    flag: u32::try_from(flag.max(0)).unwrap_or(0),
+                    id: u32::try_from(id.max(0)).unwrap_or(0),
+                    remaining: u32::try_from(remaining.max(0)).unwrap_or(0),
                 }
             }
         })
@@ -626,15 +620,31 @@ fn parse_active_effect(
 
     if extras.len() >= 8 {
         // 15-value: both sides have effects
-        let mine = parse_one(extras[1], extras[2], extras[3]);
-        let theirs = parse_one(extras[5], extras[6], extras[7]);
+        let mine = parse_one(
+            extras.cget(1, "effect_flag_m").unwrap_or(0),
+            extras.cget(2, "effect_id_m").unwrap_or(0),
+            extras.cget(3, "effect_rem_m").unwrap_or(0),
+        );
+        let theirs = parse_one(
+            extras.cget(5, "effect_flag_t").unwrap_or(0),
+            extras.cget(6, "effect_id_t").unwrap_or(0),
+            extras.cget(7, "effect_rem_t").unwrap_or(0),
+        );
         (mine, theirs)
-    } else if extras[0] != 0 {
+    } else if extras.cget(0, "effect_side").unwrap_or(0) != 0 {
         // 12-value: acting side has an effect
-        (parse_one(extras[1], extras[2], extras[3]), None)
+        (parse_one(
+            extras.cget(1, "effect_flag_m").unwrap_or(0),
+            extras.cget(2, "effect_id_m").unwrap_or(0),
+            extras.cget(3, "effect_rem_m").unwrap_or(0),
+        ), None)
     } else {
         // 12-value: opponent has an effect
-        (None, parse_one(extras[2], extras[3], extras[4]))
+        (None, parse_one(
+            extras.cget(2, "effect_flag_t").unwrap_or(0),
+            extras.cget(3, "effect_id_t").unwrap_or(0),
+            extras.cget(4, "effect_rem_t").unwrap_or(0),
+        ))
     }
 }
 
