@@ -572,10 +572,10 @@ impl FightActionType {
             2 => FightActionType::MushroomCatapult,
             10 => FightActionType::BattleMageFireball,
             11 => FightActionType::Summon,
-            12 => FightActionType::MinionAttack, /* minion acts alone (e.g.
-                                                   * after summon) */
-            15 => FightActionType::MinionAttack2, /* minion acts after
-                                                    * player also attacked */
+            12 => FightActionType::MinionAttack, // minion acts alone (e.g.
+            // after summon)
+            15 => FightActionType::MinionAttack2, // minion acts after
+            // player also attacked
             14 => FightActionType::Revive,
             17 | 18 => FightActionType::ThrowPoison,
             19 | 20 => FightActionType::PoisonTick,
