@@ -244,7 +244,7 @@ pub async fn main() -> Result<(), SFError> {
         // We will focus the attack on the weak point, if we have not yet
         // gotten the chest yet
         if let Some(weak_point) = battle.weak_point
-            && weak_point != world_boss.current_segment
+            && battle.weak_point != world_boss.current_segment
         {
             if !battle.weak_point_hit {
                 session

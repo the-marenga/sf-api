@@ -129,7 +129,7 @@ pub struct WorldBossEvent {
     pub catalysts: u32,
     pub medals: u32,
     pub rank: u32,
-    pub current_segment: WorldBossTowerSegment,
+    pub current_segment: Option<WorldBossTowerSegment>,
     /// The amount of battle loot chests we have available to collect
     pub battle_reward_chests: u32,
     /// The time until the next attack
@@ -190,7 +190,7 @@ impl WorldBossEvent {
         self.catalysts = data.csiget(0, "wb catalysts", 0)?;
         self.medals = data.csiget(1, "wb medals", 0)?;
         self.rank = data.csiget(2, "wb rank", 0)?;
-        self.current_segment = data.cfpuget(3, "wb level", |a| a)?;
+        self.current_segment = data.cfpget(3, "wb level", |a| a)?;
         // 04 => ???       // 576
 
         self.attack_timer = data.cstget(5, "wb atk timer", server_time)?;
