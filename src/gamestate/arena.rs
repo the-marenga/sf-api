@@ -54,6 +54,10 @@ pub struct Fight {
     pub rank_post_fight: u32,
     /// The item this fight gave the player (if any)
     pub item_won: Option<Item>,
+    /// The amount of soldiers sent in a fortress attack
+    pub soldiers_sent: Option<u32>,
+    /// Resources looted from a fortress attack (wood, stone)
+    pub fortress_loot: Option<(u64, u64)>,
 }
 
 impl Fight {
@@ -78,6 +82,16 @@ impl Fight {
         self.rank_post_fight = data.csiget(8, "fight rank post", 0)?;
         let item = data.skip(9, "fight item")?;
         self.item_won = Item::parse(item, server_time)?;
+
+        // Extended fortress fight data (fightresult.fortresspillagerv1)
+        if data.len() >= 25 {
+            self.fortress_loot =
+                Some((data.csiget(21, "fortress wood", 0)?, 0));
+            // Index 22 appears to be stone or silver gained
+            // Index 24 is soldiers sent
+            self.soldiers_sent = Some(data.csiget(24, "soldiers sent", 0)?);
+        }
+
         Ok(())
     }
 
@@ -272,6 +286,14 @@ impl Fighter {
                 fighter_type = FighterTyp::FortressPillager;
                 None
             }
+            Ok(-732) => {
+                fighter_type = FighterTyp::FortressArcher;
+                None
+            }
+            Ok(-722) => {
+                fighter_type = FighterTyp::FortressMage;
+                None
+            }
             Ok(..=-1) => None,
             Ok(0) => {
                 let id = data.cget(15, "fighter uwm").ok()?;
@@ -377,6 +399,10 @@ pub enum FighterTyp {
     Companion(CompanionClass),
     /// A pillager in a fortress attack
     FortressPillager,
+    /// An archer defending a fortress
+    FortressArcher,
+    /// A battlemage defending a fortress
+    FortressMage,
     /// The wall in a fortress attack
     FortressWall,
     /// A minion in an underworld lure battle

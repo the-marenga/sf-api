@@ -638,6 +638,10 @@ pub enum Command {
     FortressSetCAEnemy {
         msg_id: u32,
     },
+    /// Views the replay of a combat log entry
+    PlayerCombatLogView {
+        msg_id: u32,
+    },
     /// Upgrades the Hall of Knights to the next level
     FortressUpgradeHallOfKnights,
     /// Upgrades the given unit in the fortress using the smith
@@ -1393,7 +1397,10 @@ impl Command {
                 format!("FortressEnemy:{}", usize::from(*pay))
             }
             Command::FortressSetCAEnemy { msg_id } => {
-                format!("FortressEnemy:0/{}", *msg_id)
+                format!("FortressEnemy:0/{msg_id}")
+            }
+            Command::PlayerCombatLogView { msg_id } => {
+                format!("PlayerCombatLogView:{msg_id}")
             }
             Command::FortressUpgradeHallOfKnights => {
                 format!("FortressGroupBonusUpgrade:")
