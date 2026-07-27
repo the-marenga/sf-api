@@ -265,12 +265,17 @@ impl SingleFight {
                 )
             })?;
 
-            let (actor_minion, opponent_minion) = if stride > 9 {
+            let pos1: i64 = chunk[1].parse().unwrap_or(0);
+            let pos4: i64 = chunk[4].parse().unwrap_or(0);
+            let actor_state = FighterState::from_raw(pos1);
+            let defender_state = FighterState::from_raw(pos4);
+
+            let (actor_effect, opponent_effect) = if stride > 9 {
                 let extra_vals: Vec<i64> = chunk[7..]
                     .iter()
                     .filter_map(|s| s.parse().ok())
                     .collect();
-                parse_minion_state(&extra_vals)
+                parse_active_effect(&extra_vals)
             } else {
                 (None, None)
             };
@@ -281,8 +286,10 @@ impl SingleFight {
                 outcome,
                 other_new_life: target_life,
                 actor_life: Some(actor_life),
-                actor_minion,
-                opponent_minion,
+                actor_effect,
+                opponent_effect,
+                actor_state,
+                defender_state,
             });
 
             i += stride;
@@ -411,14 +418,69 @@ pub enum SummonedMinion {
     Golem,
 }
 
-/// State of a summoned minion during a fight round
+/// Decodes a pos1/pos4 raw value into a fighter's active state.
+/// These values appear in positions 1 and 4 of the 9-value format and
+/// indicate what special state a fighter is in (stance, form, enrage, etc.).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum FighterState {
+    /// No special state
+    #[default]
+    Normal,
+    /// Druid in bear form (values 10-11, speed change after transform)
+    BearForm,
+    /// Paladin in Defensive stance (value 20)
+    DefensiveStance,
+    /// Berserker in frenzy mode (value 30)
+    Frenzy,
+    /// An unrecognized state value (raw value attached for debugging)
+    Unknown(i64),
+}
+
+impl FighterState {
+    pub(crate) fn from_raw(val: i64) -> Self {
+        match val {
+            0 => FighterState::Normal,
+            10 | 11 => FighterState::BearForm,
+            20 => FighterState::DefensiveStance,
+            30 => FighterState::Frenzy,
+            _ => {
+                if val != 0 {
+                    warn!("Unknown fighter state: {val}");
+                }
+                FighterState::Unknown(val)
+            }
+        }
+    }
+}
+
+/// An active effect on a fighter — either a summoned minion or a class ability
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct MinionState {
-    /// The type of minion
-    pub minion_type: SummonedMinion,
-    /// How many actions the minion can still take before despawning
-    pub remaining_actions: u32,
+pub enum ActiveEffect {
+    /// A summoned minion
+    Minion {
+        /// The type of minion (Skeleton, Hound, or Golem)
+        minion_type: SummonedMinion,
+        /// How many actions the minion can still take
+        remaining_actions: u32,
+    },
+    /// A class ability (e.g. Bard melody, Druid bear form)
+    Ability {
+        /// The numeric ID of the ability
+        id: u32,
+        /// How many rounds the ability is still active for
+        remaining_rounds: u32,
+    },
+    /// An unknown effect type, with the raw flag and id values
+    Unknown {
+        /// The raw type flag from the server
+        flag: u32,
+        /// The raw id from the server
+        id: u32,
+        /// The remaining rounds/actions from the server
+        remaining: u32,
+    },
 }
 
 /// One round (action) in a fight. This is mostly just one attack
@@ -438,10 +500,16 @@ pub struct FightAction {
     /// The life of the acting fighter at the time of this action. Only
     /// available in fight_version >= 2
     pub actor_life: Option<i64>,
-    /// The state of the acting fighter's summoned minion, if any
-    pub actor_minion: Option<MinionState>,
-    /// The state of the opponent's summoned minion, if any
-    pub opponent_minion: Option<MinionState>,
+    /// The active effect on the acting fighter, if any (minion or ability)
+    pub actor_effect: Option<ActiveEffect>,
+    /// The active effect on the opponent, if any (minion or ability)
+    pub opponent_effect: Option<ActiveEffect>,
+    /// Decoded state of the acting fighter (from position 1 in 9-value format).
+    /// Non-zero when the fighter has an active stance/special ability.
+    pub actor_state: FighterState,
+    /// Decoded state of the defending fighter (from position 4 in 9-value format).
+    /// Non-zero when the fighter has an active stance/special ability.
+    pub defender_state: FighterState,
 }
 
 /// An action in a fight. In the official client this determines the animation,
@@ -460,6 +528,14 @@ pub enum FightActionType {
     Summon,
     /// A minion attacks (Necromancer skeleton)
     MinionAttack,
+    /// BattleMage's opening fireball
+    BattleMageFireball,
+    /// Assassin's main hand attack
+    AssassinMainHand,
+    /// Assassin's off hand attack
+    AssassinOffHand,
+    /// DemonHunter's revive ability
+    Revive,
     /// I have not checked all possible battle types, so whatever action I have
     /// missed will be parsed as this, with the raw integer value attached
     Unknown(u32),
@@ -471,8 +547,12 @@ impl FightActionType {
             0 => FightActionType::Attack,
             1 => FightActionType::Crit,
             2 => FightActionType::MushroomCatapult,
+            10 => FightActionType::BattleMageFireball,
             11 => FightActionType::Summon,
             12 | 15 => FightActionType::MinionAttack,
+            14 => FightActionType::Revive,
+            100 => FightActionType::AssassinMainHand,
+            101 => FightActionType::AssassinOffHand,
             _ => {
                 warn!("Unknown fight action type: {val}");
                 FightActionType::Unknown(val)
@@ -481,46 +561,60 @@ impl FightActionType {
     }
 }
 
-/// Parse the 5 (12-value) or 8 (15-value) extra values into minion state.
-/// Format: [1, 2, type, remaining, ...]
-///   12-value, acting side has minion: [1, 2, type, remaining, 0]
-///   12-value, acting side no minion: [0, 1, 2, opp_type, opp_remaining]
-///   15-value (both sides):           [1, 2, my_type, my_rem, 1, 2, their_type, their_rem]
-fn parse_minion_state(
+/// Parse the 5 (12-value) or 8 (15-value) extra values into active effects.
+/// Format: [1, type_flag, type_id, remaining, ...]
+///   type_flag=2: minion  |  type_flag=1: class ability
+///   12-value, acting has effect:  [1, flag, id, remaining, 0]
+///      flag=2 → [1, 2, minion_type, rem, 0]   flag=1 → [1, 1, ability_id, rem, 0]
+///   12-value, opponent has effect: [0, 1, flag, id, remaining]
+///      flag=2 → [0, 1, 2, minion_type, rem]   flag=1 → [0, 1, 1, ability_id, rem]
+///   15-value (both sides): [1, my_f, my_id, my_rem, 1, their_f, their_id, their_rem]
+fn parse_active_effect(
     extras: &[i64],
-) -> (Option<MinionState>, Option<MinionState>) {
+) -> (Option<ActiveEffect>, Option<ActiveEffect>) {
     if extras.len() < 4 {
         return (None, None);
     }
 
-    let minion_from_type = |t: i64| -> Option<SummonedMinion> {
-        match t {
-            1 => Some(SummonedMinion::Skeleton),
-            2 => Some(SummonedMinion::Hound),
-            3 => Some(SummonedMinion::Golem),
-            _ => None,
-        }
-    };
-
-    let to_state = |type_val: i64, remaining: i64| -> Option<MinionState> {
-        Some(MinionState {
-            minion_type: minion_from_type(type_val)?,
-            remaining_actions: remaining.max(0) as u32,
+    let parse_one = |flag: i64, id: i64, remaining: i64| -> Option<ActiveEffect> {
+        Some(match flag {
+            2 => ActiveEffect::Minion {
+                minion_type: match id {
+                    1 => SummonedMinion::Skeleton,
+                    2 => SummonedMinion::Hound,
+                    3 => SummonedMinion::Golem,
+                    _ => return None,
+                },
+                remaining_actions: remaining.max(0) as u32,
+            },
+            1 => ActiveEffect::Ability {
+                id: id.max(0) as u32,
+                remaining_rounds: remaining.max(0) as u32,
+            },
+            _ => {
+                warn!(
+                    "Unknown active effect: flag={flag}, id={id}, remaining={remaining}"
+                );
+                ActiveEffect::Unknown {
+                    flag: flag.max(0) as u32,
+                    id: id.max(0) as u32,
+                    remaining: remaining.max(0) as u32,
+                }
+            }
         })
     };
 
     if extras.len() >= 8 {
-        // 15-value: both sides have minions
-        // [1, 2, my_type, my_rem, 1, 2, their_type, their_rem]
-        (to_state(extras[2], extras[3]), to_state(extras[6], extras[7]))
+        // 15-value: both sides have effects
+        let mine = parse_one(extras[1], extras[2], extras[3]);
+        let theirs = parse_one(extras[5], extras[6], extras[7]);
+        (mine, theirs)
     } else if extras[0] != 0 {
-        // 12-value: acting side has minion
-        // [1, 2, type, remaining, 0]
-        (to_state(extras[2], extras[3]), None)
+        // 12-value: acting side has an effect
+        (parse_one(extras[1], extras[2], extras[3]), None)
     } else {
-        // 12-value: acting side has no minion
-        // [0, 1, 2, opp_type, opp_remaining]
-        (None, to_state(extras[3], extras[4]))
+        // 12-value: opponent has an effect
+        (None, parse_one(extras[2], extras[3], extras[4]))
     }
 }
 

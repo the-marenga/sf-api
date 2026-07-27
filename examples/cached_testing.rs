@@ -10,7 +10,7 @@ pub async fn main() {
 
     let args = Args::parse();
 
-    let custom_resp: Option<&str> = Some("fightresult.fortresspillagerv1:1/1/0/0/0/1/0/223105/222922/0/0/0/0/0/0/0/0/0/0/0/0/770/6012/1/1/0/0&fightversion:2&fightheader1.fighters:8/0/0/0/1/710/-710/40/133250/133250/650/10/10/650/415/-710/1/1/0/0/0/0/0/0/0/0/0/1/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/740/-740/10/33000/33000/200/60/60/600/0/-740/1/1/0/0/0/0/0/0/0/0/0/1/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0&fightequipment1:1/15/1/0/0/2/1/1/0/0/1/2/1/0/0/0/0/1/0/0&fightdecoration1:0/0/0/0&externaltoolequipment1:0/0/0/0/0/0/0/0&fight1.r:710/0/1/0/0/133250/22306/0/0/740/0/0/0/0/22306/133103/0/0/710/0/0/0/0/133103/16221/0/0/740/0/0/3/0/16221/133103/0/0/710/0/0/0/0/133103/6203/0/0/740/0/0/0/0/6203/132836/0/0/710/0/1/0/0/132836/-18685/0/0/&winnerid1.s:710&&fightadditionalplayers.r:");
+    let custom_resp: Option<&str> = None;
 
     let commands: Vec<sf_api::command::Command> = vec![];
 
@@ -112,43 +112,97 @@ pub async fn main() {
 
     let mut gs = GameState::new(login_data).unwrap();
 
-    if let Some(resp) = custom_resp {
-        let resp = Response::parse(
-            resp.to_string(),
-            chrono::Local::now().naive_local(),
-        )
-        .unwrap();
-        gs.update(resp).unwrap();
+    if let Some(_resp) = custom_resp {
+        // Not used in scan mode
     }
 
-    println!("\n=== Fortress Fight ===");
+    use sf_api::gamestate::character::Class;
+    use sf_api::gamestate::social::CombatMessageType;
+    use std::collections::BTreeSet;
 
-    // Dump fighter info
-    if let Some(fight) = &gs.last_fight {
-        println!("winner_id: {:?}, has_player_won: {}, extra: {:?}",
-            fight.fights.first().map(|f| f.winner_id),
-            fight.has_player_won,
-            fight.extra,
-        );
-        for (j, sf) in fight.fights.iter().enumerate() {
-            println!("--- SingleFight {j} ---");
-            if let Some(fa) = &sf.fighter_a {
-                println!("  fighter_a: type={:?} id={} name={:?} level={} life={}",
-                    fa.typ, fa.id, fa.name, fa.level, fa.life);
-            }
-            if let Some(fb) = &sf.fighter_b {
-                println!("  fighter_b: type={:?} id={} name={:?} level={} life={}",
-                    fb.typ, fb.id, fb.name, fb.level, fb.life);
-            }
-            for (k, action) in sf.actions.iter().enumerate() {
+    // Get arena fight msg_ids from the game state's combat log
+    let arena_fights: Vec<u32> = gs
+        .mail
+        .combat_log
+        .iter()
+        .filter(|e| matches!(e.battle_type, CombatMessageType::Arena))
+        .map(|e| e.msg_id as u32)
+        .collect();
+    eprintln!("Found {} arena fight msg_ids", arena_fights.len());
+
+    for msg_id in &arena_fights {
+        let cmd = sf_api::command::Command::PlayerCombatLogView { msg_id: *msg_id };
+
+        let resp = session.send_command_raw(&cmd).await.unwrap();
+
+        // Check if this response has actual fight data
+        let has_fight = resp.values().iter().any(|(key, _val)| {
+            let k = *key;
+            k.starts_with("fight") && k != "fightresult"
+        });
+        if !has_fight {
+            continue;
+        }
+
+        gs.update(resp).unwrap();
+
+        // Collect data from the last fight
+        if let Some(fight) = &gs.last_fight {
+            for sf in &fight.fights {
+                let enemy_name = sf
+                    .fighter_b
+                    .as_ref()
+                    .and_then(|f| f.name.clone())
+                    .unwrap_or_default();
+                let enemy_class = sf
+                    .fighter_b
+                    .as_ref()
+                    .map(|f| f.class)
+                    .unwrap_or(Class::Warrior);
+
+                let mut action_types: BTreeSet<u32> = BTreeSet::new();
+                let mut pos1_vals: BTreeSet<i64> = BTreeSet::new();
+                let mut pos4_vals: BTreeSet<i64> = BTreeSet::new();
+
+                for action in &sf.actions {
+                    // Extract raw action type from the parsed action
+                    let raw = match action.action {
+                        sf_api::gamestate::arena::FightActionType::Attack => 0,
+                        sf_api::gamestate::arena::FightActionType::Crit => 1,
+                        sf_api::gamestate::arena::FightActionType::MushroomCatapult => 2,
+                        sf_api::gamestate::arena::FightActionType::Summon => 11,
+                        sf_api::gamestate::arena::FightActionType::MinionAttack => 12,
+                        sf_api::gamestate::arena::FightActionType::BattleMageFireball => 10,
+                        sf_api::gamestate::arena::FightActionType::Revive => 14,
+                        sf_api::gamestate::arena::FightActionType::AssassinMainHand => 100,
+                        sf_api::gamestate::arena::FightActionType::AssassinOffHand => 101,
+                        sf_api::gamestate::arena::FightActionType::Unknown(v) => v,
+                        _ => 999,
+                    };
+                    action_types.insert(raw);
+                }
+
+                // Helper to get raw state value
+                let state_raw = |s: &sf_api::gamestate::arena::FighterState| -> i64 {
+                    match s {
+                        sf_api::gamestate::arena::FighterState::Normal => 0,
+                        sf_api::gamestate::arena::FighterState::BearForm => 10,
+                        sf_api::gamestate::arena::FighterState::DefensiveStance => 20,
+                        sf_api::gamestate::arena::FighterState::Frenzy => 30,
+                        sf_api::gamestate::arena::FighterState::Unknown(v) => *v,
+                    }
+                };
+                for action in &sf.actions {
+                    pos1_vals.insert(state_raw(&action.actor_state));
+                    pos4_vals.insert(state_raw(&action.defender_state));
+                }
+
                 println!(
-                    "  actions[{k}]: actor={}, action={:?}, outcome={:?}, \
-                     target_hp={}, actor_hp={:?}",
-                    action.acting_id,
-                    action.action,
-                    action.outcome,
-                    action.other_new_life,
-                    action.actor_life,
+                    "msg_id={msg_id} enemy={enemy_name:30} class={enemy_class:?}: \
+                     actions={:?} pos1={:?} pos4={:?}",
+                    action_types.iter().collect::<Vec<_>>(),
+                    pos1_vals.iter().collect::<Vec<_>>(),
+                    pos4_vals.iter().collect::<Vec<_>>(),
                 );
             }
         }
