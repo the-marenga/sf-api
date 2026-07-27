@@ -543,10 +543,14 @@ pub enum FightActionType {
     MushroomCatapult,
     /// Summons a minion (Necromancer)
     Summon,
-    /// A minion attacks (Necromancer skeleton)
+    /// A minion attacks (Necromancer)
     MinionAttack,
-    /// A minion attacks after the main fighter attacked
-    MinionAttack2,
+    /// A minion's critical hit
+    MinionAttackCrit,
+    /// `Druid`'s eagle swoop attack
+    Swoop,
+    /// `Druid`'s eagle swoop critical hit
+    SwoopCrit,
     /// `BattleMage`'s opening fireball
     BattleMageFireball,
     /// Assassin's main hand attack
@@ -572,11 +576,11 @@ impl FightActionType {
             2 => FightActionType::MushroomCatapult,
             10 => FightActionType::BattleMageFireball,
             11 => FightActionType::Summon,
-            12 => FightActionType::MinionAttack, // minion acts alone (e.g.
-            // after summon)
-            15 => FightActionType::MinionAttack2, // minion acts after
-            // player also attacked
+            12 => FightActionType::MinionAttack,
+            13 => FightActionType::Swoop,
             14 => FightActionType::Revive,
+            15 => FightActionType::MinionAttackCrit,
+            16 => FightActionType::SwoopCrit,
             17 | 18 => FightActionType::ThrowPoison,
             19 | 20 => FightActionType::PoisonTick,
             100 => FightActionType::AssassinMainHand,
