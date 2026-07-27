@@ -377,6 +377,8 @@ pub struct FightAction {
 pub enum FightActionType {
     /// A simple attack with the normal weapon
     Attack,
+    /// A critical hit
+    Crit,
     /// One shot from a loaded mushroom catapult in a guild battle
     MushroomCatapult,
     /// The last action was blocked
@@ -400,9 +402,9 @@ pub enum FightActionType {
 
 impl FightActionType {
     pub(crate) fn parse(val: u32) -> FightActionType {
-        // FIXME: Is this missing crit?
         match val {
-            0 | 1 => FightActionType::Attack,
+            0 => FightActionType::Attack,
+            1 => FightActionType::Crit,
             2 => FightActionType::MushroomCatapult,
             3 => FightActionType::Blocked,
             4 => FightActionType::Evaded,
