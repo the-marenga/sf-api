@@ -203,52 +203,89 @@ impl SingleFight {
             return Ok(());
         }
 
-        // Format: 9 values per round, '/' separated
-        //   actor_id / 0 / action_type / outcome / 0 / actor_life / target_life / 0 / 0
+        // Format variants:
+        //   9-value  (no minions):
+        //     actor / 0 / type / outcome / 0 / actor_hp / target_hp / 0 / 0
+        //   12-value (one side has minions):
+        //     actor / 0 / type / outcome / 0 / actor_hp / target_hp / e1/e2/e3/e4/trail
+        //   15-value (both sides have minions):
+        //     actor / 0 / type / outcome / 0 / actor_hp / target_hp / p1/p2/p3/p4/e1/e2/e3/e4
         let values: Vec<&str> = data.split('/').collect();
-        for chunk in values.chunks(9) {
-            if chunk.len() < 9 {
+        let mut i = 0;
+        while i < values.len() {
+            if i + 9 > values.len() {
                 break;
             }
+
+            // Detect stride for this chunk
+            let stride = if values[i + 7] == "0" && values[i + 8] == "0" {
+                // 9-value: positions 7 and 8 are both 0
+                9
+            } else if i + 15 <= values.len()
+                && values[i + 7] != "0"
+                && values[i + 11] != "0"
+            {
+                // 15-value: both sides have minions, all 8 extras are non-zero-ish
+                15
+            } else if i + 12 <= values.len() {
+                // 12-value: one side has minions
+                12
+            } else {
+                9
+            };
+
+            let chunk = &values[i..i + stride];
+
             let acting_id: i64 = chunk[0].parse().map_err(|_| {
                 SFError::ParsingError("action pid", chunk[0].to_string())
             })?;
 
             let action_type: u32 =
                 warning_from_str(chunk[2], "fight action").unwrap_or(0);
-            let outcome: u32 =
+            let raw_outcome: u32 =
                 warning_from_str(chunk[3], "fight outcome").unwrap_or(0);
 
-            // outcome=3 => blocked, outcome=4 => evaded, otherwise use
-            // the action type directly. When combined with action_type=5,
-            // these are minion-specific variants.
-            let action = match (outcome, action_type) {
-                (3, 5) => FightActionType::MinionAttackBlocked,
-                (4, 5) => FightActionType::MinionAttackEvaded,
-                (3, _) => FightActionType::Blocked,
-                (4, _) => FightActionType::Evaded,
-                _ => FightActionType::parse(action_type),
+            let action = FightActionType::parse(action_type);
+            let outcome = match raw_outcome {
+                3 => FightOutcome::Blocked,
+                4 => FightOutcome::Evaded,
+                _ => FightOutcome::Normal,
             };
 
-            let target_life: i64 = chunk[6].parse().map_err(|_| {
-                SFError::ParsingError(
-                    "action target life",
-                    chunk[6].to_string(),
-                )
-            })?;
             let actor_life: i64 = chunk[5].parse().map_err(|_| {
                 SFError::ParsingError(
                     "action actor life",
                     chunk[5].to_string(),
                 )
             })?;
+            let target_life: i64 = chunk[6].parse().map_err(|_| {
+                SFError::ParsingError(
+                    "action target life",
+                    chunk[6].to_string(),
+                )
+            })?;
+
+            let (actor_minion, opponent_minion) = if stride > 9 {
+                let extra_vals: Vec<i64> = chunk[7..]
+                    .iter()
+                    .filter_map(|s| s.parse().ok())
+                    .collect();
+                parse_minion_state(&extra_vals)
+            } else {
+                (None, None)
+            };
 
             self.actions.push(FightAction {
                 acting_id,
                 action,
+                outcome,
                 other_new_life: target_life,
                 actor_life: Some(actor_life),
+                actor_minion,
+                opponent_minion,
             });
+
+            i += stride;
         }
 
         Ok(())
@@ -352,8 +389,41 @@ impl Fighter {
     }
 }
 
-/// One round (action) in a fight. This is mostly just one attack
+/// The outcome of a single round in a fight
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum FightOutcome {
+    /// A normal hit — neither blocked nor evaded
+    #[default]
+    Normal,
+    /// The action was blocked by the defender
+    Blocked,
+    /// The action was evaded by the defender
+    Evaded,
+}
+
+/// The type of summoned minion (Necromancer)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum SummonedMinion {
+    #[default]
+    Skeleton,
+    Hound,
+    Golem,
+}
+
+/// State of a summoned minion during a fight round
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MinionState {
+    /// The type of minion
+    pub minion_type: SummonedMinion,
+    /// How many actions the minion can still take before despawning
+    pub remaining_actions: u32,
+}
+
+/// One round (action) in a fight. This is mostly just one attack
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FightAction {
     /// The id of the fighter, that does the action
@@ -364,9 +434,15 @@ pub struct FightAction {
     pub other_new_life: i64,
     /// The action, that the active side does
     pub action: FightActionType,
+    /// The outcome of this action (blocked, evaded, or normal)
+    pub outcome: FightOutcome,
     /// The life of the acting fighter at the time of this action. Only
     /// available in fight_version >= 2
     pub actor_life: Option<i64>,
+    /// The state of the acting fighter's summoned minion, if any
+    pub actor_minion: Option<MinionState>,
+    /// The state of the opponent's summoned minion, if any
+    pub opponent_minion: Option<MinionState>,
 }
 
 /// An action in a fight. In the official client this determines the animation,
@@ -381,23 +457,13 @@ pub enum FightActionType {
     Crit,
     /// One shot from a loaded mushroom catapult in a guild battle
     MushroomCatapult,
-    /// The last action was blocked
-    Blocked,
-    /// The last action was evaded
-    Evaded,
-    /// The summoned minion attacks
+    /// Summons a minion (Necromancer)
+    Summon,
+    /// A minion attacks (Necromancer skeleton)
     MinionAttack,
-    /// The summoned minion blocked the last attack
-    MinionAttackBlocked,
-    /// The summoned minion evaded the last attack
-    MinionAttackEvaded,
-    /// The summoned minion was crit
-    MinionCrit,
-    /// Plays the harp, or summons a friendly minion
-    SummonSpecial,
     /// I have not checked all possible battle types, so whatever action I have
-    /// missed will be parsed as this
-    Unknown,
+    /// missed will be parsed as this, with the raw integer value attached
+    Unknown(u32),
 }
 
 impl FightActionType {
@@ -406,15 +472,56 @@ impl FightActionType {
             0 => FightActionType::Attack,
             1 => FightActionType::Crit,
             2 => FightActionType::MushroomCatapult,
-            3 => FightActionType::Blocked,
-            4 => FightActionType::Evaded,
-            5 => FightActionType::MinionAttack,
-            6 => FightActionType::MinionAttackBlocked,
-            7 => FightActionType::MinionAttackEvaded,
-            25 => FightActionType::MinionCrit,
-            200..=250 => FightActionType::SummonSpecial,
-            _ => FightActionType::Unknown,
+            11 => FightActionType::Summon,
+            12 | 15 => FightActionType::MinionAttack,
+            _ => {
+                warn!("Unknown fight action type: {val}");
+                FightActionType::Unknown(val)
+            }
         }
+    }
+}
+
+/// Parse the 5 (12-value) or 8 (15-value) extra values into minion state.
+/// Format: [1, 2, type, remaining, ...]
+///   12-value, acting side has minion: [1, 2, type, remaining, 0]
+///   12-value, acting side no minion: [0, 1, 2, opp_type, opp_remaining]
+///   15-value (both sides):           [1, 2, my_type, my_rem, 1, 2, their_type, their_rem]
+fn parse_minion_state(
+    extras: &[i64],
+) -> (Option<MinionState>, Option<MinionState>) {
+    if extras.len() < 4 {
+        return (None, None);
+    }
+
+    let minion_from_type = |t: i64| -> Option<SummonedMinion> {
+        match t {
+            1 => Some(SummonedMinion::Skeleton),
+            2 => Some(SummonedMinion::Hound),
+            3 => Some(SummonedMinion::Golem),
+            _ => None,
+        }
+    };
+
+    let to_state = |type_val: i64, remaining: i64| -> Option<MinionState> {
+        Some(MinionState {
+            minion_type: minion_from_type(type_val)?,
+            remaining_actions: remaining.max(0) as u32,
+        })
+    };
+
+    if extras.len() >= 8 {
+        // 15-value: both sides have minions
+        // [1, 2, my_type, my_rem, 1, 2, their_type, their_rem]
+        (to_state(extras[2], extras[3]), to_state(extras[6], extras[7]))
+    } else if extras[0] != 0 {
+        // 12-value: acting side has minion
+        // [1, 2, type, remaining, 0]
+        (to_state(extras[2], extras[3]), None)
+    } else {
+        // 12-value: acting side has no minion
+        // [0, 1, 2, opp_type, opp_remaining]
+        (None, to_state(extras[3], extras[4]))
     }
 }
 

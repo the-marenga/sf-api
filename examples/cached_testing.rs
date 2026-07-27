@@ -10,12 +10,9 @@ pub async fn main() {
 
     let args = Args::parse();
 
-    let custom_resp: Option<&str> = None;
+    let custom_resp: Option<&str> = Some("fightversion:2&fightheader.fighters:0/0/0/0/1/1039746/bruhbruh/52/167056/167056/98/73/987/788/439/5/303/301/3/303/1/5/16/0/0/1/1/10/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/784913/haret44 (w35net)/57/210192/210192/1243/161/148/906/216/3/109/103/4/105/4/5/7/9/0/8/1/6/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0&fightequipment:1/1010/5/0/0/0/0/1/0/0/1/24/4/0/0/0/0/1/0/0&fightdecoration:0/0/0/0&externaltoolequipment:194/246/0/0/64/160/0/0&fight.r:784913/30/0/0/0/210192/158354/0/0/784913/0/0/0/0/210192/146572/0/0/1039746/0/0/0/0/146572/198240/0/0/784913/0/0/0/0/198240/128413/0/0/1039746/0/11/0/0/128413/198240/1/2/3/4/0/1039746/0/12/0/0/128413/181542/1/2/3/3/0/784913/30/0/0/0/181542/95209/0/1/2/3/3/784913/0/0/3/0/181542/95209/0/1/2/3/3/1039746/0/0/0/0/95209/160305/1/2/3/3/0/1039746/0/12/0/0/95209/140400/1/2/3/2/0/784913/0/0/0/0/140400/43903/0/1/2/3/2/1039746/0/0/0/0/43903/119032/1/2/3/2/0/1039746/0/12/0/0/43903/92344/1/2/3/1/0/784913/30/0/0/0/92344/9840/0/1/2/3/1/784913/0/0/0/0/92344/-25186/0/1/2/3/1/&winnerid:784913&fightresult.battlereward:0/1/0/0/0/-101/0/199362/202624/0/0/0/0/0/0/0/0/0/0/0/0&battlerewarditem:0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0");
 
-    let commands = vec![
-        sf_api::command::Command::PlayerCombatLogView { msg_id: 71712817 },
-        sf_api::command::Command::PlayerCombatLogView { msg_id: 71470287 },
-    ];
+    let commands: Vec<sf_api::command::Command> = vec![];
 
     let username = args.username;
 
@@ -124,35 +121,27 @@ pub async fn main() {
         gs.update(resp).unwrap();
     }
 
-    for command in &commands {
-        let cache_name = format!(
-            "cache/{username}-{}.response",
-            serde_json::to_string(command).unwrap()
-        );
+    println!("\n=== Fight against Alexander Dybala ===");
 
-        let resp = match (args.cache, std::fs::read_to_string(&cache_name)) {
-            (true, Ok(s)) => serde_json::from_str(&s).unwrap(),
-            _ => {
-                let resp = session.send_command_raw(command).await.unwrap();
-                let ld = serde_json::to_string_pretty(&resp).unwrap();
-                std::fs::write(&cache_name, ld).unwrap();
-                println!("Cached {}", serde_json::to_string(command).unwrap());
-                resp
-            }
-        };
-
-        gs.update(&resp).unwrap();
-
-        println!("\n=== Response keys ===");
-        for (key, val) in resp.values() {
-            let vs = val.as_str();
-            if vs.len() > 150 {
-                println!("  {key}: ({} chars)", vs.len());
-            } else {
-                println!("  {key}: {vs}");
+    if let Some(fight) = &gs.last_fight {
+        for (j, sf) in fight.fights.iter().enumerate() {
+            println!("--- SingleFight {j} ---");
+            for (k, action) in sf.actions.iter().enumerate() {
+                println!(
+                    "  actions[{k}]: actor={}, action={:?}, outcome={:?}, \
+                     target_hp={}, actor_hp={:?}, minion={:?}/{:?}",
+                    action.acting_id,
+                    action.action,
+                    action.outcome,
+                    action.other_new_life,
+                    action.actor_life,
+                    action.actor_minion,
+                    action.opponent_minion,
+                );
             }
         }
     }
+
     let js = serde_json::to_string_pretty(&gs).unwrap();
     std::fs::write("character.json", js).unwrap();
 }
