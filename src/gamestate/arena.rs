@@ -69,12 +69,14 @@ pub enum FightExtra {
     Fortress {
         /// Soldiers sent (attack) or deployed by enemy (defense)
         soldiers: u32,
-        /// Stone looted from a fortress attack
-        stone: u64,
-        /// Wood looted from a fortress attack
-        wood: u64,
-        /// Enemies defeated in defense (archers, battlemages)
-        enemies_defeated: (u32, u32),
+        /// Stone looted or lost in a fortress attack
+        stone: i64,
+        /// Wood looted or lost in a fortress attack
+        wood: i64,
+        /// Archers defeated in a fortress defense
+        archers_killed: u32,
+        /// Battlemages defeated in a fortress defense
+        mages_killed: u32,
     },
     /// Underworld lure — souls pillaged from another player
     UnderworldLure {
@@ -114,10 +116,8 @@ impl Fight {
                 soldiers: data.csiget(24, "soldiers", 0)?,
                 stone: data.csiget(21, "fortress stone", 0)?,
                 wood: data.csiget(22, "fortress wood", 0)?,
-                enemies_defeated: (
-                    data.csiget(25, "archers defeated", 0)?,
-                    data.csiget(26, "mages defeated", 0)?,
-                ),
+                archers_killed: data.csiget(25, "archers defeated", 0)?,
+                mages_killed: data.csiget(26, "mages defeated", 0)?,
             };
         }
 
