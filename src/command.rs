@@ -685,8 +685,14 @@ pub enum Command {
     },
     /// Feeds one of your pets
     PetFeed {
+        /// The id of the pet to feed
         pet_id: u32,
-        fruit_idx: u32,
+        /// The total amount of fruit you have accross all habitats.
+        /// The server uses this kind of like a checksum to make sure the users
+        /// request is not desynced, i.e. the user presses, has bad network,
+        /// nothing happens, presses again to try again and it suddenly feeds
+        /// the pet twice after both requests have reached the server.
+        total_fruit_count: u32,
     },
     /// Fights with the guild pet against the hydra
     GuildPetBattle {
@@ -1446,8 +1452,8 @@ impl Command {
                 }
                 format!("RollDice:{}/{}", *payment as usize, dices)
             }
-            Command::PetFeed { pet_id, fruit_idx } => {
-                format!("PlayerPetFeed:{pet_id}/{fruit_idx}")
+            Command::PetFeed { pet_id, total_fruit_count } => {
+                format!("PlayerPetFeed:{pet_id}/{total_fruit_count}")
             }
             Command::GuildPetBattle { use_mushroom } => {
                 format!("GroupPetBattle:{}", usize::from(*use_mushroom))
