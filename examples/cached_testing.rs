@@ -5,7 +5,7 @@ use sf_api::{gamestate::GameState, session::*, sso::SFAccount};
 #[tokio::main]
 pub async fn main() {
     env_logger::builder()
-        .filter_level(log::LevelFilter::Debug)
+        .filter_level(log::LevelFilter::Info)
         .init();
 
     let args = Args::parse();
