@@ -157,12 +157,8 @@ pub struct SingleFight {
     pub fighter_a: Option<Fighter>,
     /// The stats of the first fighter
     pub fighter_b: Option<Fighter>,
-    /// The action this fight involved. Note that this will likely be changed
-    /// in the future, as is it hard to interpret
+    /// The action this fight involved
     pub actions: Vec<FightAction>,
-    /// Raw equipment data for `fighter_a`. Each entry is 19 values (`model_id`
-    /// + item stats). The encoding differs from regular Item format.
-    pub equipment: Vec<Vec<i64>>,
 }
 
 impl SingleFight {

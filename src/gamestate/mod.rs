@@ -2232,30 +2232,7 @@ impl GameState {
                 // Format: item_count / 19-value items (different encoding
                 // from regular Item — first value is model_id, not type)
                 let fight_no = fight_no_from_header(x) - 1;
-                let data: Vec<i64> = val.into_list("fight equipment")?;
-                if data.len() < 1 + ITEM_PARSE_LEN {
-                    return Ok(());
-                }
-                let count =
-                    usize::try_from(data.cget(0, "equip_count")?).unwrap_or(0);
-                let items: Vec<Vec<i64>> = data
-                    .skip(1, "equip_data")?
-                    .chunks_exact(ITEM_PARSE_LEN)
-                    .take(count)
-                    .map(|c| c.to_vec())
-                    .collect();
-                if !items.is_empty() {
-                    let fights = &mut self
-                        .last_fight
-                        .get_or_insert_with(Default::default)
-                        .fights;
-                    if fights.len() <= fight_no {
-                        fights.resize_with(fight_no + 1, Default::default);
-                    }
-                    if let Some(sf) = fights.get_mut(fight_no) {
-                        sf.equipment = items;
-                    }
-                }
+                // TODO: Try and parse this
             }
             x if x.starts_with("externaltoolequipment") => {
                 // External tool/mount equipment data. Format unknown.
