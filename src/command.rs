@@ -639,7 +639,7 @@ pub enum Command {
         msg_id: u32,
     },
     /// Views the replay of a combat log entry
-    PlayerCombatLogView {
+    ReplayFight {
         msg_id: u32,
     },
     /// Upgrades the Hall of Knights to the next level
@@ -1399,7 +1399,7 @@ impl Command {
             Command::FortressSetCAEnemy { msg_id } => {
                 format!("FortressEnemy:0/{msg_id}")
             }
-            Command::PlayerCombatLogView { msg_id } => {
+            Command::ReplayFight { msg_id } => {
                 format!("PlayerCombatLogView:{msg_id}")
             }
             Command::FortressUpgradeHallOfKnights => {
