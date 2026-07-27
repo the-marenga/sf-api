@@ -116,6 +116,9 @@ pub struct SingleFight {
     /// The action this fight involved. Note that this will likely be changed
     /// in the future, as is it hard to interpret
     pub actions: Vec<FightAction>,
+    /// Raw equipment data for fighter_a. Each entry is 19 values (model_id
+    /// + item stats). The encoding differs from regular Item format.
+    pub equipment: Vec<Vec<i64>>,
 }
 
 impl SingleFight {

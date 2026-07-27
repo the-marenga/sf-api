@@ -2224,6 +2224,40 @@ impl GameState {
             x if x.starts_with("attbonus") => {
                 // This is always 0s, so I have no idea what this could be
             }
+            x if x.starts_with("fightequipment") => {
+                // Equipment data for each fighter in multi-fight responses.
+                // Format: item_count / 19-value items (different encoding
+                // from regular Item — first value is model_id, not type)
+                let fight_no = fight_no_from_header(x) - 1;
+                let data: Vec<i64> = val.into_list("fight equipment")?;
+                if data.len() < 1 + ITEM_PARSE_LEN {
+                    return Ok(());
+                }
+                let count = data[0] as usize;
+                let items: Vec<Vec<i64>> = data[1..]
+                    .chunks_exact(ITEM_PARSE_LEN)
+                    .take(count)
+                    .map(|c| c.to_vec())
+                    .collect();
+                if !items.is_empty() {
+                    let fights = &mut self
+                        .last_fight
+                        .get_or_insert_with(Default::default)
+                        .fights;
+                    if fights.len() <= fight_no {
+                        fights.resize_with(fight_no + 1, Default::default);
+                    }
+                    if let Some(sf) = fights.get_mut(fight_no) {
+                        sf.equipment = items;
+                    }
+                }
+            }
+            x if x.starts_with("externaltoolequipment") => {
+                // External tool/mount equipment data. Format unknown.
+            }
+            x if x.starts_with("fightdecoration") => {
+                // Cosmetic decoration data. Not currently parsed.
+            }
             x => {
                 warn!("Update ignored {x} -> {val:?}");
             }
