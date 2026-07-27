@@ -74,9 +74,9 @@ pub enum FightExtra {
         /// Wood looted or lost in a fortress attack
         wood: i64,
         /// Archers defeated in a fortress defense
-        archers_killed: u32,
+        archers_defeated: u32,
         /// Battlemages defeated in a fortress defense
-        mages_killed: u32,
+        mages_defeated: u32,
     },
     /// Underworld lure — souls pillaged from another player
     UnderworldLure {
@@ -116,8 +116,8 @@ impl Fight {
                 soldiers: data.csiget(24, "soldiers", 0)?,
                 stone: data.csiget(21, "fortress stone", 0)?,
                 wood: data.csiget(22, "fortress wood", 0)?,
-                archers_killed: data.csiget(25, "archers defeated", 0)?,
-                mages_killed: data.csiget(26, "mages defeated", 0)?,
+                archers_defeated: data.csiget(25, "archers defeated", 0)?,
+                mages_defeated: data.csiget(26, "mages defeated", 0)?,
             };
         }
 
@@ -220,13 +220,14 @@ impl SingleFight {
                 warning_from_str(chunk[3], "fight outcome").unwrap_or(0);
 
             // outcome=3 => blocked, outcome=4 => evaded, otherwise use
-            // the action type directly
-            let action = if outcome == 3 {
-                FightActionType::Blocked
-            } else if outcome == 4 {
-                FightActionType::Evaded
-            } else {
-                FightActionType::parse(action_type)
+            // the action type directly. When combined with action_type=5,
+            // these are minion-specific variants.
+            let action = match (outcome, action_type) {
+                (3, 5) => FightActionType::MinionAttackBlocked,
+                (4, 5) => FightActionType::MinionAttackEvaded,
+                (3, _) => FightActionType::Blocked,
+                (4, _) => FightActionType::Evaded,
+                _ => FightActionType::parse(action_type),
             };
 
             let target_life: i64 = chunk[6].parse().map_err(|_| {
