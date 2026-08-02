@@ -1431,25 +1431,14 @@ impl GameState {
                 // below, where it is actually used
             }
             x if x.starts_with("fight") && x.len() <= 7 => {
-                let fight_no = fight_no_from_header(x);
-                let wkey = format!("winnerid{fight_no}");
-                let version = if let Some(winner_id) =
-                    all_values.get(wkey.as_str())
-                {
-                    // For unknown reasons, the fightversion is merged
-                    // into the winnerid for all fights, except the last
-                    // one
-                    winner_id.as_str().split_once("fightversion:").map(|a| a.1)
-                } else {
-                    // The last fight uses the normal fightversion
-                    // header
-                    all_values.get("fightversion").map(|a| a.as_str())
-                };
+                let fight_version: u32 = all_values
+                    .get("fightversion")
+                    .and_then(|v| v.as_str().parse().ok())
+                    .unwrap_or(1);
                 let fight = self.get_fight(x);
-                if let Some(version) = version.and_then(|a| a.parse().ok()) {
-                    fight.update_rounds(val.as_str(), version)?;
-                } else {
-                    fight.actions.clear();
+                if let Err(e) = fight.update_rounds(val.as_str(), fight_version)
+                {
+                    warn!("Failed to parse fight rounds: {e}");
                 }
             }
             "othergroupname" => {
@@ -2237,6 +2226,17 @@ impl GameState {
             }
             x if x.starts_with("attbonus") => {
                 // This is always 0s, so I have no idea what this could be
+            }
+            x if x.starts_with("fightequipment") => {
+                // Equipment data for each fighter in multi-fight responses.
+                // Format: item_count / 19-value items (different encoding
+                // from regular Item — first value is model_id, not type)
+            }
+            x if x.starts_with("externaltoolequipment") => {
+                // External tool/mount equipment data. Format unknown.
+            }
+            x if x.starts_with("fightdecoration") => {
+                // Cosmetic decoration data. Not currently parsed.
             }
             x => {
                 warn!("Update ignored {x} -> {val:?}");

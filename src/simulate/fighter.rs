@@ -5,7 +5,7 @@ use fastrand::Rng;
 
 use crate::{
     command::AttributeType,
-    gamestate::{character::Class, items::*},
+    gamestate::{arena::Minion, character::Class, items::*},
     misc::EnumMapGet,
     simulate::{damage::*, upgradeable::UpgradeableFighter, *},
 };
@@ -323,14 +323,6 @@ pub(crate) enum ClassData {
         /// the opponent
         poison_dmg_multis: [f64; 3],
     },
-}
-
-/// The type of minion a necromancer can summon
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub(crate) enum Minion {
-    Skeleton,
-    Hound,
-    Golem,
 }
 
 /// The stance a paladin can enter

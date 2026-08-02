@@ -2,7 +2,10 @@ use chrono::{DateTime, Local};
 use num_traits::FromPrimitive;
 
 use super::{items::*, *};
-use crate::PlayerId;
+use crate::{
+    PlayerId,
+    misc::{ArrSkip, CGet},
+};
 
 /// The arena, that a player can fight other players in
 #[derive(Debug, Default, Clone)]
@@ -54,6 +57,32 @@ pub struct Fight {
     pub rank_post_fight: u32,
     /// The item this fight gave the player (if any)
     pub item_won: Option<Item>,
+    /// Extra metadata specific to certain fight types
+    pub extra: FightExtra,
+}
+
+/// Extra metadata for specific fight types
+#[derive(Debug, Default, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum FightExtra {
+    /// Default — no special metadata
+    #[default]
+    None,
+    /// Fortress attack or defense details
+    Fortress {
+        /// Soldiers sent (attack) or deployed by enemy (defense)
+        soldiers: u32,
+        /// Stone looted or lost in a fortress attack
+        stone: i64,
+        /// Wood looted or lost in a fortress attack
+        wood: i64,
+        /// Archers defeated in a fortress defense
+        archers_defeated: u32,
+        /// Battlemages defeated in a fortress defense
+        mages_defeated: u32,
+    },
+    /// Underworld lure — souls pillaged from another player
+    UnderworldLure { souls: i64 },
 }
 
 impl Fight {
@@ -65,8 +94,11 @@ impl Fight {
         self.has_player_won = data.cget(0, "has_player_won")? != 0;
         self.silver_change = data.cget(2, "fight silver change")?;
 
+        // Underworld lure (fightresult.underworldpillage) — short format
         if data.len() < 20 {
-            // Skip underworld
+            self.extra = FightExtra::UnderworldLure {
+                souls: data.csiget(3, "underworld souls", 0)?,
+            };
             return Ok(());
         }
 
@@ -78,6 +110,18 @@ impl Fight {
         self.rank_post_fight = data.csiget(8, "fight rank post", 0)?;
         let item = data.skip(9, "fight item")?;
         self.item_won = Item::parse(item, server_time)?;
+
+        // Extended fortress fight data (fightresult.fortresspillagerv1)
+        if data.len() >= 25 {
+            self.extra = FightExtra::Fortress {
+                soldiers: data.csiget(24, "soldiers", 0)?,
+                stone: data.csiget(21, "fortress stone", 0)?,
+                wood: data.csiget(22, "fortress wood", 0)?,
+                archers_defeated: data.csiget(25, "archers defeated", 0)?,
+                mages_defeated: data.csiget(26, "mages defeated", 0)?,
+            };
+        }
+
         Ok(())
     }
 
@@ -113,8 +157,7 @@ pub struct SingleFight {
     pub fighter_a: Option<Fighter>,
     /// The stats of the first fighter
     pub fighter_b: Option<Fighter>,
-    /// The action this fight involved. Note that this will likely be changed
-    /// in the future, as is it hard to interpret
+    /// The action this fight involved
     pub actions: Vec<FightAction>,
 }
 
@@ -127,7 +170,19 @@ impl SingleFight {
             warn!("Fighter response too short");
             return;
         }
-        // FIXME: IIRC this should probably be split(data.len() / 2) instead
+        // Each fighter has the same number of fields (49), but the leading
+        // padding before the actual data may differ. The first fighter starts
+        // at offset 0. The second fighter starts at an offset that gives it
+        // the same number of leading zeros as the first fighter so that
+        // Fighter::parse can find the id at index 5.
+        //
+        // Empirically the data layout is:
+        //   Fighter A (49 values) | separator (1) | Fighter B (49 values)
+        // With total = 99, split_at(47) gives:
+        //   Fighter A: 47 values (indices 0-46) - loses 2 trailing zeros
+        //   Fighter B: 52 values (indices 47-98) - gains 5 leading zeros
+        //     (2 from Fighter A trailer + 1 separator + 2 Fighter B padding)
+        // This makes the id land at index 5 for both fighters.
         let (fighter_a, fighter_b) = data.split_at(47);
         self.fighter_a = Fighter::parse(fighter_a);
         self.fighter_b = Fighter::parse(fighter_b);
@@ -140,29 +195,100 @@ impl SingleFight {
     ) -> Result<(), SFError> {
         self.actions.clear();
 
-        if fight_version > 1 {
-            // TODO: Actually parse this
+        if fight_version != 2 {
+            // Unsupported fight version
             return Ok(());
         }
-        let mut iter = data.split(',');
-        while let (Some(player_id), Some(damage_typ), Some(new_life)) =
-            (iter.next(), iter.next(), iter.next())
-        {
-            let action =
-                warning_from_str(damage_typ, "fight action").unwrap_or(0);
+        // Format variants (all values are i64):
+        //   9-value  (no effects):
+        //     actor / 0 / type / outcome / 0 / actor_hp / target_hp / 0 / 0
+        //   12-value (one fighter has an effect):
+        //     actor / 0 / type / outcome / 0 / actor_hp / target_hp / [5
+        // extras]       Actor's effect:  [who=1,  flag,       id,
+        // rem,         trail=0]       Opponent effect: [0,
+        // marker=1,   flag,  id,          rem]   15-value (both
+        // fighters have effects, or one has two):     actor / 0 / type
+        // / outcome / 0 / actor_hp / target_hp / [8 extras]
+        //       [who1, eff1_flag, eff1_id, eff1_rem, who2, eff2_flag, eff2_id,
+        // eff2_rem]       who={0→opponent, ≠0→actor}
+        let raw: Vec<&str> = data.split('/').collect();
+        // Parse once to i64 for robust stride detection
+        let values: Vec<i64> =
+            raw.iter().filter_map(|s| s.parse().ok()).collect();
+
+        let mut i = 0;
+        while i + 9 <= values.len() {
+            let extras_first = values.cget(i + 7, "extras_first")?; // 0 if none; who=0 → opponent, ≠0 → actor
+            let extras_second = values.cget(i + 8, "extras_second")?;
+
+            // Detect stride: 9-value if both effect slots are 0
+            let stride = if extras_first == 0 && extras_second == 0 {
+                9
+            } else if i + 15 <= values.len()
+                && matches!(values.cget(i + 12, "stride_p12")?, 1..=3)
+            {
+                // 15-value: position 12 is the second effect-block's flag
+                // (1=Ability, 2=Minion, 3=Poison). In any other format,
+                // position 12 is the next action's actor_id (>3 or <0).
+                15
+            } else if i + 12 <= values.len() {
+                12
+            } else {
+                9
+            };
+
+            let acting_id = values.cget(i, "acting_id")?;
+            let action_type: u32 =
+                u32::try_from(values.cget(i + 2, "action_type")?).unwrap_or(0);
+            let outcome_code: u32 =
+                u32::try_from(values.cget(i + 3, "outcome")?).unwrap_or(0);
+
+            let action = FightActionType::parse(action_type);
+            let outcome = match outcome_code {
+                3 => FightOutcome::Blocked,
+                4 => FightOutcome::Evaded,
+                _ => FightOutcome::Normal,
+            };
+
+            let actor_life = values.cget(i + 5, "actor_life")?;
+            let target_life = values.cget(i + 6, "target_life")?;
+
+            let actor_state =
+                FighterState::from_raw(values.cget(i + 1, "actor_state")?);
+            let defender_state =
+                FighterState::from_raw(values.cget(i + 4, "defender_state")?);
+
+            let (actor_effect, opponent_effect) = if stride > 9 {
+                let extras_start = values.skip(i + 7, "extras")?;
+                let extra_vals =
+                    extras_start.get(..(stride - 7)).unwrap_or(&[]);
+                parse_active_effect(extra_vals)
+            } else {
+                (None, None)
+            };
 
             self.actions.push(FightAction {
-                acting_id: player_id.parse().map_err(|_| {
-                    SFError::ParsingError("action pid", player_id.to_string())
-                })?,
-                action: FightActionType::parse(action),
-                other_new_life: new_life.parse().map_err(|_| {
-                    SFError::ParsingError(
-                        "action new life",
-                        player_id.to_string(),
-                    )
-                })?,
+                acting_id,
+                action,
+                outcome,
+                other_new_life: target_life,
+                actor_life: Some(actor_life),
+                actor_effect,
+                opponent_effect,
+                actor_state,
+                defender_state,
             });
+
+            i += stride;
+        }
+
+        if i < values.len() {
+            let trailing = raw.get(i..).unwrap_or(&[]);
+            warn!(
+                "{} trailing unparsed values in fight.r: {:?}",
+                values.len() - i,
+                trailing,
+            );
         }
 
         Ok(())
@@ -220,21 +346,30 @@ impl Fighter {
 
         let id = data.cfsget(5, "fighter id").ok()?.unwrap_or_default();
 
-        let name = match data.cget(6, "fighter name").ok()?.parse::<i64>() {
-            Ok(-770..=-740) => {
-                // This range might be too large
-                fighter_type = FighterTyp::FortressWall;
+        // Parse the name field, which doubles as fighter-type override for
+        // special NPCs (fortress units, underworld minions) and pets.
+        let raw_name = data.cget(6, "fighter name").ok()?;
+        let name = match raw_name.parse::<i64>() {
+            Ok(-719..=-710) => {
+                fighter_type = FighterTyp::FortressSoldier;
                 None
             }
-            Ok(-712) => {
-                fighter_type = FighterTyp::FortressPillager;
+            Ok(-729..=-720) => {
+                fighter_type = FighterTyp::FortressMage;
+                None
+            }
+            Ok(-739..=-730) => {
+                fighter_type = FighterTyp::FortressArcher;
+                None
+            }
+            Ok(-799..=-740) => {
+                fighter_type = FighterTyp::FortressWall;
                 None
             }
             Ok(..=-1) => None,
             Ok(0) => {
-                let id = data.cget(15, "fighter uwm").ok()?;
-                // No idea if this correct
-                if ["-910", "-935", "-933", "-924"].contains(&id) {
+                let uwm_id = data.cget(15, "fighter uwm").ok()?;
+                if ["-910", "-935", "-933", "-924"].contains(&uwm_id) {
                     fighter_type = FighterTyp::UnderworldMinion;
                 }
                 None
@@ -243,7 +378,7 @@ impl Fighter {
                 fighter_type = FighterTyp::Pet;
                 None
             }
-            _ => Some(data.cget(6, "fighter name").ok()?.to_string()),
+            _ => Some(raw_name.to_string()),
         };
 
         Some(Fighter {
@@ -258,8 +393,109 @@ impl Fighter {
     }
 }
 
-/// One round (action) in a fight. This is mostly just one attack
+/// The outcome of a single round in a fight
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum FightOutcome {
+    /// A normal hit — neither blocked nor evaded
+    #[default]
+    Normal,
+    /// The action was blocked by the defender
+    Blocked,
+    /// The action was evaded by the defender
+    Evaded,
+}
+
+/// The type of summoned minion (Necromancer)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Minion {
+    #[default]
+    Skeleton,
+    Hound,
+    Golem,
+}
+
+/// Decodes a pos1/pos4 raw value into a fighter's active state.
+/// These values appear in positions 1 and 4 of the 9-value format and
+/// indicate what special state a fighter is in (stance, form, enrage, etc.).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum FighterState {
+    /// No special state
+    #[default]
+    Normal,
+    /// Druid in eagle form
+    EagleForm,
+    /// Druid in bear form
+    BearForm,
+    /// Paladin in Defensive stance (value 20)
+    DefensiveStance,
+    /// Paladin in Offensive stance (value 21)
+    OffensiveStance,
+    /// Berserker in frenzy mode (value 30)
+    Frenzy,
+    /// An unrecognized state value (raw value attached for debugging)
+    Unknown(i64),
+}
+
+impl FighterState {
+    pub(crate) fn from_raw(val: i64) -> Self {
+        match val {
+            0 => FighterState::Normal,
+            10 => FighterState::EagleForm,
+            11 => FighterState::BearForm,
+            20 => FighterState::DefensiveStance,
+            21 => FighterState::OffensiveStance,
+            30 => FighterState::Frenzy,
+            _ => {
+                if val != 0 {
+                    warn!("Unknown fighter state: {val}");
+                }
+                FighterState::Unknown(val)
+            }
+        }
+    }
+}
+
+/// An active effect on a fighter — either a summoned minion or a class ability
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ActiveEffect {
+    /// A summoned minion
+    Minion {
+        /// The type of minion (Skeleton, Hound, or Golem)
+        minion_type: Minion,
+        /// How many actions the minion can still take
+        remaining_actions: u32,
+    },
+    /// A poison/debuff effect (`PlagueDoctor`)
+    Poison {
+        /// The numeric ID of the poison type
+        id: u32,
+        /// How many rounds the poison is still active for
+        remaining_rounds: u32,
+    },
+    /// A class ability (e.g. Bard melody, Druid bear form)
+    Ability {
+        /// The numeric ID of the ability
+        id: u32,
+        /// How many rounds the ability is still active for
+        remaining_rounds: u32,
+    },
+    /// An unknown effect type, with the raw flag and id values
+    Unknown {
+        /// The raw type flag from the server
+        flag: u32,
+        /// The raw id from the server
+        id: u32,
+        /// The remaining rounds/actions from the server
+        remaining: u32,
+    },
+}
+
+/// One round (action) in a fight. This is mostly just one attack
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FightAction {
     /// The id of the fighter, that does the action
@@ -270,6 +506,23 @@ pub struct FightAction {
     pub other_new_life: i64,
     /// The action, that the active side does
     pub action: FightActionType,
+    /// The outcome of this action (blocked, evaded, or normal)
+    pub outcome: FightOutcome,
+    /// The life of the acting fighter at the time of this action. Only
+    /// available in `fight_version` >= 2
+    pub actor_life: Option<i64>,
+    /// The active effect on the acting fighter, if any (minion or ability)
+    pub actor_effect: Option<ActiveEffect>,
+    /// The active effect on the opponent, if any (minion or ability)
+    pub opponent_effect: Option<ActiveEffect>,
+    /// Decoded state of the acting fighter (from position 1 in 9-value
+    /// format). Non-zero when the fighter has an active stance/special
+    /// ability.
+    pub actor_state: FighterState,
+    /// Decoded state of the defending fighter (from position 4 in 9-value
+    /// format). Non-zero when the fighter has an active stance/special
+    /// ability.
+    pub defender_state: FighterState,
 }
 
 /// An action in a fight. In the official client this determines the animation,
@@ -280,42 +533,156 @@ pub struct FightAction {
 pub enum FightActionType {
     /// A simple attack with the normal weapon
     Attack,
+    /// A critical hit
+    Crit,
     /// One shot from a loaded mushroom catapult in a guild battle
     MushroomCatapult,
-    /// The last action was blocked
-    Blocked,
-    /// The last action was evaded
-    Evaded,
-    /// The summoned minion attacks
+    /// Summons a minion (Necromancer)
+    Summon,
+    /// A minion attacks (Necromancer)
     MinionAttack,
-    /// The summoned minion blocked the last attack
-    MinionAttackBlocked,
-    /// The summoned minion evaded the last attack
-    MinionAttackEvaded,
-    /// The summoned minion was crit
-    MinionCrit,
-    /// Plays the harp, or summons a friendly minion
-    SummonSpecial,
+    /// A minion's critical hit
+    MinionAttackCrit,
+    /// `Druid`'s eagle swoop attack
+    Swoop,
+    /// `Druid`'s eagle swoop critical hit
+    SwoopCrit,
+    /// `BattleMage`'s opening fireball
+    BattleMageFireball,
+    /// Assassin's main hand attack
+    AssassinMainHand,
+    /// Assassin's off hand attack
+    AssassinOffHand,
+    /// `DemonHunter`'s revive ability
+    Revive,
+    /// `PlagueDoctor` throws a poison tincture
+    ThrowPoison,
+    /// `PlagueDoctor`'s poison deals damage over time
+    PoisonTick,
     /// I have not checked all possible battle types, so whatever action I have
-    /// missed will be parsed as this
-    Unknown,
+    /// missed will be parsed as this, with the raw integer value attached
+    Unknown(u32),
 }
 
 impl FightActionType {
     pub(crate) fn parse(val: u32) -> FightActionType {
-        // FIXME: Is this missing crit?
         match val {
-            0 | 1 => FightActionType::Attack,
+            0 => FightActionType::Attack,
+            1 => FightActionType::Crit,
             2 => FightActionType::MushroomCatapult,
-            3 => FightActionType::Blocked,
-            4 => FightActionType::Evaded,
-            5 => FightActionType::MinionAttack,
-            6 => FightActionType::MinionAttackBlocked,
-            7 => FightActionType::MinionAttackEvaded,
-            25 => FightActionType::MinionCrit,
-            200..=250 => FightActionType::SummonSpecial,
-            _ => FightActionType::Unknown,
+            10 => FightActionType::BattleMageFireball,
+            11 => FightActionType::Summon,
+            12 => FightActionType::MinionAttack,
+            13 => FightActionType::Swoop,
+            14 => FightActionType::Revive,
+            15 => FightActionType::MinionAttackCrit,
+            16 => FightActionType::SwoopCrit,
+            17 | 18 => FightActionType::ThrowPoison,
+            19 | 20 => FightActionType::PoisonTick,
+            100 => FightActionType::AssassinMainHand,
+            101 => FightActionType::AssassinOffHand,
+            _ => {
+                warn!("Unknown fight action type: {val}");
+                FightActionType::Unknown(val)
+            }
         }
+    }
+}
+
+/// Safely clamp an `i64` to `u32`, treating negatives as 0.
+fn clamp_u32(v: i64) -> u32 {
+    u32::try_from(v.max(0)).unwrap_or(0)
+}
+
+/// Parse a single active effect from three consecutive `extras` values.
+fn parse_one_effect(extras: &[i64], start: usize) -> Option<ActiveEffect> {
+    if start + 2 >= extras.len() {
+        return None;
+    }
+    let flag = extras.cget(start, "eff_f").unwrap_or(0);
+    let id = extras.cget(start + 1, "eff_id").unwrap_or(0);
+    let remaining = extras.cget(start + 2, "eff_rem").unwrap_or(0);
+    Some(match flag {
+        1 => ActiveEffect::Ability {
+            id: clamp_u32(id),
+            remaining_rounds: clamp_u32(remaining),
+        },
+        2 => ActiveEffect::Minion {
+            minion_type: match id {
+                1 => Minion::Skeleton,
+                2 => Minion::Hound,
+                3 => Minion::Golem,
+                _ => return None,
+            },
+            remaining_actions: clamp_u32(remaining),
+        },
+        3 => ActiveEffect::Poison {
+            id: clamp_u32(id),
+            remaining_rounds: clamp_u32(remaining),
+        },
+        _ => {
+            warn!(
+                "Unknown active effect: flag={flag}, id={id}, \
+                 remaining={remaining}"
+            );
+            ActiveEffect::Unknown {
+                flag: clamp_u32(flag),
+                id: clamp_u32(id),
+                remaining: clamp_u32(remaining),
+            }
+        }
+    })
+}
+
+/// Parse the 5 (12-value) or 8 (15-value) extra values into active effects.
+///
+/// 12-value (5 extras):
+///   [who=1,    flag, id, rem, trail=0]  → (actor,   None)
+///   [0,        marker=1, flag, id, rem] → (None,    opponent)
+///
+/// 15-value (8 extras):
+///   [who1, flag1, id1, rem1, who2, flag2, id2, rem2]
+///   who=0      → that block belongs to the **opponent**
+///   who≠0      → that block belongs to the **actor**
+///   When both blocks belong to the same fighter, only the first
+///   is returned (the second is typically an expired sentinel).
+fn parse_active_effect(
+    extras: &[i64],
+) -> (Option<ActiveEffect>, Option<ActiveEffect>) {
+    if extras.len() < 4 {
+        return (None, None);
+    }
+
+    if extras.len() >= 8 {
+        // 15-value: two effect blocks, each with an ownership flag
+        let who1_actor = extras.first().copied().unwrap_or(0) != 0;
+        let who2_actor = extras.get(4).copied().unwrap_or(0) != 0;
+
+        let eff1 = parse_one_effect(extras, 1);
+        let eff2 = parse_one_effect(extras, 5);
+
+        let actor_effect = if who1_actor {
+            eff1
+        } else if who2_actor {
+            eff2
+        } else {
+            None
+        };
+        let opponent_effect = if !who1_actor {
+            eff1
+        } else if !who2_actor {
+            eff2
+        } else {
+            None
+        };
+
+        (actor_effect, opponent_effect)
+    } else if extras.first().copied().unwrap_or(0) != 0 {
+        // 12-value, actor's effect: [who=1, flag, id, rem, trail=0]
+        (parse_one_effect(extras, 1), None)
+    } else {
+        // 12-value, opponent's effect: [0, marker=1, flag, id, rem]
+        (None, parse_one_effect(extras, 2))
     }
 }
 
@@ -330,8 +697,12 @@ pub enum FighterTyp {
     Monster(u16),
     /// One of the players companions
     Companion(CompanionClass),
-    /// A pillager in a fortress attack
-    FortressPillager,
+    /// A soldier in a fortress attack
+    FortressSoldier,
+    /// An archer defending a fortress
+    FortressArcher,
+    /// A battlemage defending a fortress
+    FortressMage,
     /// The wall in a fortress attack
     FortressWall,
     /// A minion in an underworld lure battle
