@@ -2231,8 +2231,6 @@ impl GameState {
                 // Equipment data for each fighter in multi-fight responses.
                 // Format: item_count / 19-value items (different encoding
                 // from regular Item — first value is model_id, not type)
-                let fight_no = fight_no_from_header(x) - 1;
-                // TODO: Try and parse this
             }
             x if x.starts_with("externaltoolequipment") => {
                 // External tool/mount equipment data. Format unknown.
