@@ -196,9 +196,7 @@ impl Class {
     #[must_use]
     pub fn weapon_gem_multiplier(&self) -> i32 {
         match self {
-            Class::Warrior
-            | Class::Assassin
-            | Class::Berserker => 1,
+            Class::Warrior | Class::Assassin | Class::Berserker => 1,
             _ => 2,
         }
     }
