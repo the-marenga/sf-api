@@ -324,7 +324,10 @@ pub(crate) enum ClassData {
         poison_dmg_multis: [f64; 3],
     },
     BloodWeaver {
-        // TODO:
+        /// Whether the Death Seal revival has already triggered in this fight
+        death_seal_active: bool,
+        /// The remaining rounds of the Death Seal `DoT` effect on the opponent
+        dot_remaining_rounds: u8,
     },
 }
 
@@ -630,6 +633,84 @@ impl InBattleFighter {
                 let dmg = self.calc_basic_hit_damage(*round, rng);
                 target.take_attack_dmg(dmg, round, rng)
             }
+            ClassData::BloodWeaver {
+                death_seal_active,
+                dot_remaining_rounds,
+            } => {
+                if target.is_mage() {
+                    return self.attack_generic(target, round, rng);
+                }
+
+                // Apply DoT damage tick from Death Seal if active on target
+                if *dot_remaining_rounds > 0 {
+                    *round += 1;
+                    *dot_remaining_rounds -= 1;
+
+                    let dot_dmg = calculate_hit_damage(
+                        &self.damage,
+                        *round,
+                        self.crit_chance,
+                        self.crit_dmg_multi,
+                        rng,
+                    ) * 0.15;
+                    if target.take_attack_dmg(dot_dmg, round, rng) {
+                        return true;
+                    }
+                }
+
+                // Primary Attack
+                *round += 1;
+                let opponent_was_defeated = if target.will_take_attack(rng) {
+                    let dmg = calculate_hit_damage(
+                        &self.damage,
+                        *round,
+                        self.crit_chance,
+                        self.crit_dmg_multi,
+                        rng,
+                    );
+                    let defeated = target.take_attack_dmg(dmg, round, rng);
+                    if *death_seal_active
+                        && *dot_remaining_rounds == 0
+                        && rng.f64() < 0.20
+                    {
+                        *dot_remaining_rounds = 2;
+                    }
+                    defeated
+                } else {
+                    false
+                };
+
+                if opponent_was_defeated {
+                    return true;
+                }
+
+                // Blood Pact: 30% chance to sacrifice 10% current HP for an
+                // additional attack (only before Death Seal activation, and
+                // only if it won't kill us)
+                let hp_sacrifice = self.health * 0.10;
+                if !*death_seal_active
+                    && self.health > hp_sacrifice
+                    && rng.f64() < 0.30
+                {
+                    self.health -= hp_sacrifice;
+
+                    *round += 1;
+                    if target.will_take_attack(rng) {
+                        let extra_dmg = calculate_hit_damage(
+                            &self.damage,
+                            *round,
+                            self.crit_chance,
+                            self.crit_dmg_multi,
+                            rng,
+                        );
+                        if target.take_attack_dmg(extra_dmg, round, rng) {
+                            return true;
+                        }
+                    }
+                }
+
+                false
+            }
             _ => self.attack_generic(target, round, rng),
         }
     }
@@ -754,6 +835,23 @@ impl InBattleFighter {
                 *health -= actual_damage;
                 *health <= 0.0
             }
+            ClassData::BloodWeaver {
+                death_seal_active, ..
+            } => {
+                let health = &mut self.health;
+                *health -= damage;
+                if *health > 0.0 {
+                    return false;
+                }
+                if self.opponent_is_mage || *death_seal_active {
+                    return true;
+                }
+
+                *death_seal_active = true;
+                *health = self.max_health * 0.50;
+                *round += 1;
+                false
+            }
             _ => {
                 let health = &mut self.health;
                 *health -= damage;
@@ -805,6 +903,17 @@ impl InBattleFighter {
                     _ => 20,
                 };
                 rng.u8(1..=100) > chance
+            }
+            ClassData::BloodWeaver {
+                death_seal_active, ..
+            } => {
+                if self.opponent_is_mage {
+                    return true;
+                }
+                if *death_seal_active {
+                    return rng.u8(1..=100) > 25;
+                }
+                true
             }
             _ => true,
         }
@@ -976,9 +1085,11 @@ impl ClassData {
                 ];
                 // TODO: Do we reset poison round?
             }
-            ClassData::BloodWeaver {} => {
-                // TODO:
-                () = ();
+            ClassData::BloodWeaver {
+                dot_remaining_rounds,
+                ..
+            } => {
+                *dot_remaining_rounds = 0;
             }
         }
     }
@@ -1023,7 +1134,10 @@ impl ClassData {
                 poison_remaining_round: 0,
                 poison_dmg_multis: [0.0, 0.0, 0.0],
             },
-            Class::BloodWeaver => ClassData::BloodWeaver {},
+            Class::BloodWeaver => ClassData::BloodWeaver {
+                death_seal_active: false,
+                dot_remaining_rounds: 0,
+            },
         };
         res.update_opponent(main, opponent);
         res
