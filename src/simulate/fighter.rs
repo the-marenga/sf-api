@@ -323,6 +323,9 @@ pub(crate) enum ClassData {
         /// the opponent
         poison_dmg_multis: [f64; 3],
     },
+    BloodWeaver {
+        // TODO:
+    },
 }
 
 /// The stance a paladin can enter
@@ -973,6 +976,10 @@ impl ClassData {
                 ];
                 // TODO: Do we reset poison round?
             }
+            ClassData::BloodWeaver {} => {
+                // TODO:
+                () = ();
+            }
         }
     }
 
@@ -1016,6 +1023,7 @@ impl ClassData {
                 poison_remaining_round: 0,
                 poison_dmg_multis: [0.0, 0.0, 0.0],
             },
+            Class::BloodWeaver => ClassData::BloodWeaver {},
         };
         res.update_opponent(main, opponent);
         res

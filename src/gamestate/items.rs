@@ -632,7 +632,7 @@ impl Item {
         };
 
         match class {
-            Warrior | Paladin => class_requirement == Warrior,
+            Warrior | Paladin | BloodWeaver => class_requirement == Warrior,
             Berserker => class_requirement == Warrior && !self.typ.is_shield(),
             Scout => class_requirement == Scout,
             Mage | Necromancer => class_requirement == Mage,

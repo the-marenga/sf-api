@@ -160,6 +160,7 @@ pub enum Class {
     Necromancer,
     Paladin,
     PlagueDoctor,
+    BloodWeaver,
 }
 
 #[allow(clippy::enum_glob_use)]
@@ -169,7 +170,7 @@ impl Class {
     pub fn main_attribute(&self) -> AttributeType {
         use Class::*;
         match self {
-            Paladin | BattleMage | Berserker | Warrior => {
+            BloodWeaver | Paladin | BattleMage | Berserker | Warrior => {
                 AttributeType::Strength
             }
             Assassin | DemonHunter | Scout | PlagueDoctor => {
@@ -179,13 +180,14 @@ impl Class {
         }
     }
 
+    // NOTE: Values for Blood Weaver may be guesses, or changes before release
+
     #[must_use]
     pub fn weapon_multiplier(self) -> f64 {
         use Class::*;
         match self {
             PlagueDoctor | Paladin | Warrior | Assassin | BattleMage
-            | Berserker => 2.0,
-            // TODO: Recheck these
+            | Berserker | BloodWeaver => 2.0,
             Scout | DemonHunter => 2.5,
             Mage | Druid | Bard | Necromancer => 4.5,
         }
@@ -194,7 +196,9 @@ impl Class {
     #[must_use]
     pub fn weapon_gem_multiplier(&self) -> i32 {
         match self {
-            Class::Warrior | Class::Assassin | Class::Berserker => 1,
+            Class::Warrior
+            | Class::Assassin
+            | Class::Berserker => 1,
             _ => 2,
         }
     }
@@ -207,6 +211,7 @@ impl Class {
             | Class::Berserker
             | Class::Paladin
             | Class::PlagueDoctor
+            | Class::BloodWeaver
             | Class::Assassin => 1,
             _ => 2,
         }
@@ -219,35 +224,11 @@ impl Class {
 
         match self {
             Warrior if is_companion => 6.1,
-            Warrior | BattleMage | Druid => 5.0,
+            Warrior | BattleMage | Druid | BloodWeaver => 5.0,
             Paladin => 6.0,
             PlagueDoctor | Scout | Assassin | Berserker | DemonHunter
             | Necromancer => 4.0,
             Mage | Bard => 2.0,
-        }
-    }
-
-    #[must_use]
-    pub fn item_armor_multiplier(&self) -> f64 {
-        match self {
-            Class::Warrior
-            | Class::Berserker
-            | Class::DemonHunter
-            | Class::Paladin => 15.0,
-            Class::Scout | Class::Assassin | Class::Druid | Class::Bard => 7.5,
-            Class::Mage
-            | Class::BattleMage
-            | Class::Necromancer
-            | Class::PlagueDoctor => 3.0,
-        }
-    }
-
-    #[must_use]
-    pub fn item_bonus_multiplier(&self) -> f64 {
-        match self {
-            Class::BattleMage | Class::PlagueDoctor => 1.11,
-            Class::Berserker => 1.1,
-            _ => 1.0,
         }
     }
 
@@ -273,6 +254,7 @@ impl Class {
             Class::Scout
             | Class::Assassin
             | Class::Berserker
+            | Class::BloodWeaver
             | Class::Druid => 25,
             Class::Necromancer | Class::PlagueDoctor => 20,
         }
