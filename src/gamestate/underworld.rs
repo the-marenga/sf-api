@@ -174,8 +174,8 @@ impl Underworld {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
 pub enum UnderworldResourceType {
-    Souls = 0,
-    Silver = 1,
+    Silver = 0,
+    Souls = 1,
     #[doc(alias = "ALU")]
     ThirstForAdventure = 2,
 }
