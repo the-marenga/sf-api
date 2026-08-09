@@ -589,10 +589,8 @@ impl Pets {
             })
             .sum::<f64>();
 
-        let habitat_idx = habitat_pets
-            .iter()
-            .position(|a| a.id == pet.id)
-            .unwrap_or(0);
+        let habitat_idx =
+            habitat_pets.iter().position(|a| a.id == pet.id).unwrap_or(0);
 
         let base_stat =
             PET_BASE_STAT_ARRAY.get(habitat_idx).copied().unwrap_or(0);
@@ -1097,12 +1095,7 @@ fn parse_scrapbook_item(item_idx: i64) -> Option<EquipmentIdent> {
             () => relative_pos / 5,
         } as u16;
 
-        return Some(EquipmentIdent {
-            class,
-            typ,
-            model_id,
-            color,
-        });
+        return Some(EquipmentIdent { class, typ, model_id, color });
     }
     None
 }

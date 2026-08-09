@@ -1074,17 +1074,10 @@ impl Command {
         };
 
         Ok(match self {
-            Command::Custom {
-                cmd_name,
-                arguments: values,
-            } => {
+            Command::Custom { cmd_name, arguments: values } => {
                 format!("{cmd_name}:{}", values.join("/"))
             }
-            Command::Login {
-                username,
-                pw_hash,
-                login_count,
-            } => {
+            Command::Login { username, pw_hash, login_count } => {
                 let full_hash = sha1_hash(&format!("{pw_hash}{login_count}"));
                 format!(
                     "AccountLogin:{username}/{full_hash}/{login_count}/\
@@ -1092,19 +1085,11 @@ impl Command {
                 )
             }
             #[cfg(feature = "sso")]
-            Command::SSOLogin {
-                uuid, character_id, ..
-            } => format!(
+            Command::SSOLogin { uuid, character_id, .. } => format!(
                 "SFAccountCharLogin:{uuid}/{character_id}/unity3d_webglplayer/\
                  /{APP_VERSION}"
             ),
-            Command::Register {
-                username,
-                password,
-                gender,
-                race,
-                class,
-            } => {
+            Command::Register { username, password, gender, race, class } => {
                 // TODO: Custom portrait
                 format!(
                     "AccountCreate:{username}/{password}/{username}@playa.sso/\
@@ -1142,10 +1127,7 @@ impl Command {
             }
             Command::ViewPlayer { ident } => format!("PlayerLookAt:{ident}"),
             Command::BuyBeer => format!("PlayerBeerBuy:"),
-            Command::StartQuest {
-                quest_pos,
-                overwrite_inv,
-            } => {
+            Command::StartQuest { quest_pos, overwrite_inv } => {
                 format!(
                     "PlayerAdventureStart:{}/{}",
                     quest_pos + 1,
@@ -1168,10 +1150,7 @@ impl Command {
             Command::BuyMount { mount } => {
                 format!("PlayerMountBuy:{}", *mount as usize)
             }
-            Command::IncreaseAttribute {
-                attribute,
-                increase_to,
-            } => format!(
+            Command::IncreaseAttribute { attribute, increase_to } => format!(
                 "PlayerAttributIncrease:{}/{increase_to}",
                 *attribute as u8
             ),
@@ -1183,10 +1162,7 @@ impl Command {
                 format!("PlayerArenaFight:{name}/{}", u8::from(*use_mushroom))
             }
             Command::CollectCalendar => format!("PlayerOpenCalender:"),
-            Command::UpgradeSkill {
-                attribute,
-                next_attribute,
-            } => format!(
+            Command::UpgradeSkill { attribute, next_attribute } => format!(
                 "PlayerAttributIncrease:{}/{next_attribute}",
                 *attribute as i64
             ),
@@ -1223,10 +1199,7 @@ impl Command {
             Command::GuildRaid => format!("GroupRaidDeclare:"),
             Command::ToiletFlush => format!("PlayerToilettFlush:"),
             Command::ToiletOpen => format!("PlayerToilettOpenWithKey:"),
-            Command::FightTower {
-                current_level: progress,
-                use_mush,
-            } => {
+            Command::FightTower { current_level: progress, use_mush } => {
                 format!("PlayerTowerBattle:{progress}/{}", u8::from(*use_mush))
             }
             Command::ToiletDrop { item_pos } => {
@@ -1251,21 +1224,13 @@ impl Command {
             Command::ViewPet { pet_id: pet_index } => {
                 format!("PetsGetStats:{pet_index}")
             }
-            Command::BuyShop {
-                shop_pos,
-                new_pos,
-                item_ident,
-            } => format!("PlayerItemMove:{shop_pos}/{new_pos}/{item_ident}"),
-            Command::SellShop {
-                item_pos,
-                item_ident,
-            } => {
+            Command::BuyShop { shop_pos, new_pos, item_ident } => {
+                format!("PlayerItemMove:{shop_pos}/{new_pos}/{item_ident}")
+            }
+            Command::SellShop { item_pos, item_ident } => {
                 let mut rng = fastrand::Rng::new();
-                let shop = if rng.bool() {
-                    ShopType::Magic
-                } else {
-                    ShopType::Weapon
-                };
+                let shop =
+                    if rng.bool() { ShopType::Magic } else { ShopType::Weapon };
                 let shop_pos = rng.u32(0..6);
                 format!(
                     "PlayerItemMove:{item_pos}/{}/{}/{item_ident}",
@@ -1273,16 +1238,12 @@ impl Command {
                     shop_pos + 1,
                 )
             }
-            Command::PlayerItemMove {
-                from,
-                to,
-                item_ident,
-            } => format!("PlayerItemMove:{from}/{to}/{item_ident}"),
-            Command::ItemMove {
-                from,
-                to,
-                item_ident,
-            } => format!("PlayerItemMove:{from}/{to}/{item_ident}"),
+            Command::PlayerItemMove { from, to, item_ident } => {
+                format!("PlayerItemMove:{from}/{to}/{item_ident}")
+            }
+            Command::ItemMove { from, to, item_ident } => {
+                format!("PlayerItemMove:{from}/{to}/{item_ident}")
+            }
             Command::UsePotion { from, item_ident } => {
                 format!("PlayerItemMove:{from}/1/0/{item_ident}")
             }
@@ -1290,10 +1251,7 @@ impl Command {
                 "UnlockFeature:{}/{}",
                 unlockable.main_ident, unlockable.sub_ident
             ),
-            Command::GuildSetInfo {
-                description,
-                emblem,
-            } => format!(
+            Command::GuildSetInfo { description, emblem } => format!(
                 "GroupSetDescription:{}§{}",
                 emblem.server_encode(),
                 to_sf_string(description)
@@ -1316,21 +1274,14 @@ impl Command {
             Command::WitchDropCauldron { item_pos } => {
                 format!("PlayerWitchSpendItem:{item_pos}")
             }
-            Command::Blacksmith {
-                item_pos,
-                action,
-                item_ident,
-            } => format!(
+            Command::Blacksmith { item_pos, action, item_ident } => format!(
                 "PlayerItemMove:{item_pos}/{}/-1/{item_ident}",
                 *action as usize
             ),
             Command::WitchEnchant { enchantment } => {
                 format!("PlayerWitchEnchantItem:{}/1", enchantment.0)
             }
-            Command::WitchEnchantCompanion {
-                enchantment,
-                companion,
-            } => {
+            Command::WitchEnchantCompanion { enchantment, companion } => {
                 format!(
                     "PlayerWitchEnchantItem:{}/{}",
                     enchantment.0,
@@ -1340,9 +1291,7 @@ impl Command {
             Command::UpdateLureSuggestion => {
                 format!("PlayerGetHallOfFame:-4//0/0")
             }
-            Command::SpinWheelOfFortune {
-                payment: fortune_payment,
-            } => {
+            Command::SpinWheelOfFortune { payment: fortune_payment } => {
                 format!("WheelOfFortune:{}", *fortune_payment as usize)
             }
             Command::FortressGather { resource } => {
@@ -1351,11 +1300,7 @@ impl Command {
             Command::FortressGatherSecretStorage { stone, wood } => {
                 format!("FortressGatherTreasure:{wood}/{stone}")
             }
-            Command::Equip {
-                from_pos,
-                to_slot,
-                item_ident,
-            } => format!(
+            Command::Equip { from_pos, to_slot, item_ident } => format!(
                 "PlayerItemMove:{from_pos}/1/{}/{item_ident}",
                 *to_slot as usize
             ),
@@ -1409,10 +1354,7 @@ impl Command {
             Command::FortressUpgradeUnit { unit } => {
                 format!("FortressUpgrade:{}", *unit as u8 + 1)
             }
-            Command::Whisper {
-                player_name: player,
-                message,
-            } => format!(
+            Command::Whisper { player_name: player, message } => format!(
                 "PlayerMessageWhisper:{}/{}",
                 player,
                 to_sf_string(message)
@@ -1423,20 +1365,14 @@ impl Command {
             Command::UnderworldUnitUpgrade { unit: unit_t } => {
                 format!("UnderworldUpgradeUnit:{}", *unit_t as usize + 1)
             }
-            Command::UnderworldUpgradeStart {
-                building,
-                mushrooms,
-            } => format!(
+            Command::UnderworldUpgradeStart { building, mushrooms } => format!(
                 "UnderworldBuildStart:{}/{mushrooms}",
                 *building as usize + 1
             ),
             Command::UnderworldUpgradeCancel { building } => {
                 format!("UnderworldBuildStop:{}", *building as usize + 1)
             }
-            Command::UnderworldUpgradeFinish {
-                building,
-                mushrooms,
-            } => {
+            Command::UnderworldUpgradeFinish { building, mushrooms } => {
                 format!(
                     "UnderworldBuildFinished:{}/{mushrooms}",
                     *building as usize + 1
@@ -1460,10 +1396,7 @@ impl Command {
                 }
                 format!("RollDice:{}/{}", *payment as usize, dices)
             }
-            Command::PetFeed {
-                pet_id,
-                total_fruit_count,
-            } => {
+            Command::PetFeed { pet_id, total_fruit_count } => {
                 format!("PlayerPetFeed:{pet_id}/{total_fruit_count}")
             }
             Command::GuildPetBattle { use_mushroom } => {
@@ -1510,10 +1443,7 @@ impl Command {
             Command::SetLanguage { language } => {
                 format!("AccountSetLanguage:{language}")
             }
-            Command::SetPlayerRelation {
-                player_id,
-                relation,
-            } => {
+            Command::SetPlayerRelation { player_id, relation } => {
                 format!("PlayerFriendSet:{player_id}/{}", *relation as i32)
             }
             Command::SetPortraitFrame { portrait_id } => {
@@ -1525,12 +1455,7 @@ impl Command {
             Command::CollectEventTaskReward { pos } => {
                 format!("DailyTaskClaim:2/{}", pos + 1)
             }
-            Command::SwapRunes {
-                from,
-                from_pos,
-                to,
-                to_pos,
-            } => {
+            Command::SwapRunes { from, from_pos, to, to_pos } => {
                 format!(
                     "PlayerSmithSwapRunes:{}/{}/{}/{}",
                     *from as usize,
@@ -1539,11 +1464,7 @@ impl Command {
                     *to_pos + 1
                 )
             }
-            Command::ChangeItemLook {
-                inv,
-                pos,
-                raw_model_id: model_id,
-            } => {
+            Command::ChangeItemLook { inv, pos, raw_model_id: model_id } => {
                 format!(
                     "ItemChangePicture:{}/{}/{}",
                     *inv as usize,
@@ -1641,10 +1562,7 @@ impl Command {
                     item_idx + 1
                 )
             }
-            Command::FightDungeon {
-                dungeon,
-                use_mushroom,
-            } => match dungeon {
+            Command::FightDungeon { dungeon, use_mushroom } => match dungeon {
                 Dungeon::Light(name) => {
                     if *name == LightDungeon::Tower {
                         return Err(SFError::InvalidRequest(
@@ -1674,10 +1592,7 @@ impl Command {
                     }
                 }
             },
-            Command::FightPetOpponent {
-                opponent_id,
-                habitat: element,
-            } => {
+            Command::FightPetOpponent { opponent_id, habitat: element } => {
                 format!("PetsPvPFight:0/{opponent_id}/{}", *element as u32 + 1)
             }
             Command::BrewPotion { fruit_type } => {
@@ -1712,12 +1627,7 @@ impl Command {
             Command::HellevatorFight { use_mushroom } => {
                 format!("GroupTournamentBattle:{}", u8::from(*use_mushroom))
             }
-            Command::HellevatorBuy {
-                position,
-                typ,
-                price,
-                use_mushroom,
-            } => {
+            Command::HellevatorBuy { position, typ, price, use_mushroom } => {
                 format!(
                     "GroupTournamentMerchantBuy:{position}/{}/{price}/{}",
                     *typ as u32,
@@ -1732,10 +1642,7 @@ impl Command {
                 let pos = 26 + (per_page * page);
                 format!("GroupTournamentRankingAllGroups:{pos}//25/25")
             }
-            Command::HellevatorJoinHellAttack {
-                use_mushroom,
-                plain: pos,
-            } => {
+            Command::HellevatorJoinHellAttack { use_mushroom, plain: pos } => {
                 format!(
                     "GroupTournamentRaidParticipant:{}/{}",
                     u8::from(*use_mushroom),
@@ -1782,10 +1689,7 @@ impl Command {
             Command::WorldBossRemoveCatapult => {
                 "WorldBossUpgradeDestroy:".into()
             }
-            Command::WorldBossBuyUpgrade {
-                offer_idx,
-                use_mushrooms,
-            } => {
+            Command::WorldBossBuyUpgrade { offer_idx, use_mushrooms } => {
                 format!(
                     "WorldBossUpgradeBuy:{}/{}",
                     offer_idx + 1,

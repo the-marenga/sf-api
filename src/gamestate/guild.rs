@@ -173,11 +173,7 @@ impl ChatMessage {
                 let (name, msg) = rest.split_once(':')?;
                 let msg = from_sf_string(msg.trim_start_matches(['§', ' ']));
                 let time = NaiveTime::parse_from_str(time, "%H:%M").ok()?;
-                Some(ChatMessage {
-                    user: name.to_string(),
-                    time,
-                    message: msg,
-                })
+                Some(ChatMessage { user: name.to_string(), time, message: msg })
             })
             .collect()
     }
@@ -196,8 +192,7 @@ impl Guild {
 
         let member_count = data.csiget(3, "member count", 0)?;
         self.member_count = member_count;
-        self.members
-            .resize_with(member_count as usize, Default::default);
+        self.members.resize_with(member_count as usize, Default::default);
 
         for (offset, member) in self.members.iter_mut().enumerate() {
             member.battles_joined =
@@ -273,10 +268,8 @@ impl Guild {
     }
 
     pub(crate) fn update_member_names(&mut self, val: &str) {
-        let names: Vec<_> = val
-            .split(',')
-            .map(std::string::ToString::to_string)
-            .collect();
+        let names: Vec<_> =
+            val.split(',').map(std::string::ToString::to_string).collect();
         self.members.resize_with(names.len(), Default::default);
         for (member, name) in self.members.iter_mut().zip(names) {
             member.name = name;
@@ -284,11 +277,8 @@ impl Guild {
     }
 
     pub(crate) fn update_group_knights(&mut self, val: &str) {
-        let data: Vec<i64> = val
-            .trim_end_matches(',')
-            .split(',')
-            .flat_map(str::parse)
-            .collect();
+        let data: Vec<i64> =
+            val.trim_end_matches(',').split(',').flat_map(str::parse).collect();
 
         self.members.resize_with(data.len(), Default::default);
         for (member, count) in self.members.iter_mut().zip(data) {
@@ -390,9 +380,7 @@ impl Guild {
             self.fightable_guilds.push(FightableGuild {
                 id: entries[offset].parse().unwrap_or_default(),
                 name: from_sf_string(entries[offset + 1]),
-                emblem: Emblem {
-                    raw: entries[offset + 2].to_string(),
-                },
+                emblem: Emblem { raw: entries[offset + 2].to_string() },
                 number_of_members: entries[offset + 3]
                     .parse()
                     .unwrap_or_default(),

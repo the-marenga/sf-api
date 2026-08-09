@@ -140,10 +140,7 @@ impl std::fmt::Display for PlayerItemPosition {
 
 impl From<PlayerItemPosition> for ItemPosition {
     fn from(value: PlayerItemPosition) -> Self {
-        Self {
-            place: value.place.item_position(),
-            position: value.position,
-        }
+        Self { place: value.place.item_position(), position: value.position }
     }
 }
 
@@ -163,10 +160,7 @@ impl From<EquipmentSlot> for ItemPosition {
 
 impl From<ShopPosition> for ItemPosition {
     fn from(value: ShopPosition) -> Self {
-        Self {
-            place: value.typ.into(),
-            position: value.pos,
-        }
+        Self { place: value.typ.into(), position: value.pos }
     }
 }
 
@@ -182,19 +176,13 @@ impl From<ShopType> for ItemPlace {
 impl From<BagPosition> for PlayerItemPosition {
     fn from(value: BagPosition) -> Self {
         let p = value.inventory_pos();
-        Self {
-            place: p.0.player_item_position(),
-            position: p.1,
-        }
+        Self { place: p.0.player_item_position(), position: p.1 }
     }
 }
 
 impl From<EquipmentSlot> for PlayerItemPosition {
     fn from(value: EquipmentSlot) -> Self {
-        Self {
-            place: PlayerItemPlace::Equipment,
-            position: value as usize - 1,
-        }
+        Self { place: PlayerItemPlace::Equipment, position: value as usize - 1 }
     }
 }
 
@@ -381,10 +369,9 @@ impl Item {
         let mut attribute_val =
             f64::from(*self.attributes.values().max().unwrap_or(&0));
         let item_stats = self.attributes.values().filter(|a| **a > 0).count();
-        let is_scout_or_mage_weapon = self
-            .class
-            .is_some_and(|a| a == Class::Scout || a == Class::Mage)
-            && self.typ.is_weapon();
+        let is_scout_or_mage_weapon =
+            self.class.is_some_and(|a| a == Class::Scout || a == Class::Mage)
+                && self.typ.is_weapon();
 
         if self.price != 0 {
             for _ in 0..self.upgrade_count {
@@ -434,10 +421,7 @@ impl Item {
             metal_result *= 2;
             arcane_result *= 2;
         }
-        BlacksmithPayment {
-            metal: metal_result * 2,
-            arcane: arcane_result * 2,
-        }
+        BlacksmithPayment { metal: metal_result * 2, arcane: arcane_result * 2 }
     }
 
     /// Calculates the amount of metal & arcane it would cost to upgrade this
@@ -455,10 +439,9 @@ impl Item {
         }
 
         let item_stats = self.attributes.values().filter(|a| **a > 0).count();
-        let is_scout_or_mage_weapon = self
-            .class
-            .is_some_and(|a| a == Class::Scout || a == Class::Mage)
-            && self.typ.is_weapon();
+        let is_scout_or_mage_weapon =
+            self.class.is_some_and(|a| a == Class::Scout || a == Class::Mage)
+                && self.typ.is_weapon();
 
         // Highest attribue is the base price
         let mut price =
@@ -1022,8 +1005,7 @@ impl ItemType {
     /// Checks, if this item type can be enchanted
     #[must_use]
     pub fn is_enchantable(&self) -> bool {
-        self.equipment_slot()
-            .is_some_and(|e| e.enchantment().is_some())
+        self.equipment_slot().is_some_and(|e| e.enchantment().is_some())
     }
 
     pub(crate) fn parse(
@@ -1061,15 +1043,13 @@ impl ItemType {
                     return unknown_item("unique sub ident");
                 };
                 match id {
-                    1..=11 | 17 | 19 | 22 | 69 | 70 => ItemType::DungeonKey {
-                        id,
-                        shadow_key: false,
-                    },
+                    1..=11 | 17 | 19 | 22 | 69 | 70 => {
+                        ItemType::DungeonKey { id, shadow_key: false }
+                    }
                     20 => ItemType::ToiletKey,
-                    51..=64 | 67..=68 => ItemType::DungeonKey {
-                        id,
-                        shadow_key: true,
-                    },
+                    51..=64 | 67..=68 => {
+                        ItemType::DungeonKey { id, shadow_key: true }
+                    }
                     10000 => ItemType::EpicItemBag,
                     piece => ItemType::Shard { piece },
                 }
@@ -1112,10 +1092,7 @@ impl ItemType {
                 let Some(typ) = GemType::parse(sub_ident, gem_value) else {
                     return unknown_item("gem type");
                 };
-                let gem = Gem {
-                    typ,
-                    value: gem_value,
-                };
+                let gem = Gem { typ, value: gem_value };
                 ItemType::Gem(gem)
             }
             16 => {

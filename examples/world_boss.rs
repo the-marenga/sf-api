@@ -57,9 +57,7 @@ pub async fn main() -> Result<(), SFError> {
         if world_boss.available_daily_chests.values().any(|a| *a > 0) {
             // Automatically collect all daily chests, since that is what the
             // game also does
-            session
-                .send_command(Command::WorldBossCollectDailyChests)
-                .await?;
+            session.send_command(Command::WorldBossCollectDailyChests).await?;
             continue;
         }
 

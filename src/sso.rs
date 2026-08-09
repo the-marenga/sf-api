@@ -44,10 +44,7 @@ pub struct AccountSession {
 #[derive(Debug)]
 enum APIRequest {
     Get,
-    Post {
-        parameters: Vec<&'static str>,
-        form_data: HashMap<String, String>,
-    },
+    Post { parameters: Vec<&'static str>, form_data: HashMap<String, String> },
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -268,10 +265,7 @@ async fn send_api_request(
 
     let mut request = match method {
         APIRequest::Get => client.get(url.as_str()),
-        APIRequest::Post {
-            parameters,
-            form_data,
-        } => {
+        APIRequest::Post { parameters, form_data } => {
             url.set_query(Some(&parameters.join("&")));
             client.post(url.as_str()).form(&form_data)
         }
@@ -524,10 +518,7 @@ impl SSOAuth {
         Ok(AuthResponse::Success(SFAccount {
             username,
             client: self.client,
-            session: AccountSession {
-                uuid,
-                bearer_token: access_token,
-            },
+            session: AccountSession { uuid, bearer_token: access_token },
             options: self.options,
             auth: match self.provider {
                 SSOProvider::Google => SSOAuthData::Google,
@@ -574,12 +565,6 @@ impl SSOAuth {
             .ok_or(SFError::ConnectionError)?;
         let auth_id =
             val_to_string(&resp["id"]).ok_or(SFError::ConnectionError)?;
-        Ok(Self {
-            client,
-            options,
-            auth_url,
-            auth_id,
-            provider,
-        })
+        Ok(Self { client, options, auth_url, auth_id, provider })
     }
 }

@@ -805,10 +805,7 @@ impl InBattleFighter {
 
                 true
             }
-            ClassData::Paladin {
-                stance,
-                initial_armor_reduction,
-            } => {
+            ClassData::Paladin { stance, initial_armor_reduction } => {
                 let current_armor_reduction = match stance {
                     Stance::Regular | Stance::Defensive => 1.0,
                     Stance::Offensive => {
@@ -835,9 +832,7 @@ impl InBattleFighter {
                 *health -= actual_damage;
                 *health <= 0.0
             }
-            ClassData::BloodWeaver {
-                death_seal_active, ..
-            } => {
+            ClassData::BloodWeaver { death_seal_active, .. } => {
                 let health = &mut self.health;
                 *health -= damage;
                 if *health > 0.0 {
@@ -867,11 +862,7 @@ impl InBattleFighter {
                 rng.i32(1..=100) > *block_chance
             }
             ClassData::Assassin { .. } | ClassData::Scout => rng.bool(),
-            ClassData::Druid {
-                is_in_bear_form,
-                has_just_dodged,
-                ..
-            } => {
+            ClassData::Druid { is_in_bear_form, has_just_dodged, .. } => {
                 if !*is_in_bear_form && rng.u8(1..=100) <= 35 {
                     // evade_chance hardcoded to 35 in original
                     *has_just_dodged = true;
@@ -892,10 +883,7 @@ impl InBattleFighter {
                 *stance == Stance::Defensive
                     || rng.u8(1..=100) > stance.block_chance()
             }
-            ClassData::PlagueDoctor {
-                poison_remaining_round,
-                ..
-            } => {
+            ClassData::PlagueDoctor { poison_remaining_round, .. } => {
                 let chance = match poison_remaining_round {
                     3 => 65,
                     2 => 50,
@@ -904,9 +892,7 @@ impl InBattleFighter {
                 };
                 rng.u8(1..=100) > chance
             }
-            ClassData::BloodWeaver {
-                death_seal_active, ..
-            } => {
+            ClassData::BloodWeaver { death_seal_active, .. } => {
                 if self.opponent_is_mage {
                     return true;
                 }
@@ -1046,14 +1032,10 @@ impl ClassData {
             ClassData::BattleMage { fireball_dmg, .. } => {
                 *fireball_dmg = calculate_fire_ball_damage(main, opponent);
             }
-            ClassData::Berserker {
-                frenzy_attacks: chain_attack_counter,
-            } => *chain_attack_counter = 0,
-            ClassData::Druid {
-                rage_crit_chance,
-                swoop_dmg_multi,
-                ..
-            } => {
+            ClassData::Berserker { frenzy_attacks: chain_attack_counter } => {
+                *chain_attack_counter = 0
+            }
+            ClassData::Druid { rage_crit_chance, swoop_dmg_multi, .. } => {
                 *rage_crit_chance =
                     calculate_crit_chance(main, opponent, 0.75, 0.1);
                 *swoop_dmg_multi = calculate_swoop_damage(main, opponent);
@@ -1062,16 +1044,11 @@ impl ClassData {
             ClassData::Necromancer { damage_multi, .. } => {
                 *damage_multi = calculate_damage_multiplier(main, opponent);
             }
-            ClassData::Paladin {
-                initial_armor_reduction,
-                ..
-            } => {
+            ClassData::Paladin { initial_armor_reduction, .. } => {
                 *initial_armor_reduction =
                     calculate_damage_reduction(opponent, main);
             }
-            ClassData::PlagueDoctor {
-                poison_dmg_multis, ..
-            } => {
+            ClassData::PlagueDoctor { poison_dmg_multis, .. } => {
                 let base_dmg_multi =
                     calculate_damage_multiplier(main, opponent);
 
@@ -1085,10 +1062,7 @@ impl ClassData {
                 ];
                 // TODO: Do we reset poison round?
             }
-            ClassData::BloodWeaver {
-                dot_remaining_rounds,
-                ..
-            } => {
+            ClassData::BloodWeaver { dot_remaining_rounds, .. } => {
                 *dot_remaining_rounds = 0;
             }
         }
@@ -1102,9 +1076,9 @@ impl ClassData {
             Class::Warrior => ClassData::Warrior { block_chance: 25 },
             Class::Mage => ClassData::Mage,
             Class::Scout => ClassData::Scout,
-            Class::Assassin => ClassData::Assassin {
-                secondary_damage: DamageRange::default(),
-            },
+            Class::Assassin => {
+                ClassData::Assassin { secondary_damage: DamageRange::default() }
+            }
             Class::BattleMage => ClassData::BattleMage { fireball_dmg: 0.0 },
             Class::Berserker => ClassData::Berserker { frenzy_attacks: 0 },
             Class::DemonHunter => ClassData::DemonHunter { revive_count: 0 },

@@ -93,10 +93,7 @@ pub async fn main() {
                     continue;
                 }
             },
-            CurrentAction::Quest {
-                quest_idx,
-                busy_until,
-            } => {
+            CurrentAction::Quest { quest_idx, busy_until } => {
                 let remaining = time_remaining(busy_until);
                 let mut skip = None;
 
@@ -161,7 +158,5 @@ pub async fn login_with_env() -> SimpleSession {
     let username = std::env::var("USERNAME").unwrap();
     let password = std::env::var("PASSWORD").unwrap();
     let server = std::env::var("SERVER").unwrap();
-    SimpleSession::login(&username, &password, &server)
-        .await
-        .unwrap()
+    SimpleSession::login(&username, &password, &server).await.unwrap()
 }

@@ -208,9 +208,8 @@ impl Quest {
     pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
         // NOTE: I think [0], [1] was just flavor text
         self.monster_id = data.csimget(2, "quest monster id", 0, |a| -a)?;
-        self.location_id = data
-            .cfpget(3, "quest location id", |a| a)?
-            .unwrap_or_default();
+        self.location_id =
+            data.cfpget(3, "quest location id", |a| a)?.unwrap_or_default();
         self.base_length = data.csiget(4, "quest length", 100_000)?;
         self.base_experience = data.csiget(5, "quest xp", 0)?;
         self.base_silver = data.csiget(6, "quest silver", 0)?;

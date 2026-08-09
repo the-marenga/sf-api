@@ -164,13 +164,11 @@ fn raw_cget<T: Copy + std::fmt::Debug>(
     pos: usize,
     name: &'static str,
 ) -> Result<T, SFError> {
-    val.get(pos)
-        .copied()
-        .ok_or_else(|| SFError::TooShortResponse {
-            name,
-            pos,
-            array: format!("{val:?}"),
-        })
+    val.get(pos).copied().ok_or_else(|| SFError::TooShortResponse {
+        name,
+        pos,
+        array: format!("{val:?}"),
+    })
 }
 
 pub(crate) trait CGet<T: Copy + std::fmt::Debug> {
@@ -246,8 +244,7 @@ impl<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> CCGet<T, I> for [T] {
 
     fn ciget(&self, pos: usize, name: &'static str) -> Result<I, SFError> {
         let raw = raw_cget(self, pos, name)?;
-        raw.try_into()
-            .map_err(|_| SFError::ParsingError(name, raw.to_string()))
+        raw.try_into().map_err(|_| SFError::ParsingError(name, raw.to_string()))
     }
 
     fn cimget(
@@ -258,8 +255,7 @@ impl<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> CCGet<T, I> for [T] {
     ) -> Result<I, SFError> {
         let raw = raw_cget(self, pos, name)?;
         let raw = fun(raw);
-        raw.try_into()
-            .map_err(|_| SFError::ParsingError(name, raw.to_string()))
+        raw.try_into().map_err(|_| SFError::ParsingError(name, raw.to_string()))
     }
 }
 

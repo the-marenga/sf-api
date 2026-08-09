@@ -6,3 +6,4 @@ group_imports = "StdExternalCrate"
 use_field_init_shorthand = true
 normalize_comments = true
 empty_item_single_line = false
+use_small_heuristics = "max"

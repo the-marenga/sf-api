@@ -122,10 +122,7 @@ fn simulate_fight(
     }
 
     let win_ratio = f64::from(won_fights) / f64::from(iterations);
-    FightSimulationResult {
-        win_ratio,
-        won_fights,
-    }
+    FightSimulationResult { win_ratio, won_fights }
 }
 
 struct InBattleCache(Vec<((FighterIdent, FighterIdent), InBattleFighter)>);
@@ -284,11 +281,7 @@ fn perform_fight<'a>(
 }
 
 fn outcome_from_bool(result: bool) -> FightOutcome {
-    if result {
-        FightOutcome::LeftSideWin
-    } else {
-        FightOutcome::RightSideWin
-    }
+    if result { FightOutcome::LeftSideWin } else { FightOutcome::RightSideWin }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

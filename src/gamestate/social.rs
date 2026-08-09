@@ -182,15 +182,7 @@ impl HallOfFamePlayer {
         let raw_flag = data.get(6).copied().unwrap_or_default();
         let flag = Flag::parse(raw_flag);
 
-        Ok(HallOfFamePlayer {
-            rank,
-            name,
-            guild,
-            level,
-            honor,
-            class,
-            flag,
-        })
+        Ok(HallOfFamePlayer { rank, name, guild, level, honor, class, flag })
     }
 }
 
@@ -245,14 +237,7 @@ impl HallOfFamePets {
         let honor = data.cfsuget(4, "hof pets fame")?;
         let unknown = data.cfsuget(5, "hof pets uk")?;
 
-        Ok(HallOfFamePets {
-            name,
-            rank,
-            guild,
-            collected,
-            honor,
-            unknown,
-        })
+        Ok(HallOfFamePets { name, rank, guild, collected, honor, unknown })
     }
 }
 
@@ -266,13 +251,7 @@ impl HallOfFameFortress {
         let upgrade = data.cfsuget(3, "hof ft collected")?;
         let honor = data.cfsuget(4, "hof ft fame")?;
 
-        Ok(HallOfFameFortress {
-            name,
-            rank,
-            guild,
-            upgrade,
-            honor,
-        })
+        Ok(HallOfFameFortress { name, rank, guild, upgrade, honor })
     }
 }
 
@@ -287,14 +266,7 @@ impl HallOfFameUnderworld {
         let honor = data.cfsuget(4, "hof ft fame")?;
         let unknown = data.cfsuget(5, "hof pets uk")?;
 
-        Ok(HallOfFameUnderworld {
-            rank,
-            name,
-            guild,
-            upgrade,
-            honor,
-            unknown,
-        })
+        Ok(HallOfFameUnderworld { rank, name, guild, upgrade, honor, unknown })
     }
 }
 

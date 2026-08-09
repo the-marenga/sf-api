@@ -328,22 +328,10 @@ impl Mount {
     #[must_use]
     pub fn cost(&self) -> NormalCost {
         match self {
-            Mount::Cow => NormalCost {
-                silver: 100,
-                mushrooms: 0,
-            },
-            Mount::Horse => NormalCost {
-                silver: 500,
-                mushrooms: 0,
-            },
-            Mount::Tiger => NormalCost {
-                silver: 1000,
-                mushrooms: 1,
-            },
-            Mount::Dragon => NormalCost {
-                silver: 0,
-                mushrooms: 25,
-            },
+            Mount::Cow => NormalCost { silver: 100, mushrooms: 0 },
+            Mount::Horse => NormalCost { silver: 500, mushrooms: 0 },
+            Mount::Tiger => NormalCost { silver: 1000, mushrooms: 1 },
+            Mount::Dragon => NormalCost { silver: 0, mushrooms: 25 },
         }
     }
 }

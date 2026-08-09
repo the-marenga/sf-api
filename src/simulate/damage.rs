@@ -15,10 +15,7 @@ impl std::ops::Mul<f64> for DamageRange {
     type Output = DamageRange;
 
     fn mul(self, rhs: f64) -> DamageRange {
-        DamageRange {
-            min: self.min * rhs,
-            max: self.max * rhs,
-        }
+        DamageRange { min: self.min * rhs, max: self.max * rhs }
     }
 }
 

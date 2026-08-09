@@ -32,9 +32,7 @@ fn test_simulate_battle(
     #[case] finished: u16,
     #[case] expected_wr: f64,
 ) {
-    let progress = DungeonProgress::Open {
-        finished: finished - 1,
-    };
+    let progress = DungeonProgress::Open { finished: finished - 1 };
 
     let monster =
         Fighter::from(get_dungeon_monster(dungeon, progress).unwrap());
@@ -122,10 +120,7 @@ fn init_squad(class: Class, init_companions: bool) -> PlayerFighterSquad {
         belt.type_specific_val = armor;
     }
 
-    PlayerFighterSquad {
-        character: account,
-        companions,
-    }
+    PlayerFighterSquad { character: account, companions }
 }
 
 fn create_fighter(class: Class, is_companion: bool) -> UpgradeableFighter {
@@ -148,11 +143,8 @@ fn create_fighter(class: Class, is_companion: bool) -> UpgradeableFighter {
 
     let mut equipment = Equipment::default();
 
-    equipment.0[EquipmentSlot::Hat] = Some(create_rune_item(
-        ItemType::Hat,
-        RuneType::FireResistance,
-        75,
-    ));
+    equipment.0[EquipmentSlot::Hat] =
+        Some(create_rune_item(ItemType::Hat, RuneType::FireResistance, 75));
     equipment.0[EquipmentSlot::BreastPlate] = Some(create_rune_item(
         ItemType::BreastPlate,
         RuneType::ColdResistence,
@@ -176,10 +168,7 @@ fn create_fighter(class: Class, is_companion: bool) -> UpgradeableFighter {
 
     let weapon = Item {
         typ: ItemType::Weapon { min_dmg, max_dmg },
-        rune: Some(Rune {
-            typ: RuneType::FireDamage,
-            value: 60,
-        }),
+        rune: Some(Rune { typ: RuneType::FireDamage, value: 60 }),
         enchantment: Some(Enchantment::SwordOfVengeance),
         // Defaults
         model_id: 1,
@@ -229,10 +218,7 @@ fn create_fighter(class: Class, is_companion: bool) -> UpgradeableFighter {
 fn create_rune_item(typ: ItemType, rune_typ: RuneType, value: u8) -> Item {
     Item {
         typ,
-        rune: Some(Rune {
-            typ: rune_typ,
-            value,
-        }),
+        rune: Some(Rune { typ: rune_typ, value }),
         // Defaults
         model_id: 1,
         price: 0,

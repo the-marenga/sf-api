@@ -69,10 +69,9 @@ impl LegendaryDungeonEvent {
 
         match active.stage {
             Stage::NotEntered => Status::NotEntered(theme),
-            Stage::DoorSelect => Status::DoorSelect {
-                dungeon: active,
-                doors: &active.doors,
-            },
+            Stage::DoorSelect => {
+                Status::DoorSelect { dungeon: active, doors: &active.doors }
+            }
             Stage::RoomSpecial if active.room_type == RoomType::BossRoom => {
                 Status::PickGem {
                     dungeon: active,
@@ -742,12 +741,7 @@ impl DungeonEffect {
         let max_uses: u32 = max_uses.try_into().unwrap_or(0);
         let strength: u32 = strength.try_into().unwrap_or(0);
 
-        Some(DungeonEffect {
-            typ,
-            remaining_uses,
-            max_uses,
-            strength,
-        })
+        Some(DungeonEffect { typ, remaining_uses, max_uses, strength })
     }
 }
 

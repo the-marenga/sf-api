@@ -50,16 +50,10 @@ fn main() {
             "The_3rd_League_of_Superheroes",
             "LightDungeon::ThirdLeagueOfSuperheroes",
         ),
-        (
-            "Dojo_of_Childhood_Heroes",
-            "LightDungeon::DojoOfChildhoodHeroes",
-        ),
+        ("Dojo_of_Childhood_Heroes", "LightDungeon::DojoOfChildhoodHeroes"),
         ("Monster_Grotto", "LightDungeon::MonsterGrotto"),
         ("City_of_Intrigues", "LightDungeon::CityOfIntrigues"),
-        (
-            "School_of_magic_Express",
-            "LightDungeon::SchoolOfMagicExpress",
-        ),
+        ("School_of_magic_Express", "LightDungeon::SchoolOfMagicExpress"),
         ("Ash_Mountain", "LightDungeon::AshMountain"),
         ("Playa_HQ", "LightDungeon::PlayaGamesHQ"),
         ("Training_Camp", "LightDungeon::TrainingCamp"),
@@ -78,31 +72,16 @@ fn main() {
     ];
 
     let shadow_dungeons = [
-        (
-            "Shadow_Desecrated_Catacombs",
-            "ShadowDungeon::DesecratedCatacombs",
-        ),
+        ("Shadow_Desecrated_Catacombs", "ShadowDungeon::DesecratedCatacombs"),
         ("Shadow_Mines_of_Gloria", "ShadowDungeon::MinesOfGloria"),
         ("Shadow_Ruins_of_Gnark", "ShadowDungeon::RuinsOfGnark"),
         ("Shadow_Cutthroat_Grotto", "ShadowDungeon::CutthroatGrotto"),
-        (
-            "Shadow_Emerald_Scale_Altar",
-            "ShadowDungeon::EmeraldScaleAltar",
-        ),
+        ("Shadow_Emerald_Scale_Altar", "ShadowDungeon::EmeraldScaleAltar"),
         ("Shadow_Toxic_Tree", "ShadowDungeon::ToxicTree"),
         ("Shadow_Magma_Stream", "ShadowDungeon::MagmaStream"),
-        (
-            "Shadow_Frost_Blood_Temple",
-            "ShadowDungeon::FrostBloodTemple",
-        ),
-        (
-            "Shadow_Pyramids_of_Madness",
-            "ShadowDungeon::PyramidsOfMadness",
-        ),
-        (
-            "Shadow_Black_Skull_Fortress",
-            "ShadowDungeon::BlackSkullFortress",
-        ),
+        ("Shadow_Frost_Blood_Temple", "ShadowDungeon::FrostBloodTemple"),
+        ("Shadow_Pyramids_of_Madness", "ShadowDungeon::PyramidsOfMadness"),
+        ("Shadow_Black_Skull_Fortress", "ShadowDungeon::BlackSkullFortress"),
         ("Shadow_Circus_of_Horror", "ShadowDungeon::CircusOfHorror"),
         ("Shadow_Hell", "ShadowDungeon::Hell"),
         ("Shadow_The_13th_Floor", "ShadowDungeon::The13thFloor"),
@@ -113,10 +92,7 @@ fn main() {
             "ShadowDungeon::TimeHonoredSchoolOfMagic",
         ),
         ("Shadow_Hemorridor", "ShadowDungeon::Hemorridor"),
-        (
-            "Continuous_Loop_of_Idols",
-            "ShadowDungeon::ContinuousLoopofIdols",
-        ),
+        ("Continuous_Loop_of_Idols", "ShadowDungeon::ContinuousLoopofIdols"),
         ("Shadow_Nordic", "ShadowDungeon::NordicGods"),
         ("Shadow_Mount_Olympus", "ShadowDungeon::MountOlympus"),
         (
@@ -355,24 +331,21 @@ fn append_monsters(
 
         code.push_str("    Monster {\n");
         let name =
-            m.name
-                .as_ref()
-                .map(|n| n.replace('_', " "))
-                .unwrap_or_else(|| {
-                    if is_shadow {
-                        format!(
-                            "Shadow {} monster #{}",
-                            enum_variant.split("::").last().unwrap(),
-                            idx
-                        )
-                    } else {
-                        format!(
-                            "{} monster #{}",
-                            enum_variant.split("::").last().unwrap(),
-                            idx
-                        )
-                    }
-                });
+            m.name.as_ref().map(|n| n.replace('_', " ")).unwrap_or_else(|| {
+                if is_shadow {
+                    format!(
+                        "Shadow {} monster #{}",
+                        enum_variant.split("::").last().unwrap(),
+                        idx
+                    )
+                } else {
+                    format!(
+                        "{} monster #{}",
+                        enum_variant.split("::").last().unwrap(),
+                        idx
+                    )
+                }
+            });
         code.push_str(&format!("        name: {:?},\n", name));
         code.push_str(&format!("        level: {},\n", level));
         code.push_str(&format!("        class: {},\n", class_enum));

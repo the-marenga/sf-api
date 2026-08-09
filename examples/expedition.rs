@@ -122,9 +122,7 @@ pub async fn main() {
                 let remaining = time_remaining(busy_until);
                 if remaining.as_secs() > 60 && gs.tavern.quicksand_glasses > 0 {
                     println!("Skipping the {}s wait", remaining.as_secs());
-                    Command::ExpeditionSkipWait {
-                        typ: TimeSkip::Glass,
-                    }
+                    Command::ExpeditionSkipWait { typ: TimeSkip::Glass }
                 } else {
                     println!(
                         "Waiting {}s until next expedition step",
@@ -149,7 +147,5 @@ pub async fn login_with_env() -> SimpleSession {
     let username = std::env::var("USERNAME").unwrap();
     let password = std::env::var("PASSWORD").unwrap();
     let server = std::env::var("SERVER").unwrap();
-    SimpleSession::login(&username, &password, &server)
-        .await
-        .unwrap()
+    SimpleSession::login(&username, &password, &server).await.unwrap()
 }

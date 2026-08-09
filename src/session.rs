@@ -89,10 +89,7 @@ impl Session {
         pw_hash: PWHash,
         server: ServerConnection,
     ) -> Self {
-        let ld = LoginData::Basic {
-            username: username.to_string(),
-            pw_hash,
-        };
+        let ld = LoginData::Basic { username: username.to_string(), pw_hash };
         Self::new_full(ld, server.client, server.options, server.url)
     }
 
@@ -159,11 +156,7 @@ impl Session {
                 login_count: self.login_count,
             },
             #[cfg(feature = "sso")]
-            LoginData::SSO {
-                character_id,
-                session,
-                ..
-            } => Command::SSOLogin {
+            LoginData::SSO { character_id, session, .. } => Command::SSOLogin {
                 uuid: session.uuid,
                 character_id,
                 bearer_token: session.bearer_token,
@@ -262,10 +255,8 @@ impl Session {
         })?;
 
         #[allow(unused_mut)]
-        let mut req = self
-            .client
-            .get(&url)
-            .header(REFERER, &self.server_url.to_string());
+        let mut req =
+            self.client.get(&url).header(REFERER, &self.server_url.to_string());
 
         #[cfg(feature = "sso")]
         if let LoginData::SSO { session, .. } = &self.login_data {
@@ -388,10 +379,7 @@ impl Session {
         match &self.login_data {
             LoginData::Basic { username, .. } => username,
             #[cfg(feature = "sso")]
-            LoginData::SSO {
-                username: character_name,
-                ..
-            } => character_name,
+            LoginData::SSO { username: character_name, .. } => character_name,
         }
     }
 
@@ -406,9 +394,7 @@ impl Session {
     ///   credentials
     #[cfg(feature = "sso")]
     pub async fn renew_sso_creds(&mut self) -> Result<(), SFError> {
-        let LoginData::SSO {
-            account, session, ..
-        } = &mut self.login_data
+        let LoginData::SSO { account, session, .. } = &mut self.login_data
         else {
             return Err(SFError::InvalidRequest(
                 "Can not renew sso credentials for a non-sso account",
@@ -587,10 +573,7 @@ impl SimpleSession {
         let resp = session.login().await?;
         let gs = GameState::new(resp)?;
         Self::short_sleep().await;
-        Ok(Self {
-            session,
-            gamestate: Some(gs),
-        })
+        Ok(Self { session, gamestate: Some(gs) })
     }
 
     ///  Creates new `SimpleSession`s, by logging in the S&S SSO account and
@@ -614,10 +597,7 @@ impl SimpleSession {
             .await?
             .into_iter()
             .flatten()
-            .map(|a| Self {
-                session: a,
-                gamestate: None,
-            })
+            .map(|a| Self { session: a, gamestate: None })
             .collect())
     }
 

@@ -78,9 +78,7 @@ impl UpgradeableFighter {
         potion: Potion,
         slot: usize,
     ) -> Option<Potion> {
-        self.active_potions
-            .get_mut(slot)
-            .and_then(|a| a.replace(potion))
+        self.active_potions.get_mut(slot).and_then(|a| a.replace(potion))
     }
 
     /// Removes the potion at the provided slot and returns the old potion, if
@@ -205,11 +203,8 @@ impl UpgradeableFighter {
         for (k, v) in &mut total {
             let class_bonus = (f64::from(*v) * class_bonus).trunc() as u32;
             *v += class_bonus + self.attribute_basis.get(k);
-            if let Some(potion) = self
-                .active_potions
-                .iter()
-                .flatten()
-                .find(|a| a.typ == k.into())
+            if let Some(potion) =
+                self.active_potions.iter().flatten().find(|a| a.typ == k.into())
             {
                 *v += (f64::from(*v) * potion.size.effect()) as u32;
             }
@@ -245,12 +240,8 @@ impl UpgradeableFighter {
         total += portal_bonus;
 
         let mut rune_multi = 0;
-        for rune in self
-            .equipment
-            .0
-            .iter()
-            .flat_map(|a| a.1)
-            .filter_map(|a| a.rune)
+        for rune in
+            self.equipment.0.iter().flat_map(|a| a.1).filter_map(|a| a.rune)
         {
             if rune.typ == RuneType::ExtraHitPoints {
                 rune_multi += u32::from(rune.value);
@@ -353,9 +344,6 @@ impl PlayerFighterSquad {
             companions = Some(EnumMap::from_array(res));
         }
 
-        PlayerFighterSquad {
-            character,
-            companions,
-        }
+        PlayerFighterSquad { character, companions }
     }
 }

@@ -87,18 +87,12 @@ impl EventStatus {
             3 => SpecialEventType::DrivingDungeon,
             4 => SpecialEventType::TravelingCircus,
             6 => SpecialEventType::WorldBoss(
-                data.cfpget(1, "world boss theme", |a| a)?
-                    .unwrap_or_default(),
+                data.cfpget(1, "world boss theme", |a| a)?.unwrap_or_default(),
             ),
             _ => SpecialEventType::Unknown,
         };
 
-        Ok(Self {
-            typ,
-            start,
-            end,
-            extra_end,
-        })
+        Ok(Self { typ, start, end, extra_end })
     }
 }
 
@@ -420,10 +414,8 @@ impl WorldBossCatapult {
 
         let mut upgrades: [Option<WorldBossCatapultUpgrade>; 4] =
             Default::default();
-        for (chunk, upgrade) in data
-            .skip(1, "wb catapult")?
-            .chunks_exact(4)
-            .zip(&mut upgrades)
+        for (chunk, upgrade) in
+            data.skip(1, "wb catapult")?.chunks_exact(4).zip(&mut upgrades)
         {
             if chunk.iter().all(|a| *a == 0) {
                 continue;

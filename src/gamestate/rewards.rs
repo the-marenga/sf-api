@@ -301,10 +301,7 @@ macro_rules! impl_tasks {
             /// Returns all uncompleted tasks
             #[must_use]
             pub fn get_uncompleted(&self) -> Vec<&Task> {
-                self.tasks
-                    .iter()
-                    .filter(|task| !task.is_completed())
-                    .collect()
+                self.tasks.iter().filter(|task| !task.is_completed()).collect()
             }
 
             /// Checks if the chest at the given index can be opened
@@ -767,11 +764,7 @@ impl RewardChest {
             let data = data.skip(3 + pos * 2, "rchest rewards")?;
             rewards.push(Reward::parse(data)?);
         }
-        Ok(RewardChest {
-            opened,
-            required_points,
-            rewards,
-        })
+        Ok(RewardChest { opened, required_points, rewards })
     }
 }
 

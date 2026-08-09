@@ -134,10 +134,7 @@ impl Default for Shop {
             full_model_id: 0,
         });
 
-        Self {
-            items,
-            typ: ShopType::Magic,
-        }
+        Self { items, typ: ShopType::Magic }
     }
 }
 
@@ -325,10 +322,8 @@ impl GameState {
 
     pub(crate) fn updatete_relation_list(&mut self, val: &str) {
         self.character.relations.clear();
-        for entry in val
-            .trim_end_matches(';')
-            .split(';')
-            .filter(|a| !a.is_empty())
+        for entry in
+            val.trim_end_matches(';').split(';').filter(|a| !a.is_empty())
         {
             let mut parts = entry.split(',');
             let (
@@ -388,14 +383,10 @@ impl GameState {
         bs.metal = res.csiget(9, "bs metal", 0)?;
         bs.arcane = res.csiget(10, "bs arcane", 0)?;
         let fortress = self.fortress.get_or_insert_with(Default::default);
-        fortress
-            .resources
-            .get_mut(FortressResourceType::Wood)
-            .current = res.csiget(5, "saved wood ", 0)?;
-        fortress
-            .resources
-            .get_mut(FortressResourceType::Stone)
-            .current = res.csiget(7, "saved stone", 0)?;
+        fortress.resources.get_mut(FortressResourceType::Wood).current =
+            res.csiget(5, "saved wood ", 0)?;
+        fortress.resources.get_mut(FortressResourceType::Stone).current =
+            res.csiget(7, "saved stone", 0)?;
 
         let pets = self.pets.get_or_insert_with(Default::default);
         for (e_pos, element) in HabitatType::iter().enumerate() {
@@ -403,9 +394,8 @@ impl GameState {
                 res.csiget(12 + e_pos, "fruits", 0)?;
         }
 
-        self.underworld
-            .get_or_insert_with(Default::default)
-            .souls_current = res.csiget(11, "uu souls saved", 0)?;
+        self.underworld.get_or_insert_with(Default::default).souls_current =
+            res.csiget(11, "uu souls saved", 0)?;
         Ok(())
     }
 
@@ -869,9 +859,8 @@ impl GameState {
                     val.into("max pet lvl")?;
             }
             "otherdescription" => {
-                other_player
-                    .get_or_insert_with(Default::default)
-                    .description = from_sf_string(val.as_str());
+                other_player.get_or_insert_with(Default::default).description =
+                    from_sf_string(val.as_str());
             }
             "otherplayergroupname" => {
                 let guild =
