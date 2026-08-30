@@ -13,7 +13,8 @@
     clippy::wildcard_imports,
     clippy::too_many_lines,
     clippy::field_reassign_with_default,
-    clippy::match_bool
+    clippy::match_bool,
+    clippy::chunks_exact_to_as_chunks
 )]
 #![deny(unsafe_code)]
 
