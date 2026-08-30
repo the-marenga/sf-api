@@ -250,33 +250,31 @@ pub enum Command {
     ToiletFlush,
     /// Opens the toilet door for the first time.
     ToiletOpen,
-    /// Drops an item from one of the inventories into the toilet
+    /// Drops an item from any player owned position into the toilet
     ToiletDrop {
-        /// The place of the item, that you want to throw into the toilet.
-        /// You can use `BagPosition` and `EquipmentSlot` here by calling
-        /// `pos.into()`
+        /// The position of the item, that you want to throw into the toilet.
+        /// See [`PlayerItemPosition`] for how to obtain it
         item_pos: PlayerItemPosition,
     },
-    /// Buys an item from the shop and puts it in the inventory slot specified
+    /// Buys an item from the shop and puts it in the player owned position
+    /// specified
     BuyShop {
         /// The position of the item you want to buy. You get this from
         /// `.iter()` on shop, or by constructing it yourself
         shop_pos: ShopPosition,
         /// The place where the new item should end up.
-        /// You can use `BagPosition` and `EquipmentSlot` here by calling
-        /// `pos.into()`
+        /// See [`PlayerItemPosition`] for how to obtain it
         new_pos: PlayerItemPosition,
         /// Identifies the source item to ensure it has not changed since
         /// you looked at it (shop reroll, etc.). You can get this ident by
         /// calling `.command_ident()` on any Item
         item_ident: ItemCommandIdent,
     },
-    /// Sells an item from the players inventory. To make this more convenient,
-    /// this picks a shop&item position to sell to for you
+    /// Sells an item from a player owned position. To make this more
+    /// convenient, this picks a shop&item position to sell to for you
     SellShop {
-        /// The position of the item you want to sell in the shop
-        /// You can use `BagPosition` and `EquipmentSlot` here by calling
-        /// `pos.into()`
+        /// The position of the item you want to sell in the shop.
+        /// See [`PlayerItemPosition`] for how to obtain it
         item_pos: PlayerItemPosition,
         /// Identifies the source item to ensure it has not changed since
         /// you looked at it (shop reroll, etc.). You can get this ident by
@@ -285,13 +283,11 @@ pub enum Command {
     },
     /// Moves an item from one player owned position to another
     PlayerItemMove {
-        /// The position that you want to move the item from
-        /// You can use `BagPosition` and `EquipmentSlot` here by calling
-        /// `pos.into()`
+        /// The position that you want to move the item from.
+        /// See [`PlayerItemPosition`] for how to obtain it
         from: PlayerItemPosition,
-        /// The position that you want to move the item to
-        /// You can use `BagPosition` and `EquipmentSlot` here by calling
-        /// `pos.into()`
+        /// The position that you want to move the item to.
+        /// See [`PlayerItemPosition`] for how to obtain it
         to: PlayerItemPosition,
         /// Identifies the source item to ensure it has not changed since
         /// you looked at it (shop reroll, etc.). You can get this ident by
@@ -475,18 +471,16 @@ pub enum Command {
         /// The description to set
         description: String,
     },
-    /// Drop the item from the specified position into the witches cauldron
+    /// Drops the item from the specified position into the witches cauldron
     WitchDropCauldron {
-        /// The place of the item, that you want to drop into the cauldron.
-        /// You can use `BagPosition` and `EquipmentSlot` here by calling
-        /// `pos.into()`
+        /// The position of the item, that you want to drop into the cauldron.
+        /// See [`PlayerItemPosition`] for how to obtain it
         item_pos: PlayerItemPosition,
     },
     /// Uses the blacksmith with the specified action on the specified item
     Blacksmith {
-        /// The place of the item, that you want to use at the blacksmith.
-        /// You can use `BagPosition` and `EquipmentSlot` here by calling
-        /// `pos.into()`
+        /// The position of the item, that you want to use at the blacksmith.
+        /// See [`PlayerItemPosition`] for how to obtain it
         item_pos: PlayerItemPosition,
         /// The action you want to use on the item
         action: BlacksmithAction,
@@ -494,6 +488,14 @@ pub enum Command {
         /// you looked at it (shop reroll, etc.). You can get this ident by
         /// calling `.command_ident()` on any Item
         item_ident: ItemCommandIdent,
+    },
+    /// Upgrades the item at the specified position the given amount of times
+    BlacksmithUpgradeItem {
+        /// The position of the item, that you want to use at the blacksmith.
+        /// See [`PlayerItemPosition`] for how to obtain it
+        item_pos: PlayerItemPosition,
+        // The amount of times you want to upgrade this item
+        amount: u32,
     },
     /// Sends the specified message in the guild chat
     GuildSendChat {
@@ -542,12 +544,12 @@ pub enum Command {
         /// One of [0,1,2], depending on which chest you want to collect
         pos: usize,
     },
-    /// Moves an item from a normal inventory, into the equipmentslot of the
-    /// player. This can be used to equip items, but also to socket/replace
+    /// Moves an item from any player owned position into an equipment slot of
+    /// the player. This can be used to equip items, but also to socket/replace
     /// gems
     Equip {
-        /// The position in the inventory, that you want to equip in the
-        /// equipment slot
+        /// The position, that you want to equip in the equipment slot.
+        /// See [`PlayerItemPosition`] for how to obtain it
         from_pos: PlayerItemPosition,
         /// The slot of the item you want to equip
         to_slot: EquipmentSlot,
@@ -556,19 +558,20 @@ pub enum Command {
         /// calling `.command_ident()` on any Item
         item_ident: ItemCommandIdent,
     },
-    /// Moves an item from a normal inventory, onto one of the companions
+    /// Moves an item from any player owned position into an equipment slot of
+    /// the given companion
     EquipCompanion {
-        /// The position in the inventory, that you want to equip in the
-        /// companion equipment slot
+        /// The position, that you want to equip in the companion equipment
+        /// slot. See [`PlayerItemPosition`] for how to obtain it
         from_pos: PlayerItemPosition,
         /// The slot of the companion you want to equip
         to_slot: EquipmentSlot,
+        /// The companion you want to equip
+        to_companion: CompanionClass,
         /// Identifies the source item to ensure it has not changed since
         /// you looked at it (shop reroll, etc.). You can get this ident by
         /// calling `.command_ident()` on any Item
         item_ident: ItemCommandIdent,
-        /// The companion you want to equip
-        to_companion: CompanionClass,
     },
     /// Collects a specific resource from the fortress
     FortressGather {
@@ -846,11 +849,14 @@ pub enum Command {
     LegendaryDungeonPlayRPC {
         choice: RPSChoice,
     },
+    /// Takes an item from the legendary dungeon and moves it to the specified
+    /// player owned position
     LegendaryDungeonTakeItem {
         /// The idx of the item in the dungeon, that you want to take, if there
         /// are multiple. Should just be 0 in most cases
         item_idx: usize,
-        /// The inventory you move the item to
+        /// The inventory you move the item to.
+        /// See [`PlayerItemPosition`] for how to obtain it
         inventory_to: PlayerItemPosition,
         /// Identifies the source item to ensure it has not changed since
         /// you looked at it (shop reroll, etc.). You can get this ident by
@@ -962,7 +968,6 @@ pub enum BlacksmithAction {
     SocketUpgradeWithMushrooms = 212,
     GemExtract = 203,
     GemExtractWithMushrooms = 213,
-    Upgrade = 204,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1324,6 +1329,9 @@ impl Command {
                 "PlayerItemMove:{item_pos}/{}/-1/{item_ident}",
                 *action as usize
             ),
+            Command::BlacksmithUpgradeItem { item_pos, amount } => {
+                format!("PlayerItemUpgrade:{item_pos}/{amount}")
+            }
             Command::WitchEnchant { enchantment } => {
                 format!("PlayerWitchEnchantItem:{}/1", enchantment.0)
             }
@@ -1336,6 +1344,23 @@ impl Command {
                     enchantment.0,
                     *companion as u8 + 101,
                 )
+            }
+            Command::Equip {
+                from_pos,
+                to_slot,
+                item_ident,
+            } => {
+                let to: PlayerItemPosition = (*to_slot).into();
+                format!("PlayerItemMove:{from_pos}/{to}/{item_ident}")
+            }
+            Command::EquipCompanion {
+                from_pos,
+                to_slot,
+                to_companion,
+                item_ident,
+            } => {
+                let to = to_slot.to_companion_pos(*to_companion);
+                format!("PlayerItemMove:{from_pos}/{to}/{item_ident}")
             }
             Command::UpdateLureSuggestion => {
                 format!("PlayerGetHallOfFame:-4//0/0")
@@ -1351,24 +1376,6 @@ impl Command {
             Command::FortressGatherSecretStorage { stone, wood } => {
                 format!("FortressGatherTreasure:{wood}/{stone}")
             }
-            Command::Equip {
-                from_pos,
-                to_slot,
-                item_ident,
-            } => format!(
-                "PlayerItemMove:{from_pos}/1/{}/{item_ident}",
-                *to_slot as usize
-            ),
-            Command::EquipCompanion {
-                from_pos,
-                to_companion,
-                item_ident,
-                to_slot,
-            } => format!(
-                "PlayerItemMove:{from_pos}/{}/{}/{item_ident}",
-                *to_companion as u8 + 101,
-                *to_slot as usize
-            ),
             Command::FortressBuild { f_type } => {
                 format!("FortressBuildStart:{}/0", *f_type as usize + 1)
             }
@@ -1455,7 +1462,6 @@ impl Command {
                 });
 
                 if dices.is_empty() {
-                    // FIXME: This is dead code, right?
                     dices = "0/0/0/0/0".to_string();
                 }
                 format!("RollDice:{}/{}", *payment as usize, dices)

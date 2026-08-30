@@ -13,7 +13,7 @@ use super::{
 };
 use crate::{
     command::{AttributeType, ShopType},
-    gamestate::{CCGet, CGet, ShopPosition},
+    gamestate::{CCGet, CGet, ShopPosition, dungeons::CompanionClass},
 };
 
 /// The basic inventory, that every player has
@@ -110,6 +110,10 @@ pub enum PlayerItemPlace {
     Equipment = 1,
     MainInventory = 2,
     ExtendedInventory = 5,
+    // Less often usefull and possibly invalid for certain commands
+    WarriorCompanion = 101,
+    MageCompanion = 102,
+    ScoutCompanion = 103,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,10 +129,23 @@ impl std::fmt::Display for ItemPosition {
     }
 }
 
+/// The position of an item in a player owned inventory: the main or
+/// extended inventory, the player's own equipment, or the equipment of a
+/// companion.
+///
+/// You can obtain a `PlayerItemPosition` from:
+/// - [`BagPosition`] by calling `.into()`, e.g. the positions yielded by
+///   [`Inventory::iter`]
+/// - [`EquipmentSlot`] by calling `.into()`, for your own equipment
+/// - [`EquipmentSlot::to_companion_pos`] with a [`CompanionClass`], or the
+///   `(CompanionClass, EquipmentSlot).into()` shorthand, for the equipment of a
+///   companion
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlayerItemPosition {
+    /// The player owned inventory, that the item is in
     pub place: PlayerItemPlace,
+    /// The 0 based position of the item within that inventory
     pub position: usize,
 }
 
@@ -198,6 +215,18 @@ impl From<EquipmentSlot> for PlayerItemPosition {
     }
 }
 
+impl From<(EquipmentSlot, CompanionClass)> for PlayerItemPosition {
+    fn from((slot, cc): (EquipmentSlot, CompanionClass)) -> Self {
+        slot.to_companion_pos(cc)
+    }
+}
+
+impl From<(CompanionClass, EquipmentSlot)> for PlayerItemPosition {
+    fn from((cc, slot): (CompanionClass, EquipmentSlot)) -> Self {
+        slot.to_companion_pos(cc)
+    }
+}
+
 impl PlayerItemPlace {
     /// `InventoryType` is a subset of `ItemPlace`. This is a convenient
     /// function to convert between them
@@ -206,7 +235,10 @@ impl PlayerItemPlace {
         match self {
             PlayerItemPlace::Equipment => ItemPlace::Equipment,
             PlayerItemPlace::MainInventory => ItemPlace::MainInventory,
-            PlayerItemPlace::ExtendedInventory => ItemPlace::FortressChest,
+            PlayerItemPlace::ExtendedInventory => ItemPlace::ExtendedInventory,
+            PlayerItemPlace::WarriorCompanion => ItemPlace::WarriorCompanion,
+            PlayerItemPlace::MageCompanion => ItemPlace::MageCompanion,
+            PlayerItemPlace::ScoutCompanion => ItemPlace::ScoutCompanion,
         }
     }
 }
@@ -227,7 +259,7 @@ impl InventoryType {
     pub fn item_position(&self) -> ItemPlace {
         match self {
             InventoryType::MainInventory => ItemPlace::MainInventory,
-            InventoryType::ExtendedInventory => ItemPlace::FortressChest,
+            InventoryType::ExtendedInventory => ItemPlace::ExtendedInventory,
         }
     }
     /// `InventoryType` is a subset of `ItemPlace`. This is a convenient
@@ -243,7 +275,7 @@ impl InventoryType {
     }
 }
 
-/// All places, that items can be dragged to excluding companions
+/// All places, that items can be dragged to
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ItemPlace {
@@ -256,7 +288,13 @@ pub enum ItemPlace {
     /// The items in the mage slot
     MageShop = 4,
     /// The items in the fortress chest slots
-    FortressChest = 5,
+    ExtendedInventory = 5,
+    /// The warrior companion equipment
+    WarriorCompanion = 101,
+    /// The mage companion equipment
+    MageCompanion = 102,
+    /// The scout companion equipment
+    ScoutCompanion = 103,
 }
 
 /// All the equipment a player is wearing
@@ -1328,6 +1366,22 @@ pub enum EquipmentSlot {
 }
 
 impl EquipmentSlot {
+    /// Converts this equipment slot into the position of the same slot on
+    /// the equipment of the given companion. This is how you target
+    /// companion equipment in commands, that take a [`PlayerItemPosition`]
+    #[must_use]
+    pub fn to_companion_pos(self, cc: CompanionClass) -> PlayerItemPosition {
+        let place = match cc {
+            CompanionClass::Warrior => PlayerItemPlace::WarriorCompanion,
+            CompanionClass::Mage => PlayerItemPlace::MageCompanion,
+            CompanionClass::Scout => PlayerItemPlace::ScoutCompanion,
+        };
+        PlayerItemPosition {
+            place,
+            position: self as usize - 1,
+        }
+    }
+
     /// The value the game internally uses for these slots. No idea, why this is
     /// pub
     #[must_use]
