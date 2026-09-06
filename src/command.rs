@@ -316,16 +316,15 @@ pub enum Command {
         /// calling `.command_ident()` on any Item
         item_ident: ItemCommandIdent,
     },
-    /// Opens the message at the specified index [0-100]
+    /// Opens the message with the specified message id
     MessageOpen {
-        /// The index of the message in the inbox vec
-        pos: i32,
+        /// The id of the message to view
+        msg_id: i32,
     },
-    /// Deletes a single message, if you provide the index. -1 = all
+    /// Deletes a single message by its message id.
     MessageDelete {
-        /// The position of the message to delete in the inbox vec. If this is
-        /// -1, it deletes all
-        pos: i32,
+        /// The id of the message to delete.
+        msg_id: i32,
     },
     /// Fetched the full message contents for this news entry. The message
     /// contents will be parsed into `open_msg` in `Mail`.
@@ -1242,16 +1241,12 @@ impl Command {
                 format!("GroupFightableTargets:")
             }
             Command::FightPortal => format!("PlayerPortalBattle:"),
-            Command::MessageOpen { pos: index } => {
-                format!("PlayerMessageView:{}", *index + 1)
+            Command::MessageOpen { msg_id } => {
+                format!("PlayerMessageView:{msg_id}")
             }
-            Command::MessageDelete { pos: index } => format!(
-                "PlayerMessageDelete:{}",
-                match index {
-                    -1 => -1,
-                    x => *x + 1,
-                }
-            ),
+            Command::MessageDelete { msg_id } => {
+                format!("PlayerMessageDelete:{msg_id}")
+            }
             Command::ViewScrapbook => format!("PlayerPollScrapbook:"),
             Command::ViewPet { pet_id: pet_index } => {
                 format!("PetsGetStats:{pet_index}")

@@ -700,7 +700,7 @@ impl InboxEntry {
             from: parts.cget(1, "inbox from")?.to_string(),
             msg_id: parts.cfsuget(0, "msg_id")?,
             title: from_sf_string(title.trim_end_matches('\t')),
-            read: parts.cget(2, "inbox read")? == "1",
+            read: parts.cget(2, "inbox read")? != "0",
         })
     }
 }
