@@ -425,17 +425,6 @@ fn split_values(raw: &str, delim: char) -> Vec<&str> {
     }
 }
 
-/// Reports the values of `what` that were never read.
-#[cfg(debug_assertions)]
-fn warn_unread(what: &str, values: &[&str], unread: &[usize]) {
-    if !unread.is_empty() {
-        warn!(
-            "Unaccessed response values in {what}: indices {unread:?} \
-             (values: {values:?})"
-        );
-    }
-}
-
 impl<'a> Vals<'a> {
     /// A new [`Vals`] that owns `values`.
     fn owned(values: Vec<&'a str>) -> Self {
@@ -462,7 +451,14 @@ impl<'a> From<&'a str> for Vals<'a> {
 impl Drop for Vals<'_> {
     fn drop(&mut self) {
         if matches!(self.values, Cow::Owned(_)) && !std::thread::panicking() {
-            warn_unread("Vals", &self.values, &self.unaccessed_indices());
+            let unread = &self.unaccessed_indices();
+            if !unread.is_empty() {
+                warn!(
+                    "Unaccessed response values in Vals: indices {unread:?} \
+                     (values: {:?})",
+                    self.values
+                );
+            }
         }
     }
 }
@@ -762,6 +758,17 @@ impl<'a> Vals<'a> {
     /// Marks every value as read, so none is reported as unaccessed.
     pub fn ignore_all(&self, _reason: &str) {
         self.mark_all();
+    }
+
+    /// Marks every position in every range of `ranges` as read, so none is
+    /// reported as unaccessed. Positions past the end of the response are
+    /// skipped.
+    pub fn ignore_unmodelled(&self, ranges: &[Range<usize>], reason: &str) {
+        for range in ranges {
+            for pos in range.clone() {
+                self.ignore(pos, reason);
+            }
+        }
     }
 
     /// Writes the values like they appeared in the response.
