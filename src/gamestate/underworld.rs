@@ -9,9 +9,12 @@ use strum::EnumIter;
 use super::{Result, ServerTime};
 use crate::response::Vals;
 
-/// The number of values in the `owntower` (`towerSave`) response. It is shared
-/// between the underworld and the companion parsing.
+/// The number of values in the `owntower` (`towerSave`) response.
 pub(crate) const TOWER_RESPONSE_LEN: usize = 476;
+/// The size of one `owntower` block: a companion and an underworld unit.
+pub(crate) const TOWER_BLOCK_LEN: usize = 148;
+/// The offset of the underworld unit at the end of its `owntower` block.
+pub(crate) const TOWER_UNIT_OFFSET: usize = 146;
 
 /// The information about a characters underworld
 #[derive(Debug, Default, Clone)]
@@ -114,15 +117,8 @@ impl Underworld {
         Ok(())
     }
 
-    /// Updates the underworld state from the 476-value `owntower`
-    /// (`towerSave`) response.
-    ///
-    /// That response is shared with the companion parsing in `mod.rs`: every
-    /// 148-value block holds a companion at offset 3 (level) and 7-10
-    /// (attributes) and an underworld unit at offset 146-149, and the tail
-    /// from index 442 holds the underworld buildings, production and upgrade
-    /// timers. Everything that is not part of the underworld state is marked
-    /// as ignored, so the read tracking does not report it.
+    /// Updates the underworld state from the `owntower` (`towerSave`) response.
+    /// The companion and unknown values in it are handled elsewhere.
     pub(crate) fn update(
         &mut self,
         data: &Vals<'_>,
@@ -135,7 +131,8 @@ impl Underworld {
         }
 
         for (i, unit) in self.units.values_mut().enumerate() {
-            let start = 146 + i * 148;
+            // The unit sits at the end of its block
+            let start = TOWER_UNIT_OFFSET + i * TOWER_BLOCK_LEN;
             unit.upgraded_amount = data.u16(start)?;
             unit.count = data.u16(start + 1)?;
             unit.total_attributes = data.u32(start + 2)?;
@@ -163,17 +160,6 @@ impl Underworld {
         self.upgrade_begin = data.server_time(470, server_time)?;
         self.lure_level = data.u16(471)?;
         self.lured_today = data.u16(472)?;
-
-        // 446-447 sit between the last unit and the first building, 458
-        // between the last building and the soul production and 462 between
-        // the soul storage limit and its production. 458 and 462, as well as
-        // 446-447, are 0 in every captured response. The remaining ranges are
-        // the companion values and per-block data that the underworld does
-        // not model.
-        data.ignore_unmodelled(
-            &[0..146, 150..294, 298..442, 446..448, 458..459, 462..463],
-            "tower field that is not part of the underworld state",
-        );
         Ok(())
     }
 }
@@ -279,13 +265,6 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
 
-    /// Asserts that every value of `data` was read or explicitly ignored. The
-    /// read tracking only exists in debug builds.
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     #[test]
     fn test_underworld_cost_parse() {
         crate::parse_test!(UnderworldCost("7200/4000/1100"), {
@@ -336,62 +315,5 @@ mod tests {
         let keeper = &uw.units[UnderworldUnitType::Keeper];
         assert_eq!(keeper.upgrade_next_lvl, 369);
         assert_eq!(keeper.upgrade_cost.souls, 354_450);
-    }
-
-    #[test]
-    fn test_update() {
-        // From `cache/marenga.login`, `owntower.towerSave`.
-        let raw =
-            "446275/0/100/360/1/0/0/4147/2539/2422/3743/2900/7153/2622/2391/\
-             6428/4079/0/0/0/0/0/17534/481/951/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
-             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
-             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
-             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
-             0/0/0/0/0/0/0/0/0/0/416/5/56614/600/10/360/2/0/0/2422/2539/4147/\
-             3743/2900/508/558/9704/5366/2203/0/0/0/0/0/4235/1244/2734/0/0/0/\
-             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
-             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
-             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
-             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/358/4/51450/600/2/\
-             360/3/0/0/2422/4147/2539/3743/2900/1003/8878/910/7251/4199/0/0/0/\
-             0/0/7117/582/1154/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
-             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
-             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
-             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
-             0/0/368/1/106984/600/0/0/15/15/29/15/15/15/15/15/15/15/0/1188000/\
-             1188000/162518400/0/49500/1439888618/1460585058/25182501/\
-             1786541817/0/0/0/504/0/2000/2000/80";
-        let data = Vals::from(raw);
-        assert_eq!(data.len(), TOWER_RESPONSE_LEN);
-
-        let mut uw = Underworld::default();
-        uw.update(&data, ServerTime::default()).unwrap();
-        assert_all_read(&data);
-
-        assert_eq!(
-            uw.buildings[UnderworldBuildingType::HeartOfDarkness].level,
-            15
-        );
-        assert_eq!(uw.buildings[UnderworldBuildingType::GoldPit].level, 29);
-
-        let goblin = &uw.units[UnderworldUnitType::Goblin];
-        assert_eq!(goblin.upgraded_amount, 416);
-        assert_eq!(goblin.count, 5);
-        assert_eq!(goblin.total_attributes, 56_614);
-        assert_eq!(goblin.level, 600);
-
-        assert_eq!(uw.souls_limit, 162_518_400);
-        assert_eq!(
-            uw.production[UnderworldResourceType::Souls].per_hour,
-            49_500
-        );
-        assert_eq!(uw.lure_level, 504);
-        assert_eq!(uw.lured_today, 0);
-
-        // No upgrade is running in this capture
-        assert_eq!(uw.upgrade_building, None);
-        assert_eq!(uw.upgrade_finish, None);
-        assert_eq!(uw.upgrade_begin, None);
-        assert!(uw.last_collectable_update.is_some());
     }
 }

@@ -5,10 +5,10 @@ use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
 use super::{
-    AttributeType, CCGet, Class, EnumMapGet, Item, SFError, ServerTime,
+    AttributeType, CCGet, Class, EnumMapGet, Item, Result, SFError, ServerTime,
     items::Equipment,
 };
-use crate::misc::soft_into;
+use crate::{misc::soft_into, response::Vals};
 
 /// The personal demon portal
 #[derive(Debug, Default, Clone)]
@@ -359,6 +359,39 @@ pub struct Companion {
     pub equipment: Equipment,
     /// The total attributes of this companion
     pub attributes: EnumMap<AttributeType, u32>,
+}
+
+impl Companion {
+    /// Updates the level and attributes from an `owntower` companion record.
+    /// The equipment comes from `companionequipment`; the rest is ignored.
+    pub(crate) fn update(&mut self, data: &Vals<'_>) -> Result<()> {
+        self.level = data.i64(0)?;
+        for (idx, attr) in self.attributes.values_mut().enumerate() {
+            *attr = data.u32(4 + idx)?;
+        }
+        // The 1-based index of this companion in the tower
+        data.ignore(1, "companion index (1, 2, 3)");
+        data.ignore(2, "always 0");
+        data.ignore(3, "always 0");
+        // A second attribute map; its largest value sits in this companion's
+        // class main attribute slot, so it may include equipment attributes
+        for idx in 9..14 {
+            data.ignore(idx, "2nd attribute map (basis or additions?)");
+        }
+        for idx in 14..19 {
+            data.ignore(idx, "always 0");
+        }
+        // The first value is an order of magnitude larger than the other two
+        for idx in 19..22 {
+            data.ignore(idx, "unknown, maybe hp and damage");
+        }
+        // The companion equipment the old code read here; 0 in every capture
+        // since it moved to the `companionequipment` response
+        for idx in 22..data.len() {
+            data.ignore(idx, "old companion equipment, now 0");
+        }
+        Ok(())
+    }
 }
 
 #[cfg(feature = "simulation")]
