@@ -86,9 +86,7 @@ pub struct FortressCost {
 
 impl FortressCost {
     /// Parses a fortress cost `[time_seconds, silver, wood, stone]`.
-    pub(crate) fn parse(
-        data: &ResponseVals<4>,
-    ) -> Result<FortressCost> {
+    pub(crate) fn parse(data: &ResponseVals<4>) -> Result<FortressCost> {
         Ok(FortressCost {
             time: Duration::from_secs(data.u64(0)?),
             silver: data.u64(1)?,
@@ -108,8 +106,8 @@ pub struct FortressResource {
     /// The maximum amount of this resource, that you can store. If `current ==
     /// limit`, you will not be able to collect resources from buildings
     pub limit: u64,
-    /// The maximum amount of this resource, that you can store in the fortress
-    /// after you upgrade the Heart of Darkness
+    /// The maximum amount of this resource that can be stored in the fortress
+    /// after upgrading the Fortress main building to the next level
     pub limit_next_level: u64,
     /// Information about the production building, that produces this resource.
     pub production: FortressProduction,
@@ -157,33 +155,48 @@ pub struct FortressProduction {
 }
 
 /// The type of resource available in the fortress
-#[derive(Debug, Clone, Copy, EnumCount, EnumIter, PartialEq, Eq, Enum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Enum, EnumCount, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum FortressResourceType {
+    /// Wood produced by the Woodcutter's Hut; used for buildings and units
     Wood = 0,
+    /// Stone produced by the Quarry; used for buildings and units
     Stone = 1,
+    /// Experience produced by the Academy; awarded to the player character
     Experience = 2,
 }
 
 /// The type of building that can be built in the fortress
 #[derive(
-    Debug, Clone, Copy, EnumCount, FromPrimitive, PartialEq, Eq, Enum, EnumIter,
+    Debug, Clone, Copy, PartialEq, Eq, Enum, EnumCount, EnumIter, FromPrimitive,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum FortressBuildingType {
+    /// The main fortress building; determines the maximum level of all other
+    /// buildings and increases resource storage capacity
     Fortress = 0,
+    /// Laborer's Quarters; reduces the construction and upgrade duration of all
+    /// fortress buildings
     LaborersQuarters = 1,
+    /// Woodcutter's Hut; produces wood over time
     WoodcuttersHut = 2,
+    /// Quarry; produces stone over time
     Quarry = 3,
+    /// Gem Mine; allows searching for attribute and black gems
     GemMine = 4,
+    /// Academy; produces experience for the character over time
     Academy = 5,
+    /// Archery Guild; trains archers for fortress defense
     ArcheryGuild = 6,
+    /// Barracks; trains soldiers for fortress attacks and defense
     Barracks = 7,
+    /// Mage's Tower; trains battle mages for fortress defense
     MagesTower = 8,
+    /// Treasury; expands backpack/chest capacity and provides secret storage
     Treasury = 9,
+    /// Smithy; upgrades the weapon and armor quality of combat units
     Smithy = 10,
+    /// Fortress Wall; provides a defensive bonus during enemy attacks
     Wall = 11,
 }
 
@@ -229,35 +242,38 @@ pub struct FortressUnit {
     /// The level this unit has
     pub level: u16,
 
-    /// The amount of this unit, that you have available for combat
+    /// The amount of this unit available for combat
     pub count: u16,
-    /// The amount of this unit, that are currently being trained/build
+    /// The amount of this unit currently being trained
     pub in_training: u16,
-    /// The maximum `count + in_training` you have of this unit
+    /// The maximum `count + in_training` capacity for this unit
     pub limit: u16,
     /// All information about training up new units of this type
     pub training: FortressAction<()>,
 
-    /// The price to pay in stone for the next upgrade
+    /// The resource cost for the next unit level upgrade
     pub upgrade_cost: FortressCost,
-    /// The level this unit will be at, when you upgrade it
+    /// The level this unit will be at when upgraded
     pub upgrade_next_lvl: u64,
 }
 
-/// An action, that costs some amount of resources to do and will finish at a
-/// certain point in time
+/// An action that costs resources and finishes after a specific duration.
+///
+/// The generic parameter `T` specifies the action target:
+/// - [`FortressBuildingType`] for building upgrades
+///   ([`Fortress::building_upgrade`])
+/// - [`GemType`] for gem searches ([`Fortress::gem_search`])
+/// - `()` for unit recruitment ([`FortressUnit::training`])
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressAction<T> {
-    /// When this action was started. This can be months in the past, as this
-    /// will often not be cleared by the server
+    /// When this action was started
     pub start: Option<DateTime<Local>>,
-    /// When this action will be finished
+    /// When this action will finish
     pub finish: Option<DateTime<Local>>,
-    /// The amount of resources it costs to do this
+    /// The amount of resources required for this action
     pub cost: FortressCost,
-    /// If it is not clear from the place where this is located, this will
-    /// contain the specific type, that this action will be applied to/for
+    /// The specific target of this action, if applicable
     pub target: Option<T>,
 }
 
@@ -273,12 +289,14 @@ impl<T> Default for FortressAction<T> {
 }
 
 /// The type of a unit usable in the fortress
-#[derive(Debug, Clone, Copy, EnumCount, PartialEq, Eq, Enum, EnumIter)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Enum, EnumCount, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum FortressUnitType {
+    /// Soldiers; used for fortress attacks and defense
     Soldier = 0,
+    /// Battle mages; used for fortress defense
     Magician = 1,
+    /// Archers; used for fortress defense
     Archer = 2,
 }
 
@@ -300,7 +318,7 @@ impl FortressUnitType {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressBuilding {
     /// The current level of this building. If this is 0, it has not yet been
-    /// build
+    /// built
     pub level: u16,
     /// The amount of resources it costs to upgrade to the next level
     pub upgrade_cost: FortressCost,
