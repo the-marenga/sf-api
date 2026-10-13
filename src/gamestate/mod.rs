@@ -384,10 +384,10 @@ impl GameState {
             res.csiget(4, "quicksand glass count", 0)?;
 
         self.specials.wheel.lucky_coins = res.csiget(3, "lucky coins", 0)?;
-        let bs = self.blacksmith.get_or_insert_with(Default::default);
+        let bs = self.blacksmith.get_or_insert_default();
         bs.metal = res.csiget(9, "bs metal", 0)?;
         bs.arcane = res.csiget(10, "bs arcane", 0)?;
-        let fortress = self.fortress.get_or_insert_with(Default::default);
+        let fortress = self.fortress.get_or_insert_default();
         fortress
             .resources
             .get_mut(FortressResourceType::Wood)
@@ -397,15 +397,14 @@ impl GameState {
             .get_mut(FortressResourceType::Stone)
             .current = res.csiget(7, "saved stone", 0)?;
 
-        let pets = self.pets.get_or_insert_with(Default::default);
+        let pets = self.pets.get_or_insert_default();
         for (e_pos, element) in HabitatType::iter().enumerate() {
             pets.habitats.get_mut(element).fruits =
                 res.csiget(12 + e_pos, "fruits", 0)?;
         }
 
-        self.underworld
-            .get_or_insert_with(Default::default)
-            .souls_current = res.csiget(11, "uu souls saved", 0)?;
+        self.underworld.get_or_insert_default().souls_current =
+            res.csiget(11, "uu souls saved", 0)?;
         Ok(())
     }
 
@@ -422,8 +421,7 @@ impl GameState {
     #[must_use]
     fn get_fight(&mut self, header_name: &str) -> &mut SingleFight {
         let id = fight_no_from_header(header_name);
-        let fights =
-            &mut self.last_fight.get_or_insert_with(Default::default).fights;
+        let fights = &mut self.last_fight.get_or_insert_default().fights;
 
         if fights.len() < id {
             fights.resize(id, SingleFight::default());
@@ -483,11 +481,9 @@ impl GameState {
             "ownplayersave" => {
                 // Goodbye old friend...
             }
-            "owngroupname" => self
-                .guild
-                .get_or_insert_with(Default::default)
-                .name
-                .set(val.as_str()),
+            "owngroupname" => {
+                self.guild.get_or_insert_default().name.set(val.as_str())
+            }
             "sfhomeid" => {}
             "backpack" => {
                 let data: Vec<i64> = val.into_list("backpack")?;
@@ -535,7 +531,7 @@ impl GameState {
                 for (idx, cmp) in self
                     .dungeons
                     .companions
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .values_mut()
                     .enumerate()
                 {
@@ -574,10 +570,8 @@ impl GameState {
             }
             "owntower" => {
                 let data = val.into_list("tower")?;
-                let companions = self
-                    .dungeons
-                    .companions
-                    .get_or_insert_with(Default::default);
+                let companions =
+                    self.dungeons.companions.get_or_insert_default();
 
                 for (i, class) in CompanionClass::iter().enumerate() {
                     let comp_start = 3 + i * 148;
@@ -590,11 +584,11 @@ impl GameState {
                 }
                 // Why would they include this in the tower response???
                 self.underworld
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .update(&data, server_time)?;
             }
             "owngrouprank" => {
-                self.guild.get_or_insert_with(Default::default).rank =
+                self.guild.get_or_insert_default().rank =
                     val.into("group rank")?;
             }
             "owngroupattack" | "owngroupdefense" => {
@@ -605,21 +599,21 @@ impl GameState {
             }
             "owngroupsave" => {
                 self.guild
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .update_group_save(val.as_str(), server_time)?;
             }
             "owngroupmember" => self
                 .guild
-                .get_or_insert_with(Default::default)
+                .get_or_insert_default()
                 .update_member_names(val.as_str()),
             "owngrouppotion" => {
                 self.guild
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .update_member_potions(val.as_str());
             }
             "unitprice" => {
                 self.fortress
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .update_unit_prices(&val.into_list("fortress units")?)?;
             }
             "dicestatus" => {
@@ -640,23 +634,23 @@ impl GameState {
                 });
             }
             "chathistory" => {
-                self.guild.get_or_insert_with(Default::default).chat =
+                self.guild.get_or_insert_default().chat =
                     ChatMessage::parse_messages(val.as_str());
             }
             "chatwhisper" => {
-                self.guild.get_or_insert_with(Default::default).whispers =
+                self.guild.get_or_insert_default().whispers =
                     ChatMessage::parse_messages(val.as_str());
             }
             "upgradeprice" => {
                 self.fortress
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .update_unit_upgrade_info(
                         &val.into_list("fortress unit upgrade prices")?,
                     )?;
             }
             "unitlevel" => {
                 self.fortress
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .update_levels(&val.into_list("fortress unit levels")?)?;
             }
             "fortressprice" => {
@@ -675,12 +669,12 @@ impl GameState {
             }
             "witchshop" => {
                 self.witch
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .update(&val.into_list("witch")?)?;
             }
             "underworldupgradeprice" => {
                 self.underworld
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .update_underworld_unit_prices(
                         &val.into_list("underworld upgrade prices")?,
                     )?;
@@ -700,7 +694,7 @@ impl GameState {
             "portalprogress" => {
                 self.dungeons
                     .portal
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .update(&val.into_list("portal progress")?, server_time)?;
             }
             "owntowerlevel" => {
@@ -711,7 +705,7 @@ impl GameState {
             }
             "stoneperhournextlevel" => {
                 self.fortress
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .resources
                     .get_mut(FortressResourceType::Stone)
                     .production
@@ -719,7 +713,7 @@ impl GameState {
             }
             "woodperhournextlevel" => {
                 self.fortress
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .resources
                     .get_mut(FortressResourceType::Wood)
                     .production
@@ -734,7 +728,7 @@ impl GameState {
             "gtsave" => {
                 self.hellevator
                     .active
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .update(&val.into_list("gtsave")?, server_time)?;
             }
             "eventstatus" => {
@@ -825,11 +819,9 @@ impl GameState {
                 self.achievements.update(&val.into_list("achievements")?)?;
             }
             "groupskillprice" => {
-                self.guild
-                    .get_or_insert_with(Default::default)
-                    .update_group_prices(
-                        &val.into_list("guild skill prices")?,
-                    )?;
+                self.guild.get_or_insert_default().update_group_prices(
+                    &val.into_list("guild skill prices")?,
+                )?;
             }
             "soldieradvice" => {
                 let advice: u16 = val.into("soldier advice")?;
@@ -844,7 +836,7 @@ impl GameState {
             }
             "owngroupdescription" => self
                 .guild
-                .get_or_insert_with(Default::default)
+                .get_or_insert_default()
                 .update_description_embed(val.as_str()),
             "idle" => {
                 self.idle_game = IdleGame::parse_idle_game(
@@ -863,39 +855,33 @@ impl GameState {
                 // time
             }
             "maxpetlevel" => {
-                self.pets.get_or_insert_with(Default::default).max_pet_level =
+                self.pets.get_or_insert_default().max_pet_level =
                     val.into("max pet lvl")?;
             }
             "otherdescription" => {
-                other_player
-                    .get_or_insert_with(Default::default)
-                    .description = from_sf_string(val.as_str());
+                other_player.get_or_insert_default().description =
+                    from_sf_string(val.as_str());
             }
             "otherplayergroupname" => {
                 let guild =
                     Some(val.as_str().to_string()).filter(|a| !a.is_empty());
-                other_player.get_or_insert_with(Default::default).guild = guild;
+                other_player.get_or_insert_default().guild = guild;
             }
             "otherplayername" => {
-                other_player
-                    .get_or_insert_with(Default::default)
-                    .name
-                    .set(val.as_str());
+                other_player.get_or_insert_default().name.set(val.as_str());
             }
             "otherplayersaveequipment" => {
                 let data: Vec<i64> = val.into_list("other player equipment")?;
-                other_player.get_or_insert_with(Default::default).equipment =
+                other_player.get_or_insert_default().equipment =
                     Equipment::parse(&data, server_time)?;
             }
             "fortresspricereroll" => {
-                self.fortress
-                    .get_or_insert_with(Default::default)
-                    .opponent_reroll_price = val.into("fortress reroll")?;
+                self.fortress.get_or_insert_default().opponent_reroll_price =
+                    val.into("fortress reroll")?;
             }
             "fortresswalllevel" => {
-                self.fortress
-                    .get_or_insert_with(Default::default)
-                    .wall_combat_lvl = val.into("fortress wall lvl")?;
+                self.fortress.get_or_insert_default().wall_combat_lvl =
+                    val.into("fortress wall lvl")?;
             }
             "dragongoldbonus" => {
                 self.character.mount_dragon_refund = val.into("dragon gold")?;
@@ -953,13 +939,12 @@ impl GameState {
                 }
             }
             "othergroupattack" => {
-                other_guild.get_or_insert_with(Default::default).attacks =
+                other_guild.get_or_insert_default().attacks =
                     Some(val.to_string());
             }
             "othergroupdefense" => {
-                other_guild
-                    .get_or_insert_with(Default::default)
-                    .defends_against = Some(val.to_string());
+                other_guild.get_or_insert_default().defends_against =
+                    Some(val.to_string());
             }
             "inboxcapacity" => {
                 self.mail.inbox_capacity = val.into("inbox cap")?;
@@ -1049,11 +1034,11 @@ impl GameState {
             }
             "underworldprice" => self
                 .underworld
-                .get_or_insert_with(Default::default)
+                .get_or_insert_default()
                 .update_building_prices(&val.into_list("ub prices")?)?,
             "owngroupknights" => self
                 .guild
-                .get_or_insert_with(Default::default)
+                .get_or_insert_default()
                 .update_group_knights(val.as_str()),
             "friendlist" => self.updatete_relation_list(val.as_str()),
             "legendaries" => {
@@ -1063,17 +1048,16 @@ impl GameState {
             }
             "smith" => {
                 let data: Vec<i64> = val.into_list("smith")?;
-                let bs = self.blacksmith.get_or_insert_with(Default::default);
+                let bs = self.blacksmith.get_or_insert_default();
 
                 bs.dismantle_left = data.csiget(0, "dismantles left", 0)?;
                 bs.last_dismantled = data.cstget(1, "bs time", server_time)?;
             }
             "fortressGroupPrice" => {
                 self.fortress
-                    .get_or_insert_with(Default::default)
-                    .hall_of_knights_upgrade_price = FortressCost::parse(
-                    &val.values_fixed()?,
-                )?;
+                    .get_or_insert_default()
+                    .hall_of_knights_upgrade_price =
+                    FortressCost::parse(&val.values_fixed()?)?;
             }
             "goldperhournextlevel" => {
                 // I dont think this matters
@@ -1137,11 +1121,8 @@ impl GameState {
             }
             "expeditionmonster" => {
                 let data: Vec<i64> = val.into_list("expedition monster")?;
-                let exp = self
-                    .tavern
-                    .expeditions
-                    .active
-                    .get_or_insert_with(Default::default);
+                let exp =
+                    self.tavern.expeditions.active.get_or_insert_default();
 
                 exp.boss = ExpeditionBoss {
                     id: data
@@ -1156,11 +1137,8 @@ impl GameState {
             }
             "expeditionhalftime" => {
                 let data: Vec<i64> = val.into_list("halftime exp")?;
-                let exp = self
-                    .tavern
-                    .expeditions
-                    .active
-                    .get_or_insert_with(Default::default);
+                let exp =
+                    self.tavern.expeditions.active.get_or_insert_default();
 
                 exp.halftime_for_boss_id =
                     -data.cget(0, "halftime for boss id")?;
@@ -1172,11 +1150,8 @@ impl GameState {
             }
             "expeditionstate" => {
                 let data: Vec<i64> = val.into_list("exp state")?;
-                let exp = self
-                    .tavern
-                    .expeditions
-                    .active
-                    .get_or_insert_with(Default::default);
+                let exp =
+                    self.tavern.expeditions.active.get_or_insert_default();
                 exp.floor_stage = data.cget(2, "floor stage")?;
 
                 exp.target_thing = data
@@ -1209,11 +1184,8 @@ impl GameState {
             "expeditioncrossroad" => {
                 // 3/3/132/0/2/2
                 let data: Vec<i64> = val.into_list("cross")?;
-                let exp = self
-                    .tavern
-                    .expeditions
-                    .active
-                    .get_or_insert_with(Default::default);
+                let exp =
+                    self.tavern.expeditions.active.get_or_insert_default();
                 exp.update_encounters(&data);
             }
             "eventtasklist" => {
@@ -1292,35 +1264,33 @@ impl GameState {
                 }
             }
             "maxupgradelevel" => {
-                self.fortress
-                    .get_or_insert_with(Default::default)
-                    .building_max_lvl = val.into("max upgrade lvl")?;
+                self.fortress.get_or_insert_default().building_max_lvl =
+                    val.into("max upgrade lvl")?;
             }
             "singleportalenemylevel" => {
-                self.dungeons
-                    .portal
-                    .get_or_insert_with(Default::default)
-                    .enemy_level = val.into("portal lvl").unwrap_or(u32::MAX);
+                self.dungeons.portal.get_or_insert_default().enemy_level =
+                    val.into("portal lvl").unwrap_or(u32::MAX);
             }
             "ownpetsstats" => {
                 self.pets
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .update_pet_stat(&val.into_list("pet stats")?);
             }
             "ownpets" => {
                 let data = val.into_list("own pets")?;
                 self.pets
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .update(&data, server_time)?;
             }
             "petsdefensetype" => {
                 let pet_id = val.into("pet def typ")?;
-                self.pets
-                    .get_or_insert_with(Default::default)
-                    .opponent
-                    .habitat = Some(HabitatType::from_typ_id(pet_id).ok_or(
-                    SFError::ParsingError("pet def typ", format!("{pet_id}")),
-                )?);
+                self.pets.get_or_insert_default().opponent.habitat =
+                    Some(HabitatType::from_typ_id(pet_id).ok_or(
+                        SFError::ParsingError(
+                            "pet def typ",
+                            format!("{pet_id}"),
+                        ),
+                    )?);
             }
             "otherplayersavecharacter" => {
                 other_player
@@ -1343,18 +1313,17 @@ impl GameState {
                 }
             }
             "otherplayerfriendstatus" => {
-                other_player
-                    .get_or_insert_with(Default::default)
-                    .relationship = warning_parse(
-                    val.into::<i32>("other friend")?,
-                    "other friend",
-                    FromPrimitive::from_i32,
-                )
-                .unwrap_or_default();
+                other_player.get_or_insert_default().relationship =
+                    warning_parse(
+                        val.into::<i32>("other friend")?,
+                        "other friend",
+                        FromPrimitive::from_i32,
+                    )
+                    .unwrap_or_default();
             }
             "otherplayerpetbonus" => {
                 other_player
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .update_pet_bonus(&val.into_list("o pet bonus")?)?;
             }
             "otherplayerunitlevel" => {
@@ -1362,12 +1331,11 @@ impl GameState {
                     val.into_list("other player unit level")?;
                 // This includes other levels, but they are handled
                 // elsewhere I think
-                other_player
-                    .get_or_insert_with(Default::default)
-                    .wall_combat_lvl = data.csiget(0, "wall_lvl", 0)?;
+                other_player.get_or_insert_default().wall_combat_lvl =
+                    data.csiget(0, "wall_lvl", 0)?;
             }
             "petsrank" => {
-                self.pets.get_or_insert_with(Default::default).rank =
+                self.pets.get_or_insert_default().rank =
                     val.into("pet rank")?;
             }
 
@@ -1407,7 +1375,7 @@ impl GameState {
             "fightresult" => {
                 let data: Vec<i64> = val.into_list("fight result")?;
                 self.last_fight
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .update_result(&data, server_time)?;
                 // Note: The sub_key from this, can improve fighter parsing
             }
@@ -1415,8 +1383,7 @@ impl GameState {
                 self.get_fight(x).update_fighters(val.as_str());
             }
             "fightgroups" => {
-                let fight =
-                    self.last_fight.get_or_insert_with(Default::default);
+                let fight = self.last_fight.get_or_insert_default();
                 fight.update_groups(val.as_str());
             }
             "fightadditionalplayers" => {
@@ -1440,29 +1407,26 @@ impl GameState {
                 }
             }
             "othergroupname" => {
-                other_guild
-                    .get_or_insert_with(Default::default)
-                    .name
-                    .set(val.as_str());
+                other_guild.get_or_insert_default().name.set(val.as_str());
             }
             "othergrouprank" => {
-                other_guild.get_or_insert_with(Default::default).rank =
+                other_guild.get_or_insert_default().rank =
                     val.into("other group rank")?;
             }
             "othergroupfightcost" => {
-                other_guild.get_or_insert_with(Default::default).attack_cost =
+                other_guild.get_or_insert_default().attack_cost =
                     val.into("other group fighting cost")?;
             }
             "othergroupmember" => {
                 let names: Vec<_> = val.as_str().split(',').collect();
-                let og = other_guild.get_or_insert_with(Default::default);
+                let og = other_guild.get_or_insert_default();
                 og.members.resize_with(names.len(), Default::default);
                 for (m, n) in og.members.iter_mut().zip(names) {
                     m.name.set(n);
                 }
             }
             "othergroupdescription" => {
-                let guild = other_guild.get_or_insert_with(Default::default);
+                let guild = other_guild.get_or_insert_default();
                 let (emblem, desc) =
                     val.as_str().split_once('§').unwrap_or(("", val.as_str()));
 
@@ -1471,7 +1435,7 @@ impl GameState {
             }
             "othergroup" => {
                 other_guild
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .update(val.as_str(), server_time)?;
             }
             "reward" => {
@@ -1481,7 +1445,7 @@ impl GameState {
             "gtdailypoints" => {
                 self.hellevator
                     .active
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .guild_points_today = val.into("gtdaily").unwrap_or(0);
             }
             "gtchest" => {
@@ -1496,8 +1460,7 @@ impl GameState {
             }
             "gtraidparticipants" => {
                 let all: Vec<_> = val.as_str().split('/').collect();
-                let hellevator =
-                    self.hellevator.active.get_or_insert_with(Default::default);
+                let hellevator = self.hellevator.active.get_or_insert_default();
 
                 for floor in &mut hellevator.guild_raid_floors {
                     floor.today_assigned.clear();
@@ -1530,8 +1493,7 @@ impl GameState {
             "gtraidparticipantsyesterday" => {
                 let all: Vec<_> = val.as_str().split('/').collect();
 
-                let hellevator =
-                    self.hellevator.active.get_or_insert_with(Default::default);
+                let hellevator = self.hellevator.active.get_or_insert_default();
 
                 for floor in &mut hellevator.guild_raid_floors {
                     floor.yesterday_assigned.clear();
@@ -1562,28 +1524,22 @@ impl GameState {
                 }
             }
             "gtrank" => {
-                self.hellevator
-                    .active
-                    .get_or_insert_with(Default::default)
-                    .guild_rank = val.into("gt rank").unwrap_or(0);
+                self.hellevator.active.get_or_insert_default().guild_rank =
+                    val.into("gt rank").unwrap_or(0);
             }
             "gtrankingmax" => {
                 self.hall_of_fames.hellevator_total =
                     val.into("gt rank max").ok();
             }
             "gtbracketlist" => {
-                self.hellevator
-                    .active
-                    .get_or_insert_with(Default::default)
-                    .brackets =
+                self.hellevator.active.get_or_insert_default().brackets =
                     val.into_list("gtbracketlist").unwrap_or_default();
             }
             "gtraidfights" => {
                 let data: Vec<i64> =
                     val.into_list("gt raids").unwrap_or_default();
 
-                let hellevator =
-                    self.hellevator.active.get_or_insert_with(Default::default);
+                let hellevator = self.hellevator.active.get_or_insert_default();
 
                 hellevator.guild_raid_signup_start = data
                     .cstget(0, "h raid signup start", server_time)?
@@ -1619,8 +1575,7 @@ impl GameState {
                 let data: Vec<i64> =
                     val.into_list("gt m reward").unwrap_or_default();
 
-                let hellevator =
-                    self.hellevator.active.get_or_insert_with(Default::default);
+                let hellevator = self.hellevator.active.get_or_insert_default();
                 hellevator.monster_rewards.clear();
 
                 for chunk in data.chunks_exact(3) {
@@ -1643,25 +1598,21 @@ impl GameState {
                 }
             }
             "gtdailyreward" => {
-                self.hellevator
-                    .active
-                    .get_or_insert_with(Default::default)
-                    .rewards_today = HellevatorDailyReward::parse(
-                    &val.into_list("hdrtd").unwrap_or_default(),
-                );
+                self.hellevator.active.get_or_insert_default().rewards_today =
+                    HellevatorDailyReward::parse(
+                        &val.into_list("hdrtd").unwrap_or_default(),
+                    );
             }
             "gtdailyrewardnext" => {
-                self.hellevator
-                    .active
-                    .get_or_insert_with(Default::default)
-                    .rewards_next = HellevatorDailyReward::parse(
-                    &val.into_list("hdrnd").unwrap_or_default(),
-                );
+                self.hellevator.active.get_or_insert_default().rewards_next =
+                    HellevatorDailyReward::parse(
+                        &val.into_list("hdrnd").unwrap_or_default(),
+                    );
             }
             "gtdailyrewardyesterday" => {
                 self.hellevator
                     .active
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .rewards_yesterday = HellevatorDailyReward::parse(
                     &val.into_list("hdryd").unwrap_or_default(),
                 );
@@ -1719,7 +1670,7 @@ impl GameState {
             "gtmonster" => {
                 self.hellevator
                     .active
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .current_monster = HellevatorMonster::parse(
                     &val.into_list("h monster").unwrap_or_default(),
                 )
@@ -1728,7 +1679,7 @@ impl GameState {
             "gtbonus" => {
                 self.hellevator
                     .active
-                    .get_or_insert_with(Default::default)
+                    .get_or_insert_default()
                     .daily_treat_bonus = val
                     .into_list("gt bonus")
                     .and_then(|a| HellevatorTreatBonus::parse(&a))
@@ -1772,25 +1723,19 @@ impl GameState {
                 let vals: Vec<i64> =
                     val.into_list("pendingrewardressources")?;
 
-                self.mail
-                    .open_claimable
-                    .get_or_insert_with(Default::default)
-                    .resources = vals
-                    .chunks_exact(2)
-                    .flat_map(|chunk| -> Result<Reward, SFError> {
-                        Ok(Reward {
-                            typ: RewardType::parse(chunk.cget(0, "c typ")?),
-                            amount: chunk.csiget(1, "c amount", 1)?,
+                self.mail.open_claimable.get_or_insert_default().resources =
+                    vals.chunks_exact(2)
+                        .flat_map(|chunk| -> Result<Reward, SFError> {
+                            Ok(Reward {
+                                typ: RewardType::parse(chunk.cget(0, "c typ")?),
+                                amount: chunk.csiget(1, "c amount", 1)?,
+                            })
                         })
-                    })
-                    .collect();
+                        .collect();
             }
             "pendingreward" => {
                 let vals: Vec<i64> = val.into_list("pending item")?;
-                self.mail
-                    .open_claimable
-                    .get_or_insert_with(Default::default)
-                    .items = vals
+                self.mail.open_claimable.get_or_insert_default().items = vals
                     .chunks_exact(ITEM_PARSE_LEN)
                     .flat_map(|a|
                             // Might be broken
@@ -1875,7 +1820,7 @@ impl GameState {
             }
             "charactergroup" => {
                 let data: Vec<i64> = val.into_list("c group")?;
-                let guild = self.guild.get_or_insert_with(Default::default);
+                let guild = self.guild.get_or_insert_default();
                 guild.own_treasure_skill =
                     data.csiget(0, "own treasure skill", 0)?;
                 guild.own_instructor_skill =
@@ -1912,7 +1857,7 @@ impl GameState {
                 if toilet_lvl > 0 {
                     self.tavern
                         .toilet
-                        .get_or_insert_with(Default::default)
+                        .get_or_insert_default()
                         .update(&data, server_time)?;
                 }
             }
@@ -1950,9 +1895,7 @@ impl GameState {
                 // 0
                 // 0
                 // 0
-                self.pets
-                    .get_or_insert_with(Default::default)
-                    .next_free_exploration =
+                self.pets.get_or_insert_default().next_free_exploration =
                     data.cstget(20, "pet next free exp", server_time)?;
                 self.dungeons.next_free_fight =
                     data.cstget(21, "dungeon timer", server_time)?;
@@ -2012,16 +1955,10 @@ impl GameState {
                 self.character.armor = data.csiget(23, "total armor", 0)?;
                 self.character.min_damage = data.csiget(24, "min damage", 0)?;
                 self.character.max_damage = data.csiget(25, "max damage", 0)?;
-                self.guild
-                    .get_or_insert_with(Default::default)
-                    .portal
-                    .damage_bonus =
+                self.guild.get_or_insert_default().portal.damage_bonus =
                     data.cimget(26, "portal dmg bonus", |a| a)?;
                 // 4280492 ??
-                self.dungeons
-                    .portal
-                    .get_or_insert_with(Default::default)
-                    .player_hp_bonus =
+                self.dungeons.portal.get_or_insert_default().player_hp_bonus =
                     data.csimget(28, "portal hp bonus", 0, |a| a)?;
                 self.character.mount_end =
                     data.cstget(29, "mount end", server_time)?;
