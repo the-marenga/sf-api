@@ -5,10 +5,10 @@ use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive as _;
-use strum::{EnumCount, EnumIter, IntoEnumIterator};
+use strum::{EnumCount, EnumIter};
 
-use super::{ArrSkip, CCGet, CSTGet, SFError, ServerTime, items::GemType};
-use crate::{PlayerId, gamestate::EnumMapGet, response::ResponseVals};
+use super::{SFError, ServerTime, items::GemType};
+use crate::response::ResponseVals;
 
 /// The information about a characters fortress
 #[derive(Debug, Default, Clone)]
@@ -62,7 +62,7 @@ pub struct Fortress {
     /// but there is the edge case of being the first player on a server to get
     /// a fortress, which I can not even test for, so I just assume this could
     /// be none then.
-    pub attack_target: Option<PlayerId>,
+    pub attack_target: Option<u32>,
     /// The time at which switching is free again
     pub attack_free_reroll: Option<DateTime<Local>>,
     /// The price in silver re-rolling costs
@@ -94,18 +94,6 @@ impl FortressCost {
             silver: data.u64(1)?,
             wood: data.u64(2)?,
             stone: data.u64(3)?,
-        })
-    }
-
-    #[deprecated(note = "use FortressCost::parse with ResponseVals instead")]
-    #[allow(dead_code)]
-    pub(crate) fn parse_slice(data: &[i64]) -> Result<FortressCost, SFError> {
-        Ok(FortressCost {
-            time: Duration::from_secs(data.csiget(0, "fortress time", 0)?),
-            // Guessing here
-            silver: data.csiget(1, "silver cost", u64::MAX)?,
-            wood: data.csiget(2, "wood cost", u64::MAX)?,
-            stone: data.csiget(3, "stone cost", u64::MAX)?,
         })
     }
 }
@@ -316,7 +304,7 @@ impl Fortress {
     pub fn in_use(&self, building_type: FortressBuildingType) -> bool {
         // Check if associated units are training
         if let Some(unit_type) = building_type.unit_produced()
-            && let Some(finish) = self.units.get(unit_type).training.finish
+            && let Some(finish) = self.units[unit_type].training.finish
             && finish > Local::now()
         {
             return true;
@@ -338,9 +326,9 @@ impl Fortress {
         building_type: FortressBuildingType,
         available_silver: u64,
     ) -> bool {
-        let building_info = self.buildings.get(building_type);
+        let building_info = &self.buildings[building_type];
         let fortress_level =
-            self.buildings.get(FortressBuildingType::Fortress).level;
+            self.buildings[FortressBuildingType::Fortress].level;
         let smithy_required_buildings = [
             FortressBuildingType::ArcheryGuild,
             FortressBuildingType::Barracks,
@@ -357,11 +345,8 @@ impl Fortress {
 
         // Smithy can only be built if these buildings exist
         let can_smithy_be_built = smithy_required_buildings
-            .map(|required_building| {
-                self.buildings.get(required_building).level
-            })
-            .iter()
-            .all(|level| *level > 0);
+            .into_iter()
+            .all(|b| self.buildings[b].level > 0);
 
         if matches!(building_type, FortressBuildingType::Smithy)
             && !can_smithy_be_built
@@ -382,8 +367,8 @@ impl Fortress {
             // Check that no construction is in progress
             && self.building_upgrade.target.is_none()
             // Check if there are enough resources
-            && upgrade_cost.stone <= self.resources.get(FortressResourceType::Stone).current
-            && upgrade_cost.wood <= self.resources.get(FortressResourceType::Wood).current
+            && upgrade_cost.stone <= self.resources[FortressResourceType::Stone].current
+            && upgrade_cost.wood <= self.resources[FortressResourceType::Wood].current
             && upgrade_cost.silver <= available_silver
         }
     }
@@ -455,11 +440,10 @@ impl Fortress {
         data: &ResponseVals<52>,
     ) -> Result<(), SFError> {
         let mut chunks = data.chunks_exact::<4>();
-        for typ in FortressBuildingType::iter() {
-            if let Some(cost_vals) = chunks.next() {
-                self.buildings.get_mut(typ).upgrade_cost =
-                    FortressCost::parse(&cost_vals)?;
-            }
+        for (building, cost_vals) in
+            self.buildings.values_mut().zip(&mut chunks)
+        {
+            building.upgrade_cost = FortressCost::parse(&cost_vals)?;
         }
         if let Some(gem_cost_vals) = chunks.next() {
             self.gem_search.cost = FortressCost::parse(&gem_cost_vals)?;
