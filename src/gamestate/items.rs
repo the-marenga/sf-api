@@ -719,15 +719,14 @@ impl Item {
             return Ok(None);
         };
 
-        let enchantment = FromPrimitive::from_u8(data.u8_or(2, 0));
+        let enchantment = data.enum_opt(2);
         let gem_slot_val = data.i64_or(1, 0);
         let gem_pwr = data.u32_or(16, 0);
 
         let gem_slot = GemSlot::parse(gem_slot_val, i64::from(gem_pwr));
 
         let class = if typ.is_class_item() {
-            let class_raw = (data.u32_or(3, 0) & 0xFFFF) / 1000;
-            FromPrimitive::from_u32(class_raw)
+            data.enum_map(3, |raw| (raw & 0xFFFF) / 1000)
         } else {
             None
         };

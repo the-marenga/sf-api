@@ -10,6 +10,7 @@ use std::{
 
 use chrono::NaiveDateTime;
 use log::{debug, error, trace, warn};
+use num_traits::FromPrimitive;
 
 use crate::error::SFError;
 
@@ -325,6 +326,64 @@ impl<'a> ResponseVal<'a> {
         ResponseVals::from_raw(self.value)
     }
 
+    /// Splits this response value by `'/'` into consecutive non-overlapping chunks of size `CHUNK`.
+    ///
+    /// # Errors
+    /// Returns [`SFError::ParsingErrorV2`] if the response is empty.
+    #[track_caller]
+    pub fn parse_chunks<const CHUNK: usize>(
+        &self,
+    ) -> Result<impl Iterator<Item = ResponseVals<'a, CHUNK>>, SFError> {
+        self.parse_chunks_delim::<CHUNK>('/')
+    }
+
+    /// Splits this response value by `delim` into consecutive non-overlapping chunks of size `CHUNK`.
+    ///
+    /// # Errors
+    /// Returns [`SFError::ParsingErrorV2`] if the response is empty.
+    ///
+    /// # Panics
+    /// Panics if `CHUNK == 0`.
+    #[track_caller]
+    pub fn parse_chunks_delim<const CHUNK: usize>(
+        &self,
+        delim: char,
+    ) -> Result<impl Iterator<Item = ResponseVals<'a, CHUNK>>, SFError> {
+        assert!(CHUNK > 0, "CHUNK size must be greater than 0");
+        let trimmed = self
+            .value
+            .trim_matches(|a| [delim, ' ', '\n', '\r'].contains(&a));
+        if trimmed.is_empty() {
+            let caller = std::panic::Location::caller();
+            return Err(SFError::ParsingErrorV2(format!(
+                "Server response value is empty at {}:{}:{}",
+                caller.file(),
+                caller.line(),
+                caller.column()
+            )));
+        }
+
+        let vals: Vec<&'a str> = trimmed.split(delim).map(str::trim).collect();
+        if !vals.len().is_multiple_of(CHUNK) {
+            let caller = std::panic::Location::caller();
+            warn!(
+                "Server response contains {} leftover values when chunked by {CHUNK} at {}:{}:{}",
+                vals.len() % CHUNK,
+                caller.file(),
+                caller.line(),
+                caller.column()
+            );
+        }
+
+        Ok(vals
+            .chunks_exact(CHUNK)
+            .map(|chunk| ResponseVals {
+                values: chunk.into(),
+            })
+            .collect::<Vec<_>>()
+            .into_iter())
+    }
+
     /// Parses the response into [`ResponseVals`].
     ///
     /// If `expected_length > 0`, verifies that at least `expected_length` values
@@ -338,9 +397,56 @@ impl<'a> ResponseVal<'a> {
         self,
         expected_length: usize,
     ) -> Result<ResponseVals<'a>, SFError> {
+        self.values_delim_runtime(expected_length, '/')
+    }
+
+    /// Parses the response into a compile-time bounded [`ResponseVals<'a, N>`] split by `/`.
+    ///
+    /// # Errors
+    /// Returns [`SFError::ParsingErrorV2`] if the response is empty or has fewer than `N` values.
+    #[track_caller]
+    pub fn values_fixed<const N: usize>(
+        self,
+    ) -> Result<ResponseVals<'a, N>, SFError> {
+        self.values_delim::<N>('/')
+    }
+
+    /// Parses the response into a compile-time bounded [`ResponseVals<'a, N>`] split by `delim`.
+    ///
+    /// # Errors
+    /// Returns [`SFError::ParsingErrorV2`] if the response is empty or has fewer than `N` values.
+    #[track_caller]
+    pub fn values_by<const N: usize>(
+        self,
+        delim: char,
+    ) -> Result<ResponseVals<'a, N>, SFError> {
+        self.values_delim::<N>(delim)
+    }
+
+    /// Parses the response into a compile-time bounded [`ResponseVals<'a, N>`] split by `delim`.
+    ///
+    /// # Errors
+    /// Returns [`SFError::ParsingErrorV2`] if the response is empty or has fewer than `N` values.
+    #[track_caller]
+    pub fn values_delim<const N: usize>(
+        self,
+        delim: char,
+    ) -> Result<ResponseVals<'a, N>, SFError> {
+        let unbounded = self.values_delim_runtime(N, delim)?;
+        Ok(ResponseVals {
+            values: unbounded.values,
+        })
+    }
+
+    #[track_caller]
+    fn values_delim_runtime(
+        self,
+        expected_length: usize,
+        delim: char,
+    ) -> Result<ResponseVals<'a>, SFError> {
         let trimmed = self
             .value
-            .trim_matches(|a| ['/', ' ', '\n', '\r'].contains(&a));
+            .trim_matches(|a| [delim, ' ', '\n', '\r'].contains(&a));
         if trimmed.is_empty() {
             let caller = std::panic::Location::caller();
             return Err(SFError::ParsingErrorV2(format!(
@@ -351,7 +457,7 @@ impl<'a> ResponseVal<'a> {
             )));
         }
 
-        let mut vals: Vec<_> = trimmed.split('/').map(str::trim).collect();
+        let mut vals: Vec<_> = trimmed.split(delim).map(str::trim).collect();
 
         if expected_length != UNBOUNDED {
             if vals.len() > expected_length {
@@ -380,23 +486,6 @@ impl<'a> ResponseVal<'a> {
 
         Ok(ResponseVals {
             values: vals.into_boxed_slice(),
-        })
-    }
-
-    /// Parses the response into a compile-time bounded [`ResponseVals<'a, N>`].
-    ///
-    /// If `N > 0`, verifies that at least `N` values exist, warns and truncates
-    /// any unexpected trailing values.
-    ///
-    /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if the response is empty or has fewer than `N` values.
-    #[track_caller]
-    pub fn values_fixed<const N: usize>(
-        self,
-    ) -> Result<ResponseVals<'a, N>, SFError> {
-        let unbounded = self.values(N)?;
-        Ok(ResponseVals {
-            values: unbounded.values,
         })
     }
 }
@@ -778,6 +867,54 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         })
     }
 
+    /// Parses an optional enum at `pos` using [`FromPrimitive`].
+    ///
+    /// Returns `None` if missing, unparseable, or not a recognized variant.
+    #[must_use]
+    pub fn enum_opt<T: FromPrimitive>(&self, pos: usize) -> Option<T> {
+        let val = self.i64(pos).ok()?;
+        T::from_i64(val).or_else(|| T::from_u64(val.cast_unsigned()))
+    }
+
+    /// Parses an enum at `pos` using [`FromPrimitive`], returning `default` if missing or invalid.
+    #[must_use]
+    pub fn enum_or<T: FromPrimitive>(&self, pos: usize, default: T) -> T {
+        self.enum_opt(pos).unwrap_or(default)
+    }
+
+    /// Parses an enum at `pos` using [`FromPrimitive`] after transforming the raw integer with `f`.
+    pub fn enum_map<T: FromPrimitive, F: FnOnce(u32) -> u32>(
+        &self,
+        pos: usize,
+        f: F,
+    ) -> Option<T> {
+        let raw = self.u32_or(pos, 0);
+        T::from_u32(f(raw))
+    }
+
+    /// Parses a required enum at `pos` using [`FromPrimitive`].
+    ///
+    /// # Errors
+    /// Returns [`SFError::ParsingErrorV2`] if missing, unparseable, or not a recognized variant.
+    #[track_caller]
+    pub fn parse_enum<T: FromPrimitive>(&self, pos: usize) -> Result<T, SFError> {
+        let raw = self.i64(pos)?;
+        T::from_i64(raw).or_else(|| T::from_u64(raw.cast_unsigned())).ok_or_else(|| {
+            let caller = std::panic::Location::caller();
+            warn!(
+                "Unknown enum variant {raw} for {} at {}:{}:{}",
+                std::any::type_name::<T>(),
+                caller.file(),
+                caller.line(),
+                caller.column()
+            );
+            SFError::ParsingErrorV2(format!(
+                "Unknown enum variant {raw} for {}",
+                std::any::type_name::<T>()
+            ))
+        })
+    }
+
     /// Returns an iterator yielding consecutive non-overlapping chunks of size `CHUNK`.
     ///
     /// # Panics
@@ -920,18 +1057,6 @@ impl<'a> From<Vec<&'a str>> for ResponseVals<'a, UNBOUNDED> {
     }
 }
 
-impl<'a> From<ResponseVal<'a>> for ResponseVals<'a, UNBOUNDED> {
-    fn from(val: ResponseVal<'a>) -> Self {
-        Self::from_raw(val.as_str())
-    }
-}
-
-impl<'a> From<&ResponseVal<'a>> for ResponseVals<'a, UNBOUNDED> {
-    fn from(val: &ResponseVal<'a>) -> Self {
-        Self::from_raw(val.as_str())
-    }
-}
-
 impl<'a, const N: usize> TryFrom<&'a str> for ResponseVals<'a, N> {
     type Error = SFError;
 
@@ -950,6 +1075,24 @@ impl<'a, const N: usize> TryFrom<&ResponseVals<'a, N>> for ResponseVals<'a, N> {
 
     fn try_from(vals: &ResponseVals<'a, N>) -> Result<Self, Self::Error> {
         Ok(vals.clone())
+    }
+}
+
+impl<'a, const N: usize> TryFrom<ResponseVal<'a>> for ResponseVals<'a, N> {
+    type Error = SFError;
+
+    #[track_caller]
+    fn try_from(val: ResponseVal<'a>) -> Result<Self, Self::Error> {
+        val.values_fixed()
+    }
+}
+
+impl<'a, const N: usize> TryFrom<&ResponseVal<'a>> for ResponseVals<'a, N> {
+    type Error = SFError;
+
+    #[track_caller]
+    fn try_from(val: &ResponseVal<'a>) -> Result<Self, Self::Error> {
+        (*val).values_fixed()
     }
 }
 
@@ -1052,5 +1195,63 @@ mod tests {
         let err = empty_val.values(0).unwrap_err();
         assert!(matches!(err, SFError::ParsingErrorV2(_)));
         assert!(err.to_string().contains("is empty"));
+    }
+
+    #[derive(Debug, PartialEq, Eq, num_derive::FromPrimitive)]
+    enum TestEnum {
+        First = 1,
+        Second = 2,
+    }
+
+    #[test]
+    fn test_parse_chunks_and_delimiters() {
+        let rval = ResponseVal {
+            value: "1/2/3/4/5/6",
+            sub_key: "",
+        };
+        let chunks: Vec<ResponseVals<2>> = rval.parse_chunks().unwrap().collect();
+        assert_eq!(chunks.len(), 3);
+        assert_eq!((chunks[0].u32(0).unwrap(), chunks[0].u32(1).unwrap()), (1, 2));
+        assert_eq!((chunks[1].u32(0).unwrap(), chunks[1].u32(1).unwrap()), (3, 4));
+        assert_eq!((chunks[2].u32(0).unwrap(), chunks[2].u32(1).unwrap()), (5, 6));
+
+        // Test custom delimiter (comma)
+        let comma_val = ResponseVal {
+            value: "10,20;30,40",
+            sub_key: "",
+        };
+        let semi_chunks: Vec<ResponseVals<1>> =
+            comma_val.parse_chunks_delim(';').unwrap().collect();
+        assert_eq!(semi_chunks.len(), 2);
+        assert_eq!(semi_chunks[0].str(0).unwrap(), "10,20");
+
+        let comma_fixed: ResponseVals<2> = comma_val.values_delim(';').unwrap();
+        assert_eq!(comma_fixed.str(0).unwrap(), "10,20");
+        assert_eq!(comma_fixed.str(1).unwrap(), "30,40");
+
+        // Test TryFrom for ResponseVal
+        let fixed: Result<ResponseVals<6>, _> = rval.try_into();
+        assert!(fixed.is_ok());
+    }
+
+    #[test]
+    fn test_enum_helpers() {
+        let raw = "1/2/99/invalid";
+        let vals: ResponseVals<4> = raw.try_into().unwrap();
+
+        assert_eq!(vals.enum_opt::<TestEnum>(0), Some(TestEnum::First));
+        assert_eq!(vals.enum_opt::<TestEnum>(1), Some(TestEnum::Second));
+        assert_eq!(vals.enum_opt::<TestEnum>(2), None);
+        assert_eq!(vals.enum_opt::<TestEnum>(3), None);
+
+        assert_eq!(vals.enum_or(2, TestEnum::First), TestEnum::First);
+
+        assert_eq!(vals.parse_enum::<TestEnum>(0).unwrap(), TestEnum::First);
+        assert!(vals.parse_enum::<TestEnum>(2).is_err());
+
+        assert_eq!(
+            vals.enum_map::<TestEnum, _>(0, |x| x + 1),
+            Some(TestEnum::Second)
+        );
     }
 }
