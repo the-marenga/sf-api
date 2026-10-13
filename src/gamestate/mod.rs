@@ -487,8 +487,7 @@ impl GameState {
             "sfhomeid" => {}
             "backpack" => {
                 self.character.inventory.backpack = val
-                    .values(0)?
-                    .parse_chunks::<ITEM_PARSE_LEN>()
+                    .parse_chunks::<ITEM_PARSE_LEN>()?
                     .map(|chunk| Item::parse(&chunk, server_time))
                     .collect::<Result<Vec<_>, _>>()?;
             }
