@@ -661,10 +661,8 @@ impl GameState {
             }
             "fortressprice" => {
                 self.fortress
-                    .get_or_insert_with(Default::default)
-                    .update_prices(
-                        &val.into_list("fortress upgrade prices")?,
-                    )?;
+                    .get_or_insert_default()
+                    .update_prices(&val.values_fixed()?)?;
             }
             "Arenarank" => {
                 if let Some(uw) = self.underworld.as_mut() {
@@ -1074,7 +1072,7 @@ impl GameState {
                 self.fortress
                     .get_or_insert_with(Default::default)
                     .hall_of_knights_upgrade_price = FortressCost::parse(
-                    &val.into_list("hall of knights prices")?,
+                    &val.values_fixed()?,
                 )?;
             }
             "goldperhournextlevel" => {
