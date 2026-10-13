@@ -2158,13 +2158,16 @@ impl GameState {
             x if x.starts_with("fightequipment") => {
                 // Equipment data for each fighter in multi-fight responses.
                 // Format: item_count / 19-value items (different encoding
-                // from regular Item — first value is model_id, not type)
+                // from regular Item — first value is model_id, not type).
+                // Always 20 values, one item, in the captured responses
             }
             x if x.starts_with("externaltoolequipment") => {
-                // External tool/mount equipment data. Format unknown.
+                // External tool/mount equipment data. 8 values, the first
+                // ones look like min/max damage pairs, e.g.
+                // 647/865/0/0/1206/1260/0/0
             }
             x if x.starts_with("fightdecoration") => {
-                // Cosmetic decoration data. Not currently parsed.
+                // Cosmetic decoration data: always `0/0/0/0` so far
             }
             x => {
                 warn!("Update ignored {x} -> {val:?}");
