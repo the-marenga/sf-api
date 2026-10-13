@@ -14,6 +14,9 @@ pub(crate) const TOWER_RESPONSE_LEN: usize = 476;
 /// The size of one `owntower` block: a companion, its underworld unit and the
 /// value after it.
 pub(crate) const TOWER_BLOCK_LEN: usize = 148;
+/// The offset of the companion level at the start of its `owntower` block, and
+/// so also of the underworld tail after the last block.
+pub(crate) const TOWER_BLOCK_OFFSET: usize = 3;
 
 /// The information about a characters underworld
 #[derive(Debug, Default, Clone)]
@@ -116,8 +119,8 @@ impl Underworld {
         Ok(())
     }
 
-    /// Updates the underworld state from the `owntower` (`towerSave`) response.
-    /// The companion and unknown values in it are handled elsewhere.
+    /// Updates the underworld state from the tail of the `owntower`
+    /// (`towerSave`) response, everything after the companion blocks.
     pub(crate) fn update(
         &mut self,
         data: &Vals<'_>,
@@ -126,39 +129,36 @@ impl Underworld {
         use UnderworldResourceType as Resource;
 
         for (pos, building) in self.buildings.values_mut().enumerate() {
-            building.level = data.u8(448 + pos)?;
+            building.level = data.u8(1 + pos)?;
         }
 
-        for (i, unit) in self.units.values_mut().enumerate() {
-            // The unit sits at the end of its block
-            let start = 146 + i * TOWER_BLOCK_LEN;
-            unit.upgraded_amount = data.u16(start)?;
-            unit.count = data.u16(start + 1)?;
-            unit.total_attributes = data.u32(start + 2)?;
-            unit.level = data.u16(start + 3)?;
-        }
+        self.production[Resource::Souls].last_collectable = data.u64(12)?;
+        self.production[Resource::Souls].limit = data.u64(13)?;
+        self.souls_limit = data.u64(14)?;
+        self.production[Resource::Souls].per_hour = data.u64(16)?;
 
-        self.production[Resource::Souls].last_collectable = data.u64(459)?;
-        self.production[Resource::Souls].limit = data.u64(460)?;
-        self.souls_limit = data.u64(461)?;
-        self.production[Resource::Souls].per_hour = data.u64(463)?;
-
-        self.production[Resource::Silver].last_collectable = data.u64(464)?;
-        self.production[Resource::Silver].limit = data.u64(465)?;
-        self.production[Resource::Silver].per_hour = data.u64(466)?;
+        self.production[Resource::Silver].last_collectable = data.u64(17)?;
+        self.production[Resource::Silver].limit = data.u64(18)?;
+        self.production[Resource::Silver].per_hour = data.u64(19)?;
 
         self.production[Resource::ThirstForAdventure].last_collectable =
-            data.u64(473)?;
-        self.production[Resource::ThirstForAdventure].limit = data.u64(474)?;
+            data.u64(26)?;
+        self.production[Resource::ThirstForAdventure].limit = data.u64(27)?;
         self.production[Resource::ThirstForAdventure].per_hour =
-            data.u64(475)?;
+            data.u64(28)?;
 
-        self.last_collectable_update = data.server_time(467, server_time)?;
-        self.upgrade_building = data.enum_map(468, |raw| raw.wrapping_sub(1));
-        self.upgrade_finish = data.server_time(469, server_time)?;
-        self.upgrade_begin = data.server_time(470, server_time)?;
-        self.lure_level = data.u16(471)?;
-        self.lured_today = data.u16(472)?;
+        self.last_collectable_update = data.server_time(20, server_time)?;
+        self.upgrade_building = data.enum_map(21, |raw| raw.wrapping_sub(1));
+        self.upgrade_finish = data.server_time(22, server_time)?;
+        self.upgrade_begin = data.server_time(23, server_time)?;
+        self.lure_level = data.u16(24)?;
+        self.lured_today = data.u16(25)?;
+
+        // 0 in every captured response: before the buildings and around the
+        // soul production
+        data.ignore(0, "always 0");
+        data.ignore(11, "always 0");
+        data.ignore(15, "always 0");
         Ok(())
     }
 }
@@ -257,6 +257,17 @@ pub struct UnderworldUnit {
     pub upgrade_cost: UnderworldCost,
     /// The level this unit will have, when the upgrade has been bought
     pub upgrade_next_lvl: u16,
+}
+
+impl UnderworldUnit {
+    /// Updates this unit from its 4-value slice of an `owntower` block.
+    pub(crate) fn update(&mut self, data: &Vals<'_>) -> Result<()> {
+        self.upgraded_amount = data.u16(0)?;
+        self.count = data.u16(1)?;
+        self.total_attributes = data.u32(2)?;
+        self.level = data.u16(3)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
