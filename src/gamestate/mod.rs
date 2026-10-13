@@ -34,7 +34,7 @@ use crate::{
         tavern::*, underworld::*, unlockables::*,
     },
     misc::*,
-    response::{Response, ResponseVal},
+    response::{Response, ResponseVal, Vals},
 };
 
 /// Represent the full state of the game at some point in time
@@ -409,6 +409,43 @@ impl GameState {
         Ok(())
     }
 
+    /// Updates the companion and underworld state from an `owntower`
+    /// (`towerSave`) response: three companion blocks then the underworld.
+    pub(crate) fn update_tower(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) -> Result<()> {
+        let companions = self.dungeons.companions.get_or_insert_default();
+        for (i, class) in CompanionClass::iter().enumerate() {
+            // The companion record runs from its level at 3 up to the
+            // underworld unit, which `Underworld::update` reads
+            let base = i * TOWER_BLOCK_LEN;
+            companions
+                .get_mut(class)
+                .update(&data.window(3 + base..TOWER_UNIT_OFFSET + base))?;
+        }
+
+        // Why would they include this in the tower response???
+        self.underworld
+            .get_or_insert_default()
+            .update(data, server_time)?;
+
+        // The own player id, a 0 and a constant 100
+        data.ignore(0, "own player id");
+        data.ignore(1, "always 0");
+        data.ignore(2, "always 100");
+        // An unknown value in front of companion 1 and 2; 10/13 and 2
+        data.ignore(150, "unknown per-block value");
+        data.ignore(298, "unknown per-block value");
+        // The 0 gaps in the underworld tail
+        data.ignore(446, "always 0");
+        data.ignore(447, "always 0");
+        data.ignore(458, "always 0");
+        data.ignore(462, "always 0");
+        Ok(())
+    }
+
     /// Returns the time of the server. This is just an 8 byte copy behind the
     /// scenes, so feel free to NOT cache/optimize calling this in any way
     #[must_use]
@@ -564,26 +601,10 @@ impl GameState {
                 self.character.mannequin =
                     Some(Equipment::parse(&data, server_time)?);
             }
-            "owntower" => {
-                let data = val.into_list("tower")?;
-                let companions =
-                    self.dungeons.companions.get_or_insert_default();
-
-                for (i, class) in CompanionClass::iter().enumerate() {
-                    let comp_start = 3 + i * 148;
-                    companions.get_mut(class).level =
-                        data.cget(comp_start, "comp level")?;
-                    update_enum_map(
-                        &mut companions.get_mut(class).attributes,
-                        data.skip(comp_start + 4, "comp attrs")?,
-                    );
-                }
-                // Why would they include this in the tower response???
-                self.underworld.get_or_insert_default().update(
-                    &val.values::<TOWER_RESPONSE_LEN>()?,
-                    server_time,
-                )?;
-            }
+            "owntower" => self.update_tower(
+                &val.values::<TOWER_RESPONSE_LEN>()?,
+                server_time,
+            )?,
             "owngrouprank" => {
                 self.guild.get_or_insert_default().rank =
                     val.into("group rank")?;
@@ -2288,4 +2309,84 @@ pub struct NormalCost {
     pub silver: u64,
     /// The amount of mushrooms something costs
     pub mushrooms: u16,
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+
+    /// Asserts that every value of `data` was read or explicitly ignored.
+    fn assert_all_read(data: &Vals<'_>) {
+        let unread = data.unaccessed_indices();
+        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
+    }
+
+    /// The whole `owntower` response: companions, underworld and ignored.
+    #[test]
+    fn test_update_tower() {
+        // From `cache/marenga.login`, `owntower.towerSave`.
+        let raw =
+            "446275/0/100/360/1/0/0/4147/2539/2422/3743/2900/7153/2622/2391/\
+             6428/4079/0/0/0/0/0/17534/481/951/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+             0/0/0/0/0/0/0/0/0/0/416/5/56614/600/10/360/2/0/0/2422/2539/4147/\
+             3743/2900/508/558/9704/5366/2203/0/0/0/0/0/4235/1244/2734/0/0/0/\
+             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/358/4/51450/600/2/\
+             360/3/0/0/2422/4147/2539/3743/2900/1003/8878/910/7251/4199/0/0/0/\
+             0/0/7117/582/1154/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+             0/0/368/1/106984/600/0/0/15/15/29/15/15/15/15/15/15/15/0/1188000/\
+             1188000/162518400/0/49500/1439888618/1460585058/25182501/\
+             1786541817/0/0/0/504/0/2000/2000/80";
+        let data = Vals::from(raw);
+        assert_eq!(data.len(), TOWER_RESPONSE_LEN);
+
+        let mut state = GameState::default();
+        state.update_tower(&data, ServerTime::default()).unwrap();
+        assert_all_read(&data);
+
+        let companions = state.dungeons.companions.as_ref().unwrap();
+        let warrior = &companions[CompanionClass::Warrior];
+        assert_eq!(warrior.level, 360);
+        assert_eq!(warrior.attributes[AttributeType::Strength], 4147);
+        assert_eq!(warrior.attributes[AttributeType::Luck], 2900);
+
+        let scout = &companions[CompanionClass::Scout];
+        assert_eq!(scout.attributes[AttributeType::Strength], 2422);
+        assert_eq!(scout.attributes[AttributeType::Intelligence], 2539);
+
+        let uw = state.underworld.as_ref().unwrap();
+        assert_eq!(
+            uw.buildings[UnderworldBuildingType::HeartOfDarkness].level,
+            15
+        );
+        assert_eq!(uw.buildings[UnderworldBuildingType::GoldPit].level, 29);
+
+        let goblin = &uw.units[UnderworldUnitType::Goblin];
+        assert_eq!(goblin.upgraded_amount, 416);
+        assert_eq!(goblin.count, 5);
+        assert_eq!(goblin.total_attributes, 56_614);
+        assert_eq!(goblin.level, 600);
+
+        assert_eq!(uw.souls_limit, 162_518_400);
+        assert_eq!(
+            uw.production[UnderworldResourceType::Souls].per_hour,
+            49_500
+        );
+        assert_eq!(uw.lure_level, 504);
+        assert_eq!(uw.lured_today, 0);
+
+        // No upgrade is running in this capture
+        assert_eq!(uw.upgrade_building, None);
+        assert_eq!(uw.upgrade_finish, None);
+        assert!(uw.last_collectable_update.is_some());
+    }
 }
