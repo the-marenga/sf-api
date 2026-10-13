@@ -14,7 +14,7 @@ use super::{
 use crate::{
     command::{AttributeType, ShopType},
     gamestate::{CCGet, CGet, ShopPosition, dungeons::CompanionClass},
-    response::ResponseVals,
+    response::{Vals, ValueArray},
 };
 
 /// The basic inventory, that every player has
@@ -316,7 +316,7 @@ impl Equipment {
 
     /// Parses equipment from a compile-time fixed 190-element response chunk.
     pub(crate) fn parse(
-        data: &ResponseVals<EQUIPMENT_PARSE_LEN>,
+        data: &ValueArray<EQUIPMENT_PARSE_LEN>,
         server_time: ServerTime,
     ) -> Result<Equipment, SFError> {
         let mut res = Equipment::default();
@@ -696,7 +696,7 @@ impl Item {
     /// Parses an item from a compile-time fixed 19-element response chunk.
     #[allow(clippy::cast_possible_truncation)]
     pub(crate) fn parse(
-        data: &ResponseVals<ITEM_PARSE_LEN>,
+        data: &ValueArray<ITEM_PARSE_LEN>,
         server_time: ServerTime,
     ) -> Result<Option<Self>, SFError> {
         let Some(typ) = ItemType::parse(data, server_time)? else {
@@ -825,7 +825,7 @@ impl Item {
     }
 
     /// Parses an item from an i64 slice.
-    #[deprecated(note = "use Item::parse with ResponseVals instead")]
+    #[deprecated(note = "use Item::parse with ValueArray instead")]
     #[allow(clippy::too_many_lines)]
     pub(crate) fn parse_slice(
         data: &[i64],
@@ -1195,7 +1195,7 @@ impl ItemType {
     }
 
     pub(crate) fn parse(
-        data: &ResponseVals<ITEM_PARSE_LEN>,
+        data: &ValueArray<ITEM_PARSE_LEN>,
         _server_time: ServerTime,
     ) -> Result<Option<Self>, SFError> {
         let raw_typ = data.u8_or(0, 255);
@@ -1292,7 +1292,7 @@ impl ItemType {
         }))
     }
 
-    #[deprecated(note = "use ItemType::parse with ResponseVals instead")]
+    #[deprecated(note = "use ItemType::parse with ValueArray instead")]
     pub(crate) fn parse_slice(
         data: &[i64],
         _server_time: ServerTime,
@@ -1701,7 +1701,7 @@ mod tests {
     #[test]
     fn test_equipment_parse() {
         let raw = ["0"; EQUIPMENT_PARSE_LEN];
-        let vals = ResponseVals::from_array(raw);
+        let vals = ValueArray::from_array(raw);
         let equipment = Equipment::parse(&vals, ServerTime::default()).unwrap();
         assert!(equipment.0.values().all(|item| item.is_none()));
     }

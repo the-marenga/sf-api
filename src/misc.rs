@@ -34,7 +34,7 @@ pub fn sha1_hash(val: &str) -> String {
 /// for stuff, that should not crash everything, when there is a weird value and
 /// the silent failure of `as T`, or `unwrap_or_default()` would yield worse
 /// results and/or no warning
-#[deprecated(note = "use ResponseVals instead")]
+#[deprecated(note = "use ValueArray instead")]
 #[inline]
 pub(crate) fn soft_into<B: Display + Copy, T: TryFrom<B>>(
     val: B,
@@ -49,7 +49,7 @@ pub(crate) fn soft_into<B: Display + Copy, T: TryFrom<B>>(
 
 /// Tries to convert val to T. If that fails a warning is emitted and none is
 /// returned
-#[deprecated(note = "use ResponseVals instead")]
+#[deprecated(note = "use ValueArray instead")]
 #[inline]
 pub(crate) fn warning_try_into<B: Display + Copy, T: TryFrom<B>>(
     val: B,
@@ -63,7 +63,7 @@ pub(crate) fn warning_try_into<B: Display + Copy, T: TryFrom<B>>(
 
 /// Converts the value using the function. If that fails, a warning is emitted
 /// and None is returned
-#[deprecated(note = "use ResponseVals instead")]
+#[deprecated(note = "use ValueArray instead")]
 #[inline]
 pub(crate) fn warning_parse<T, F, V: Display + Copy>(
     val: V,
@@ -79,7 +79,7 @@ where
     })
 }
 
-#[deprecated(note = "use ResponseVals instead")]
+#[deprecated(note = "use ValueArray instead")]
 #[inline]
 pub(crate) fn warning_from_str<T: FromStr>(val: &str, name: &str) -> Option<T> {
     val.parse().ok().or_else(|| {
@@ -147,23 +147,6 @@ pub fn to_sf_string(val: &str) -> String {
     new
 }
 
-#[deprecated(note = "use ResponseVals instead")]
-pub(crate) fn parse_vec<B: Display + Copy + std::fmt::Debug, T, F>(
-    data: &[B],
-    name: &'static str,
-    func: F,
-) -> Result<Vec<T>, SFError>
-where
-    F: Fn(B) -> Option<T>,
-{
-    data.iter()
-        .map(|a| {
-            func(*a)
-                .ok_or_else(|| SFError::ParsingError(name, format!("{data:?}")))
-        })
-        .collect()
-}
-
 fn raw_cget<T: Copy + std::fmt::Debug>(
     val: &[T],
     pos: usize,
@@ -178,7 +161,7 @@ fn raw_cget<T: Copy + std::fmt::Debug>(
         })
 }
 
-#[deprecated(note = "use ResponseVals instead")]
+#[deprecated(note = "use ValueArray instead")]
 pub(crate) trait CGet<T: Copy + std::fmt::Debug> {
     fn cget(&self, pos: usize, name: &'static str) -> Result<T, SFError>;
 }
@@ -190,7 +173,7 @@ impl<T: Copy + std::fmt::Debug + Display> CGet<T> for [T] {
     }
 }
 
-#[deprecated(note = "use ResponseVals instead")]
+#[deprecated(note = "use ValueArray instead")]
 #[allow(unused)]
 pub(crate) trait CCGet<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> {
     fn csiget(
@@ -272,27 +255,13 @@ impl<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> CCGet<T, I> for [T] {
     }
 }
 
-#[deprecated(note = "use ResponseVals instead")]
+#[deprecated(note = "use ValueArray instead")]
 pub(crate) trait CSGet<T: FromStr> {
-    fn cfsget(
-        &self,
-        pos: usize,
-        name: &'static str,
-    ) -> Result<Option<T>, SFError>;
     fn cfsuget(&self, pos: usize, name: &'static str) -> Result<T, SFError>;
 }
 
 #[allow(deprecated)]
 impl<T: FromStr> CSGet<T> for [&str] {
-    fn cfsget(
-        &self,
-        pos: usize,
-        name: &'static str,
-    ) -> Result<Option<T>, SFError> {
-        let raw = raw_cget(self, pos, name)?;
-        Ok(warning_from_str(raw, name))
-    }
-
     fn cfsuget(&self, pos: usize, name: &'static str) -> Result<T, SFError> {
         let raw = raw_cget(self, pos, name)?;
         let Some(val) = warning_from_str(raw, name) else {
@@ -302,7 +271,7 @@ impl<T: FromStr> CSGet<T> for [&str] {
     }
 }
 
-#[deprecated(note = "use ResponseVals instead")]
+#[deprecated(note = "use ValueArray instead")]
 #[allow(deprecated)]
 pub(crate) fn update_enum_map<B: Default + TryFrom<i64>, A: enum_map::Enum>(
     map: &mut enum_map::EnumMap<A, B>,
@@ -335,7 +304,7 @@ impl<K: enum_map::Enum, V> EnumMapGet<K, V> for EnumMap<K, V> {
     }
 }
 
-#[deprecated(note = "use ResponseVals instead")]
+#[deprecated(note = "use ValueArray instead")]
 pub(crate) trait ArrSkip<T: Debug> {
     /// Basically does the equivalent of [pos..], but bounds checked with
     /// correct errors
@@ -356,7 +325,7 @@ impl<T: Debug> ArrSkip<T> for [T] {
     }
 }
 
-#[deprecated(note = "use ResponseVals instead")]
+#[deprecated(note = "use ValueArray instead")]
 pub(crate) trait CFPGet<T: Into<i64> + Copy + std::fmt::Debug, R: FromPrimitive>
 {
     fn cfpget(
@@ -408,7 +377,7 @@ impl<T: Into<i64> + Copy + std::fmt::Debug, R: FromPrimitive> CFPGet<T, R>
     }
 }
 
-#[deprecated(note = "use ResponseVals instead")]
+#[deprecated(note = "use ValueArray instead")]
 pub(crate) trait CSTGet<T: Copy + Debug + Into<i64>> {
     fn cstget(
         &self,

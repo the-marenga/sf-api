@@ -34,7 +34,7 @@ use crate::{
         tavern::*, underworld::*, unlockables::*,
     },
     misc::*,
-    response::{Response, ResponseVal},
+    response::{Response, ResponseVal, ValueArray},
 };
 
 /// Represent the full state of the game at some point in time
@@ -608,7 +608,7 @@ impl GameState {
             "unitprice" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_unit_prices(&val.values_fixed()?)?;
+                    .update_unit_prices(&val.values()?)?;
             }
             "dicestatus" => {
                 let dices: Option<Vec<DiceType>> = val
@@ -638,17 +638,17 @@ impl GameState {
             "upgradeprice" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_unit_upgrade_info(&val.values_fixed()?)?;
+                    .update_unit_upgrade_info(&val.values()?)?;
             }
             "unitlevel" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_levels(&val.values_fixed()?)?;
+                    .update_levels(&val.values()?)?;
             }
             "fortressprice" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_prices(&val.values_fixed()?)?;
+                    .update_prices(&val.values()?)?;
             }
             "Arenarank" => {
                 if let Some(uw) = self.underworld.as_mut() {
@@ -1049,7 +1049,7 @@ impl GameState {
                 self.fortress
                     .get_or_insert_default()
                     .hall_of_knights_upgrade_price =
-                    FortressCost::parse(&val.values_fixed()?)?;
+                    FortressCost::parse(&val.values()?)?;
             }
             "goldperhournextlevel" => {
                 // I dont think this matters
@@ -1365,19 +1365,31 @@ impl GameState {
                 }
             }
             "fightresult" => {
-                let data: Vec<i64> = val.into_list("fight result")?;
-                self.last_fight
-                    .get_or_insert_default()
-                    .update_result(&data, server_time)?;
-                // Note: The sub_key from this, can improve fighter parsing
+                let data = val.list();
+                self.last_fight.get_or_insert_default().update_result(&data);
             }
-            x if x.starts_with("fightheader") => {
-                self.get_fight(x).update_fighters(val.as_str());
+            "battlerewarditem" => {
+                // The item won in the fight, encoded like a regular item
+                let data: ValueArray<ITEM_PARSE_LEN> = val.try_into()?;
+                let item = Item::parse(&data, server_time)?;
+                self.last_fight.get_or_insert_default().item_won = item;
             }
-            "fightgroups" => {
-                let fight = self.last_fight.get_or_insert_default();
-                fight.update_groups(val.as_str());
-            }
+            x if x.starts_with("fightheader") => match val.values::<99>() {
+                Ok(data) => self.get_fight(x).update_fighters(&data),
+                Err(err) => {
+                    warn!("Failed to parse the fight header: {err}");
+                }
+            },
+            "fightgroups" => match val.values_by::<4>(',') {
+                Ok(data) => {
+                    self.last_fight
+                        .get_or_insert_default()
+                        .update_groups(&data);
+                }
+                Err(err) => {
+                    warn!("Failed to parse the fight groups: {err}");
+                }
+            },
             "fightadditionalplayers" => {
                 // This should be players in guild battles, that have not
                 // participapted. I dont think this matters
@@ -1392,11 +1404,8 @@ impl GameState {
                     .get("fightversion")
                     .and_then(|v| v.as_str().parse().ok())
                     .unwrap_or(1);
-                let fight = self.get_fight(x);
-                if let Err(e) = fight.update_rounds(val.as_str(), fight_version)
-                {
-                    warn!("Failed to parse fight rounds: {e}");
-                }
+                let data = val.list();
+                self.get_fight(x).update_rounds(&data, fight_version);
             }
             "othergroupname" => {
                 other_guild.get_or_insert_default().name.set(val.as_str());
@@ -1782,17 +1791,17 @@ impl GameState {
             "fortressstorage" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_resources(&val.values_fixed()?, server_time)?;
+                    .update_resources(&val.values()?, server_time)?;
             }
             "fortressunits" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_units(&val.values_fixed()?, server_time)?;
+                    .update_units(&val.values()?, server_time)?;
             }
             "fortress" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update(&val.values_fixed()?, server_time)?;
+                    .update(&val.values()?, server_time)?;
             }
             "wheel" => {
                 let data: Vec<i64> = val.into_list("wheel")?;
@@ -1824,17 +1833,7 @@ impl GameState {
                 guild.joined = data.cstget(5, "guild joined", server_time)?;
                 // [6] => ????
             }
-            "arena" => {
-                let data: Vec<i64> = val.into_list("arena")?;
-                self.arena.next_free_fight =
-                    data.cstget(0, "next battle time", server_time)?;
-                self.arena.fights_for_xp =
-                    data.csiget(1, "arena xp fights", 0)?;
-                for (idx, val) in self.arena.enemy_ids.iter_mut().enumerate() {
-                    *val = data.csiget(2 + idx, "arena enemy id", 0)?;
-                }
-                // [5] => ??
-            }
+            "arena" => self.arena.update(&val.values()?, server_time)?,
             "ownplayersavepotions" => {
                 let data: Vec<i64> = val.into_list("potions")?;
                 self.character.active_potions =
