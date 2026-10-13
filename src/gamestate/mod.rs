@@ -187,7 +187,7 @@ impl Shop {
         shop.typ = typ;
         for (idx, item) in shop.items.iter_mut().enumerate() {
             let d = data.skip(idx * ITEM_PARSE_LEN, "shop item")?;
-            let Some(p_item) = Item::parse(d, server_time)? else {
+            let Some(p_item) = Item::parse_slice(d, server_time)? else {
                 return Err(SFError::ParsingError(
                     "shop item",
                     format!("{d:?}"),
@@ -482,14 +482,14 @@ impl GameState {
                 // Goodbye old friend...
             }
             "owngroupname" => {
-                self.guild.get_or_insert_default().name.set(val.as_str())
+                self.guild.get_or_insert_default().name.set(val.as_str());
             }
             "sfhomeid" => {}
             "backpack" => {
-                let data: Vec<i64> = val.into_list("backpack")?;
-                self.character.inventory.backpack = data
-                    .chunks_exact(ITEM_PARSE_LEN)
-                    .map(|a| Item::parse(a, server_time))
+                self.character.inventory.backpack = val
+                    .values(0)?
+                    .parse_chunks::<ITEM_PARSE_LEN>()
+                    .map(|chunk| Item::parse(&chunk, server_time))
                     .collect::<Result<Vec<_>, _>>()?;
             }
             "itemlevelshop" => {
@@ -506,7 +506,7 @@ impl GameState {
                     .chunks_exact(19)
                     .zip(&mut self.tavern.quests)
                 {
-                    quest.item = Item::parse(chunk, server_time)?;
+                    quest.item = Item::parse_slice(chunk, server_time)?;
                 }
             }
             #[allow(
@@ -1739,7 +1739,7 @@ impl GameState {
                     .chunks_exact(ITEM_PARSE_LEN)
                     .flat_map(|a|
                             // Might be broken
-                            Item::parse(a, server_time))
+                            Item::parse_slice(a, server_time))
                     .flatten()
                     .collect();
             }
@@ -2085,7 +2085,7 @@ impl GameState {
                 for slice in
                     data.skip(1, "ld items")?.chunks_exact(ITEM_PARSE_LEN)
                 {
-                    let Some(item) = Item::parse(slice, server_time)? else {
+                    let Some(item) = Item::parse_slice(slice, server_time)? else {
                         warn!("Could not parse pending ld item");
                         continue;
                     };

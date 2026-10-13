@@ -109,7 +109,7 @@ impl Fight {
         self.rank_pre_fight = data.csiget(7, "fight rank pre", 0)?;
         self.rank_post_fight = data.csiget(8, "fight rank post", 0)?;
         let item = data.skip(9, "fight item")?;
-        self.item_won = Item::parse(item, server_time)?;
+        self.item_won = Item::parse_slice(item, server_time)?;
 
         // Extended fortress fight data (fightresult.fortresspillagerv1)
         if data.len() >= 25 {
