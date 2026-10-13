@@ -698,7 +698,7 @@ impl Item {
         }
     }
 
-    /// Parses an item from a compile-time fixed 19-element response chunk or raw string.
+    /// Parses an item from a compile-time fixed 19-element response chunk.
     ///
     /// # Examples
     /// ```
@@ -706,16 +706,15 @@ impl Item {
     /// use sf_api::gamestate::ServerTime;
     ///
     /// let raw = "1/0/0/1010/0/149/265/5/4/0/108/72/0/83940/10/0/0/45/0";
-    /// let item = Item::parse(raw, ServerTime::default()).unwrap().unwrap();
+    /// let item = Item::parse(&raw.try_into().unwrap(), ServerTime::default()).unwrap().unwrap();
     /// assert_eq!(item.price, 83940);
     /// ```
     #[allow(clippy::missing_errors_doc, clippy::cast_possible_truncation)]
-    pub fn parse<'a>(
-        data: impl TryInto<ResponseVals<'a, ITEM_PARSE_LEN>, Error = SFError>,
+    pub fn parse(
+        data: &ResponseVals<ITEM_PARSE_LEN>,
         server_time: ServerTime,
     ) -> Result<Option<Self>, SFError> {
-        let data: ResponseVals<'a, ITEM_PARSE_LEN> = data.try_into()?;
-        let Some(typ) = ItemType::parse(&data, server_time)? else {
+        let Some(typ) = ItemType::parse(data, server_time)? else {
             return Ok(None);
         };
 
