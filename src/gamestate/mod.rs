@@ -418,12 +418,12 @@ impl GameState {
     ) -> Result<()> {
         let companions = self.dungeons.companions.get_or_insert_default();
         for (i, class) in CompanionClass::iter().enumerate() {
-            // The companion record runs from its level at 3 up to the
-            // underworld unit, which `Underworld::update` reads
-            let base = i * TOWER_BLOCK_LEN;
+            // A block is TOWER_BLOCK_LEN values: the companion, its underworld
+            // unit and the trailing value after it
+            let start = 3 + i * TOWER_BLOCK_LEN;
             companions
                 .get_mut(class)
-                .update(&data.window(3 + base..TOWER_UNIT_OFFSET + base))?;
+                .update(&data.window(start..start + TOWER_BLOCK_LEN))?;
         }
 
         // Why would they include this in the tower response???
@@ -435,11 +435,7 @@ impl GameState {
         data.ignore(0, "own player id");
         data.ignore(1, "always 0");
         data.ignore(2, "always 100");
-        // An unknown value in front of companion 1 and 2; 10/13 and 2
-        data.ignore(150, "unknown per-block value");
-        data.ignore(298, "unknown per-block value");
         // The 0 gaps in the underworld tail
-        data.ignore(446, "always 0");
         data.ignore(447, "always 0");
         data.ignore(458, "always 0");
         data.ignore(462, "always 0");
