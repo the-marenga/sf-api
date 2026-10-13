@@ -7,8 +7,10 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive as _;
 use strum::{EnumCount, EnumIter};
 
-use super::{Result, ServerTime, items::GemType};
-use crate::response::Vals;
+use crate::{
+    gamestate::{Result, ServerTime, items::GemType},
+    response::Vals,
+};
 
 /// The information about a characters fortress
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
