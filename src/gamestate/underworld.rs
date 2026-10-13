@@ -14,9 +14,6 @@ pub(crate) const TOWER_RESPONSE_LEN: usize = 476;
 /// The size of one `owntower` block: a companion, its underworld unit and the
 /// value after it.
 pub(crate) const TOWER_BLOCK_LEN: usize = 148;
-/// The offset of the companion level at the start of its `owntower` block, and
-/// so also of the underworld tail after the last block.
-pub(crate) const TOWER_BLOCK_OFFSET: usize = 3;
 
 /// The information about a characters underworld
 #[derive(Debug, Default, Clone)]
