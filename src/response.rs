@@ -378,6 +378,8 @@ impl<'a> ResponseVal<'a> {
                 };
                 ResponseVals {
                     values: Box::new(arr),
+                    #[cfg(debug_assertions)]
+                    accessed: new_accessed(),
                 }
             })
             .collect::<Vec<_>>()
@@ -479,7 +481,11 @@ impl<'a> ResponseVal<'a> {
             ))
         })?;
 
-        Ok(ResponseVals { values })
+        Ok(ResponseVals {
+            values,
+            #[cfg(debug_assertions)]
+            accessed: new_accessed(),
+        })
     }
 }
 
@@ -495,18 +501,117 @@ impl std::fmt::Display for ResponseVal<'_> {
 /// Guarantees at compile-time that exactly `N` values are present in the response
 /// (validated upon construction or conversion), stored efficiently in a heap-allocated
 /// fixed-size array `Box<[&'a str; N]>`.
-#[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::module_name_repetitions)]
 pub struct ResponseVals<'a, const N: usize> {
     values: Box<[&'a str; N]>,
+    #[cfg(debug_assertions)]
+    accessed: Box<[std::cell::Cell<bool>; N]>,
+}
+
+#[cfg(debug_assertions)]
+#[inline]
+fn new_accessed<const N: usize>() -> Box<[std::cell::Cell<bool>; N]> {
+    Box::new(std::array::from_fn(|_| std::cell::Cell::new(false)))
+}
+
+#[cfg(debug_assertions)]
+impl<const N: usize> Drop for ResponseVals<'_, N> {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            let unaccessed: Vec<usize> = self
+                .accessed
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, cell)| if cell.get() { None } else { Some(idx) })
+                .collect();
+
+            if !unaccessed.is_empty() {
+                warn!(
+                    "Unaccessed response values in ResponseVals<{N}>: indices {unaccessed:?} (values: {:?})",
+                    self.values
+                );
+            }
+        }
+    }
+}
+
+impl<const N: usize> Clone for ResponseVals<'_, N> {
+    fn clone(&self) -> Self {
+        Self {
+            values: self.values.clone(),
+            #[cfg(debug_assertions)]
+            accessed: new_accessed(),
+        }
+    }
+}
+
+impl<const N: usize> PartialEq for ResponseVals<'_, N> {
+    fn eq(&self, other: &Self) -> bool {
+        self.values == other.values
+    }
+}
+
+impl<const N: usize> Eq for ResponseVals<'_, N> {}
+
+impl<const N: usize> std::fmt::Debug for ResponseVals<'_, N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("ResponseVals")
+            .field(&self.values)
+            .finish()
+    }
 }
 
 impl<'a, const N: usize> ResponseVals<'a, N> {
+    #[inline]
+    fn mark_accessed(&self, pos: usize) {
+        #[cfg(debug_assertions)]
+        if let Some(cell) = self.accessed.get(pos) {
+            cell.set(true);
+        }
+    }
+
+    #[inline]
+    fn mark_all_accessed(&self) {
+        #[cfg(debug_assertions)]
+        for cell in &self.accessed {
+            cell.set(true);
+        }
+    }
+
+    /// Marks the element at index `pos` as accessed or ignored, suppressing warnings on drop.
+    pub fn ignore(&self, pos: usize) {
+        self.mark_accessed(pos);
+    }
+
+    /// Marks all elements as accessed or ignored, suppressing warnings on drop.
+    pub fn ignore_all(&self) {
+        self.mark_all_accessed();
+    }
+
+    /// Returns a list of indices that have not yet been accessed (in debug mode).
+    #[must_use]
+    pub fn unaccessed_indices(&self) -> Vec<usize> {
+        #[cfg(debug_assertions)]
+        {
+            self.accessed
+                .iter()
+                .enumerate()
+                .filter_map(|(idx, cell)| if cell.get() { None } else { Some(idx) })
+                .collect()
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            Vec::new()
+        }
+    }
+
     /// Creates a new [`ResponseVals`] from a fixed-size array.
     #[must_use]
     pub fn from_array(values: [&'a str; N]) -> Self {
         Self {
             values: Box::new(values),
+            #[cfg(debug_assertions)]
+            accessed: new_accessed(),
         }
     }
 
@@ -525,12 +630,14 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     /// Returns a reference to the underlying slice of `&str`.
     #[must_use]
     pub fn as_slice(&self) -> &[&'a str] {
+        self.mark_all_accessed();
         self.values.as_slice()
     }
 
     /// Returns the string value at index `pos`, if in bounds.
     #[must_use]
     pub fn get_str(&self, pos: usize) -> Option<&'a str> {
+        self.mark_accessed(pos);
         self.values.get(pos).copied()
     }
 
@@ -540,6 +647,7 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds.
     #[track_caller]
     pub fn get(&self, pos: usize) -> Result<&'a str, SFError> {
+        self.mark_accessed(pos);
         let Some(val) = self.values.get(pos) else {
             let caller = std::panic::Location::caller();
             return Err(SFError::ParsingErrorV2(format!(
@@ -779,6 +887,7 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         pos: usize,
         name: &'static str,
     ) -> Result<T, SFError> {
+        self.mark_accessed(pos);
         let val = self.values.get(pos).ok_or_else(|| {
             SFError::TooShortResponse {
                 name,
@@ -800,6 +909,7 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         pos: usize,
         name: &'static str,
     ) -> Option<T> {
+        self.mark_accessed(pos);
         let val = self.values.get(pos)?;
         val.trim().parse::<T>().ok().or_else(|| {
             warn!("Could not parse optional {name} from {val}");
@@ -815,6 +925,7 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         name: &'static str,
         default: T,
     ) -> T {
+        self.mark_accessed(pos);
         let Some(val) = self.values.get(pos) else {
             warn!("Missing value for {name} at index {pos}");
             return default;
@@ -881,6 +992,7 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         &self,
     ) -> impl Iterator<Item = ResponseVals<'a, CHUNK>> + '_ {
         assert!(CHUNK > 0, "CHUNK size must be greater than 0");
+        self.mark_all_accessed();
         self.values.chunks_exact(CHUNK).map(|chunk| {
             let arr: [&'a str; CHUNK] = match chunk.try_into() {
                 Ok(a) => a,
@@ -888,6 +1000,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
             };
             ResponseVals {
                 values: Box::new(arr),
+                #[cfg(debug_assertions)]
+                accessed: new_accessed(),
             }
         })
     }
@@ -895,6 +1009,7 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     /// Returns a direct array reference to the values.
     #[must_use]
     pub fn as_array(&self) -> &[&'a str; N] {
+        self.mark_all_accessed();
         &self.values
     }
 
@@ -905,6 +1020,7 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     #[must_use]
     pub fn get_const<const IDX: usize>(&self) -> &'a str {
         const { assert!(IDX < N, "index out of bounds for ResponseVals") };
+        self.mark_accessed(IDX);
         #[allow(clippy::indexing_slicing)]
         self.values[IDX]
     }
@@ -941,6 +1057,10 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
                 "sub_chunk out of bounds for ResponseVals"
             );
         };
+        #[cfg(debug_assertions)]
+        for i in OFFSET..OFFSET + M {
+            self.mark_accessed(i);
+        }
         #[allow(clippy::indexing_slicing)]
         let slice: &[&'a str] = &self.values[OFFSET..OFFSET + M];
         let arr: [&'a str; M] = match slice.try_into() {
@@ -949,6 +1069,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         };
         ResponseVals {
             values: Box::new(arr),
+            #[cfg(debug_assertions)]
+            accessed: new_accessed(),
         }
     }
 
@@ -966,6 +1088,7 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
                 "N must be an exact multiple of CHUNK size"
             );
         };
+        self.mark_all_accessed();
         self.values
             .chunks_exact(CHUNK)
             .map(|chunk| {
@@ -975,12 +1098,15 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
                 };
                 ResponseVals {
                     values: Box::new(arr),
+                    #[cfg(debug_assertions)]
+                    accessed: new_accessed(),
                 }
             })
     }
 
     /// Returns an iterator over the string values.
     pub fn iter(&self) -> std::iter::Copied<std::slice::Iter<'_, &'a str>> {
+        self.mark_all_accessed();
         self.values.iter().copied()
     }
 }
@@ -989,18 +1115,21 @@ impl<'a, const N: usize> std::ops::Deref for ResponseVals<'a, N> {
     type Target = [&'a str; N];
 
     fn deref(&self) -> &Self::Target {
+        self.mark_all_accessed();
         &self.values
     }
 }
 
 impl<'a, const N: usize> AsRef<[&'a str; N]> for ResponseVals<'a, N> {
     fn as_ref(&self) -> &[&'a str; N] {
+        self.mark_all_accessed();
         &self.values
     }
 }
 
 impl<'a, const N: usize> AsRef<[&'a str]> for ResponseVals<'a, N> {
     fn as_ref(&self) -> &[&'a str] {
+        self.mark_all_accessed();
         self.values.as_slice()
     }
 }
@@ -1009,13 +1138,19 @@ impl<'a, const N: usize> From<[&'a str; N]> for ResponseVals<'a, N> {
     fn from(arr: [&'a str; N]) -> Self {
         Self {
             values: Box::new(arr),
+            #[cfg(debug_assertions)]
+            accessed: new_accessed(),
         }
     }
 }
 
 impl<'a, const N: usize> From<Box<[&'a str; N]>> for ResponseVals<'a, N> {
     fn from(values: Box<[&'a str; N]>) -> Self {
-        Self { values }
+        Self {
+            values,
+            #[cfg(debug_assertions)]
+            accessed: new_accessed(),
+        }
     }
 }
 
@@ -1024,6 +1159,7 @@ impl<'a, const N: usize> IntoIterator for &'a ResponseVals<'a, N> {
     type IntoIter = std::iter::Copied<std::slice::Iter<'a, &'a str>>;
 
     fn into_iter(self) -> Self::IntoIter {
+        self.mark_all_accessed();
         self.values.iter().copied()
     }
 }
@@ -1212,4 +1348,36 @@ mod tests {
             Some(TestEnum::Second)
         );
     }
+
+    #[test]
+    fn test_exhaustion_tracking() {
+        let raw = "10/20/30/40/50";
+        let vals: ResponseVals<5> = raw.try_into().unwrap();
+
+        #[cfg(debug_assertions)]
+        assert_eq!(vals.unaccessed_indices(), vec![0, 1, 2, 3, 4]);
+
+        assert_eq!(vals.u32(0).unwrap(), 10);
+        #[cfg(debug_assertions)]
+        assert_eq!(vals.unaccessed_indices(), vec![1, 2, 3, 4]);
+
+        vals.ignore(1);
+        #[cfg(debug_assertions)]
+        assert_eq!(vals.unaccessed_indices(), vec![2, 3, 4]);
+
+        let sub: ResponseVals<2> = vals.sub_chunk::<2, 2>();
+        #[cfg(debug_assertions)]
+        {
+            assert_eq!(vals.unaccessed_indices(), vec![4]);
+            assert_eq!(sub.unaccessed_indices(), vec![0, 1]);
+        }
+        sub.ignore_all();
+        #[cfg(debug_assertions)]
+        assert_eq!(sub.unaccessed_indices(), Vec::<usize>::new());
+
+        vals.ignore_all();
+        #[cfg(debug_assertions)]
+        assert_eq!(vals.unaccessed_indices(), Vec::<usize>::new());
+    }
 }
+

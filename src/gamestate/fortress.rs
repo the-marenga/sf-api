@@ -91,16 +91,7 @@ pub struct FortressCost {
 
 impl FortressCost {
     /// Parses a fortress cost `[time_seconds, silver, wood, stone]`.
-    ///
-    /// # Examples
-    /// ```
-    /// use sf_api::gamestate::fortress::FortressCost;
-    ///
-    /// let cost = FortressCost::parse(&"7200/4000/1100/333".try_into().unwrap()).unwrap();
-    /// assert_eq!((cost.time.as_secs(), cost.silver, cost.wood, cost.stone), (7200, 4000, 1100, 333));
-    /// ```
-    #[allow(clippy::missing_errors_doc)]
-    pub fn parse(
+    pub(crate) fn parse(
         data: &ResponseVals<4>,
     ) -> Result<FortressCost, SFError> {
         Ok(FortressCost {
@@ -468,23 +459,7 @@ impl Fortress {
     }
 
     /// Updates building upgrade costs and gem search cost.
-    ///
-    /// # Examples
-    /// ```
-    /// use sf_api::gamestate::fortress::{Fortress, FortressBuildingType};
-    ///
-    /// let raw = "7200/4000/1100/333/7200/2000/1015/308/7200/800/220/133/7200/1200/660/107/7200/6000/1467/444/765/700/7/9/765/500/41/7/765/400/20/14/765/600/61/20/7200/10000/1173/356/765/400/25/8/765/15000/30/13/9180/45000/29/9";
-    /// let mut fortress = Fortress::default();
-    /// fortress.update_prices(&raw.try_into().unwrap()).unwrap();
-    ///
-    /// let ft = fortress.buildings[FortressBuildingType::Fortress].upgrade_cost;
-    /// assert_eq!((ft.time.as_secs(), ft.silver, ft.wood, ft.stone), (7200, 4000, 1100, 333));
-    ///
-    /// let gem = fortress.gem_search.cost;
-    /// assert_eq!((gem.time.as_secs(), gem.silver, gem.wood, gem.stone), (9180, 45000, 29, 9));
-    /// ```
-    #[allow(clippy::missing_errors_doc)]
-    pub fn update_prices(
+    pub(crate) fn update_prices(
         &mut self,
         data: &ResponseVals<52>,
     ) -> Result<(), SFError> {
@@ -570,5 +545,44 @@ impl Fortress {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+
+    #[test]
+    fn test_fortress_cost_parse() {
+        crate::parse_test!(FortressCost("7200/4000/1100/333"), {
+            time: Duration::from_secs(7200),
+            silver: 4000,
+            wood: 1100,
+            stone: 333,
+        });
+    }
+
+    #[test]
+    fn test_fortress_update_prices() {
+        let raw = "7200/4000/1100/333/7200/2000/1015/308/7200/800/220/133/7200/1200/660/107/7200/6000/1467/444/765/700/7/9/765/500/41/7/765/400/20/14/765/600/61/20/7200/10000/1173/356/765/400/25/8/765/15000/30/13/9180/45000/29/9";
+        let mut fortress = Fortress::default();
+        let vals = match raw.try_into() {
+            Ok(v) => v,
+            Err(e) => panic!("invalid vals: {e}"),
+        };
+        fortress.update_prices(&vals).unwrap();
+
+        let ft = fortress.buildings[FortressBuildingType::Fortress].upgrade_cost;
+        assert_eq!(
+            (ft.time.as_secs(), ft.silver, ft.wood, ft.stone),
+            (7200, 4000, 1100, 333)
+        );
+
+        let gem = fortress.gem_search.cost;
+        assert_eq!(
+            (gem.time.as_secs(), gem.silver, gem.wood, gem.stone),
+            (9180, 45000, 29, 9)
+        );
     }
 }

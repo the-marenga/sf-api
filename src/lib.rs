@@ -30,6 +30,49 @@ pub mod simulate;
 #[cfg(feature = "sso")]
 pub mod sso;
 
+#[cfg(test)]
+#[macro_export]
+macro_rules! parse_test {
+    ($ty:ident ( $raw:expr $(, $arg:expr)* ), { $($field:ident: $expected:expr),+ $(,)? }) => {
+        let vals = match $raw.try_into() {
+            Ok(v) => v,
+            Err(e) => panic!("invalid ResponseVals format: {e}"),
+        };
+        let parsed = match $ty::parse(&vals $(, $arg)*) {
+            Ok(p) => p,
+            Err(e) => panic!("parsing failed: {e}"),
+        };
+        $(
+            assert_eq!(parsed.$field, $expected, "mismatch in field '{}'", stringify!($field));
+        )+
+    };
+    (opt: $ty:ident ( $raw:expr $(, $arg:expr)* ), { $($field:ident: $expected:expr),+ $(,)? }) => {
+        let vals = match $raw.try_into() {
+            Ok(v) => v,
+            Err(e) => panic!("invalid ResponseVals format: {e}"),
+        };
+        let parsed = match $ty::parse(&vals $(, $arg)*) {
+            Ok(Some(p)) => p,
+            Ok(None) => panic!("expected Some, found None"),
+            Err(e) => panic!("parsing failed: {e}"),
+        };
+        $(
+            assert_eq!(parsed.$field, $expected, "mismatch in field '{}'", stringify!($field));
+        )+
+    };
+    ($ty:ident ( $raw:expr $(, $arg:expr)* ) => $expected:expr) => {
+        let vals = match $raw.try_into() {
+            Ok(v) => v,
+            Err(e) => panic!("invalid ResponseVals format: {e}"),
+        };
+        let parsed = match $ty::parse(&vals $(, $arg)*) {
+            Ok(p) => p,
+            Err(e) => panic!("parsing failed: {e}"),
+        };
+        assert_eq!(parsed, $expected);
+    };
+}
+
 /// This is the numerical id of a player on a server. Note that in rare edge
 /// cases this might be 0 (you are the first person to unlock the Dungeon. Who
 /// do you fight?), but you can almost always expect this to be > 0
