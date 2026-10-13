@@ -324,18 +324,6 @@ impl<'a> ResponseVal<'a> {
         ResponseVals::from_raw(self.value)
     }
 
-    /// Splits this response value by '/' and validates that at least `N`
-    /// elements are present.
-    ///
-    /// # Errors
-    /// Returns [`SFError::TooShortResponse`] if fewer than `N` elements are present.
-    pub fn fixed_vals<const N: usize>(
-        &self,
-        name: &'static str,
-    ) -> Result<ResponseVals<'_, N>, SFError> {
-        self.vals().to_fixed(name)
-    }
-
     /// Parses the response into [`ResponseVals`].
     ///
     /// If `expected_length > 0`, verifies that at least `expected_length` values
@@ -465,44 +453,6 @@ impl<'a> ResponseVals<'a, UNBOUNDED> {
 }
 
 impl<'a, const N: usize> ResponseVals<'a, N> {
-    /// Creates a [`ResponseVals`] from a raw string, verifying that at least `N` elements are present.
-    ///
-    /// # Errors
-    /// Returns [`SFError::TooShortResponse`] if fewer than `N` elements are present.
-    pub fn parse_raw(raw: &'a str, name: &'static str) -> Result<Self, SFError> {
-        ResponseVals::from_raw(raw).to_fixed(name)
-    }
-
-    /// Creates a [`ResponseVals`] from a slice, verifying that at least `N` elements are present.
-    ///
-    /// # Errors
-    /// Returns [`SFError::TooShortResponse`] if fewer than `N` elements are present.
-    pub fn from_slice_checked(
-        values: &[&'a str],
-        name: &'static str,
-    ) -> Result<Self, SFError> {
-        ResponseVals::from_slice(values).to_fixed(name)
-    }
-
-    /// Validates that at least `TARGET` elements are present and converts to `ResponseVals<'a, TARGET>`.
-    ///
-    /// # Errors
-    /// Returns [`SFError::TooShortResponse`] if the response contains fewer than `TARGET` values.
-    pub fn to_fixed<const TARGET: usize>(
-        self,
-        name: &'static str,
-    ) -> Result<ResponseVals<'a, TARGET>, SFError> {
-        if self.values.len() < TARGET {
-            return Err(SFError::TooShortResponse {
-                name,
-                pos: TARGET,
-                array: format!("{:?}", self.values),
-            });
-        }
-        Ok(ResponseVals {
-            values: self.values,
-        })
-    }
 
     /// Converts this into an unbounded [`ResponseVals`].
     #[must_use]
@@ -1008,14 +958,6 @@ mod tests {
     #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
     use super::*;
 
-    fn test_parse_16(data: &ResponseVals<16>) -> Result<u32, SFError> {
-        // Guaranteed to have at least 16 elements at compile time
-        assert_eq!(data.len(), 16);
-        let first = data.parse_at::<u32>(0, "first")?;
-        let last = data.parse_const::<u32, 15>("last")?;
-        Ok(first + last)
-    }
-
     fn test_parse_unbounded(data: &ResponseVals) -> usize {
         data.len()
     }
@@ -1034,44 +976,6 @@ mod tests {
         let vals = ResponseVals::from_raw("");
         assert!(vals.is_empty());
         assert_eq!(vals.len(), 0);
-    }
-
-    #[test]
-    fn test_to_fixed_success() {
-        let raw = "10/20/30";
-        let vals = ResponseVals::from_raw(raw);
-        let fixed: ResponseVals<3> = vals.to_fixed("test").unwrap();
-        assert_eq!(fixed.as_array(), &["10", "20", "30"]);
-        assert_eq!(fixed.get_const::<0>(), "10");
-        assert_eq!(fixed.get_const::<1>(), "20");
-        assert_eq!(fixed.get_const::<2>(), "30");
-        assert_eq!(fixed.parse_at::<u32>(1, "mid").unwrap(), 20);
-        assert_eq!(fixed.parse_const::<u32, 2>("last").unwrap(), 30);
-    }
-
-    #[test]
-    fn test_to_fixed_too_short() {
-        let vals = ResponseVals::from_raw("10/20");
-        let res = vals.to_fixed::<3>("test");
-        assert!(matches!(res, Err(SFError::TooShortResponse { .. })));
-    }
-
-    #[test]
-    fn test_at_least_semantic() {
-        // Server sends 5 elements, but we only expect at least 3
-        let vals = ResponseVals::from_raw("1/2/3/4/5");
-        let fixed: ResponseVals<3> = vals.to_fixed("test").unwrap();
-        assert_eq!(fixed.len(), 5);
-        assert_eq!(fixed.as_array(), &["1", "2", "3"]);
-    }
-
-    #[test]
-    fn test_fixed_function_16() {
-        let raw = "1/2/3/4/5/6/7/8/9/10/11/12/13/14/15/16";
-        let vals = ResponseVals::from_raw(raw);
-        let vals16: ResponseVals<16> = vals.to_fixed("16 vals").unwrap();
-        let res = test_parse_16(&vals16).unwrap();
-        assert_eq!(res, 1 + 16);
     }
 
     #[test]
