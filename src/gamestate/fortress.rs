@@ -96,14 +96,13 @@ impl FortressCost {
     /// ```
     /// use sf_api::gamestate::fortress::FortressCost;
     ///
-    /// let cost = FortressCost::parse("7200/4000/1100/333").unwrap();
+    /// let cost = FortressCost::parse(&"7200/4000/1100/333".try_into().unwrap()).unwrap();
     /// assert_eq!((cost.time.as_secs(), cost.silver, cost.wood, cost.stone), (7200, 4000, 1100, 333));
     /// ```
     #[allow(clippy::missing_errors_doc)]
-    pub fn parse<'a>(
-        data: impl TryInto<ResponseVals<'a, 4>, Error = SFError>,
+    pub fn parse(
+        data: &ResponseVals<4>,
     ) -> Result<FortressCost, SFError> {
-        let data: ResponseVals<'a, 4> = data.try_into()?;
         Ok(FortressCost {
             time: Duration::from_secs(data.u64(0)?),
             silver: data.u64(1)?,
