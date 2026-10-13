@@ -320,8 +320,9 @@ impl Equipment {
         server_time: ServerTime,
     ) -> Result<Equipment, SFError> {
         let mut res = Equipment::default();
-        for (chunk, slot) in
-            data.chunks_exact::<ITEM_PARSE_LEN>().zip(res.0.as_mut_slice())
+        for (chunk, slot) in data
+            .chunks_exact::<ITEM_PARSE_LEN>()
+            .zip(res.0.as_mut_slice())
         {
             *slot = Item::parse(&chunk, server_time)?;
         }
@@ -1247,10 +1248,7 @@ impl ItemType {
                     let Some(typ) = FromPrimitive::from_i64(id) else {
                         return unknown_item("resource type");
                     };
-                    ItemType::Resource {
-                        amount: 0,
-                        typ,
-                    }
+                    ItemType::Resource { amount: 0, typ }
                 } else {
                     let Some(typ) = PotionType::parse(id) else {
                         return unknown_item("potion type");

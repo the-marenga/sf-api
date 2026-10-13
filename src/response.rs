@@ -320,7 +320,8 @@ impl<'a> ResponseVal<'a> {
         self.value
     }
 
-    /// Splits this response value by `'/'` into consecutive non-overlapping chunks of size `CHUNK`.
+    /// Splits this response value by `'/'` into consecutive non-overlapping
+    /// chunks of size `CHUNK`.
     ///
     /// # Errors
     /// Returns [`SFError::ParsingErrorV2`] if the response is empty.
@@ -331,7 +332,8 @@ impl<'a> ResponseVal<'a> {
         self.parse_chunks_delim::<CHUNK>('/')
     }
 
-    /// Splits this response value by `delim` into consecutive non-overlapping chunks of size `CHUNK`.
+    /// Splits this response value by `delim` into consecutive non-overlapping
+    /// chunks of size `CHUNK`.
     ///
     /// # Errors
     /// Returns [`SFError::ParsingErrorV2`] if the response is empty.
@@ -361,7 +363,8 @@ impl<'a> ResponseVal<'a> {
         if !vals.len().is_multiple_of(CHUNK) {
             let caller = std::panic::Location::caller();
             warn!(
-                "Server response contains {} leftover values when chunked by {CHUNK} at {}:{}:{}",
+                "Server response contains {} leftover values when chunked by \
+                 {CHUNK} at {}:{}:{}",
                 vals.len() % CHUNK,
                 caller.file(),
                 caller.line(),
@@ -386,10 +389,12 @@ impl<'a> ResponseVal<'a> {
             .into_iter())
     }
 
-    /// Parses the response into a compile-time bounded [`ResponseVals<'a, N>`] split by `/`.
+    /// Parses the response into a compile-time bounded [`ResponseVals<'a, N>`]
+    /// split by `/`.
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if the response is empty or has fewer than `N` values.
+    /// Returns [`SFError::ParsingErrorV2`] if the response is empty or has
+    /// fewer than `N` values.
     #[track_caller]
     pub fn values<const N: usize>(
         self,
@@ -397,10 +402,12 @@ impl<'a> ResponseVal<'a> {
         self.values_delim::<N>('/')
     }
 
-    /// Parses the response into a compile-time bounded [`ResponseVals<'a, N>`] split by `/`.
+    /// Parses the response into a compile-time bounded [`ResponseVals<'a, N>`]
+    /// split by `/`.
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if the response is empty or has fewer than `N` values.
+    /// Returns [`SFError::ParsingErrorV2`] if the response is empty or has
+    /// fewer than `N` values.
     #[track_caller]
     pub fn values_fixed<const N: usize>(
         self,
@@ -408,10 +415,12 @@ impl<'a> ResponseVal<'a> {
         self.values_delim::<N>('/')
     }
 
-    /// Parses the response into a compile-time bounded [`ResponseVals<'a, N>`] split by `delim`.
+    /// Parses the response into a compile-time bounded [`ResponseVals<'a, N>`]
+    /// split by `delim`.
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if the response is empty or has fewer than `N` values.
+    /// Returns [`SFError::ParsingErrorV2`] if the response is empty or has
+    /// fewer than `N` values.
     #[track_caller]
     pub fn values_by<const N: usize>(
         self,
@@ -420,10 +429,12 @@ impl<'a> ResponseVal<'a> {
         self.values_delim::<N>(delim)
     }
 
-    /// Parses the response into a compile-time bounded [`ResponseVals<'a, N>`] split by `delim`.
+    /// Parses the response into a compile-time bounded [`ResponseVals<'a, N>`]
+    /// split by `delim`.
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if the response is empty or has fewer than `N` values.
+    /// Returns [`SFError::ParsingErrorV2`] if the response is empty or has
+    /// fewer than `N` values.
     #[track_caller]
     pub fn values_delim<const N: usize>(
         self,
@@ -471,15 +482,17 @@ impl<'a> ResponseVal<'a> {
         }
 
         let boxed_slice: Box<[&'a str]> = vals.into_boxed_slice();
-        let values: Box<[&'a str; N]> = boxed_slice.try_into().map_err(|_| {
-            let caller = std::panic::Location::caller();
-            SFError::ParsingErrorV2(format!(
-                "Failed to convert response into array of size {N} at {}:{}:{}",
-                caller.file(),
-                caller.line(),
-                caller.column()
-            ))
-        })?;
+        let values: Box<[&'a str; N]> =
+            boxed_slice.try_into().map_err(|_| {
+                let caller = std::panic::Location::caller();
+                SFError::ParsingErrorV2(format!(
+                    "Failed to convert response into array of size {N} at \
+                     {}:{}:{}",
+                    caller.file(),
+                    caller.line(),
+                    caller.column()
+                ))
+            })?;
 
         Ok(ResponseVals {
             values,
@@ -498,9 +511,9 @@ impl std::fmt::Display for ResponseVal<'_> {
 /// A sequence of string values from a server response, typically split from a
 /// `/`-separated list.
 ///
-/// Guarantees at compile-time that exactly `N` values are present in the response
-/// (validated upon construction or conversion), stored efficiently in a heap-allocated
-/// fixed-size array `Box<[&'a str; N]>`.
+/// Guarantees at compile-time that exactly `N` values are present in the
+/// response (validated upon construction or conversion), stored efficiently in
+/// a heap-allocated fixed-size array `Box<[&'a str; N]>`.
 #[allow(clippy::module_name_repetitions)]
 pub struct ResponseVals<'a, const N: usize> {
     values: Box<[&'a str; N]>,
@@ -522,12 +535,15 @@ impl<const N: usize> Drop for ResponseVals<'_, N> {
                 .accessed
                 .iter()
                 .enumerate()
-                .filter_map(|(idx, cell)| if cell.get() { None } else { Some(idx) })
+                .filter_map(
+                    |(idx, cell)| if cell.get() { None } else { Some(idx) },
+                )
                 .collect();
 
             if !unaccessed.is_empty() {
                 warn!(
-                    "Unaccessed response values in ResponseVals<{N}>: indices {unaccessed:?} (values: {:?})",
+                    "Unaccessed response values in ResponseVals<{N}>: indices \
+                     {unaccessed:?} (values: {:?})",
                     self.values
                 );
             }
@@ -551,13 +567,12 @@ impl<const N: usize> PartialEq for ResponseVals<'_, N> {
     }
 }
 
-impl<const N: usize> Eq for ResponseVals<'_, N> {}
+impl<const N: usize> Eq for ResponseVals<'_, N> {
+}
 
 impl<const N: usize> std::fmt::Debug for ResponseVals<'_, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("ResponseVals")
-            .field(&self.values)
-            .finish()
+        f.debug_tuple("ResponseVals").field(&self.values).finish()
     }
 }
 
@@ -578,7 +593,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         }
     }
 
-    /// Marks the element at index `pos` as accessed or ignored, suppressing warnings on drop.
+    /// Marks the element at index `pos` as accessed or ignored, suppressing
+    /// warnings on drop.
     ///
     /// Requires `reason` to document why the field is ignored.
     pub fn ignore(&self, pos: usize, _reason: &str) {
@@ -592,7 +608,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         self.mark_all_accessed();
     }
 
-    /// Returns a list of indices that have not yet been accessed (in debug mode).
+    /// Returns a list of indices that have not yet been accessed (in debug
+    /// mode).
     #[must_use]
     pub fn unaccessed_indices(&self) -> Vec<usize> {
         #[cfg(debug_assertions)]
@@ -600,7 +617,9 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
             self.accessed
                 .iter()
                 .enumerate()
-                .filter_map(|(idx, cell)| if cell.get() { None } else { Some(idx) })
+                .filter_map(
+                    |(idx, cell)| if cell.get() { None } else { Some(idx) },
+                )
                 .collect()
         }
         #[cfg(not(debug_assertions))]
@@ -625,7 +644,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         N
     }
 
-    /// Returns `true` if this response contains no values (always `false` since `N > 0`).
+    /// Returns `true` if this response contains no values (always `false` since
+    /// `N > 0`).
     #[must_use]
     pub const fn is_empty(&self) -> bool {
         N == 0
@@ -645,7 +665,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         self.values.get(pos).copied()
     }
 
-    /// Returns the raw string value at `pos`, or an error with caller location if out of bounds.
+    /// Returns the raw string value at `pos`, or an error with caller location
+    /// if out of bounds.
     ///
     /// # Errors
     /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds.
@@ -668,7 +689,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     /// Parses the value at index `pos` into type `T` with caller tracking.
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or parsing fails.
+    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or parsing
+    /// fails.
     #[track_caller]
     pub fn parse<T: FromStr>(
         &self,
@@ -687,15 +709,11 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         })
     }
 
-    /// Parses the value at index `pos` into type `T`, returning `default` on error.
+    /// Parses the value at index `pos` into type `T`, returning `default` on
+    /// error.
     #[track_caller]
     #[must_use]
-    pub fn parse_or<T: FromStr>(
-        &self,
-        pos: usize,
-        default: T,
-        ty: &str,
-    ) -> T {
+    pub fn parse_or<T: FromStr>(&self, pos: usize, default: T, ty: &str) -> T {
         self.parse(pos, ty).unwrap_or_else(|err| {
             warn!("{err}");
             default
@@ -705,7 +723,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     /// Parses the value at `pos` as `i64`.
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot be parsed as `i64`.
+    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot
+    /// be parsed as `i64`.
     #[track_caller]
     pub fn i64(&self, pos: usize) -> Result<i64, SFError> {
         self.parse(pos, "i64")
@@ -721,7 +740,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     /// Parses the value at `pos` as `u64`.
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot be parsed as `u64`.
+    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot
+    /// be parsed as `u64`.
     #[track_caller]
     pub fn u64(&self, pos: usize) -> Result<u64, SFError> {
         self.parse(pos, "u64")
@@ -737,7 +757,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     /// Parses the value at `pos` as `u32`.
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot be parsed as `u32`.
+    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot
+    /// be parsed as `u32`.
     #[track_caller]
     pub fn u32(&self, pos: usize) -> Result<u32, SFError> {
         self.parse(pos, "u32")
@@ -753,7 +774,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     /// Parses the value at `pos` as `i32`.
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot be parsed as `i32`.
+    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot
+    /// be parsed as `i32`.
     #[track_caller]
     pub fn i32(&self, pos: usize) -> Result<i32, SFError> {
         self.parse(pos, "i32")
@@ -769,7 +791,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     /// Parses the value at `pos` as `usize`.
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot be parsed as `usize`.
+    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot
+    /// be parsed as `usize`.
     #[track_caller]
     pub fn usize(&self, pos: usize) -> Result<usize, SFError> {
         self.parse(pos, "usize")
@@ -785,7 +808,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     /// Parses the value at `pos` as `u8`.
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot be parsed as `u8`.
+    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot
+    /// be parsed as `u8`.
     #[track_caller]
     pub fn u8(&self, pos: usize) -> Result<u8, SFError> {
         self.parse(pos, "u8")
@@ -801,7 +825,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     /// Parses the value at `pos` as `i8`.
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot be parsed as `i8`.
+    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot
+    /// be parsed as `i8`.
     #[track_caller]
     pub fn i8(&self, pos: usize) -> Result<i8, SFError> {
         self.parse(pos, "i8")
@@ -817,7 +842,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     /// Parses the value at `pos` as `u16`.
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot be parsed as `u16`.
+    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot
+    /// be parsed as `u16`.
     #[track_caller]
     pub fn u16(&self, pos: usize) -> Result<u16, SFError> {
         self.parse(pos, "u16")
@@ -833,7 +859,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     /// Parses the value at `pos` as `i16`.
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot be parsed as `i16`.
+    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot
+    /// be parsed as `i16`.
     #[track_caller]
     pub fn i16(&self, pos: usize) -> Result<i16, SFError> {
         self.parse(pos, "i16")
@@ -849,7 +876,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     /// Parses the value at `pos` as `bool`.
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot be parsed as `bool`.
+    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot
+    /// be parsed as `bool`.
     #[track_caller]
     pub fn bool(&self, pos: usize) -> Result<bool, SFError> {
         self.parse(pos, "bool")
@@ -892,13 +920,14 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         name: &'static str,
     ) -> Result<T, SFError> {
         self.mark_accessed(pos);
-        let val = self.values.get(pos).ok_or_else(|| {
-            SFError::TooShortResponse {
-                name,
-                pos,
-                array: format!("{:?}", self.values),
-            }
-        })?;
+        let val =
+            self.values
+                .get(pos)
+                .ok_or_else(|| SFError::TooShortResponse {
+                    name,
+                    pos,
+                    array: format!("{:?}", self.values),
+                })?;
         val.trim().parse::<T>().map_err(|_| {
             error!("Could not parse {name} from {val:?}");
             SFError::ParsingError(name, (*val).to_string())
@@ -906,7 +935,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     }
 
     /// Tries to parse the value at index `pos` into `Option<T>`.
-    /// If the index is out of bounds or parsing fails, returns `None` with a warning.
+    /// If the index is out of bounds or parsing fails, returns `None` with a
+    /// warning.
     #[must_use]
     pub fn parse_opt_at<T: FromStr>(
         &self,
@@ -921,7 +951,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         })
     }
 
-    /// Parses the value at index `pos` into `T`, returning `default` on failure with a warning.
+    /// Parses the value at index `pos` into `T`, returning `default` on failure
+    /// with a warning.
     #[must_use]
     pub fn parse_soft_at<T: FromStr + Display + Copy>(
         &self,
@@ -949,13 +980,15 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         T::from_i64(val).or_else(|| T::from_u64(val.cast_unsigned()))
     }
 
-    /// Parses an enum at `pos` using [`FromPrimitive`], returning `default` if missing or invalid.
+    /// Parses an enum at `pos` using [`FromPrimitive`], returning `default` if
+    /// missing or invalid.
     #[must_use]
     pub fn enum_or<T: FromPrimitive>(&self, pos: usize, default: T) -> T {
         self.enum_opt(pos).unwrap_or(default)
     }
 
-    /// Parses an enum at `pos` using [`FromPrimitive`] after transforming the raw integer with `f`.
+    /// Parses an enum at `pos` using [`FromPrimitive`] after transforming the
+    /// raw integer with `f`.
     pub fn enum_map<T: FromPrimitive, F: FnOnce(u32) -> u32>(
         &self,
         pos: usize,
@@ -968,32 +1001,41 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     /// Parses a required enum at `pos` using [`FromPrimitive`].
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if missing, unparseable, or not a recognized variant.
+    /// Returns [`SFError::ParsingErrorV2`] if missing, unparseable, or not a
+    /// recognized variant.
     #[track_caller]
-    pub fn parse_enum<T: FromPrimitive>(&self, pos: usize) -> Result<T, SFError> {
+    pub fn parse_enum<T: FromPrimitive>(
+        &self,
+        pos: usize,
+    ) -> Result<T, SFError> {
         let raw = self.i64(pos)?;
-        T::from_i64(raw).or_else(|| T::from_u64(raw.cast_unsigned())).ok_or_else(|| {
-            let caller = std::panic::Location::caller();
-            warn!(
-                "Unknown enum variant {raw} for {} at {}:{}:{}",
-                std::any::type_name::<T>(),
-                caller.file(),
-                caller.line(),
-                caller.column()
-            );
-            SFError::ParsingErrorV2(format!(
-                "Unknown enum variant {raw} for {}",
-                std::any::type_name::<T>()
-            ))
-        })
+        T::from_i64(raw)
+            .or_else(|| T::from_u64(raw.cast_unsigned()))
+            .ok_or_else(|| {
+                let caller = std::panic::Location::caller();
+                warn!(
+                    "Unknown enum variant {raw} for {} at {}:{}:{}",
+                    std::any::type_name::<T>(),
+                    caller.file(),
+                    caller.line(),
+                    caller.column()
+                );
+                SFError::ParsingErrorV2(format!(
+                    "Unknown enum variant {raw} for {}",
+                    std::any::type_name::<T>()
+                ))
+            })
     }
 
-    /// Parses the timestamp at `pos` as an `i64` and converts it to local time using `server_time`.
+    /// Parses the timestamp at `pos` as an `i64` and converts it to local time
+    /// using `server_time`.
     ///
-    /// Returns `Ok(None)` if the timestamp is unset (e.g. 0, -1, 1, 11) or invalid.
+    /// Returns `Ok(None)` if the timestamp is unset (e.g. 0, -1, 1, 11) or
+    /// invalid.
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot be parsed as `i64`.
+    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot
+    /// be parsed as `i64`.
     #[track_caller]
     pub fn server_time(
         &self,
@@ -1004,7 +1046,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         Ok(server_time.convert_to_local_tracked(raw))
     }
 
-    /// Parses the timestamp at `pos` and converts it to local time, returning `None` on parse error or unset date.
+    /// Parses the timestamp at `pos` and converts it to local time, returning
+    /// `None` on parse error or unset date.
     #[track_caller]
     #[must_use]
     pub fn server_time_opt(
@@ -1015,7 +1058,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         self.server_time(pos, server_time).ok().flatten()
     }
 
-    /// Returns an iterator yielding consecutive non-overlapping chunks of size `CHUNK`.
+    /// Returns an iterator yielding consecutive non-overlapping chunks of size
+    /// `CHUNK`.
     ///
     /// # Panics
     /// Panics if `CHUNK == 0`.
@@ -1069,9 +1113,9 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     ) -> Result<T, SFError> {
         const { assert!(IDX < N, "index out of bounds for ResponseVals") };
         let s = self.get_const::<IDX>();
-        s.trim().parse::<T>().map_err(|_| {
-            SFError::ParsingError(name, s.to_string())
-        })
+        s.trim()
+            .parse::<T>()
+            .map_err(|_| SFError::ParsingError(name, s.to_string()))
     }
 
     /// Returns a sub-chunk of `M` elements starting at compile-time `OFFSET`.
@@ -1105,7 +1149,8 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         }
     }
 
-    /// Returns an iterator yielding consecutive non-overlapping chunks of size `CHUNK`.
+    /// Returns an iterator yielding consecutive non-overlapping chunks of size
+    /// `CHUNK`.
     ///
     /// # Panics
     /// Fails to compile if `CHUNK == 0` or if `N % CHUNK != 0`.
@@ -1120,19 +1165,17 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
             );
         };
         self.mark_all_accessed();
-        self.values
-            .chunks_exact(CHUNK)
-            .map(|chunk| {
-                let arr: [&'a str; CHUNK] = match chunk.try_into() {
-                    Ok(a) => a,
-                    Err(_) => unreachable!(),
-                };
-                ResponseVals {
-                    values: Box::new(arr),
-                    #[cfg(debug_assertions)]
-                    accessed: new_accessed(),
-                }
-            })
+        self.values.chunks_exact(CHUNK).map(|chunk| {
+            let arr: [&'a str; CHUNK] = match chunk.try_into() {
+                Ok(a) => a,
+                Err(_) => unreachable!(),
+            };
+            ResponseVals {
+                values: Box::new(arr),
+                #[cfg(debug_assertions)]
+                accessed: new_accessed(),
+            }
+        })
     }
 
     /// Returns an iterator over the string values.
@@ -1334,11 +1377,21 @@ mod tests {
             value: "1/2/3/4/5/6",
             sub_key: "",
         };
-        let chunks: Vec<ResponseVals<2>> = rval.parse_chunks().unwrap().collect();
+        let chunks: Vec<ResponseVals<2>> =
+            rval.parse_chunks().unwrap().collect();
         assert_eq!(chunks.len(), 3);
-        assert_eq!((chunks[0].u32(0).unwrap(), chunks[0].u32(1).unwrap()), (1, 2));
-        assert_eq!((chunks[1].u32(0).unwrap(), chunks[1].u32(1).unwrap()), (3, 4));
-        assert_eq!((chunks[2].u32(0).unwrap(), chunks[2].u32(1).unwrap()), (5, 6));
+        assert_eq!(
+            (chunks[0].u32(0).unwrap(), chunks[0].u32(1).unwrap()),
+            (1, 2)
+        );
+        assert_eq!(
+            (chunks[1].u32(0).unwrap(), chunks[1].u32(1).unwrap()),
+            (3, 4)
+        );
+        assert_eq!(
+            (chunks[2].u32(0).unwrap(), chunks[2].u32(1).unwrap()),
+            (5, 6)
+        );
 
         // Test custom delimiter (comma)
         let comma_val = ResponseVal {
@@ -1411,4 +1464,3 @@ mod tests {
         assert_eq!(vals.unaccessed_indices(), Vec::<usize>::new());
     }
 }
-
