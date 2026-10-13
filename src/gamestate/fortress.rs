@@ -7,14 +7,8 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive as _;
 use strum::{EnumCount, EnumIter, IntoEnumIterator};
 
-use super::{
-    ArrSkip, CCGet, CSTGet, SFError, ServerTime, items::GemType,
-};
-use crate::{
-    PlayerId,
-    gamestate::EnumMapGet,
-    response::ResponseVals,
-};
+use super::{ArrSkip, CCGet, CSTGet, SFError, ServerTime, items::GemType};
+use crate::{PlayerId, gamestate::EnumMapGet, response::ResponseVals};
 
 /// The information about a characters fortress
 #[derive(Debug, Default, Clone)]
@@ -420,12 +414,10 @@ impl Fortress {
         &mut self,
         data: &ResponseVals<12>,
     ) -> Result<(), SFError> {
-        let mut chunks = data.chunks_exact::<4>();
-        for typ in FortressUnitType::iter() {
-            if let Some(cost_vals) = chunks.next() {
-                self.units[typ].training.cost =
-                    FortressCost::parse(&cost_vals)?;
-            }
+        for (unit, cost_vals) in
+            self.units.values_mut().zip(data.chunks_exact::<4>())
+        {
+            unit.training.cost = FortressCost::parse(&cost_vals)?;
         }
         Ok(())
     }
@@ -435,14 +427,12 @@ impl Fortress {
         &mut self,
         data: &ResponseVals<9>,
     ) -> Result<(), SFError> {
-        let mut chunks = data.chunks_exact::<3>();
-        for typ in FortressUnitType::iter() {
-            if let Some(chunk) = chunks.next() {
-                let unit = &mut self.units[typ];
-                unit.upgrade_next_lvl = chunk.u64(0)?;
-                unit.upgrade_cost.wood = chunk.u64(1)?;
-                unit.upgrade_cost.stone = chunk.u64(2)?;
-            }
+        for (unit, chunk) in
+            self.units.values_mut().zip(data.chunks_exact::<3>())
+        {
+            unit.upgrade_next_lvl = chunk.u64(0)?;
+            unit.upgrade_cost.wood = chunk.u64(1)?;
+            unit.upgrade_cost.stone = chunk.u64(2)?;
         }
         Ok(())
     }
@@ -453,8 +443,8 @@ impl Fortress {
         data: &ResponseVals<4>,
     ) -> Result<(), SFError> {
         data.ignore(0, "might be max unit level");
-        for (i, typ) in FortressUnitType::iter().enumerate() {
-            self.units[typ].level = data.u16(1 + i)?;
+        for (i, unit) in self.units.values_mut().enumerate() {
+            unit.level = data.u16(1 + i)?;
         }
         Ok(())
     }
@@ -547,11 +537,15 @@ mod tests {
 
     #[test]
     fn test_fortress_update_prices() {
-        let raw = "7200/4000/1100/333/7200/2000/1015/308/7200/800/220/133/7200/1200/660/107/7200/6000/1467/444/765/700/7/9/765/500/41/7/765/400/20/14/765/600/61/20/7200/10000/1173/356/765/400/25/8/765/15000/30/13/9180/45000/29/9";
+        let raw = "7200/4000/1100/333/7200/2000/1015/308/7200/800/220/133/\
+                   7200/1200/660/107/7200/6000/1467/444/765/700/7/9/765/500/\
+                   41/7/765/400/20/14/765/600/61/20/7200/10000/1173/356/765/\
+                   400/25/8/765/15000/30/13/9180/45000/29/9";
         let mut fortress = Fortress::default();
         crate::parse_test!(update: fortress.update_prices(raw), {});
 
-        let ft = fortress.buildings[FortressBuildingType::Fortress].upgrade_cost;
+        let ft =
+            fortress.buildings[FortressBuildingType::Fortress].upgrade_cost;
         assert_eq!(
             (ft.time.as_secs(), ft.silver, ft.wood, ft.stone),
             (7200, 4000, 1100, 333)
@@ -566,7 +560,9 @@ mod tests {
 
     #[test]
     fn test_fortress_update() {
-        let raw = "19/15/18/18/18/18/15/15/15/18/18/18/3/1786227769/1785018169/376/7053/1565/1785024031/278315/1459278099/1784875170/0/0/0/18/348143";
+        let raw = "19/15/18/18/18/18/15/15/15/18/18/18/3/1786227769/\
+                   1785018169/376/7053/1565/1785024031/278315/1459278099/\
+                   1784875170/0/0/0/18/348143";
         let mut fortress = Fortress::default();
         crate::parse_test!(update: fortress(raw, ServerTime::default()), {
             upgrades: 376,
@@ -600,7 +596,9 @@ mod tests {
 
     #[test]
     fn test_fortress_update_idle_and_gem_search() {
-        let raw = "19/15/19/18/18/18/15/15/15/18/18/18/0/0/0/377/7069/1583/1790325015/370262/1459278099/1791987830/13/1790346770/1790323370/18/521703";
+        let raw = "19/15/19/18/18/18/15/15/15/18/18/18/0/0/0/377/7069/1583/\
+                   1790325015/370262/1459278099/1791987830/13/1790346770/\
+                   1790323370/18/521703";
         let mut fortress = Fortress::default();
         crate::parse_test!(update: fortress(raw, ServerTime::default()), {
             upgrades: 377,
@@ -620,24 +618,49 @@ mod tests {
 
     #[test]
     fn test_fortress_update_units() {
-        let raw = "45/0/0/0/0/0/1790341727/1790327907/1790327907/0/0/0/18/18/18";
+        let raw =
+            "45/0/0/0/0/0/1790341727/1790327907/1790327907/0/0/0/18/18/18";
         let mut fortress = Fortress::default();
         crate::parse_test!(update: fortress.update_units(raw, ServerTime::default()), {});
 
         assert_eq!(fortress.units[FortressUnitType::Soldier].count, 45);
         assert_eq!(fortress.units[FortressUnitType::Soldier].in_training, 0);
-        assert!(fortress.units[FortressUnitType::Soldier].training.start.is_some());
-        assert_eq!(fortress.units[FortressUnitType::Soldier].training.finish, None);
+        assert!(
+            fortress.units[FortressUnitType::Soldier]
+                .training
+                .start
+                .is_some()
+        );
+        assert_eq!(
+            fortress.units[FortressUnitType::Soldier].training.finish,
+            None
+        );
 
         assert_eq!(fortress.units[FortressUnitType::Magician].count, 0);
         assert_eq!(fortress.units[FortressUnitType::Magician].in_training, 0);
-        assert!(fortress.units[FortressUnitType::Magician].training.start.is_some());
-        assert_eq!(fortress.units[FortressUnitType::Magician].training.finish, None);
+        assert!(
+            fortress.units[FortressUnitType::Magician]
+                .training
+                .start
+                .is_some()
+        );
+        assert_eq!(
+            fortress.units[FortressUnitType::Magician].training.finish,
+            None
+        );
 
         assert_eq!(fortress.units[FortressUnitType::Archer].count, 0);
         assert_eq!(fortress.units[FortressUnitType::Archer].in_training, 0);
-        assert!(fortress.units[FortressUnitType::Archer].training.start.is_some());
-        assert_eq!(fortress.units[FortressUnitType::Archer].training.finish, None);
+        assert!(
+            fortress.units[FortressUnitType::Archer]
+                .training
+                .start
+                .is_some()
+        );
+        assert_eq!(
+            fortress.units[FortressUnitType::Archer].training.finish,
+            None
+        );
     }
 
     #[test]
@@ -653,7 +676,8 @@ mod tests {
 
     #[test]
     fn test_fortress_update_unit_upgrade_info() {
-        let raw = "145/49500000/37800000/145/132000000/10800000/145/66000000/32400000";
+        let raw = "145/49500000/37800000/145/132000000/10800000/145/66000000/\
+                   32400000";
         let mut fortress = Fortress::default();
         crate::parse_test!(update: fortress.update_unit_upgrade_info(raw), {});
 
@@ -679,17 +703,20 @@ mod tests {
         let mut fortress = Fortress::default();
         crate::parse_test!(update: fortress.update_unit_prices(raw), {});
 
-        let soldier_cost = fortress.units[FortressUnitType::Soldier].training.cost;
+        let soldier_cost =
+            fortress.units[FortressUnitType::Soldier].training.cost;
         assert_eq!(soldier_cost.time.as_secs(), 600);
         assert_eq!(soldier_cost.wood, 20_250);
         assert_eq!(soldier_cost.stone, 6750);
 
-        let mage_cost = fortress.units[FortressUnitType::Magician].training.cost;
+        let mage_cost =
+            fortress.units[FortressUnitType::Magician].training.cost;
         assert_eq!(mage_cost.time.as_secs(), 600);
         assert_eq!(mage_cost.wood, 15_187);
         assert_eq!(mage_cost.stone, 8437);
 
-        let archer_cost = fortress.units[FortressUnitType::Archer].training.cost;
+        let archer_cost =
+            fortress.units[FortressUnitType::Archer].training.cost;
         assert_eq!(archer_cost.time.as_secs(), 300);
         assert_eq!(archer_cost.wood, 25_312);
         assert_eq!(archer_cost.stone, 5062);
@@ -697,7 +724,9 @@ mod tests {
 
     #[test]
     fn test_fortress_update_resources() {
-        let raw = "614062/136458/4911687/6300000/1350000/4911687/165000000/54000000/225000/50000/454785/1791911255/300000000/100000000/49500000/16200000";
+        let raw = "614062/136458/4911687/6300000/1350000/4911687/165000000/\
+                   54000000/225000/50000/454785/1791911255/300000000/\
+                   100000000/49500000/16200000";
         let mut fortress = Fortress::default();
         crate::parse_test!(update: fortress.update_resources(raw, ServerTime::default()), {});
 

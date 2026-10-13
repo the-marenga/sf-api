@@ -1779,10 +1779,9 @@ impl GameState {
                 // {pid}/2/2/0/{rank}/1761884016/482/10/0/217/1761821390/482
             }
             "fortressstorage" => {
-                self.fortress.get_or_insert_default().update_resources(
-                    &val.values_fixed()?,
-                    server_time,
-                )?;
+                self.fortress
+                    .get_or_insert_default()
+                    .update_resources(&val.values_fixed()?, server_time)?;
             }
             "fortressunits" => {
                 self.fortress
@@ -2076,7 +2075,8 @@ impl GameState {
                 for slice in
                     data.skip(1, "ld items")?.chunks_exact(ITEM_PARSE_LEN)
                 {
-                    let Some(item) = Item::parse_slice(slice, server_time)? else {
+                    let Some(item) = Item::parse_slice(slice, server_time)?
+                    else {
                         warn!("Could not parse pending ld item");
                         continue;
                     };
@@ -2189,7 +2189,8 @@ fn fight_no_from_header(header_name: &str) -> usize {
 pub struct ServerTime(i64);
 
 impl ServerTime {
-    /// Converts the raw timestamp from the server to local time with caller tracking.
+    /// Converts the raw timestamp from the server to local time with caller
+    /// tracking.
     #[must_use]
     #[track_caller]
     pub(crate) fn convert_to_local_tracked(
