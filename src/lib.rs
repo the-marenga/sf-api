@@ -38,7 +38,7 @@ macro_rules! parse_test {
     ($ty:ident ( $raw:expr $(, $arg:expr)* ), { $($field:ident: $expected:expr),+ $(,)? }) => {
         let vals = match $raw.try_into() {
             Ok(v) => v,
-            Err(e) => panic!("invalid ResponseVals format: {e}"),
+            Err(e) => panic!("invalid ValueArray format: {e}"),
         };
         let parsed = match $ty::parse(&vals $(, $arg)*) {
             Ok(p) => p,
@@ -51,7 +51,7 @@ macro_rules! parse_test {
     (opt: $ty:ident ( $raw:expr $(, $arg:expr)* ), { $($field:ident: $expected:expr),+ $(,)? }) => {
         let vals = match $raw.try_into() {
             Ok(v) => v,
-            Err(e) => panic!("invalid ResponseVals format: {e}"),
+            Err(e) => panic!("invalid ValueArray format: {e}"),
         };
         let parsed = match $ty::parse(&vals $(, $arg)*) {
             Ok(Some(p)) => p,
@@ -65,7 +65,7 @@ macro_rules! parse_test {
     ($ty:ident ( $raw:expr $(, $arg:expr)* ) => $expected:expr) => {
         let vals = match $raw.try_into() {
             Ok(v) => v,
-            Err(e) => panic!("invalid ResponseVals format: {e}"),
+            Err(e) => panic!("invalid ValueArray format: {e}"),
         };
         let parsed = match $ty::parse(&vals $(, $arg)*) {
             Ok(p) => p,
@@ -76,7 +76,7 @@ macro_rules! parse_test {
     (update: $target:ident . $method:ident ( $raw:expr $(, $arg:expr)* ), { $($field:ident: $expected:expr),* $(,)? }) => {
         let vals = match $raw.try_into() {
             Ok(v) => v,
-            Err(e) => panic!("invalid ResponseVals format: {e}"),
+            Err(e) => panic!("invalid ValueArray format: {e}"),
         };
         if let Err(e) = $target.$method(&vals $(, $arg)*) {
             panic!("update failed: {e}");
@@ -88,7 +88,7 @@ macro_rules! parse_test {
     (update: $target:ident ( $raw:expr $(, $arg:expr)* ), { $($field:ident: $expected:expr),* $(,)? }) => {
         let vals = match $raw.try_into() {
             Ok(v) => v,
-            Err(e) => panic!("invalid ResponseVals format: {e}"),
+            Err(e) => panic!("invalid ValueArray format: {e}"),
         };
         if let Err(e) = $target.update(&vals $(, $arg)*) {
             panic!("update failed: {e}");
