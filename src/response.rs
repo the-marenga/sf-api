@@ -320,12 +320,6 @@ impl<'a> ResponseVal<'a> {
         self.value
     }
 
-    /// Splits this response value by '/' into a list of response values.
-    #[must_use]
-    pub fn vals(&self) -> ResponseVals<'_> {
-        ResponseVals::from_raw(self.value)
-    }
-
     /// Splits this response value by `'/'` into consecutive non-overlapping chunks of size `CHUNK`.
     ///
     /// # Errors
@@ -377,27 +371,28 @@ impl<'a> ResponseVal<'a> {
 
         Ok(vals
             .chunks_exact(CHUNK)
-            .map(|chunk| ResponseVals {
-                values: chunk.into(),
+            .map(|chunk| {
+                let arr: [&'a str; CHUNK] = match chunk.try_into() {
+                    Ok(a) => a,
+                    Err(_) => unreachable!(),
+                };
+                ResponseVals {
+                    values: Box::new(arr),
+                }
             })
             .collect::<Vec<_>>()
             .into_iter())
     }
 
-    /// Parses the response into [`ResponseVals`].
-    ///
-    /// If `expected_length > 0`, verifies that at least `expected_length` values
-    /// exist, warns and truncates any unexpected trailing values.
-    /// If `expected_length == UNBOUNDED` (0), returns all values as an unbounded list.
+    /// Parses the response into a compile-time bounded [`ResponseVals<'a, N>`] split by `/`.
     ///
     /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if the response is empty or has fewer than `expected_length` values.
+    /// Returns [`SFError::ParsingErrorV2`] if the response is empty or has fewer than `N` values.
     #[track_caller]
-    pub fn values(
+    pub fn values<const N: usize>(
         self,
-        expected_length: usize,
-    ) -> Result<ResponseVals<'a>, SFError> {
-        self.values_delim_runtime(expected_length, '/')
+    ) -> Result<ResponseVals<'a, N>, SFError> {
+        self.values_delim::<N>('/')
     }
 
     /// Parses the response into a compile-time bounded [`ResponseVals<'a, N>`] split by `/`.
@@ -432,18 +427,9 @@ impl<'a> ResponseVal<'a> {
         self,
         delim: char,
     ) -> Result<ResponseVals<'a, N>, SFError> {
-        let unbounded = self.values_delim_runtime(N, delim)?;
-        Ok(ResponseVals {
-            values: unbounded.values,
-        })
-    }
-
-    #[track_caller]
-    fn values_delim_runtime(
-        self,
-        expected_length: usize,
-        delim: char,
-    ) -> Result<ResponseVals<'a>, SFError> {
+        const {
+            assert!(N > 0, "ResponseVals bound N must be greater than 0");
+        };
         let trimmed = self
             .value
             .trim_matches(|a| [delim, ' ', '\n', '\r'].contains(&a));
@@ -459,34 +445,41 @@ impl<'a> ResponseVal<'a> {
 
         let mut vals: Vec<_> = trimmed.split(delim).map(str::trim).collect();
 
-        if expected_length != UNBOUNDED {
-            if vals.len() > expected_length {
-                let caller = std::panic::Location::caller();
-                let extra = vals.len() - expected_length;
-                warn!(
-                    "Server response contains {extra} unexpected values at \
-                     {}:{}:{}: {:?}",
-                    caller.file(),
-                    caller.line(),
-                    caller.column(),
-                    vals.get(expected_length..).unwrap_or_default()
-                );
-                vals.truncate(expected_length);
-            } else if vals.len() < expected_length {
-                let caller = std::panic::Location::caller();
-                let missing = expected_length - vals.len();
-                return Err(SFError::ParsingErrorV2(format!(
-                    "Server response is missing {missing} values at {}:{}:{}",
-                    caller.file(),
-                    caller.line(),
-                    caller.column()
-                )));
-            }
+        if vals.len() > N {
+            let caller = std::panic::Location::caller();
+            let extra = vals.len() - N;
+            warn!(
+                "Server response contains {extra} unexpected values at \
+                 {}:{}:{}: {:?}",
+                caller.file(),
+                caller.line(),
+                caller.column(),
+                vals.get(N..).unwrap_or_default()
+            );
+            vals.truncate(N);
+        } else if vals.len() < N {
+            let caller = std::panic::Location::caller();
+            let missing = N - vals.len();
+            return Err(SFError::ParsingErrorV2(format!(
+                "Server response is missing {missing} values at {}:{}:{}",
+                caller.file(),
+                caller.line(),
+                caller.column()
+            )));
         }
 
-        Ok(ResponseVals {
-            values: vals.into_boxed_slice(),
-        })
+        let boxed_slice: Box<[&'a str]> = vals.into_boxed_slice();
+        let values: Box<[&'a str; N]> = boxed_slice.try_into().map_err(|_| {
+            let caller = std::panic::Location::caller();
+            SFError::ParsingErrorV2(format!(
+                "Failed to convert response into array of size {N} at {}:{}:{}",
+                caller.file(),
+                caller.line(),
+                caller.column()
+            ))
+        })?;
+
+        Ok(ResponseVals { values })
     }
 }
 
@@ -496,78 +489,43 @@ impl std::fmt::Display for ResponseVal<'_> {
     }
 }
 
-/// The default const generic parameter for [`ResponseVals`], indicating an
-/// unbounded (unknown/dynamic) length.
-pub const UNBOUNDED: usize = 0;
-
 /// A sequence of string values from a server response, typically split from a
 /// `/`-separated list.
 ///
-/// When `N > 0`, the type guarantees at compile-time that at least `N` values
-/// are present in the response (validated upon construction or conversion).
-///
-/// When `N == UNBOUNDED` (the default `0`), the response has an unbounded /
-/// dynamic length.
+/// Guarantees at compile-time that exactly `N` values are present in the response
+/// (validated upon construction or conversion), stored efficiently in a heap-allocated
+/// fixed-size array `Box<[&'a str; N]>`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::module_name_repetitions)]
-pub struct ResponseVals<'a, const N: usize = UNBOUNDED> {
-    values: Box<[&'a str]>,
-}
-
-impl<'a> ResponseVals<'a, UNBOUNDED> {
-    /// Creates a new unbounded [`ResponseVals`] by splitting a raw server string by `/`.
-    #[must_use]
-    pub fn from_raw(raw: &'a str) -> Self {
-        let trimmed = raw.trim_matches(|a| ['/', ' ', '\n', '\r'].contains(&a));
-        let values: Box<[&'a str]> = if trimmed.is_empty() {
-            Box::default()
-        } else {
-            trimmed.split('/').map(str::trim).collect()
-        };
-        Self { values }
-    }
-
-    /// Creates a new unbounded [`ResponseVals`] from a boxed slice of string references.
-    #[must_use]
-    pub fn from_boxed(values: Box<[&'a str]>) -> Self {
-        Self { values }
-    }
-
-    /// Creates a new unbounded [`ResponseVals`] from a slice of string references.
-    #[must_use]
-    pub fn from_slice(values: &[&'a str]) -> Self {
-        Self {
-            values: values.to_vec().into_boxed_slice(),
-        }
-    }
+pub struct ResponseVals<'a, const N: usize> {
+    values: Box<[&'a str; N]>,
 }
 
 impl<'a, const N: usize> ResponseVals<'a, N> {
-
-    /// Converts this into an unbounded [`ResponseVals`].
+    /// Creates a new [`ResponseVals`] from a fixed-size array.
     #[must_use]
-    pub fn into_unbounded(self) -> ResponseVals<'a, UNBOUNDED> {
-        ResponseVals {
-            values: self.values,
+    pub fn from_array(values: [&'a str; N]) -> Self {
+        Self {
+            values: Box::new(values),
         }
     }
 
-    /// Returns the number of values in this response.
+    /// Returns the number of values in this response (always `N`).
     #[must_use]
-    pub fn len(&self) -> usize {
-        self.values.len()
+    pub const fn len(&self) -> usize {
+        N
     }
 
-    /// Returns `true` if this response contains no values.
+    /// Returns `true` if this response contains no values (always `false` since `N > 0`).
     #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.values.is_empty()
+    pub const fn is_empty(&self) -> bool {
+        N == 0
     }
 
     /// Returns a reference to the underlying slice of `&str`.
     #[must_use]
     pub fn as_slice(&self) -> &[&'a str] {
-        &self.values
+        self.values.as_slice()
     }
 
     /// Returns the string value at index `pos`, if in bounds.
@@ -923,21 +881,21 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         &self,
     ) -> impl Iterator<Item = ResponseVals<'a, CHUNK>> + '_ {
         assert!(CHUNK > 0, "CHUNK size must be greater than 0");
-        self.values.chunks_exact(CHUNK).map(|chunk| ResponseVals {
-            values: chunk.into(),
+        self.values.chunks_exact(CHUNK).map(|chunk| {
+            let arr: [&'a str; CHUNK] = match chunk.try_into() {
+                Ok(a) => a,
+                Err(_) => unreachable!(),
+            };
+            ResponseVals {
+                values: Box::new(arr),
+            }
         })
     }
 
-    /// Returns a direct array reference to the first `N` elements.
-    ///
-    /// Since `self.len() >= N` was validated upon construction or conversion,
-    /// this is guaranteed to succeed.
+    /// Returns a direct array reference to the values.
     #[must_use]
     pub fn as_array(&self) -> &[&'a str; N] {
-        match self.values.as_ref().first_chunk::<N>() {
-            Some(arr) => arr,
-            None => unreachable!("ResponseVals<N> invariant violated: len < N"),
-        }
+        &self.values
     }
 
     /// Returns the element at `IDX` with compile-time bounds checking.
@@ -948,7 +906,7 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     pub fn get_const<const IDX: usize>(&self) -> &'a str {
         const { assert!(IDX < N, "index out of bounds for ResponseVals") };
         #[allow(clippy::indexing_slicing)]
-        self.as_array()[IDX]
+        self.values[IDX]
     }
 
     /// Parses the element at `IDX` into `T` with compile-time bounds checking.
@@ -984,9 +942,13 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
             );
         };
         #[allow(clippy::indexing_slicing)]
-        let slice = &self.as_array()[OFFSET..OFFSET + M];
+        let slice: &[&'a str] = &self.values[OFFSET..OFFSET + M];
+        let arr: [&'a str; M] = match slice.try_into() {
+            Ok(a) => a,
+            Err(_) => unreachable!(),
+        };
         ResponseVals {
-            values: slice.into(),
+            values: Box::new(arr),
         }
     }
 
@@ -1004,33 +966,56 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
                 "N must be an exact multiple of CHUNK size"
             );
         };
-        self.as_array()
+        self.values
             .chunks_exact(CHUNK)
-            .map(|chunk| ResponseVals {
-                values: chunk.into(),
+            .map(|chunk| {
+                let arr: [&'a str; CHUNK] = match chunk.try_into() {
+                    Ok(a) => a,
+                    Err(_) => unreachable!(),
+                };
+                ResponseVals {
+                    values: Box::new(arr),
+                }
             })
+    }
+
+    /// Returns an iterator over the string values.
+    pub fn iter(&self) -> std::iter::Copied<std::slice::Iter<'_, &'a str>> {
+        self.values.iter().copied()
     }
 }
 
 impl<'a, const N: usize> std::ops::Deref for ResponseVals<'a, N> {
-    type Target = [&'a str];
+    type Target = [&'a str; N];
 
     fn deref(&self) -> &Self::Target {
         &self.values
     }
 }
 
-impl<'a, const N: usize> AsRef<[&'a str]> for ResponseVals<'a, N> {
-    fn as_ref(&self) -> &[&'a str] {
+impl<'a, const N: usize> AsRef<[&'a str; N]> for ResponseVals<'a, N> {
+    fn as_ref(&self) -> &[&'a str; N] {
         &self.values
     }
 }
 
-impl Default for ResponseVals<'_, UNBOUNDED> {
-    fn default() -> Self {
+impl<'a, const N: usize> AsRef<[&'a str]> for ResponseVals<'a, N> {
+    fn as_ref(&self) -> &[&'a str] {
+        self.values.as_slice()
+    }
+}
+
+impl<'a, const N: usize> From<[&'a str; N]> for ResponseVals<'a, N> {
+    fn from(arr: [&'a str; N]) -> Self {
         Self {
-            values: Box::default(),
+            values: Box::new(arr),
         }
+    }
+}
+
+impl<'a, const N: usize> From<Box<[&'a str; N]>> for ResponseVals<'a, N> {
+    fn from(values: Box<[&'a str; N]>) -> Self {
+        Self { values }
     }
 }
 
@@ -1040,20 +1025,6 @@ impl<'a, const N: usize> IntoIterator for &'a ResponseVals<'a, N> {
 
     fn into_iter(self) -> Self::IntoIter {
         self.values.iter().copied()
-    }
-}
-
-impl<'a> From<&'a [&'a str]> for ResponseVals<'a, UNBOUNDED> {
-    fn from(slice: &'a [&'a str]) -> Self {
-        Self::from_slice(slice)
-    }
-}
-
-impl<'a> From<Vec<&'a str>> for ResponseVals<'a, UNBOUNDED> {
-    fn from(vec: Vec<&'a str>) -> Self {
-        Self {
-            values: vec.into_boxed_slice(),
-        }
     }
 }
 
@@ -1115,30 +1086,21 @@ mod tests {
     #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
     use super::*;
 
-    fn test_parse_unbounded(data: &ResponseVals) -> usize {
-        data.len()
-    }
-
     #[test]
-    fn test_unbounded_from_raw() {
-        let vals = ResponseVals::from_raw("1/2/3/4");
+    fn test_from_array_and_try_from() {
+        let vals = ResponseVals::from_array(["1", "2", "3", "4"]);
         assert_eq!(vals.len(), 4);
         assert_eq!(vals[0], "1");
         assert_eq!(vals[3], "4");
-        assert_eq!(test_parse_unbounded(&vals), 4);
-    }
 
-    #[test]
-    fn test_empty_raw() {
-        let vals = ResponseVals::from_raw("");
-        assert!(vals.is_empty());
-        assert_eq!(vals.len(), 0);
+        let parsed: ResponseVals<4> = "1/2/3/4".try_into().unwrap();
+        assert_eq!(parsed, vals);
     }
 
     #[test]
     fn test_caller_tracking_get_and_typed_parsers() {
         let raw = "42/-10/true/hello/255/1000/2000000000/9000000000000000000";
-        let vals = ResponseVals::from_raw(raw);
+        let vals: ResponseVals<8> = raw.try_into().unwrap();
         assert_eq!(vals.u32(0).unwrap(), 42);
         assert_eq!(vals.i32(1).unwrap(), -10);
         assert!(vals.bool(2).unwrap());
@@ -1173,17 +1135,13 @@ mod tests {
             sub_key: "k",
         };
         // Expected 3, but got 5: should warn and truncate to 3
-        let vals = rval.values(3).unwrap();
+        let vals: ResponseVals<3> = rval.values().unwrap();
         assert_eq!(vals.len(), 3);
         assert_eq!(vals.u32(0).unwrap(), 1);
         assert_eq!(vals.u32(2).unwrap(), 3);
 
-        // Expected 3 with compile-time fixed
-        let fixed: ResponseVals<3> = rval.values_fixed().unwrap();
-        assert_eq!(fixed.len(), 3);
-
         // Missing values error
-        let err = rval.values(10).unwrap_err();
+        let err = rval.values::<10>().unwrap_err();
         assert!(matches!(err, SFError::ParsingErrorV2(_)));
         assert!(err.to_string().contains("missing 5 values"));
 
@@ -1192,7 +1150,7 @@ mod tests {
             value: "",
             sub_key: "",
         };
-        let err = empty_val.values(0).unwrap_err();
+        let err = empty_val.values::<3>().unwrap_err();
         assert!(matches!(err, SFError::ParsingErrorV2(_)));
         assert!(err.to_string().contains("is empty"));
     }
