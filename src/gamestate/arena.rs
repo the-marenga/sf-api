@@ -1,11 +1,12 @@
-use std::ops::Range;
-
 use chrono::{DateTime, Local};
+use enum_map::EnumMap;
+use log::warn;
 
-use super::{items::*, *};
+use super::{AttributeType, Class, CompanionClass, Item, Result, ServerTime};
 use crate::{
     PlayerId,
-    response::{Vals, ValueArray, ValueList},
+    error::SFError,
+    response::{Vals, ValueArray},
 };
 
 /// The arena, that a player can fight other players in
@@ -112,7 +113,7 @@ impl Fight {
     /// Updates this fight from a `fightresult` response. `battlereward` (21
     /// values) and `fortresspillagerv1` (27) share their first 9 values, the
     /// shorter `underworldpillage` has the pillaged souls at index 3.
-    pub(crate) fn update_result(&mut self, data: &ValueList<'_>) {
+    pub(crate) fn update_result<'a>(&mut self, data: &impl Vals<'a>) {
         self.has_player_won = data.i64_or(0, 0) != 0;
         self.silver_change = data.i64_or(2, 0);
 
@@ -196,9 +197,9 @@ impl SingleFight {
     /// 9 (no effects), 12 (one effect) or 15 (two effects) values long:
     /// 7 base values (`actor / state / type / outcome / state / actor_life /
     /// target_life`) plus 2/5/8 more.
-    pub(crate) fn update_rounds(
+    pub(crate) fn update_rounds<'a>(
         &mut self,
-        data: &ValueList<'_>,
+        data: &impl Vals<'a>,
         fight_version: u32,
     ) {
         self.actions.clear();
@@ -249,7 +250,7 @@ impl SingleFight {
             let (actor_effect, opponent_effect) = if stride > 9 {
                 // The actor's effect block has an unused trailing slot
                 data.ignore(i + 11, "effect trailer");
-                parse_active_effect(data, i + 7..i + stride)
+                parse_active_effect(&data.window(i + 7..i + stride))
             } else {
                 (None, None)
             };
@@ -582,15 +583,11 @@ impl FightActionType {
     }
 }
 
-/// Parse a single active effect from the effect block whose type flag is at
-/// `start`: `flag / id / remaining`.
-fn parse_one_effect(
-    data: &ValueList<'_>,
-    start: usize,
-) -> Option<ActiveEffect> {
-    let flag = data.u32_or(start, 0);
-    let id = data.u32_or(start + 1, 0);
-    let remaining = data.u32_or(start + 2, 0);
+/// Parse a single active effect from an effect block: `flag / id / remaining`.
+fn parse_one_effect<'a>(block: &impl Vals<'a>) -> Option<ActiveEffect> {
+    let flag = block.u32_or(0, 0);
+    let id = block.u32_or(1, 0);
+    let remaining = block.u32_or(2, 0);
     Some(match flag {
         1 => ActiveEffect::Ability {
             id,
@@ -624,6 +621,7 @@ fn parse_one_effect(
 }
 
 /// Parse the 5 (12-value) or 8 (15-value) extra values into active effects.
+/// Positions are relative to `extras`.
 ///
 /// 12-value (5 extras):
 ///   [who=1,    flag, id, rem, trail=0]  → (actor,   None)
@@ -635,22 +633,20 @@ fn parse_one_effect(
 ///   who≠0      → that block belongs to the **actor**
 ///   When both blocks belong to the same fighter, only the first
 ///   is returned (the second is typically an expired sentinel).
-fn parse_active_effect(
-    data: &ValueList<'_>,
-    extras: Range<usize>,
+fn parse_active_effect<'a>(
+    extras: &impl Vals<'a>,
 ) -> (Option<ActiveEffect>, Option<ActiveEffect>) {
     if extras.len() < 4 {
         return (None, None);
     }
-    let at = |offset: usize| extras.start + offset;
 
     if extras.len() >= 8 {
         // 15-value: two effect blocks, each with an ownership flag
-        let who1_actor = data.i64_or(at(0), 0) != 0;
-        let who2_actor = data.i64_or(at(4), 0) != 0;
+        let who1_actor = extras.i64_or(0, 0) != 0;
+        let who2_actor = extras.i64_or(4, 0) != 0;
 
-        let eff1 = parse_one_effect(data, at(1));
-        let eff2 = parse_one_effect(data, at(5));
+        let eff1 = parse_one_effect(&extras.window(1..4));
+        let eff2 = parse_one_effect(&extras.window(5..8));
 
         let actor_effect = if who1_actor {
             eff1
@@ -668,12 +664,12 @@ fn parse_active_effect(
         };
 
         (actor_effect, opponent_effect)
-    } else if data.i64_or(at(0), 0) != 0 {
+    } else if extras.i64_or(0, 0) != 0 {
         // 12-value, actor's effect: [who=1, flag, id, rem, trail=0]
-        (parse_one_effect(data, at(1)), None)
+        (parse_one_effect(&extras.window(1..4)), None)
     } else {
         // 12-value, opponent's effect: [0, marker=1, flag, id, rem]
-        (None, parse_one_effect(data, at(2)))
+        (None, parse_one_effect(&extras.window(2..5)))
     }
 }
 
@@ -708,6 +704,7 @@ mod tests {
     use chrono::Local;
 
     use super::*;
+    use crate::response::ValueList;
 
     #[test]
     fn test_arena_update() {
@@ -757,7 +754,7 @@ mod tests {
                    27830/162633/0/1/2/3/3/1039746/0/1/0/0/162633/-6030/1/2/3/\
                    3/0";
         let mut fight = SingleFight::default();
-        fight.update_rounds(&raw.into(), 2);
+        fight.update_rounds(&ValueList::from(raw), 2);
 
         assert_eq!(fight.actions.len(), 8);
         assert_eq!(fight.actions[0].outcome, FightOutcome::Evaded);
@@ -786,7 +783,7 @@ mod tests {
     fn test_update_result_battle_reward() {
         let mut fight = Fight::default();
         let raw = "1/1/0/822/0/100/0/204025/200284/0/0/0/0/0/0/0/0/0/0/0/0";
-        fight.update_result(&raw.into());
+        fight.update_result(&ValueList::from(raw));
 
         assert!(fight.has_player_won);
         assert_eq!(fight.xp_change, 822);
@@ -801,7 +798,7 @@ mod tests {
         let mut fight = Fight::default();
         let raw = "1/1/0/0/0/1/0/1565/1565/0/0/0/0/0/0/0/0/0/0/0/0/1129390/\
                    3438403/1/45/0/0";
-        fight.update_result(&raw.into());
+        fight.update_result(&ValueList::from(raw));
 
         assert!(fight.has_player_won);
         let FightExtra::Fortress {

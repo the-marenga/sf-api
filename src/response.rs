@@ -539,20 +539,26 @@ fn unread<S: Iterator<Item = bool>>(accessed: S) -> Vec<usize> {
         .collect()
 }
 
+/// Reports the values of `what` that were never read.
+#[cfg(debug_assertions)]
+fn warn_unread(what: &str, values: &[&str], unread: &[usize]) {
+    if !unread.is_empty() {
+        warn!(
+            "Unaccessed response values in {what}: indices {unread:?} \
+             (values: {values:?})"
+        );
+    }
+}
+
 #[cfg(debug_assertions)]
 impl<const N: usize> Drop for ValueArray<'_, N> {
     fn drop(&mut self) {
         if !std::thread::panicking() {
-            let unaccessed =
-                unread(self.accessed.iter().map(std::cell::Cell::get));
-
-            if !unaccessed.is_empty() {
-                warn!(
-                    "Unaccessed response values in ValueArray<{N}>: indices \
-                     {unaccessed:?} (values: {:?})",
-                    self.values
-                );
-            }
+            warn_unread(
+                &format!("ValueArray<{N}>"),
+                self.values.as_slice(),
+                &unread(self.accessed.iter().map(std::cell::Cell::get)),
+            );
         }
     }
 }
@@ -582,8 +588,8 @@ impl<const N: usize> std::fmt::Debug for ValueArray<'_, N> {
     }
 }
 
-/// The accessors shared by [`ValueArray<N>`] and `ValueList`, the two kinds
-/// of `/` separated value responses.
+/// The accessors shared by [`ValueArray<N>`], `ValueList` and [`ValsWindow`],
+/// the kinds of `/` separated value responses.
 ///
 /// Values are parsed into the requested type on demand. In debug builds every
 /// read is tracked, so values that are never read are reported when the
@@ -731,6 +737,22 @@ pub trait Vals<'a> {
         let end = range.end.min(self.len());
         let start = range.start.min(end);
         self.values().get(start..end).unwrap_or_default()
+    }
+
+    /// The `range` of values as a [`ValsWindow`], marking them as read.
+    /// Positions are relative to the view, out of range values are clamped.
+    #[must_use]
+    fn window(&self, range: Range<usize>) -> ValsWindow<'_, Self>
+    where
+        Self: Sized,
+    {
+        let end = range.end.min(self.len());
+        let start = range.start.min(end);
+        ValsWindow {
+            inner: self,
+            start,
+            len: end - start,
+        }
     }
 
     /// An iterator over the values, marking all of them as read.
@@ -1025,6 +1047,66 @@ pub trait Vals<'a> {
         server_time: ServerTime,
     ) -> Option<DateTime<Local>> {
         self.server_time(pos, server_time).ok().flatten()
+    }
+}
+
+/// A borrowed, offset section of a [`Vals`], created by [`Vals::window`].
+///
+/// Reads are delegated, so they mark the same values as read at the source.
+pub struct ValsWindow<'v, V> {
+    inner: &'v V,
+    start: usize,
+    len: usize,
+}
+
+impl<'a, V: Vals<'a>> Vals<'a> for ValsWindow<'_, V> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    #[inline]
+    fn value(&self, pos: usize) -> Option<&'a str> {
+        if pos < self.len {
+            self.inner.value(self.start + pos)
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn values(&self) -> &[&'a str] {
+        self.inner
+            .values()
+            .get(self.start..self.start + self.len)
+            .unwrap_or_default()
+    }
+
+    fn mark_all(&self) {
+        for pos in 0..self.len {
+            let _ = self.value(pos);
+        }
+    }
+
+    fn unaccessed_indices(&self) -> Vec<usize> {
+        self.inner
+            .unaccessed_indices()
+            .into_iter()
+            .filter(|pos| *pos >= self.start && *pos < self.start + self.len)
+            .map(|pos| pos - self.start)
+            .collect()
+    }
+}
+
+impl<'a, V: Vals<'a>> Debug for ValsWindow<'_, V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_list().entries(self.values()).finish()
+    }
+}
+
+impl<'a, V: Vals<'a>> Display for ValsWindow<'_, V> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.fmt_values(f)
     }
 }
 
@@ -1377,16 +1459,11 @@ impl<'a> Vals<'a> for ValueList<'a> {
 impl Drop for ValueList<'_> {
     fn drop(&mut self) {
         if !std::thread::panicking() {
-            let unaccessed =
-                unread(self.accessed.iter().map(std::cell::Cell::get));
-
-            if !unaccessed.is_empty() {
-                warn!(
-                    "Unaccessed response values in ValueList: indices \
-                     {unaccessed:?} (values: {:?})",
-                    self.values
-                );
-            }
+            warn_unread(
+                "ValueList",
+                &self.values,
+                &unread(self.accessed.iter().map(std::cell::Cell::get)),
+            );
         }
     }
 }
@@ -1578,7 +1655,10 @@ mod tests {
 
         let vals: ValueArray<4> = "1/abc/3/4".try_into().unwrap();
         check(&vals);
+        // A whole range window behaves like the values it came from
+        check(&vals.window(0..4));
         check(&ValueList::from("1/abc/3/4"));
+        check(&ValueList::from("1/abc/3/4").window(0..4));
     }
 
     #[test]
@@ -1610,5 +1690,49 @@ mod tests {
         vals.ignore_all("test ignore all parent");
         #[cfg(debug_assertions)]
         assert_eq!(vals.unaccessed_indices(), Vec::<usize>::new());
+    }
+
+    /// A window keeps the accessors and shared read tracking of its source.
+    #[test]
+    fn test_window() {
+        let raw = "0/1/2/3/4/5/6/7/8";
+        let vals: ValueArray<9> = raw.try_into().unwrap();
+
+        let window = vals.window(2..5);
+        assert_eq!(window.len(), 3);
+        assert!(!window.is_empty());
+        assert_eq!(window.values(), ["2", "3", "4"]);
+        assert_eq!(window.to_string(), "2/3/4");
+        assert_eq!(window.u32(0).unwrap(), 2);
+        assert_eq!(window.u32(2).unwrap(), 4);
+        assert!(window.u32(3).is_err());
+        assert_eq!(window.u32_or(3, 9), 9);
+        assert_eq!(format!("{window:?}"), r#"["2", "3", "4"]"#);
+
+        #[cfg(debug_assertions)]
+        {
+            // Reads through the window mark the source, the view counts its
+            // own unread values
+            assert_eq!(vals.unaccessed_indices(), vec![0, 1, 3, 5, 6, 7, 8]);
+            assert_eq!(window.unaccessed_indices(), vec![1]);
+        }
+
+        window.ignore_all("test ignore all window");
+        #[cfg(debug_assertions)]
+        {
+            assert_eq!(vals.unaccessed_indices(), vec![0, 1, 5, 6, 7, 8]);
+            assert_eq!(window.unaccessed_indices(), Vec::<usize>::new());
+        }
+
+        // Windows nest and keep the accessors
+        let outer = vals.window(0..8);
+        let nested = outer.window(2..4);
+        assert_eq!(nested.values(), ["2", "3"]);
+        assert_eq!(nested.u32(1).unwrap(), 3);
+
+        // Out of range windows are clamped instead of panicking
+        assert!(vals.window(9..12).is_empty());
+        assert_eq!(vals.window(7..99).len(), 2);
+        assert_eq!(vals.window(7..99).values(), ["7", "8"]);
     }
 }
