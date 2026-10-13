@@ -3,11 +3,7 @@ use enum_map::EnumMap;
 use log::warn;
 
 use super::{AttributeType, Class, CompanionClass, Item, Result, ServerTime};
-use crate::{
-    PlayerId,
-    error::SFError,
-    response::{Vals, ValueArray},
-};
+use crate::{PlayerId, error::SFError, response::Vals};
 
 /// The arena, that a player can fight other players in
 #[derive(Debug, Default, Clone)]
@@ -28,7 +24,7 @@ impl Arena {
     /// `next_free_fight / fights_for_xp / 3 enemy ids / ? / ?`.
     pub(crate) fn update(
         &mut self,
-        data: &ValueArray<7>,
+        data: &Vals<'_>,
         server_time: ServerTime,
     ) -> Result<()> {
         self.next_free_fight = data.server_time(0, server_time)?;
@@ -113,7 +109,7 @@ impl Fight {
     /// Updates this fight from a `fightresult` response. `battlereward` (21
     /// values) and `fortresspillagerv1` (27) share their first 9 values, the
     /// shorter `underworldpillage` has the pillaged souls at index 3.
-    pub(crate) fn update_result<'a>(&mut self, data: &impl Vals<'a>) {
+    pub(crate) fn update_result(&mut self, data: &Vals<'_>) {
         self.has_player_won = data.i64_or(0, 0) != 0;
         self.silver_change = data.i64_or(2, 0);
 
@@ -150,7 +146,7 @@ impl Fight {
 
     /// Updates the group ids & names from a `fightgroups` response:
     /// `attacker_id,defender_id,attacker_name,defender_name`.
-    pub(crate) fn update_groups(&mut self, data: &ValueArray<4>) {
+    pub(crate) fn update_groups(&mut self, data: &Vals<'_>) {
         self.group_attacker_id = Some(data.u32_or(0, 0));
         self.group_defender_id = Some(data.u32_or(1, 0));
         self.group_attacker_name = Some(data.str_or(2, "").to_string());
@@ -178,14 +174,14 @@ impl SingleFight {
     /// Updates both fighters from a `fightheader*.fighters` response: two 47
     /// value fighter records followed by 5 unknown values, both records keep
     /// the fighter id at index 5 of their own record.
-    pub(crate) fn update_fighters(&mut self, data: &ValueArray<99>) {
-        self.fighter_a = Fighter::parse(&data.sub_chunk::<0, 47>())
-            .unwrap_or_else(|err| {
+    pub(crate) fn update_fighters(&mut self, data: &Vals<'_>) {
+        self.fighter_a =
+            Fighter::parse(&data.window(0..47)).unwrap_or_else(|err| {
                 warn!("Failed to parse fighter A: {err}");
                 None
             });
-        self.fighter_b = Fighter::parse(&data.sub_chunk::<47, 47>())
-            .unwrap_or_else(|err| {
+        self.fighter_b =
+            Fighter::parse(&data.window(47..94)).unwrap_or_else(|err| {
                 warn!("Failed to parse fighter B: {err}");
                 None
             });
@@ -197,9 +193,9 @@ impl SingleFight {
     /// 9 (no effects), 12 (one effect) or 15 (two effects) values long:
     /// 7 base values (`actor / state / type / outcome / state / actor_life /
     /// target_life`) plus 2/5/8 more.
-    pub(crate) fn update_rounds<'a>(
+    pub(crate) fn update_rounds(
         &mut self,
-        data: &impl Vals<'a>,
+        data: &Vals<'_>,
         fight_version: u32,
     ) {
         self.actions.clear();
@@ -307,7 +303,7 @@ impl Fighter {
     /// response. Index 5 is the raw id and doubles as the fighter type (see
     /// [`FighterTyp`]), index 6 the name, 10-14 the attributes and 27 the
     /// class.
-    pub(crate) fn parse(data: &ValueArray<47>) -> Result<Option<Fighter>> {
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Option<Fighter>> {
         // The fields we do not model yet: 0-4, 9, 15-26 and 28-46.
         data.ignore_all("fighter fields that are not modelled");
 
@@ -584,7 +580,7 @@ impl FightActionType {
 }
 
 /// Parse a single active effect from an effect block: `flag / id / remaining`.
-fn parse_one_effect<'a>(block: &impl Vals<'a>) -> Option<ActiveEffect> {
+fn parse_one_effect(block: &Vals<'_>) -> Option<ActiveEffect> {
     let flag = block.u32_or(0, 0);
     let id = block.u32_or(1, 0);
     let remaining = block.u32_or(2, 0);
@@ -633,8 +629,8 @@ fn parse_one_effect<'a>(block: &impl Vals<'a>) -> Option<ActiveEffect> {
 ///   who≠0      → that block belongs to the **actor**
 ///   When both blocks belong to the same fighter, only the first
 ///   is returned (the second is typically an expired sentinel).
-fn parse_active_effect<'a>(
-    extras: &impl Vals<'a>,
+fn parse_active_effect(
+    extras: &Vals<'_>,
 ) -> (Option<ActiveEffect>, Option<ActiveEffect>) {
     if extras.len() < 4 {
         return (None, None);
@@ -704,12 +700,12 @@ mod tests {
     use chrono::Local;
 
     use super::*;
-    use crate::response::ValueList;
+    use crate::response::Vals;
 
     #[test]
     fn test_arena_update() {
         let mut arena = Arena::default();
-        let data = "1785018466/0/397200/157923/123916/1/1".try_into().unwrap();
+        let data = Vals::from("1785018466/0/397200/157923/123916/1/1");
         arena.update(&data, ServerTime::default()).unwrap();
 
         assert_eq!(arena.enemy_ids, [397_200, 157_923, 123_916]);
@@ -726,7 +722,7 @@ mod tests {
                    205/4/4/2/0/0/3/1/6/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
                    0/0/0/0/0";
         let mut fight = SingleFight::default();
-        fight.update_fighters(&raw.try_into().unwrap());
+        fight.update_fighters(&Vals::from(raw));
 
         let a = fight.fighter_a.unwrap();
         assert_eq!(a.typ, FighterTyp::Player);
@@ -754,7 +750,7 @@ mod tests {
                    27830/162633/0/1/2/3/3/1039746/0/1/0/0/162633/-6030/1/2/3/\
                    3/0";
         let mut fight = SingleFight::default();
-        fight.update_rounds(&ValueList::from(raw), 2);
+        fight.update_rounds(&Vals::from(raw), 2);
 
         assert_eq!(fight.actions.len(), 8);
         assert_eq!(fight.actions[0].outcome, FightOutcome::Evaded);
@@ -783,7 +779,7 @@ mod tests {
     fn test_update_result_battle_reward() {
         let mut fight = Fight::default();
         let raw = "1/1/0/822/0/100/0/204025/200284/0/0/0/0/0/0/0/0/0/0/0/0";
-        fight.update_result(&ValueList::from(raw));
+        fight.update_result(&Vals::from(raw));
 
         assert!(fight.has_player_won);
         assert_eq!(fight.xp_change, 822);
@@ -798,7 +794,7 @@ mod tests {
         let mut fight = Fight::default();
         let raw = "1/1/0/0/0/1/0/1565/1565/0/0/0/0/0/0/0/0/0/0/0/0/1129390/\
                    3438403/1/45/0/0";
-        fight.update_result(&ValueList::from(raw));
+        fight.update_result(&Vals::from(raw));
 
         assert!(fight.has_player_won);
         let FightExtra::Fortress {
@@ -822,8 +818,7 @@ mod tests {
             Local::now().naive_local(),
         )
         .unwrap();
-        let data: ValueArray<4> =
-            resp.values()["fightgroups"].values_by(',').unwrap();
+        let data = resp.values()["fightgroups"].values_by::<4>(',').unwrap();
 
         let mut fight = Fight::default();
         fight.update_groups(&data);
