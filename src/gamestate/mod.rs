@@ -607,7 +607,7 @@ impl GameState {
             "unitprice" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_unit_prices(&val.into_list("fortress units")?)?;
+                    .update_unit_prices(&val.values_fixed()?)?;
             }
             "dicestatus" => {
                 let dices: Option<Vec<DiceType>> = val
@@ -637,14 +637,12 @@ impl GameState {
             "upgradeprice" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_unit_upgrade_info(
-                        &val.into_list("fortress unit upgrade prices")?,
-                    )?;
+                    .update_unit_upgrade_info(&val.values_fixed()?)?;
             }
             "unitlevel" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_levels(&val.into_list("fortress unit levels")?)?;
+                    .update_levels(&val.values_fixed()?)?;
             }
             "fortressprice" => {
                 self.fortress
@@ -1782,14 +1780,14 @@ impl GameState {
             }
             "fortressstorage" => {
                 self.fortress.get_or_insert_default().update_resources(
-                    &val.into_list("ft resources")?,
+                    &val.values_fixed()?,
                     server_time,
                 )?;
             }
             "fortressunits" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_units(&val.into_list("ft units")?, server_time)?;
+                    .update_units(&val.values_fixed()?, server_time)?;
             }
             "fortress" => {
                 self.fortress
