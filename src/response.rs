@@ -8,11 +8,11 @@ use std::{
     str::FromStr,
 };
 
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Local, NaiveDateTime};
 use log::{debug, error, trace, warn};
 use num_traits::FromPrimitive;
 
-use crate::error::SFError;
+use crate::{error::SFError, gamestate::ServerTime};
 
 /// A bunch of new information about the state of the server and/or the
 /// player
@@ -579,12 +579,16 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
     }
 
     /// Marks the element at index `pos` as accessed or ignored, suppressing warnings on drop.
-    pub fn ignore(&self, pos: usize) {
+    ///
+    /// Requires `reason` to document why the field is ignored.
+    pub fn ignore(&self, pos: usize, _reason: &str) {
         self.mark_accessed(pos);
     }
 
     /// Marks all elements as accessed or ignored, suppressing warnings on drop.
-    pub fn ignore_all(&self) {
+    ///
+    /// Requires `reason` to document why the fields are ignored.
+    pub fn ignore_all(&self, _reason: &str) {
         self.mark_all_accessed();
     }
 
@@ -984,6 +988,33 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         })
     }
 
+    /// Parses the timestamp at `pos` as an `i64` and converts it to local time using `server_time`.
+    ///
+    /// Returns `Ok(None)` if the timestamp is unset (e.g. 0, -1, 1, 11) or invalid.
+    ///
+    /// # Errors
+    /// Returns [`SFError::ParsingErrorV2`] if `pos` is out of bounds or cannot be parsed as `i64`.
+    #[track_caller]
+    pub fn server_time(
+        &self,
+        pos: usize,
+        server_time: ServerTime,
+    ) -> Result<Option<DateTime<Local>>, SFError> {
+        let raw = self.i64(pos)?;
+        Ok(server_time.convert_to_local_tracked(raw))
+    }
+
+    /// Parses the timestamp at `pos` and converts it to local time, returning `None` on parse error or unset date.
+    #[track_caller]
+    #[must_use]
+    pub fn server_time_opt(
+        &self,
+        pos: usize,
+        server_time: ServerTime,
+    ) -> Option<DateTime<Local>> {
+        self.server_time(pos, server_time).ok().flatten()
+    }
+
     /// Returns an iterator yielding consecutive non-overlapping chunks of size `CHUNK`.
     ///
     /// # Panics
@@ -1361,7 +1392,7 @@ mod tests {
         #[cfg(debug_assertions)]
         assert_eq!(vals.unaccessed_indices(), vec![1, 2, 3, 4]);
 
-        vals.ignore(1);
+        vals.ignore(1, "test ignore index 1");
         #[cfg(debug_assertions)]
         assert_eq!(vals.unaccessed_indices(), vec![2, 3, 4]);
 
@@ -1371,11 +1402,11 @@ mod tests {
             assert_eq!(vals.unaccessed_indices(), vec![4]);
             assert_eq!(sub.unaccessed_indices(), vec![0, 1]);
         }
-        sub.ignore_all();
+        sub.ignore_all("test ignore all sub");
         #[cfg(debug_assertions)]
         assert_eq!(sub.unaccessed_indices(), Vec::<usize>::new());
 
-        vals.ignore_all();
+        vals.ignore_all("test ignore all parent");
         #[cfg(debug_assertions)]
         assert_eq!(vals.unaccessed_indices(), Vec::<usize>::new());
     }

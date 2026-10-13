@@ -4,14 +4,15 @@ use std::time::Duration;
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
 use num_derive::FromPrimitive;
+use num_traits::FromPrimitive as _;
 use strum::{EnumCount, EnumIter, IntoEnumIterator};
 
 use super::{
-    ArrSkip, CCGet, CFPGet, CSTGet, SFError, ServerTime, items::GemType,
+    ArrSkip, CCGet, CSTGet, SFError, ServerTime, items::GemType,
 };
 use crate::{
     PlayerId,
-    gamestate::{CGet, EnumMapGet},
+    gamestate::EnumMapGet,
     response::ResponseVals,
 };
 
@@ -495,54 +496,38 @@ impl Fortress {
         Ok(())
     }
 
+    /// Updates the fortress state from a 27-element response chunk.
     pub(crate) fn update(
         &mut self,
-        data: &[i64],
+        data: &ResponseVals<27>,
         server_time: ServerTime,
     ) -> Result<(), SFError> {
         // Buildings
-        for (idx, (_, building)) in self.buildings.iter_mut().enumerate() {
-            building.level = data.csiget(idx, "building lvl", 0)?;
+        for (idx, building) in self.buildings.values_mut().enumerate() {
+            building.level = data.u16(idx)?;
         }
+
         let upgrade = &mut self.building_upgrade;
-        upgrade.target =
-            data.cfpget(12, "fortress building upgrade", |x| x - 1)?;
-        upgrade.finish =
-            data.cstget(13, "fortress upgrade end", server_time)?;
-        upgrade.start =
-            data.cstget(14, "fortress upgrade begin", server_time)?;
+        upgrade.target = data
+            .u32(12)?
+            .checked_sub(1)
+            .and_then(FortressBuildingType::from_u32);
+        upgrade.finish = data.server_time(13, server_time)?;
+        upgrade.start = data.server_time(14, server_time)?;
 
-        self.upgrades = data.csiget(15, "fortress lvl", 0)?;
-        self.honor = data.csiget(16, "fortress honor", 0)?;
-        let fortress_rank: i64 = data.csiget(17, "fortress rank", 0)?;
+        self.upgrades = data.u16(15)?;
+        self.honor = data.u32(16)?;
+        self.rank = Some(data.u32(17)?).filter(|&x| x != 0);
 
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        if fortress_rank > 0 {
-            self.rank = Some(fortress_rank as u32);
-        } else {
-            self.rank = None;
-        }
-        self.attack_free_reroll =
-            data.cstget(18, "fortress attack reroll", server_time)?;
-        self.attack_target = data.cwiget(19, "fortress enemy")?;
-
-        // 20 = 1541425816 ???
-        // 21 = 1751042620 ???
-
-        self.gem_search.target =
-            GemType::parse(data.cget(22, "gem target")?, 0);
-        self.gem_search.finish =
-            data.cstget(23, "gem search end", server_time)?;
-        self.gem_search.start =
-            data.cstget(24, "gem search start", server_time)?;
-        self.hall_of_knights_level =
-            data.csiget(25, "hall of knights level", 0)?;
-
-        // 26 = 14309
-
-        if data.len() > 27 {
-            log::warn!("fortress update has new values: {data:?}");
-        }
+        self.attack_free_reroll = data.server_time(18, server_time)?;
+        self.attack_target = Some(data.u32(19)?).filter(|&x| x != 0);
+        data.ignore(20, "unknown server timestamp");
+        data.ignore(21, "unknown server timestamp");
+        self.gem_search.target = GemType::parse(data.i64(22)?, 0);
+        self.gem_search.finish = data.server_time(23, server_time)?;
+        self.gem_search.start = data.server_time(24, server_time)?;
+        self.hall_of_knights_level = data.u16(25)?;
+        data.ignore(26, "unknown server value");
 
         Ok(())
     }
@@ -550,7 +535,7 @@ impl Fortress {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
+    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
     use super::*;
 
     #[test]
@@ -584,5 +569,59 @@ mod tests {
             (gem.time.as_secs(), gem.silver, gem.wood, gem.stone),
             (9180, 45000, 29, 9)
         );
+    }
+
+    #[test]
+    fn test_fortress_update() {
+        let raw = "19/15/18/18/18/18/15/15/15/18/18/18/3/1786227769/1785018169/376/7053/1565/1785024031/278315/1459278099/1784875170/0/0/0/18/348143";
+        let mut fortress = Fortress::default();
+        crate::parse_test!(update: fortress(raw, ServerTime::default()), {
+            upgrades: 376,
+            honor: 7053,
+            rank: Some(1565),
+            attack_target: Some(278_315),
+            hall_of_knights_level: 18,
+        });
+
+        assert_eq!(
+            fortress.buildings[FortressBuildingType::Fortress].level,
+            19
+        );
+        assert_eq!(
+            fortress.buildings[FortressBuildingType::LaborersQuarters].level,
+            15
+        );
+        assert_eq!(
+            fortress.buildings[FortressBuildingType::WoodcuttersHut].level,
+            18
+        );
+        assert_eq!(
+            fortress.building_upgrade.target,
+            Some(FortressBuildingType::WoodcuttersHut)
+        );
+        assert!(fortress.building_upgrade.start.is_some());
+        assert!(fortress.building_upgrade.finish.is_some());
+        assert!(fortress.attack_free_reroll.is_some());
+        assert_eq!(fortress.gem_search.target, None);
+    }
+
+    #[test]
+    fn test_fortress_update_idle_and_gem_search() {
+        let raw = "19/15/19/18/18/18/15/15/15/18/18/18/0/0/0/377/7069/1583/1790325015/370262/1459278099/1791987830/13/1790346770/1790323370/18/521703";
+        let mut fortress = Fortress::default();
+        crate::parse_test!(update: fortress(raw, ServerTime::default()), {
+            upgrades: 377,
+            honor: 7069,
+            rank: Some(1583),
+            attack_target: Some(370_262),
+            hall_of_knights_level: 18,
+        });
+
+        assert_eq!(fortress.building_upgrade.target, None);
+        assert_eq!(fortress.building_upgrade.start, None);
+        assert_eq!(fortress.building_upgrade.finish, None);
+        assert_eq!(fortress.gem_search.target, Some(GemType::Constitution));
+        assert!(fortress.gem_search.start.is_some());
+        assert!(fortress.gem_search.finish.is_some());
     }
 }

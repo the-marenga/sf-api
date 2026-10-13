@@ -1794,7 +1794,7 @@ impl GameState {
             "fortress" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update(&val.into_list("fortress")?, server_time)?;
+                    .update(&val.values_fixed()?, server_time)?;
             }
             "wheel" => {
                 let data: Vec<i64> = val.into_list("wheel")?;
@@ -2191,6 +2191,34 @@ fn fight_no_from_header(header_name: &str) -> usize {
 pub struct ServerTime(i64);
 
 impl ServerTime {
+    /// Converts the raw timestamp from the server to local time with caller tracking.
+    #[must_use]
+    #[track_caller]
+    pub(crate) fn convert_to_local_tracked(
+        self,
+        timestamp: i64,
+    ) -> Option<DateTime<Local>> {
+        if matches!(timestamp, 0 | -1 | 1 | 11) {
+            // For some reason these can be bad
+            return None;
+        }
+
+        if !(1_000_000_000..=3_000_000_000).contains(&timestamp) {
+            let caller = std::panic::Location::caller();
+            warn!(
+                "Weird timestamp: {timestamp} at {}:{}:{}",
+                caller.file(),
+                caller.line(),
+                caller.column()
+            );
+            return None;
+        }
+        DateTime::from_timestamp(timestamp - self.0, 0)?
+            .naive_utc()
+            .and_local_timezone(Local)
+            .latest()
+    }
+
     /// Converts the raw timestamp from the server to the local time.
     #[must_use]
     pub(crate) fn convert_to_local(
