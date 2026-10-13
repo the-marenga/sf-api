@@ -315,22 +315,7 @@ impl Equipment {
     }
 
     /// Parses equipment from a compile-time fixed 190-element response chunk.
-    ///
-    /// # Errors
-    /// Returns [`SFError::ParsingErrorV2`] if item attributes fail to parse.
-    ///
-    /// # Examples
-    /// ```
-    /// use sf_api::gamestate::items::{Equipment, EQUIPMENT_PARSE_LEN};
-    /// use sf_api::gamestate::ServerTime;
-    /// use sf_api::response::ResponseVals;
-    ///
-    /// let raw = ["0"; EQUIPMENT_PARSE_LEN];
-    /// let vals = ResponseVals::from_array(raw);
-    /// let equipment = Equipment::parse(&vals, ServerTime::default()).unwrap();
-    /// assert!(equipment.0.values().all(|item| item.is_none()));
-    /// ```
-    pub fn parse(
+    pub(crate) fn parse(
         data: &ResponseVals<EQUIPMENT_PARSE_LEN>,
         server_time: ServerTime,
     ) -> Result<Equipment, SFError> {
@@ -339,28 +324,6 @@ impl Equipment {
             data.chunks_exact::<ITEM_PARSE_LEN>().zip(res.0.as_mut_slice())
         {
             *slot = Item::parse(&chunk, server_time)?;
-        }
-        Ok(res)
-    }
-
-    /// Expects the input `data` to have items directly at data[0]
-    #[deprecated(note = "use Equipment::parse with ResponseVals instead")]
-    #[allow(dead_code, clippy::indexing_slicing)]
-    pub(crate) fn parse_slice(
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<Equipment, SFError> {
-        let mut res = Equipment::default();
-        if !data.len().is_multiple_of(ITEM_PARSE_LEN) {
-            return Err(SFError::ParsingError(
-                "Invalid Equipment",
-                format!("{data:?}"),
-            ));
-        }
-        for (chunk, slot) in
-            data.chunks_exact(ITEM_PARSE_LEN).zip(res.0.as_mut_slice())
-        {
-            *slot = Item::parse_slice(chunk, server_time)?;
         }
         Ok(res)
     }
@@ -730,24 +693,25 @@ impl Item {
     }
 
     /// Parses an item from a compile-time fixed 19-element response chunk.
-    ///
-    /// # Examples
-    /// ```
-    /// use sf_api::gamestate::items::Item;
-    /// use sf_api::gamestate::ServerTime;
-    ///
-    /// let raw = "1/0/0/1010/0/149/265/5/4/0/108/72/0/83940/10/0/0/45/0";
-    /// let item = Item::parse(&raw.try_into().unwrap(), ServerTime::default()).unwrap().unwrap();
-    /// assert_eq!(item.price, 83940);
-    /// ```
-    #[allow(clippy::missing_errors_doc, clippy::cast_possible_truncation)]
-    pub fn parse(
+    #[allow(clippy::cast_possible_truncation)]
+    pub(crate) fn parse(
         data: &ResponseVals<ITEM_PARSE_LEN>,
         server_time: ServerTime,
     ) -> Result<Option<Self>, SFError> {
         let Some(typ) = ItemType::parse(data, server_time)? else {
+            data.ignore_all();
             return Ok(None);
         };
+
+        data.ignore(4);
+        if !typ.is_weapon() {
+            data.ignore(6);
+        }
+        if typ.equipment_slot().is_none() {
+            for pos in 7..=12 {
+                data.ignore(pos);
+            }
+        }
 
         let enchantment = data.enum_opt(2);
         let gem_slot_val = data.i64_or(1, 0);
@@ -1729,4 +1693,31 @@ pub(crate) fn parse_active_potions(
             // 6 => effect, but no idea why we would want to use that
         })
     })
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+
+    #[test]
+    fn test_equipment_parse() {
+        let raw = ["0"; EQUIPMENT_PARSE_LEN];
+        let vals = ResponseVals::from_array(raw);
+        let equipment = Equipment::parse(&vals, ServerTime::default()).unwrap();
+        assert!(equipment.0.values().all(|item| item.is_none()));
+    }
+
+    #[test]
+    fn test_item_parse() {
+        crate::parse_test!(
+            opt: Item(
+                "1/0/0/1010/0/149/265/5/4/0/108/72/0/83940/10/0/0/45/0",
+                ServerTime::default()
+            ),
+            {
+                price: 83940,
+            }
+        );
+    }
 }
