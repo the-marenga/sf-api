@@ -362,8 +362,9 @@ pub struct Companion {
 }
 
 impl Companion {
-    /// Updates the level and attributes from an `owntower` companion record.
-    /// The equipment comes from `companionequipment`; the rest is ignored.
+    /// Updates the level and attributes from an `owntower` companion block.
+    /// The equipment comes from `companionequipment`; the rest is ignored,
+    /// except the underworld unit, which `Underworld::update` reads.
     pub(crate) fn update(&mut self, data: &Vals<'_>) -> Result<()> {
         self.level = data.i64(0)?;
         for (idx, attr) in self.attributes.values_mut().enumerate() {
@@ -385,11 +386,14 @@ impl Companion {
         for idx in 19..22 {
             data.ignore(idx, "unknown, maybe hp and damage");
         }
-        // The companion equipment the old code read here; 0 in every capture
-        // since it moved to the `companionequipment` response
-        for idx in 22..data.len() {
+        // The equipment the old code read here; 0 in every capture since it
+        // moved to the `companionequipment` response. The last 5 values are
+        // the underworld unit and the trailing value after it
+        for idx in 22..data.len() - 5 {
             data.ignore(idx, "old companion equipment, now 0");
         }
+        // The value at the end of the block, after the underworld unit
+        data.ignore(data.len() - 1, "trailing value (10/13, 2, 0)");
         Ok(())
     }
 }

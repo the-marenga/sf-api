@@ -11,10 +11,9 @@ use crate::response::Vals;
 
 /// The number of values in the `owntower` (`towerSave`) response.
 pub(crate) const TOWER_RESPONSE_LEN: usize = 476;
-/// The size of one `owntower` block: a companion and an underworld unit.
+/// The size of one `owntower` block: a companion, its underworld unit and the
+/// value after it.
 pub(crate) const TOWER_BLOCK_LEN: usize = 148;
-/// The offset of the underworld unit at the end of its `owntower` block.
-pub(crate) const TOWER_UNIT_OFFSET: usize = 146;
 
 /// The information about a characters underworld
 #[derive(Debug, Default, Clone)]
@@ -132,7 +131,7 @@ impl Underworld {
 
         for (i, unit) in self.units.values_mut().enumerate() {
             // The unit sits at the end of its block
-            let start = TOWER_UNIT_OFFSET + i * TOWER_BLOCK_LEN;
+            let start = 146 + i * TOWER_BLOCK_LEN;
             unit.upgraded_amount = data.u16(start)?;
             unit.count = data.u16(start + 1)?;
             unit.total_attributes = data.u32(start + 2)?;
