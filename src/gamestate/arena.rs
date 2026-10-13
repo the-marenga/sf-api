@@ -5,8 +5,20 @@ use log::warn;
 use super::{AttributeType, Class, CompanionClass, Item, Result, ServerTime};
 use crate::{PlayerId, error::SFError, response::Vals};
 
+/// The number of values a single fighter record of a `fightheader*.fighters`
+/// response takes up.
+const FIGHTER_RECORD_LEN: usize = 47;
+
+/// The number of values of a fight round without any active effect:
+/// `actor / state / type / outcome / state / actor_life / target_life / 0 / 0`.
+const ROUND_LEN_PLAIN: usize = 9;
+/// The number of values of a fight round with a single effect block.
+const ROUND_LEN_ONE_EFFECT: usize = 12;
+/// The number of values of a fight round with two effect blocks.
+const ROUND_LEN_TWO_EFFECTS: usize = 15;
+
 /// The arena, that a player can fight other players in
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Arena {
     /// The enemies currently available in the arena. You have to fetch the
@@ -40,7 +52,7 @@ impl Arena {
 
 /// A complete fight, which can be between multiple fighters for guild/tower
 /// fights
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Fight {
     /// The name of the attacking player for pet battles, or the name of the
@@ -79,8 +91,9 @@ pub struct Fight {
 }
 
 /// Extra metadata for specific fight types
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum FightExtra {
     /// Default — no special metadata
     #[default]
@@ -118,7 +131,10 @@ impl Fight {
             self.extra = FightExtra::UnderworldLure {
                 souls: data.i64_or(3, 0),
             };
-            data.ignore_all("underworld lure fields that are not modelled");
+            data.ignore_unmodelled(
+                &[1..2, 4..data.len()],
+                "underworld lure field that is not modelled",
+            );
             return;
         }
 
@@ -130,7 +146,7 @@ impl Fight {
         self.rank_post_fight = data.u32_or(8, 0);
 
         // Extended fortress fight data (fightresult.fortresspillagerv1)
-        if data.len() >= 25 {
+        if data.len() >= 27 {
             self.extra = FightExtra::Fortress {
                 soldiers: data.u32_or(24, 0),
                 stone: data.i64_or(21, 0),
@@ -138,10 +154,18 @@ impl Fight {
                 archers_defeated: data.u32_or(25, 0),
                 mages_defeated: data.u32_or(26, 0),
             };
+            // 1 & 6 are unused, 9-20 & 23 are not modelled yet
+            data.ignore_unmodelled(
+                &[1..2, 6..7, 9..21, 23..24, 27..data.len()],
+                "fortress fight result field that is not modelled",
+            );
+        } else {
+            // 1 & 6 are unused, everything from 9 on is not modelled yet
+            data.ignore_unmodelled(
+                &[1..2, 6..7, 9..data.len()],
+                "fight result field that is not modelled",
+            );
         }
-
-        // The item won is in the `battlerewarditem` response
-        data.ignore_all("fight result fields that are not modelled");
     }
 
     /// Updates the group ids & names from a `fightgroups` response:
@@ -156,7 +180,7 @@ impl Fight {
 
 /// This is a single fight between two fighters, which ends when one of them is
 /// at <= 0 health
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SingleFight {
     /// The ID of the player, that won.
@@ -164,35 +188,41 @@ pub struct SingleFight {
     /// The stats of the first fighter. Typically the player, if the fight was
     /// started by them
     pub fighter_a: Option<Fighter>,
-    /// The stats of the first fighter
+    /// The stats of the second fighter
     pub fighter_b: Option<Fighter>,
     /// The action this fight involved
     pub actions: Vec<FightAction>,
 }
 
 impl SingleFight {
-    /// Updates both fighters from a `fightheader*.fighters` response: two 47
-    /// value fighter records followed by 5 unknown values, both records keep
-    /// the fighter id at index 5 of their own record.
+    /// Updates both fighters from a `fightheader*.fighters` response: two
+    /// [`FIGHTER_RECORD_LEN`] value fighter records followed by 5 unknown
+    /// values, both records keep the fighter id at index 5 of their own
+    /// record.
     pub(crate) fn update_fighters(&mut self, data: &Vals<'_>) {
-        self.fighter_a =
-            Fighter::parse(&data.window(0..47)).unwrap_or_else(|err| {
-                warn!("Failed to parse fighter A: {err}");
-                None
-            });
-        self.fighter_b =
-            Fighter::parse(&data.window(47..94)).unwrap_or_else(|err| {
-                warn!("Failed to parse fighter B: {err}");
-                None
-            });
-        data.ignore_all("fight header fields that are not modelled");
+        let second = FIGHTER_RECORD_LEN..FIGHTER_RECORD_LEN * 2;
+
+        self.fighter_a = Fighter::parse(&data.window(0..FIGHTER_RECORD_LEN))
+            .map_err(|err| warn!("Failed to parse fighter A: {err}"))
+            .ok();
+        self.fighter_b = Fighter::parse(&data.window(second))
+            .map_err(|err| warn!("Failed to parse fighter B: {err}"))
+            .ok();
+
+        // The 5 values after the two records are not modelled yet
+        let trailing = FIGHTER_RECORD_LEN * 2..data.len();
+        data.ignore_unmodelled(
+            &[trailing],
+            "fight header field that is not modelled",
+        );
     }
 
     /// Updates the rounds of this fight from a `fight*.r` response. Unlike the
     /// other fight responses it has no fixed number of values, every round is
-    /// 9 (no effects), 12 (one effect) or 15 (two effects) values long:
-    /// 7 base values (`actor / state / type / outcome / state / actor_life /
-    /// target_life`) plus 2/5/8 more.
+    /// [`ROUND_LEN_PLAIN`] (no effects), [`ROUND_LEN_ONE_EFFECT`] (one effect)
+    /// or [`ROUND_LEN_TWO_EFFECTS`] (two effects) values long: always 7 base
+    /// values (`actor / state / type / outcome / state / actor_life /
+    /// target_life`) plus 2, 5 or 8 more.
     pub(crate) fn update_rounds(
         &mut self,
         data: &Vals<'_>,
@@ -206,24 +236,24 @@ impl SingleFight {
         }
 
         let mut i = 0;
-        while i + 9 <= data.len() {
+        while i + ROUND_LEN_PLAIN <= data.len() {
             let extras_first = data.i64_or(i + 7, 0);
             let extras_second = data.i64_or(i + 8, 0);
 
-            // Detect stride: 9-value if both effect slots are 0
+            // Detect stride: plain if both effect slots are 0
             let stride = if extras_first == 0 && extras_second == 0 {
-                9
-            } else if i + 15 <= data.len()
-                && matches!(data.i64_or(i + 12, 0), 1..=3)
+                ROUND_LEN_PLAIN
+            } else if i + ROUND_LEN_TWO_EFFECTS <= data.len()
+                && matches!(data.i64_or(i + ROUND_LEN_ONE_EFFECT, 0), 1..=3)
             {
-                // 15-value: position 12 is the second effect-block's flag
+                // Two effects: position 12 is the second effect-block's flag
                 // (1=Ability, 2=Minion, 3=Poison). In any other format,
                 // position 12 is the next action's actor_id (>3 or <0).
-                15
-            } else if i + 12 <= data.len() {
-                12
+                ROUND_LEN_TWO_EFFECTS
+            } else if i + ROUND_LEN_ONE_EFFECT <= data.len() {
+                ROUND_LEN_ONE_EFFECT
             } else {
-                9
+                ROUND_LEN_PLAIN
             };
 
             let acting_id = data.i64_or(i, 0);
@@ -243,9 +273,15 @@ impl SingleFight {
             let actor_state = FighterState::from_raw(data.i64_or(i + 1, 0));
             let defender_state = FighterState::from_raw(data.i64_or(i + 4, 0));
 
-            let (actor_effect, opponent_effect) = if stride > 9 {
-                // The actor's effect block has an unused trailing slot
-                data.ignore(i + 11, "effect trailer");
+            let (actor_effect, opponent_effect) = if stride > ROUND_LEN_PLAIN {
+                // A single effect block has an unused trailing slot, a double
+                // one does not
+                if stride == ROUND_LEN_ONE_EFFECT {
+                    data.ignore(
+                        i + ROUND_LEN_ONE_EFFECT - 1,
+                        "unused effect trailer slot",
+                    );
+                }
                 parse_active_effect(&data.window(i + 7..i + stride))
             } else {
                 (None, None)
@@ -278,8 +314,9 @@ impl SingleFight {
 
 /// A participant in a fight. Can be anything, that shows up in the battle
 /// screen from the player to a fortress Wall
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub struct Fighter {
     /// The type of the fighter
     pub typ: FighterTyp,
@@ -299,13 +336,25 @@ pub struct Fighter {
 }
 
 impl Fighter {
-    /// Parses one 47 value fighter record of a `fightheader*.fighters`
-    /// response. Index 5 is the raw id and doubles as the fighter type (see
-    /// [`FighterTyp`]), index 6 the name, 10-14 the attributes and 27 the
-    /// class.
-    pub(crate) fn parse(data: &Vals<'_>) -> Result<Option<Fighter>> {
-        // The fields we do not model yet: 0-4, 9, 15-26 and 28-46.
-        data.ignore_all("fighter fields that are not modelled");
+    /// Parses one [`FIGHTER_RECORD_LEN`] value fighter record of a
+    /// `fightheader*.fighters` response. Index 5 is the raw id and doubles as
+    /// the fighter type (see [`FighterTyp`]), index 6 the name, 7 the level, 8
+    /// the life, 10-14 the attributes and 27 the class. Index 15 is a name
+    /// fallback that marks underworld minions.
+    ///
+    /// # Errors
+    /// [`SFError::ParsingErrorV2`] if the record is too short, contains an
+    /// unparsable number or has an unknown class.
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Fighter> {
+        // The fields we do not model yet: 0-4, 9, 16-26 and 28-46.
+        data.ignore_unmodelled(
+            &[0..5, 9..10, 16..27, 28..FIGHTER_RECORD_LEN],
+            "fighter field that is not modelled",
+        );
+
+        // Index 15 is only meaningful for underworld minions, but is read
+        // unconditionally so records without one are not reported as unread.
+        let name_fallback = data.get_str(15).unwrap_or_default();
 
         let raw_id = data.i64(5)?;
         let mut fighter_type = match raw_id {
@@ -356,7 +405,9 @@ impl Fighter {
             }
             Ok(..=-1) => None,
             Ok(0) => {
-                if ["-910", "-935", "-933", "-924"].contains(&data.str(15)?) {
+                // Index 15 doubles as the underworld minion marker
+                let minion_names = ["-910", "-935", "-933", "-924"];
+                if minion_names.contains(&name_fallback) {
                     fighter_type = FighterTyp::UnderworldMinion;
                 }
                 None
@@ -368,7 +419,7 @@ impl Fighter {
             _ => Some(raw_name.to_string()),
         };
 
-        Ok(Some(Fighter {
+        Ok(Fighter {
             typ: fighter_type,
             id: raw_id,
             name,
@@ -376,13 +427,14 @@ impl Fighter {
             life: data.u32(8)?,
             attributes,
             class,
-        }))
+        })
     }
 }
 
 /// The outcome of a single round in a fight
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum FightOutcome {
     /// A normal hit — neither blocked nor evaded
     #[default]
@@ -396,6 +448,7 @@ pub enum FightOutcome {
 /// The type of summoned minion (Necromancer)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum Minion {
     /// A skeleton
     #[default]
@@ -411,6 +464,7 @@ pub enum Minion {
 /// indicate what special state a fighter is in (stance, form, enrage, etc.).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum FighterState {
     /// No special state
     #[default]
@@ -439,9 +493,7 @@ impl FighterState {
             21 => FighterState::OffensiveStance,
             30 => FighterState::Frenzy,
             _ => {
-                if val != 0 {
-                    warn!("Unknown fighter state: {val}");
-                }
+                warn!("Unknown fighter state: {val}");
                 FighterState::Unknown(val)
             }
         }
@@ -449,8 +501,9 @@ impl FighterState {
 }
 
 /// An active effect on a fighter — either a summoned minion or a class ability
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum ActiveEffect {
     /// A summoned minion
     Minion {
@@ -485,7 +538,7 @@ pub enum ActiveEffect {
 }
 
 /// One round (action) in a fight. This is mostly just one attack
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FightAction {
     /// The id of the fighter, that does the action
@@ -594,7 +647,10 @@ fn parse_one_effect(block: &Vals<'_>) -> Option<ActiveEffect> {
                 1 => Minion::Skeleton,
                 2 => Minion::Hound,
                 3 => Minion::Golem,
-                _ => return None,
+                _ => {
+                    warn!("Unknown minion type: {id}");
+                    return None;
+                }
             },
             remaining_actions: remaining,
         },
@@ -616,28 +672,29 @@ fn parse_one_effect(block: &Vals<'_>) -> Option<ActiveEffect> {
     })
 }
 
-/// Parse the 5 (12-value) or 8 (15-value) extra values into active effects.
-/// Positions are relative to `extras`.
+/// Parses the 5 (single effect round) or 8 (double effect round) extra values
+/// into active effects. Positions are relative to `extras`.
 ///
-/// 12-value (5 extras):
-///   [who=1,    flag, id, rem, trail=0]  → (actor,   None)
-///   [0,        marker=1, flag, id, rem] → (None,    opponent)
+/// Single effect (5 extras):
+///   `[who=1, flag, id, rem, trailer=0]` → (actor, None)
+///   `[0, marker=1, flag, id, rem]`      → (None, opponent)
 ///
-/// 15-value (8 extras):
-///   [who1, flag1, id1, rem1, who2, flag2, id2, rem2]
-///   who=0      → that block belongs to the **opponent**
-///   who≠0      → that block belongs to the **actor**
-///   When both blocks belong to the same fighter, only the first
-///   is returned (the second is typically an expired sentinel).
+/// Double effect (8 extras):
+///   `[who1, flag1, id1, rem1, who2, flag2, id2, rem2]`
+///   `who=0` → that block belongs to the **opponent**
+///   `who≠0` → that block belongs to the **actor**
+///   When both blocks belong to the same fighter, only the first is returned
+///   (the second is typically an expired sentinel).
 fn parse_active_effect(
     extras: &Vals<'_>,
 ) -> (Option<ActiveEffect>, Option<ActiveEffect>) {
+    // A leading flag plus at least one effect block is required
     if extras.len() < 4 {
         return (None, None);
     }
 
     if extras.len() >= 8 {
-        // 15-value: two effect blocks, each with an ownership flag
+        // Double effect: two blocks, each with an ownership flag
         let who1_actor = extras.i64_or(0, 0) != 0;
         let who2_actor = extras.i64_or(4, 0) != 0;
 
@@ -661,10 +718,15 @@ fn parse_active_effect(
 
         (actor_effect, opponent_effect)
     } else if extras.i64_or(0, 0) != 0 {
-        // 12-value, actor's effect: [who=1, flag, id, rem, trail=0]
+        // Single effect, the actor's: [who=1, flag, id, rem, trailer=0]
         (parse_one_effect(&extras.window(1..4)), None)
     } else {
-        // 12-value, opponent's effect: [0, marker=1, flag, id, rem]
+        // Single effect, the opponent's: [0, marker=1, flag, id, rem]. The
+        // marker is not enforced: an unexpected block is still attributed to
+        // the opponent rather than silently dropped.
+        if extras.i64_or(1, 0) != 1 {
+            warn!("Unexpected opponent effect marker: {extras:?}");
+        }
         (None, parse_one_effect(&extras.window(2..5)))
     }
 }
@@ -672,6 +734,7 @@ fn parse_active_effect(
 /// The type of the participant in a fight
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
 pub enum FighterTyp {
     /// Not just the own player, but any player on the server
     #[default]
@@ -702,11 +765,26 @@ mod tests {
     use super::*;
     use crate::response::Vals;
 
+    /// Asserts that every value of `data` was read or explicitly ignored. The
+    /// read tracking only exists in debug builds.
+    fn assert_all_read(data: &Vals<'_>) {
+        let unread = data.unaccessed_indices();
+        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
+    }
+
+    /// Parses a single [`FIGHTER_RECORD_LEN`] value fighter record.
+    fn parse_fighter(record: &str) -> Fighter {
+        let data = Vals::from(record);
+        assert_eq!(data.len(), FIGHTER_RECORD_LEN);
+        Fighter::parse(&data).unwrap()
+    }
+
     #[test]
     fn test_arena_update() {
         let mut arena = Arena::default();
         let data = Vals::from("1785018466/0/397200/157923/123916/1/1");
         arena.update(&data, ServerTime::default()).unwrap();
+        assert_all_read(&data);
 
         assert_eq!(arena.enemy_ids, [397_200, 157_923, 123_916]);
         assert_eq!(arena.fights_for_xp, 0);
@@ -722,7 +800,9 @@ mod tests {
                    205/4/4/2/0/0/3/1/6/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
                    0/0/0/0/0";
         let mut fight = SingleFight::default();
-        fight.update_fighters(&Vals::from(raw));
+        let data = Vals::from(raw);
+        fight.update_fighters(&data);
+        assert_all_read(&data);
 
         let a = fight.fighter_a.unwrap();
         assert_eq!(a.typ, FighterTyp::Player);
@@ -742,6 +822,96 @@ mod tests {
     }
 
     #[test]
+    fn test_fighter_types() {
+        // Real `fightheader*.fighters` records. The underworld minion reuses
+        // one of them with the documented marker at index 15, as no capture
+        // of an underworld lure exists in `cache/`.
+        let cases: [(&str, FighterTyp); 10] = [
+            // companion warrior (-391)
+            (
+                "12/0/0/68/1/-391/-391/365/34711556/34711556/18016/6842/4588/\
+                 10824/6673/-391/0/0/0/0/0/0/0/0/0/0/0/1/0/0/0/0/0/0/0/0/0/0/\
+                 0/0/0/0/0/0/0/0/0",
+                FighterTyp::Companion(CompanionClass::Warrior),
+            ),
+            // companion mage (-392)
+            (
+                "12/0/0/68/1/-392/-392/365/10888295/10888295/5774/5777/15094/\
+                 11184/7198/-392/0/0/0/0/0/0/0/0/0/0/0/2/0/0/0/0/0/0/0/0/0/0/\
+                 0/0/0/0/0/0/0/0/0",
+                FighterTyp::Companion(CompanionClass::Mage),
+            ),
+            // companion scout (-393)
+            (
+                "12/0/0/68/1/-393/-393/365/35739679/35739679/5388/18464/4206/\
+                 15961/9880/-393/0/0/0/0/0/0/0/0/0/0/0/3/0/0/0/0/0/0/0/0/0/0/\
+                 0/0/0/0/0/0/0/0/0",
+                FighterTyp::Companion(CompanionClass::Scout),
+            ),
+            // fortress soldier, mage, archer & wall (named -710 to -799)
+            (
+                "8/0/0/0/1/712/-712/150/1736500/1736500/2300/10/10/2300/1515/\
+                 -712/1/41/0/0/0/0/0/0/0/0/0/1/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+                 0/0/0/0",
+                FighterTyp::FortressSoldier,
+            ),
+            (
+                "0/0/0/0/0/722/-722/140/606300/606300/10/10/2150/2150/1415/\
+                 -722/1/-1/0/0/0/0/0/0/0/0/0/2/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+                 0/0/0/0",
+                FighterTyp::FortressMage,
+            ),
+            (
+                "0/0/0/0/0/732/-732/140/1212600/1212600/10/2150/10/2150/1415/\
+                 -732/1/30/0/0/0/0/0/0/0/0/0/3/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+                 0/0/0/0",
+                FighterTyp::FortressArcher,
+            ),
+            (
+                "0/0/0/0/0/756/-756/185/7881750/7881750/2825/935/935/8475/0/\
+                 -756/1/1/0/0/0/0/0/0/0/0/0/1/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+                 0/0/0",
+                FighterTyp::FortressWall,
+            ),
+            // a pet repeats the player id in its name
+            (
+                "14/0/0/0/1/470832/470832/1/328/328/20/41/20/41/30/-800/0/0/0/\
+                 0/0/0/0/0/0/0/0/3/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0",
+                FighterTyp::Pet,
+            ),
+            // an id of 0 stays a monster
+            (
+                "0/0/0/0/0/0/0/222/80000000/80000000/90000/2000/2000/71749/\
+                 5000/-1320/0/0/0/0/0/0/0/0/0/0/0/1/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+                 0/0/0/0/0/0",
+                FighterTyp::Monster(0),
+            ),
+            // index 15 marks an underworld minion
+            (
+                "0/0/0/0/0/0/0/222/80000000/80000000/90000/2000/2000/71749/\
+                 5000/-910/0/0/0/0/0/0/0/0/0/0/0/1/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+                 0/0/0/0/0/0",
+                FighterTyp::UnderworldMinion,
+            ),
+        ];
+
+        for (record, expected) in cases {
+            assert_eq!(parse_fighter(record).typ, expected, "in {record}");
+        }
+    }
+
+    #[test]
+    fn test_fighter_state_from_raw() {
+        assert_eq!(FighterState::from_raw(0), FighterState::Normal);
+        assert_eq!(FighterState::from_raw(10), FighterState::EagleForm);
+        assert_eq!(FighterState::from_raw(11), FighterState::BearForm);
+        assert_eq!(FighterState::from_raw(20), FighterState::DefensiveStance);
+        assert_eq!(FighterState::from_raw(21), FighterState::OffensiveStance);
+        assert_eq!(FighterState::from_raw(30), FighterState::Frenzy);
+        assert_eq!(FighterState::from_raw(99), FighterState::Unknown(99));
+    }
+
+    #[test]
     fn test_update_rounds() {
         let raw = "1039746/0/0/4/0/167268/55080/0/0/641953/0/0/0/0/55080/\
                    166066/0/0/1039746/0/1/4/0/166066/55080/0/0/641953/0/0/0/0/\
@@ -750,43 +920,110 @@ mod tests {
                    27830/162633/0/1/2/3/3/1039746/0/1/0/0/162633/-6030/1/2/3/\
                    3/0";
         let mut fight = SingleFight::default();
-        fight.update_rounds(&Vals::from(raw), 2);
+        let data = Vals::from(raw);
+        fight.update_rounds(&data, 2);
+        assert_all_read(&data);
 
         assert_eq!(fight.actions.len(), 8);
         assert_eq!(fight.actions[0].outcome, FightOutcome::Evaded);
         assert_eq!(fight.actions[1].acting_id, 641_953);
         assert_eq!(fight.actions[4].action, FightActionType::Summon);
-        assert!(matches!(
+        assert_eq!(
             fight.actions[4].actor_effect,
             Some(ActiveEffect::Minion {
                 minion_type: Minion::Golem,
                 remaining_actions: 4,
             })
-        ));
+        );
         assert!(fight.actions[4].opponent_effect.is_none());
-        assert!(matches!(
+        assert_eq!(
             fight.actions[6].opponent_effect,
             Some(ActiveEffect::Minion {
                 minion_type: Minion::Golem,
                 remaining_actions: 3,
             })
-        ));
+        );
         assert!(fight.actions[6].actor_effect.is_none());
         assert_eq!(fight.actions[7].other_new_life, -6030);
+    }
+
+    #[test]
+    fn test_update_rounds_double_effect() {
+        // A single round with two effect blocks: the actor summons a skeleton
+        // while the opponent is poisoned. The flag of the second block at
+        // index 12 is what distinguishes it from the 12 value stride.
+        let raw = "2/0/0/0/0/1000/500/1/2/1/3/0/3/7/2";
+        let data = Vals::from(raw);
+        let mut fight = SingleFight::default();
+        fight.update_rounds(&data, 2);
+        assert_all_read(&data);
+
+        assert_eq!(fight.actions.len(), 1);
+        let action = &fight.actions[0];
+        assert_eq!(action.acting_id, 2);
+        assert_eq!(action.actor_life, Some(1000));
+        assert_eq!(action.other_new_life, 500);
+        assert_eq!(
+            action.actor_effect,
+            Some(ActiveEffect::Minion {
+                minion_type: Minion::Skeleton,
+                remaining_actions: 3,
+            })
+        );
+        assert_eq!(
+            action.opponent_effect,
+            Some(ActiveEffect::Poison {
+                id: 7,
+                remaining_rounds: 2,
+            })
+        );
+    }
+
+    #[test]
+    fn test_update_rounds_unsupported_version() {
+        let data = Vals::from("1/0/0/0/0/100/50/0/0");
+        let mut fight = SingleFight::default();
+
+        fight.update_rounds(&data, 2);
+        assert_eq!(fight.actions.len(), 1);
+
+        // An unsupported version must not keep the previous rounds around
+        fight.update_rounds(&data, 1);
+        assert_eq!(fight.actions.len(), 0, "stale rounds kept around");
+        assert_all_read(&data);
     }
 
     #[test]
     fn test_update_result_battle_reward() {
         let mut fight = Fight::default();
         let raw = "1/1/0/822/0/100/0/204025/200284/0/0/0/0/0/0/0/0/0/0/0/0";
-        fight.update_result(&Vals::from(raw));
+        let data = Vals::from(raw);
+        fight.update_result(&data);
+        assert_all_read(&data);
 
         assert!(fight.has_player_won);
         assert_eq!(fight.xp_change, 822);
         assert_eq!(fight.honor_change, 100);
         assert_eq!(fight.rank_pre_fight, 204_025);
         assert_eq!(fight.rank_post_fight, 200_284);
-        assert!(matches!(fight.extra, FightExtra::None));
+        assert_eq!(fight.extra, FightExtra::None);
+    }
+
+    #[test]
+    fn test_update_result_underworld_lure() {
+        let mut fight = Fight::default();
+        // No capture of `fightresult.underworldpillage` exists in `cache/`,
+        // this is built from its documented layout: a short response with the
+        // pillaged souls at index 3.
+        let data = Vals::from("1/1/0/42/0/0/0/0/0/0/0/0");
+        fight.update_result(&data);
+        assert_all_read(&data);
+
+        assert!(fight.has_player_won);
+        assert_eq!(fight.extra, FightExtra::UnderworldLure { souls: 42 });
+        // The battle reward fields are not part of the short format
+        assert_eq!(fight.xp_change, 0);
+        assert_eq!(fight.rank_pre_fight, 0);
     }
 
     #[test]
@@ -794,14 +1031,17 @@ mod tests {
         let mut fight = Fight::default();
         let raw = "1/1/0/0/0/1/0/1565/1565/0/0/0/0/0/0/0/0/0/0/0/0/1129390/\
                    3438403/1/45/0/0";
-        fight.update_result(&Vals::from(raw));
+        let data = Vals::from(raw);
+        fight.update_result(&data);
+        assert_all_read(&data);
 
         assert!(fight.has_player_won);
         let FightExtra::Fortress {
             soldiers,
             stone,
             wood,
-            ..
+            archers_defeated,
+            mages_defeated,
         } = fight.extra
         else {
             panic!("expected fortress extras, got {:?}", fight.extra);
@@ -809,6 +1049,35 @@ mod tests {
         assert_eq!(soldiers, 45);
         assert_eq!(stone, 1_129_390);
         assert_eq!(wood, 3_438_403);
+        assert_eq!(archers_defeated, 0);
+        assert_eq!(mages_defeated, 0);
+    }
+
+    #[test]
+    fn test_update_result_fortress_defense_units() {
+        let mut fight = Fight::default();
+        // A real fortress defense, where the units at index 25 & 26 are set
+        let raw =
+            "1/1/0/0/0/0/0/1533/1533/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/41/30/13";
+        let data = Vals::from(raw);
+        fight.update_result(&data);
+        assert_all_read(&data);
+
+        let FightExtra::Fortress {
+            soldiers,
+            stone,
+            wood,
+            archers_defeated,
+            mages_defeated,
+        } = fight.extra
+        else {
+            panic!("expected fortress extras, got {:?}", fight.extra);
+        };
+        assert_eq!(soldiers, 41);
+        assert_eq!(stone, 0);
+        assert_eq!(wood, 0);
+        assert_eq!(archers_defeated, 30);
+        assert_eq!(mages_defeated, 13);
     }
 
     #[test]
