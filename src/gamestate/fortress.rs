@@ -111,6 +111,7 @@ impl FortressCost {
         })
     }
 
+    #[deprecated(note = "use FortressCost::parse with ResponseVals instead")]
     pub(crate) fn parse_slice(data: &[i64]) -> Result<FortressCost, SFError> {
         Ok(FortressCost {
             time: Duration::from_secs(data.csiget(0, "fortress time", 0)?),
