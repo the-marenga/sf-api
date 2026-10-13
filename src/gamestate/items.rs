@@ -14,6 +14,7 @@ use super::{
 use crate::{
     command::{AttributeType, ShopType},
     gamestate::{CCGet, CGet, ShopPosition, dungeons::CompanionClass},
+    response::ResponseVals,
 };
 
 /// The basic inventory, that every player has
@@ -329,13 +330,13 @@ impl Equipment {
         for (chunk, slot) in
             data.chunks_exact(ITEM_PARSE_LEN).zip(res.0.as_mut_slice())
         {
-            *slot = Item::parse(chunk, server_time)?;
+            *slot = Item::parse_slice(chunk, server_time)?;
         }
         Ok(res)
     }
 }
 
-pub(crate) const ITEM_PARSE_LEN: usize = 19;
+pub const ITEM_PARSE_LEN: usize = 19;
 
 /// Information about a single item. This can be anything, that is either in a
 /// inventory, in a reward slot, or similar
@@ -697,12 +698,147 @@ impl Item {
         }
     }
 
-    /// Parses an item, that starts at the start of the given data
-    pub(crate) fn parse(
+    /// Parses an item from a compile-time fixed 19-element response chunk or raw string.
+    ///
+    /// # Examples
+    /// ```
+    /// use sf_api::gamestate::items::Item;
+    /// use sf_api::gamestate::ServerTime;
+    ///
+    /// let raw = "1/0/0/1010/0/149/265/5/4/0/108/72/0/83940/10/0/0/45/0";
+    /// let item = Item::parse(raw, ServerTime::default()).unwrap().unwrap();
+    /// assert_eq!(item.price, 83940);
+    /// ```
+    #[allow(clippy::missing_errors_doc, clippy::cast_possible_truncation)]
+    pub fn parse<'a>(
+        data: impl TryInto<ResponseVals<'a, ITEM_PARSE_LEN>, Error = SFError>,
+        server_time: ServerTime,
+    ) -> Result<Option<Self>, SFError> {
+        let data: ResponseVals<'a, ITEM_PARSE_LEN> = data.try_into()?;
+        let Some(typ) = ItemType::parse(&data, server_time)? else {
+            return Ok(None);
+        };
+
+        let enchantment = FromPrimitive::from_u8(data.u8_or(2, 0));
+        let gem_slot_val = data.i64_or(1, 0);
+        let gem_pwr = data.u32_or(16, 0);
+
+        let gem_slot = GemSlot::parse(gem_slot_val, i64::from(gem_pwr));
+
+        let class = if typ.is_class_item() {
+            let class_raw = (data.u32_or(3, 0) & 0xFFFF) / 1000;
+            FromPrimitive::from_u32(class_raw)
+        } else {
+            None
+        };
+
+        let mut rune = None;
+        let mut attributes: EnumMap<AttributeType, u32> = EnumMap::default();
+        let price = data.u32_or(13, u32::MAX);
+
+        if typ.equipment_slot().is_some() {
+            for i in 0..3 {
+                let atr_typ = data.usize_or(i + 7, 0);
+                let atr_val = data.u32_or(i + 10, 0);
+                match atr_typ {
+                    0 => {}
+                    1..=5 => {
+                        let Some(atr_typ) = FromPrimitive::from_usize(atr_typ)
+                        else {
+                            continue;
+                        };
+                        *attributes.get_mut(atr_typ) += atr_val;
+                    }
+                    6 => {
+                        for atr in attributes.values_mut() {
+                            *atr += atr_val;
+                        }
+                    }
+                    21 => {
+                        for atr in [
+                            AttributeType::Strength,
+                            AttributeType::Constitution,
+                            AttributeType::Luck,
+                        ] {
+                            *attributes.get_mut(atr) += atr_val;
+                        }
+                    }
+                    22 => {
+                        for atr in [
+                            AttributeType::Dexterity,
+                            AttributeType::Constitution,
+                            AttributeType::Luck,
+                        ] {
+                            *attributes.get_mut(atr) += atr_val;
+                        }
+                    }
+                    23 => {
+                        for atr in [
+                            AttributeType::Intelligence,
+                            AttributeType::Constitution,
+                            AttributeType::Luck,
+                        ] {
+                            *attributes.get_mut(atr) += atr_val;
+                        }
+                    }
+                    rune_typ => {
+                        let Some(typ) = FromPrimitive::from_usize(rune_typ)
+                        else {
+                            warn!(
+                                "Unhandled item val: {atr_typ} -> {atr_val} \
+                                 for {class:?} {typ:?}",
+                            );
+                            continue;
+                        };
+                        let Ok(value) = atr_val.try_into() else {
+                            warn!("Rune value too big for a u8: {atr_val}");
+                            continue;
+                        };
+                        rune = Some(Rune { typ, value });
+                    }
+                }
+            }
+        }
+
+        let model_id: u16 = ((data.u32_or(3, 0) & 0xFFFF) % 1000) as u16;
+
+        let color = match model_id {
+            ..=49 if typ != ItemType::Talisman => {
+                let sum: u64 = (5..=12).map(|pos| data.u64_or(pos, 0)).sum();
+                ((sum % 5) + 1) as u8
+            }
+            _ => 1,
+        };
+
+        let item = Item {
+            typ,
+            model_id,
+            rune,
+            type_specific_val: data.u32_or(5, 0),
+            gem_slot,
+            enchantment,
+            class,
+            attributes,
+            color,
+            price,
+            mushroom_price: data.u32_or(14, u32::MAX),
+            upgrade_count: data.u8_or(15, u8::MAX),
+            item_quality: data.u32_or(17, 0),
+            is_washed: data.u32_or(18, 0) != 0,
+            full_model_id: data.u32_or(3, 0),
+        };
+        Ok(Some(item))
+    }
+
+    /// Parses an item from an i64 slice.
+    #[deprecated(note = "use Item::parse with ResponseVals instead")]
+    #[allow(clippy::too_many_lines)]
+    pub(crate) fn parse_slice(
         data: &[i64],
         server_time: ServerTime,
     ) -> Result<Option<Self>, SFError> {
-        let Some(typ) = ItemType::parse(data, server_time)? else {
+        #[allow(deprecated)]
+        let Some(typ) = ItemType::parse_slice(data, server_time)? else {
             return Ok(None);
         };
 
@@ -1065,6 +1201,108 @@ impl ItemType {
     }
 
     pub(crate) fn parse(
+        data: &ResponseVals<ITEM_PARSE_LEN>,
+        _server_time: ServerTime,
+    ) -> Result<Option<Self>, SFError> {
+        let raw_typ = data.u8_or(0, 255);
+        let unknown_item = |name: &'static str| {
+            warn!("Could not parse item of type: {raw_typ}. {name} is faulty");
+            Ok(Some(ItemType::Unknown(raw_typ)))
+        };
+
+        let sub_ident = data.i64(3)?;
+
+        Ok(Some(match raw_typ {
+            0 => return Ok(None),
+            1 => ItemType::Weapon {
+                min_dmg: data.u32_or(5, 0),
+                max_dmg: data.u32_or(6, 0),
+            },
+            2 => ItemType::Shield {
+                block_chance: data.u32_or(5, 0),
+            },
+            3 => ItemType::BreastPlate,
+            4 => ItemType::FootWear,
+            5 => ItemType::Gloves,
+            6 => ItemType::Hat,
+            7 => ItemType::Belt,
+            8 => ItemType::Amulet,
+            9 => ItemType::Ring,
+            10 => ItemType::Talisman,
+            11 => {
+                let id = sub_ident & 0xFFFF;
+                let Ok(id) = id.try_into() else {
+                    return unknown_item("unique sub ident");
+                };
+                match id {
+                    1..=11 | 17 | 19 | 22 | 69 | 70 => ItemType::DungeonKey {
+                        id,
+                        shadow_key: false,
+                    },
+                    20 => ItemType::ToiletKey,
+                    51..=64 | 67..=68 => ItemType::DungeonKey {
+                        id,
+                        shadow_key: true,
+                    },
+                    10000 => ItemType::EpicItemBag,
+                    piece => ItemType::Shard { piece },
+                }
+            }
+            12 => {
+                let id = sub_ident & 0xFF;
+                if id > 16 {
+                    let Some(typ) = FromPrimitive::from_i64(id) else {
+                        return unknown_item("resource type");
+                    };
+                    ItemType::Resource {
+                        amount: 0,
+                        typ,
+                    }
+                } else {
+                    let Some(typ) = PotionType::parse(id) else {
+                        return unknown_item("potion type");
+                    };
+                    let Some(size) = PotionSize::parse(id) else {
+                        return unknown_item("potion size");
+                    };
+                    ItemType::Potion(Potion {
+                        typ,
+                        size,
+                        expires: None,
+                    })
+                }
+            }
+            13 => ItemType::Scrapbook,
+            15 => {
+                let gem_value = data.u32_or(16, 0);
+                let Some(typ) = GemType::parse(sub_ident, gem_value) else {
+                    return unknown_item("gem type");
+                };
+                let gem = Gem {
+                    typ,
+                    value: gem_value,
+                };
+                ItemType::Gem(gem)
+            }
+            16 => {
+                let Some(typ) = PetItem::parse(sub_ident & 0xFFFF) else {
+                    return unknown_item("pet item");
+                };
+                ItemType::PetItem { typ }
+            }
+            17 if (sub_ident & 0xFFFF) == 4 => ItemType::Gral,
+            17 => ItemType::QuickSandGlass,
+            18 => ItemType::HeartOfDarkness,
+            19 => ItemType::WheelOfFortune,
+            20 => ItemType::Mannequin,
+            _ => {
+                return unknown_item("main ident");
+            }
+        }))
+    }
+
+    #[deprecated(note = "use ItemType::parse with ResponseVals instead")]
+    pub(crate) fn parse_slice(
         data: &[i64],
         _server_time: ServerTime,
     ) -> Result<Option<Self>, SFError> {

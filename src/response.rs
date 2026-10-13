@@ -278,6 +278,7 @@ impl<'a> ResponseVal<'a> {
     /// # Errors
     /// If any of the values in the string can not be parsed into the output
     /// value, the `ParsingError` for that value will be returned
+    #[deprecated]
     pub fn into_list<T: FromStr>(
         self,
         name: &'static str,
@@ -774,6 +775,19 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
         val.trim().parse::<T>().unwrap_or_else(|_| {
             warn!("Invalid value for {name} at index {pos}: {val}");
             default
+        })
+    }
+
+    /// Returns an iterator yielding consecutive non-overlapping chunks of size `CHUNK`.
+    ///
+    /// # Panics
+    /// Panics if `CHUNK == 0`.
+    pub fn parse_chunks<const CHUNK: usize>(
+        &self,
+    ) -> impl Iterator<Item = ResponseVals<'a, CHUNK>> + '_ {
+        assert!(CHUNK > 0, "CHUNK size must be greater than 0");
+        self.values.chunks_exact(CHUNK).map(|chunk| ResponseVals {
+            values: chunk.into(),
         })
     }
 
