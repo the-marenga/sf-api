@@ -579,9 +579,10 @@ impl GameState {
                     );
                 }
                 // Why would they include this in the tower response???
-                self.underworld
-                    .get_or_insert_default()
-                    .update(&data, server_time)?;
+                self.underworld.get_or_insert_default().update(
+                    &val.values::<TOWER_RESPONSE_LEN>()?,
+                    server_time,
+                )?;
             }
             "owngrouprank" => {
                 self.guild.get_or_insert_default().rank =
@@ -669,9 +670,7 @@ impl GameState {
             "underworldupgradeprice" => {
                 self.underworld
                     .get_or_insert_default()
-                    .update_underworld_unit_prices(
-                        &val.into_list("underworld upgrade prices")?,
-                    )?;
+                    .update_underworld_unit_prices(&val.values::<9>()?)?;
             }
             "unlockfeature" => {
                 self.pending_unlocks =
@@ -1029,7 +1028,7 @@ impl GameState {
             "underworldprice" => self
                 .underworld
                 .get_or_insert_default()
-                .update_building_prices(&val.into_list("ub prices")?)?,
+                .update_building_prices(&val.values::<30>()?)?,
             "owngroupknights" => self
                 .guild
                 .get_or_insert_default()
