@@ -314,9 +314,39 @@ impl Equipment {
         false
     }
 
+    /// Parses equipment from a compile-time fixed 190-element response chunk.
+    ///
+    /// # Errors
+    /// Returns [`SFError::ParsingErrorV2`] if item attributes fail to parse.
+    ///
+    /// # Examples
+    /// ```
+    /// use sf_api::gamestate::items::{Equipment, EQUIPMENT_PARSE_LEN};
+    /// use sf_api::gamestate::ServerTime;
+    /// use sf_api::response::ResponseVals;
+    ///
+    /// let raw = ["0"; EQUIPMENT_PARSE_LEN];
+    /// let vals = ResponseVals::from_array(raw);
+    /// let equipment = Equipment::parse(&vals, ServerTime::default()).unwrap();
+    /// assert!(equipment.0.values().all(|item| item.is_none()));
+    /// ```
+    pub fn parse(
+        data: &ResponseVals<EQUIPMENT_PARSE_LEN>,
+        server_time: ServerTime,
+    ) -> Result<Equipment, SFError> {
+        let mut res = Equipment::default();
+        for (chunk, slot) in
+            data.chunks_exact::<ITEM_PARSE_LEN>().zip(res.0.as_mut_slice())
+        {
+            *slot = Item::parse(&chunk, server_time)?;
+        }
+        Ok(res)
+    }
+
     /// Expects the input `data` to have items directly at data[0]
-    #[allow(clippy::indexing_slicing)]
-    pub(crate) fn parse(
+    #[deprecated(note = "use Equipment::parse with ResponseVals instead")]
+    #[allow(dead_code, clippy::indexing_slicing)]
+    pub(crate) fn parse_slice(
         data: &[i64],
         server_time: ServerTime,
     ) -> Result<Equipment, SFError> {
@@ -337,6 +367,7 @@ impl Equipment {
 }
 
 pub const ITEM_PARSE_LEN: usize = 19;
+pub const EQUIPMENT_PARSE_LEN: usize = ITEM_PARSE_LEN * EquipmentSlot::COUNT;
 
 /// Information about a single item. This can be anything, that is either in a
 /// inventory, in a reward slot, or similar
