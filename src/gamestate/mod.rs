@@ -24,6 +24,8 @@ use log::{error, warn};
 use num_traits::FromPrimitive;
 use strum::{EnumCount, IntoEnumIterator};
 
+pub use crate::error::{Result, SFError};
+
 use crate::{
     command::*,
     error::*,

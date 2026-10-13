@@ -6,15 +6,15 @@
     clippy::print_stderr,
     missing_debug_implementations,
     clippy::pedantic,
-    // missing_docs
+    missing_docs
 )]
 #![allow(
-    clippy::redundant_closure_for_method_calls,
-    clippy::wildcard_imports,
+    // clippy::redundant_closure_for_method_calls,
+    // clippy::wildcard_imports,
     clippy::too_many_lines,
-    clippy::field_reassign_with_default,
-    clippy::match_bool,
-    clippy::chunks_exact_to_as_chunks
+    // clippy::field_reassign_with_default,
+    // clippy::match_bool,
+    // clippy::chunks_exact_to_as_chunks
 )]
 #![deny(unsafe_code)]
 
@@ -23,6 +23,8 @@ pub mod error;
 pub mod gamestate;
 pub mod misc;
 pub mod response;
+
+pub use error::{Result, SFError};
 #[cfg(feature = "session")]
 pub mod session;
 #[cfg(feature = "simulation")]

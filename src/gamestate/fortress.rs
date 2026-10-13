@@ -7,11 +7,11 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive as _;
 use strum::{EnumCount, EnumIter};
 
-use super::{SFError, ServerTime, items::GemType};
+use super::{Result, ServerTime, items::GemType};
 use crate::response::ResponseVals;
 
 /// The information about a characters fortress
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Fortress {
     /// All the buildings, that a fortress can have. If they are not yet built,
@@ -21,7 +21,7 @@ pub struct Fortress {
     pub units: EnumMap<FortressUnitType, FortressUnit>,
     /// All information about resources in the fortress
     pub resources: EnumMap<FortressResourceType, FortressResource>,
-    /// The `last_collectable` variable in `FortessProduction` is NOT
+    /// The `last_collectable` variable in `FortressProduction` is NOT
     /// calculated whenever you did the last request, instead the server
     /// calculates it at regular points in time and whenever you collect
     /// resources. That point in time is this variable here. That means if
@@ -71,7 +71,7 @@ pub struct Fortress {
 
 /// The price an upgrade, or building something in the fortress costs. These
 /// are always for one upgrade/build, which is important for unit builds
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressCost {
     /// The time it takes to complete one build/upgrade
@@ -88,7 +88,7 @@ impl FortressCost {
     /// Parses a fortress cost `[time_seconds, silver, wood, stone]`.
     pub(crate) fn parse(
         data: &ResponseVals<4>,
-    ) -> Result<FortressCost, SFError> {
+    ) -> Result<FortressCost> {
         Ok(FortressCost {
             time: Duration::from_secs(data.u64(0)?),
             silver: data.u64(1)?,
@@ -99,7 +99,7 @@ impl FortressCost {
 }
 
 /// Information about one of the three resources, that the fortress can produce.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressResource {
     /// The amount of this resource you have available to spend on upgrades and
@@ -117,16 +117,27 @@ pub struct FortressResource {
     pub secret_storage: FortressSecretStorage,
 }
 
-#[derive(Debug, Default, Clone)]
+/// The secret storage in the treasury where wood and stone are protected.
+///
+/// Resources obtained outside of regular building production (such as from
+/// quests, the Wheel of Fortune, or events) are stored and secured here.
+///
+/// All resources stored here are safe from enemy attacks during fortress
+/// battles and cannot be looted. The capacity is 30% of the main fortress
+/// resource storage limit.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressSecretStorage {
+    /// The current amount of resources stored in secret storage
     pub amount: u64,
+    /// The maximum amount of resources that can be protected in secret storage
+    /// (30% of the main fortress storage limit)
     pub limit: u64,
 }
 
 /// Information about the production of a resource in the fortress.  Note that
 /// experience will not have some of these fields
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressProduction {
     /// The amount the production building has already produced, that you can
@@ -145,7 +156,7 @@ pub struct FortressProduction {
     pub per_hour_next_lvl: u64,
 }
 
-/// The type of resource, that the fortress available in the fortress
+/// The type of resource available in the fortress
 #[derive(Debug, Clone, Copy, EnumCount, EnumIter, PartialEq, Eq, Enum)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(missing_docs)]
@@ -155,7 +166,7 @@ pub enum FortressResourceType {
     Experience = 2,
 }
 
-/// The type of building, that can be build in the fortress
+/// The type of building that can be built in the fortress
 #[derive(
     Debug, Clone, Copy, EnumCount, FromPrimitive, PartialEq, Eq, Enum, EnumIter,
 )]
@@ -177,10 +188,9 @@ pub enum FortressBuildingType {
 }
 
 impl FortressBuildingType {
-    /// Minimal fortress level which is required to be allowed to build this
-    /// building
+    /// Minimum fortress level required to build this building
     #[must_use]
-    pub fn required_min_fortress_level(&self) -> u16 {
+    pub fn required_min_fortress_level(self) -> u16 {
         match self {
             FortressBuildingType::Fortress => 0,
             FortressBuildingType::LaborersQuarters
@@ -213,7 +223,7 @@ impl FortressBuildingType {
 }
 
 /// Information about a single type of unit
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressUnit {
     /// The level this unit has
@@ -236,7 +246,7 @@ pub struct FortressUnit {
 
 /// An action, that costs some amount of resources to do and will finish at a
 /// certain point in time
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressAction<T> {
     /// When this action was started. This can be months in the past, as this
@@ -275,7 +285,7 @@ pub enum FortressUnitType {
 impl FortressUnitType {
     /// The building, that trains this unit type
     #[must_use]
-    pub fn training_building(&self) -> FortressBuildingType {
+    pub fn training_building(self) -> FortressBuildingType {
         match self {
             FortressUnitType::Archer => FortressBuildingType::ArcheryGuild,
             FortressUnitType::Magician => FortressBuildingType::MagesTower,
@@ -286,7 +296,7 @@ impl FortressUnitType {
 
 /// Generic information about a building in the fortress. If you want
 /// information about a production building, you should look at the resources
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressBuilding {
     /// The current level of this building. If this is 0, it has not yet been
@@ -305,18 +315,13 @@ impl Fortress {
         // Check if associated units are training
         if let Some(unit_type) = building_type.unit_produced()
             && let Some(finish) = self.units[unit_type].training.finish
-            && finish > Local::now()
         {
-            return true;
+            return finish > Local::now();
         }
 
         // Check if gem mining is in progress
-        if building_type == FortressBuildingType::GemMine
+        building_type == FortressBuildingType::GemMine
             && self.gem_search.finish.is_some()
-        {
-            return true;
-        }
-        false
     }
 
     /// Checks whether or not it is possible to build/upgrade a building
@@ -326,51 +331,53 @@ impl Fortress {
         building_type: FortressBuildingType,
         available_silver: u64,
     ) -> bool {
-        let building_info = &self.buildings[building_type];
-        let fortress_level =
-            self.buildings[FortressBuildingType::Fortress].level;
-        let smithy_required_buildings = [
-            FortressBuildingType::ArcheryGuild,
-            FortressBuildingType::Barracks,
-            FortressBuildingType::MagesTower,
-            FortressBuildingType::Wall,
-        ];
-
-        // Checks whether a building is in use, in such a way that it prevents
-        // upgrading (for example, if a unit is being trained, or gem mining is
-        // in progress)
-        if self.in_use(building_type) {
+        // Checks whether a building is in use, or another upgrade is in
+        // progress
+        if self.in_use(building_type) || self.building_upgrade.target.is_some()
+        {
             return false;
         }
 
-        // Smithy can only be built if these buildings exist
-        let can_smithy_be_built = smithy_required_buildings
-            .into_iter()
-            .all(|b| self.buildings[b].level > 0);
+        let fortress_level =
+            self.buildings[FortressBuildingType::Fortress].level;
 
-        if matches!(building_type, FortressBuildingType::Smithy)
-            && !can_smithy_be_built
-        {
-            // Some buildings which are required to built Smithy do not exist
-            false
-        } else if !matches!(building_type, FortressBuildingType::Fortress)
-            && building_info.level == fortress_level
-        {
-            // It is not possible to upgrade a building to a higher level than
-            // the fortress level
-            false
-        } else {
-            let upgrade_cost = building_info.upgrade_cost;
-
-            // Check if required fortress level has been reached
-            building_type.required_min_fortress_level() <= fortress_level
-            // Check that no construction is in progress
-            && self.building_upgrade.target.is_none()
-            // Check if there are enough resources
-            && upgrade_cost.stone <= self.resources[FortressResourceType::Stone].current
-            && upgrade_cost.wood <= self.resources[FortressResourceType::Wood].current
-            && upgrade_cost.silver <= available_silver
+        // Check if required fortress level has been reached
+        if building_type.required_min_fortress_level() > fortress_level {
+            return false;
         }
+
+        let building_info = &self.buildings[building_type];
+
+        // It is not possible to upgrade a building to a higher level than the
+        // fortress level
+        if building_type != FortressBuildingType::Fortress
+            && building_info.level >= fortress_level
+        {
+            return false;
+        }
+
+        // Smithy can only be built if all combat buildings exist
+        if building_type == FortressBuildingType::Smithy {
+            let smithy_required_buildings = [
+                FortressBuildingType::ArcheryGuild,
+                FortressBuildingType::Barracks,
+                FortressBuildingType::MagesTower,
+                FortressBuildingType::Wall,
+            ];
+            let can_smithy_be_built = smithy_required_buildings
+                .into_iter()
+                .all(|b| self.buildings[b].level > 0);
+            if !can_smithy_be_built {
+                return false;
+            }
+        }
+
+        let upgrade_cost = building_info.upgrade_cost;
+        upgrade_cost.stone
+            <= self.resources[FortressResourceType::Stone].current
+            && upgrade_cost.wood
+                <= self.resources[FortressResourceType::Wood].current
+            && upgrade_cost.silver <= available_silver
     }
 
     /// Updates the fortress resources from a 16-element response chunk.
@@ -378,7 +385,7 @@ impl Fortress {
         &mut self,
         data: &ResponseVals<16>,
         server_time: ServerTime,
-    ) -> Result<(), SFError> {
+    ) -> Result<()> {
         for (idx, (typ, resource)) in self.resources.iter_mut().enumerate() {
             resource.production.last_collectable = data.u64(idx)?;
             resource.production.limit = data.u64(3 + idx)?;
@@ -398,7 +405,7 @@ impl Fortress {
     pub(crate) fn update_unit_prices(
         &mut self,
         data: &ResponseVals<12>,
-    ) -> Result<(), SFError> {
+    ) -> Result<()> {
         for (unit, cost_vals) in
             self.units.values_mut().zip(data.chunks_exact::<4>())
         {
@@ -411,7 +418,7 @@ impl Fortress {
     pub(crate) fn update_unit_upgrade_info(
         &mut self,
         data: &ResponseVals<9>,
-    ) -> Result<(), SFError> {
+    ) -> Result<()> {
         for (unit, chunk) in
             self.units.values_mut().zip(data.chunks_exact::<3>())
         {
@@ -426,7 +433,7 @@ impl Fortress {
     pub(crate) fn update_levels(
         &mut self,
         data: &ResponseVals<4>,
-    ) -> Result<(), SFError> {
+    ) -> Result<()> {
         data.ignore(0, "might be max unit level");
         for (i, unit) in self.units.values_mut().enumerate() {
             unit.level = data.u16(1 + i)?;
@@ -438,7 +445,7 @@ impl Fortress {
     pub(crate) fn update_prices(
         &mut self,
         data: &ResponseVals<52>,
-    ) -> Result<(), SFError> {
+    ) -> Result<()> {
         let mut chunks = data.chunks_exact::<4>();
         for (building, cost_vals) in
             self.buildings.values_mut().zip(&mut chunks)
@@ -456,7 +463,7 @@ impl Fortress {
         &mut self,
         data: &ResponseVals<15>,
         server_time: ServerTime,
-    ) -> Result<(), SFError> {
+    ) -> Result<()> {
         for (idx, unit) in self.units.values_mut().enumerate() {
             unit.count = data.u16(idx)?;
             unit.in_training = data.u16(3 + idx)?;
@@ -472,7 +479,7 @@ impl Fortress {
         &mut self,
         data: &ResponseVals<27>,
         server_time: ServerTime,
-    ) -> Result<(), SFError> {
+    ) -> Result<()> {
         // Buildings
         for (idx, building) in self.buildings.values_mut().enumerate() {
             building.level = data.u16(idx)?;

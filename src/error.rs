@@ -1,5 +1,8 @@
 use thiserror::Error;
 
+/// A specialized [`Result`] type for operations that can fail with [`SFError`].
+pub type Result<T, E = SFError> = std::result::Result<T, E>;
+
 /// An error, that occurred during the communication (sending/receiving/parsing)
 /// of requests to the S&F server
 #[derive(Debug, Error)]
