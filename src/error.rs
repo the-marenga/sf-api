@@ -26,6 +26,9 @@ pub enum SFError {
          value of: {1}"
     )]
     ParsingError(&'static str, String),
+    /// Error encountered when parsing server response with caller tracking
+    #[error("Error parsing the server response: {0}")]
+    ParsingErrorV2(String),
     /// The server responded with an error. If you are already logged in, this
     /// is likely recoverable,  i.e you are able to reuse your session. You
     /// should just not resend the same command, as the server had some error
