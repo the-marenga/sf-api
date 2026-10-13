@@ -523,22 +523,16 @@ impl GameState {
                 toilet.sacrifices_left = vals[2] as u32;
             }
             "companionequipment" => {
-                let data: Vec<i64> = val.into_list("quest items")?;
-                if data.is_empty() {
+                if val.as_str().trim().is_empty() {
                     return Ok(());
                 }
-                for (idx, cmp) in self
-                    .dungeons
-                    .companions
-                    .get_or_insert_default()
-                    .values_mut()
-                    .enumerate()
+                let companions =
+                    self.dungeons.companions.get_or_insert_default();
+                for (chunk, cmp) in val
+                    .parse_chunks::<EQUIPMENT_PARSE_LEN>()?
+                    .zip(companions.values_mut())
                 {
-                    let data = data.skip(
-                        (19 * EquipmentSlot::COUNT) * idx,
-                        "companion item",
-                    )?;
-                    cmp.equipment = Equipment::parse(data, server_time)?;
+                    cmp.equipment = Equipment::parse(&chunk, server_time)?;
                 }
             }
             "storeitemsfidget" => {
@@ -547,7 +541,7 @@ impl GameState {
                     Shop::parse(&data, server_time, ShopType::Magic)?;
             }
             "ownplayersaveequipment" => {
-                let data: Vec<i64> = val.into_list("player equipment")?;
+                let data = val.values::<EQUIPMENT_PARSE_LEN>()?;
                 self.character.equipment =
                     Equipment::parse(&data, server_time)?;
             }
@@ -563,9 +557,9 @@ impl GameState {
                 }
             }
             "dummieequipment" => {
-                let m: Vec<i64> = val.into_list("mannequin")?;
+                let data = val.values::<EQUIPMENT_PARSE_LEN>()?;
                 self.character.mannequin =
-                    Some(Equipment::parse(&m, server_time)?);
+                    Some(Equipment::parse(&data, server_time)?);
             }
             "owntower" => {
                 let data = val.into_list("tower")?;
@@ -870,7 +864,7 @@ impl GameState {
                 other_player.get_or_insert_default().name.set(val.as_str());
             }
             "otherplayersaveequipment" => {
-                let data: Vec<i64> = val.into_list("other player equipment")?;
+                let data = val.values::<EQUIPMENT_PARSE_LEN>()?;
                 other_player.get_or_insert_default().equipment =
                     Equipment::parse(&data, server_time)?;
             }
