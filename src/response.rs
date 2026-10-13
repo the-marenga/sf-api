@@ -867,6 +867,48 @@ impl<'a, const N: usize> ResponseVals<'a, N> {
             SFError::ParsingError(name, s.to_string())
         })
     }
+
+    /// Returns a sub-chunk of `M` elements starting at compile-time `OFFSET`.
+    ///
+    /// # Panics
+    /// Fails to compile if `OFFSET + M > N`.
+    #[must_use]
+    pub fn sub_chunk<const OFFSET: usize, const M: usize>(
+        &self,
+    ) -> ResponseVals<'a, M> {
+        const {
+            assert!(
+                OFFSET + M <= N,
+                "sub_chunk out of bounds for ResponseVals"
+            );
+        };
+        #[allow(clippy::indexing_slicing)]
+        let slice = &self.as_array()[OFFSET..OFFSET + M];
+        ResponseVals {
+            values: slice.into(),
+        }
+    }
+
+    /// Returns an iterator yielding consecutive non-overlapping chunks of size `CHUNK`.
+    ///
+    /// # Panics
+    /// Fails to compile if `CHUNK == 0` or if `N % CHUNK != 0`.
+    pub fn chunks_exact<const CHUNK: usize>(
+        &self,
+    ) -> impl Iterator<Item = ResponseVals<'a, CHUNK>> + '_ {
+        const {
+            assert!(CHUNK > 0, "CHUNK size must be non-zero");
+            assert!(
+                N.is_multiple_of(CHUNK),
+                "N must be an exact multiple of CHUNK size"
+            );
+        };
+        self.as_array()
+            .chunks_exact(CHUNK)
+            .map(|chunk| ResponseVals {
+                values: chunk.into(),
+            })
+    }
 }
 
 impl<'a, const N: usize> std::ops::Deref for ResponseVals<'a, N> {
@@ -926,7 +968,26 @@ impl<'a> From<&ResponseVal<'a>> for ResponseVals<'a, UNBOUNDED> {
     }
 }
 
+impl<'a, const N: usize> TryFrom<&'a str> for ResponseVals<'a, N> {
+    type Error = SFError;
 
+    #[track_caller]
+    fn try_from(raw: &'a str) -> Result<Self, Self::Error> {
+        ResponseVal {
+            value: raw,
+            sub_key: "",
+        }
+        .values_fixed()
+    }
+}
+
+impl<'a, const N: usize> TryFrom<&ResponseVals<'a, N>> for ResponseVals<'a, N> {
+    type Error = SFError;
+
+    fn try_from(vals: &ResponseVals<'a, N>) -> Result<Self, Self::Error> {
+        Ok(vals.clone())
+    }
+}
 
 impl<const N: usize> Display for ResponseVals<'_, N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

@@ -12,6 +12,7 @@ use super::{
 use crate::{
     PlayerId,
     gamestate::{CGet, EnumMapGet},
+    response::ResponseVals,
 };
 
 /// The information about a characters fortress
@@ -89,7 +90,29 @@ pub struct FortressCost {
 }
 
 impl FortressCost {
-    pub(crate) fn parse(data: &[i64]) -> Result<FortressCost, SFError> {
+    /// Parses a fortress cost `[time_seconds, silver, wood, stone]`.
+    ///
+    /// # Examples
+    /// ```
+    /// use sf_api::gamestate::fortress::FortressCost;
+    ///
+    /// let cost = FortressCost::parse("7200/4000/1100/333").unwrap();
+    /// assert_eq!((cost.time.as_secs(), cost.silver, cost.wood, cost.stone), (7200, 4000, 1100, 333));
+    /// ```
+    #[allow(clippy::missing_errors_doc)]
+    pub fn parse<'a>(
+        data: impl TryInto<ResponseVals<'a, 4>, Error = SFError>,
+    ) -> Result<FortressCost, SFError> {
+        let data: ResponseVals<'a, 4> = data.try_into()?;
+        Ok(FortressCost {
+            time: Duration::from_secs(data.u64(0)?),
+            silver: data.u64(1)?,
+            wood: data.u64(2)?,
+            stone: data.u64(3)?,
+        })
+    }
+
+    pub(crate) fn parse_slice(data: &[i64]) -> Result<FortressCost, SFError> {
         Ok(FortressCost {
             time: Duration::from_secs(data.csiget(0, "fortress time", 0)?),
             // Guessing here
@@ -411,7 +434,7 @@ impl Fortress {
     ) -> Result<(), SFError> {
         for (i, typ) in FortressUnitType::iter().enumerate() {
             self.units.get_mut(typ).training.cost =
-                FortressCost::parse(data.skip(i * 4, "unit prices")?)?;
+                FortressCost::parse_slice(data.skip(i * 4, "unit prices")?)?;
         }
         Ok(())
     }
@@ -444,16 +467,37 @@ impl Fortress {
         Ok(())
     }
 
-    pub(crate) fn update_prices(
+    /// Updates building upgrade costs and gem search cost.
+    ///
+    /// # Examples
+    /// ```
+    /// use sf_api::gamestate::fortress::{Fortress, FortressBuildingType};
+    ///
+    /// let raw = "7200/4000/1100/333/7200/2000/1015/308/7200/800/220/133/7200/1200/660/107/7200/6000/1467/444/765/700/7/9/765/500/41/7/765/400/20/14/765/600/61/20/7200/10000/1173/356/765/400/25/8/765/15000/30/13/9180/45000/29/9";
+    /// let mut fortress = Fortress::default();
+    /// fortress.update_prices(&raw.try_into().unwrap()).unwrap();
+    ///
+    /// let ft = fortress.buildings[FortressBuildingType::Fortress].upgrade_cost;
+    /// assert_eq!((ft.time.as_secs(), ft.silver, ft.wood, ft.stone), (7200, 4000, 1100, 333));
+    ///
+    /// let gem = fortress.gem_search.cost;
+    /// assert_eq!((gem.time.as_secs(), gem.silver, gem.wood, gem.stone), (9180, 45000, 29, 9));
+    /// ```
+    #[allow(clippy::missing_errors_doc)]
+    pub fn update_prices(
         &mut self,
-        data: &[i64],
+        data: &ResponseVals<52>,
     ) -> Result<(), SFError> {
-        for (i, typ) in FortressBuildingType::iter().enumerate() {
-            self.buildings.get_mut(typ).upgrade_cost =
-                FortressCost::parse(data.skip(i * 4, "fortress unit prices")?)?;
+        let mut chunks = data.chunks_exact::<4>();
+        for typ in FortressBuildingType::iter() {
+            if let Some(cost_vals) = chunks.next() {
+                self.buildings.get_mut(typ).upgrade_cost =
+                    FortressCost::parse(&cost_vals)?;
+            }
         }
-        self.gem_search.cost =
-            FortressCost::parse(data.skip(48, "gem_search_cost")?)?;
+        if let Some(gem_cost_vals) = chunks.next() {
+            self.gem_search.cost = FortressCost::parse(&gem_cost_vals)?;
+        }
         Ok(())
     }
 
