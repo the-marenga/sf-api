@@ -71,6 +71,18 @@ macro_rules! parse_test {
         };
         assert_eq!(parsed, $expected);
     };
+    (update: $target:ident ( $raw:expr $(, $arg:expr)* ), { $($field:ident: $expected:expr),+ $(,)? }) => {
+        let vals = match $raw.try_into() {
+            Ok(v) => v,
+            Err(e) => panic!("invalid ResponseVals format: {e}"),
+        };
+        if let Err(e) = $target.update(&vals $(, $arg)*) {
+            panic!("update failed: {e}");
+        }
+        $(
+            assert_eq!($target.$field, $expected, "mismatch in field '{}'", stringify!($field));
+        )+
+    };
 }
 
 /// This is the numerical id of a player on a server. Note that in rare edge

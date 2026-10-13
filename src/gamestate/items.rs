@@ -699,17 +699,17 @@ impl Item {
         server_time: ServerTime,
     ) -> Result<Option<Self>, SFError> {
         let Some(typ) = ItemType::parse(data, server_time)? else {
-            data.ignore_all();
+            data.ignore_all("empty item slot");
             return Ok(None);
         };
 
-        data.ignore(4);
+        data.ignore(4, "unused timestamp");
         if !typ.is_weapon() {
-            data.ignore(6);
+            data.ignore(6, "weapon damage field on non-weapon item");
         }
         if typ.equipment_slot().is_none() {
             for pos in 7..=12 {
-                data.ignore(pos);
+                data.ignore(pos, "attributes on non-equipment item");
             }
         }
 
