@@ -36,10 +36,7 @@ pub mod sso;
 #[macro_export]
 macro_rules! parse_test {
     ($ty:ident ( $raw:expr $(, $arg:expr)* ), { $($field:ident: $expected:expr),+ $(,)? }) => {
-        let vals = match $raw.try_into() {
-            Ok(v) => v,
-            Err(e) => panic!("invalid ValueArray format: {e}"),
-        };
+        let vals = $crate::response::Vals::from($raw);
         let parsed = match $ty::parse(&vals $(, $arg)*) {
             Ok(p) => p,
             Err(e) => panic!("parsing failed: {e}"),
@@ -49,10 +46,7 @@ macro_rules! parse_test {
         )+
     };
     (opt: $ty:ident ( $raw:expr $(, $arg:expr)* ), { $($field:ident: $expected:expr),+ $(,)? }) => {
-        let vals = match $raw.try_into() {
-            Ok(v) => v,
-            Err(e) => panic!("invalid ValueArray format: {e}"),
-        };
+        let vals = $crate::response::Vals::from($raw);
         let parsed = match $ty::parse(&vals $(, $arg)*) {
             Ok(Some(p)) => p,
             Ok(None) => panic!("expected Some, found None"),
@@ -63,10 +57,7 @@ macro_rules! parse_test {
         )+
     };
     ($ty:ident ( $raw:expr $(, $arg:expr)* ) => $expected:expr) => {
-        let vals = match $raw.try_into() {
-            Ok(v) => v,
-            Err(e) => panic!("invalid ValueArray format: {e}"),
-        };
+        let vals = $crate::response::Vals::from($raw);
         let parsed = match $ty::parse(&vals $(, $arg)*) {
             Ok(p) => p,
             Err(e) => panic!("parsing failed: {e}"),
@@ -74,10 +65,7 @@ macro_rules! parse_test {
         assert_eq!(parsed, $expected);
     };
     (update: $target:ident . $method:ident ( $raw:expr $(, $arg:expr)* ), { $($field:ident: $expected:expr),* $(,)? }) => {
-        let vals = match $raw.try_into() {
-            Ok(v) => v,
-            Err(e) => panic!("invalid ValueArray format: {e}"),
-        };
+        let vals = $crate::response::Vals::from($raw);
         if let Err(e) = $target.$method(&vals $(, $arg)*) {
             panic!("update failed: {e}");
         }
@@ -86,10 +74,7 @@ macro_rules! parse_test {
         )*
     };
     (update: $target:ident ( $raw:expr $(, $arg:expr)* ), { $($field:ident: $expected:expr),* $(,)? }) => {
-        let vals = match $raw.try_into() {
-            Ok(v) => v,
-            Err(e) => panic!("invalid ValueArray format: {e}"),
-        };
+        let vals = $crate::response::Vals::from($raw);
         if let Err(e) = $target.update(&vals $(, $arg)*) {
             panic!("update failed: {e}");
         }

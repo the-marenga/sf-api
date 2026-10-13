@@ -8,7 +8,7 @@ use num_traits::FromPrimitive as _;
 use strum::{EnumCount, EnumIter};
 
 use super::{Result, ServerTime, items::GemType};
-use crate::response::{Vals, ValueArray};
+use crate::response::Vals;
 
 /// The information about a characters fortress
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -86,7 +86,7 @@ pub struct FortressCost {
 
 impl FortressCost {
     /// Parses a fortress cost `[time_seconds, silver, wood, stone]`.
-    pub(crate) fn parse(data: &ValueArray<4>) -> Result<FortressCost> {
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<FortressCost> {
         Ok(FortressCost {
             time: Duration::from_secs(data.u64(0)?),
             silver: data.u64(1)?,
@@ -401,7 +401,7 @@ impl Fortress {
     /// Updates the fortress resources from a 16-element response chunk.
     pub(crate) fn update_resources(
         &mut self,
-        data: &ValueArray<16>,
+        data: &Vals<'_>,
         server_time: ServerTime,
     ) -> Result<()> {
         for (idx, (typ, resource)) in self.resources.iter_mut().enumerate() {
@@ -420,13 +420,8 @@ impl Fortress {
     }
 
     /// Updates unit recruitment costs from a 12-element response chunk.
-    pub(crate) fn update_unit_prices(
-        &mut self,
-        data: &ValueArray<12>,
-    ) -> Result<()> {
-        for (unit, cost_vals) in
-            self.units.values_mut().zip(data.chunks_exact::<4>())
-        {
+    pub(crate) fn update_unit_prices(&mut self, data: &Vals<'_>) -> Result<()> {
+        for (unit, cost_vals) in self.units.values_mut().zip(data.chunks(4)) {
             unit.training.cost = FortressCost::parse(&cost_vals)?;
         }
         Ok(())
@@ -435,11 +430,9 @@ impl Fortress {
     /// Updates unit upgrade requirements from a 9-element response chunk.
     pub(crate) fn update_unit_upgrade_info(
         &mut self,
-        data: &ValueArray<9>,
+        data: &Vals<'_>,
     ) -> Result<()> {
-        for (unit, chunk) in
-            self.units.values_mut().zip(data.chunks_exact::<3>())
-        {
+        for (unit, chunk) in self.units.values_mut().zip(data.chunks(3)) {
             unit.upgrade_next_lvl = chunk.u64(0)?;
             unit.upgrade_cost.wood = chunk.u64(1)?;
             unit.upgrade_cost.stone = chunk.u64(2)?;
@@ -448,7 +441,7 @@ impl Fortress {
     }
 
     /// Updates the fortress unit levels from a 4-element response chunk.
-    pub(crate) fn update_levels(&mut self, data: &ValueArray<4>) -> Result<()> {
+    pub(crate) fn update_levels(&mut self, data: &Vals<'_>) -> Result<()> {
         data.ignore(0, "might be max unit level");
         for (i, unit) in self.units.values_mut().enumerate() {
             unit.level = data.u16(1 + i)?;
@@ -457,11 +450,8 @@ impl Fortress {
     }
 
     /// Updates building upgrade costs and gem search cost.
-    pub(crate) fn update_prices(
-        &mut self,
-        data: &ValueArray<52>,
-    ) -> Result<()> {
-        let mut chunks = data.chunks_exact::<4>();
+    pub(crate) fn update_prices(&mut self, data: &Vals<'_>) -> Result<()> {
+        let mut chunks = data.chunks(4);
         for (building, cost_vals) in
             self.buildings.values_mut().zip(&mut chunks)
         {
@@ -476,7 +466,7 @@ impl Fortress {
     /// Updates the fortress units from a 15-element response chunk.
     pub(crate) fn update_units(
         &mut self,
-        data: &ValueArray<15>,
+        data: &Vals<'_>,
         server_time: ServerTime,
     ) -> Result<()> {
         for (idx, unit) in self.units.values_mut().enumerate() {
@@ -492,7 +482,7 @@ impl Fortress {
     /// Updates the fortress state from a 27-element response chunk.
     pub(crate) fn update(
         &mut self,
-        data: &ValueArray<27>,
+        data: &Vals<'_>,
         server_time: ServerTime,
     ) -> Result<()> {
         // Buildings

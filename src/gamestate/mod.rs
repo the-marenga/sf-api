@@ -34,7 +34,7 @@ use crate::{
         tavern::*, underworld::*, unlockables::*,
     },
     misc::*,
-    response::{Response, ResponseVal, ValueArray},
+    response::{Response, ResponseVal},
 };
 
 /// Represent the full state of the game at some point in time
@@ -488,7 +488,8 @@ impl GameState {
             "sfhomeid" => {}
             "backpack" => {
                 self.character.inventory.backpack = val
-                    .parse_chunks::<ITEM_PARSE_LEN>()?
+                    .list()
+                    .chunks(ITEM_PARSE_LEN)
                     .map(|chunk| Item::parse(&chunk, server_time))
                     .collect::<Result<Vec<_>, _>>()?;
             }
@@ -529,8 +530,9 @@ impl GameState {
                 }
                 let companions =
                     self.dungeons.companions.get_or_insert_default();
-                for (chunk, cmp) in val
-                    .parse_chunks::<EQUIPMENT_PARSE_LEN>()?
+                let chunks = val.list();
+                for (chunk, cmp) in chunks
+                    .chunks(EQUIPMENT_PARSE_LEN)
                     .zip(companions.values_mut())
                 {
                     cmp.equipment = Equipment::parse(&chunk, server_time)?;
@@ -608,7 +610,7 @@ impl GameState {
             "unitprice" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_unit_prices(&val.values()?)?;
+                    .update_unit_prices(&val.values::<12>()?)?;
             }
             "dicestatus" => {
                 let dices: Option<Vec<DiceType>> = val
@@ -638,17 +640,17 @@ impl GameState {
             "upgradeprice" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_unit_upgrade_info(&val.values()?)?;
+                    .update_unit_upgrade_info(&val.values::<9>()?)?;
             }
             "unitlevel" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_levels(&val.values()?)?;
+                    .update_levels(&val.values::<4>()?)?;
             }
             "fortressprice" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_prices(&val.values()?)?;
+                    .update_prices(&val.values::<52>()?)?;
             }
             "Arenarank" => {
                 if let Some(uw) = self.underworld.as_mut() {
@@ -1049,7 +1051,7 @@ impl GameState {
                 self.fortress
                     .get_or_insert_default()
                     .hall_of_knights_upgrade_price =
-                    FortressCost::parse(&val.values()?)?;
+                    FortressCost::parse(&val.values::<4>()?)?;
             }
             "goldperhournextlevel" => {
                 // I dont think this matters
@@ -1370,7 +1372,7 @@ impl GameState {
             }
             "battlerewarditem" => {
                 // The item won in the fight, encoded like a regular item
-                let data: ValueArray<ITEM_PARSE_LEN> = val.try_into()?;
+                let data = val.values::<ITEM_PARSE_LEN>()?;
                 let item = Item::parse(&data, server_time)?;
                 self.last_fight.get_or_insert_default().item_won = item;
             }
@@ -1791,17 +1793,17 @@ impl GameState {
             "fortressstorage" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_resources(&val.values()?, server_time)?;
+                    .update_resources(&val.values::<16>()?, server_time)?;
             }
             "fortressunits" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_units(&val.values()?, server_time)?;
+                    .update_units(&val.values::<15>()?, server_time)?;
             }
             "fortress" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update(&val.values()?, server_time)?;
+                    .update(&val.values::<27>()?, server_time)?;
             }
             "wheel" => {
                 let data: Vec<i64> = val.into_list("wheel")?;
@@ -1833,7 +1835,7 @@ impl GameState {
                 guild.joined = data.cstget(5, "guild joined", server_time)?;
                 // [6] => ????
             }
-            "arena" => self.arena.update(&val.values()?, server_time)?,
+            "arena" => self.arena.update(&val.values::<7>()?, server_time)?,
             "ownplayersavepotions" => {
                 let data: Vec<i64> = val.into_list("potions")?;
                 self.character.active_potions =
