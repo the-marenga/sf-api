@@ -154,13 +154,15 @@ impl Fight {
                 archers_defeated: data.u32_or(25, 0),
                 mages_defeated: data.u32_or(26, 0),
             };
-            // 1 & 6 are unused, 9-20 & 23 are not modelled yet
+            // 1 & 6 as above, 9-20 & 23 are not modelled yet
             data.ignore_unmodelled(
                 &[1..2, 6..7, 9..21, 23..24, 27..data.len()],
                 "fortress fight result field that is not modelled",
             );
         } else {
-            // 1 & 6 are unused, everything from 9 on is not modelled yet
+            // 1 is a 0/1 flag that does not follow the win, 6 is 0 so far and
+            // 9-20 are always 0. The won item used to be parsed from index 9,
+            // it now comes from the `battlerewarditem` response
             data.ignore_unmodelled(
                 &[1..2, 6..7, 9..data.len()],
                 "fight result field that is not modelled",
@@ -209,7 +211,8 @@ impl SingleFight {
             .map_err(|err| warn!("Failed to parse fighter B: {err}"))
             .ok();
 
-        // The 5 values after the two records are not modelled yet
+        // The 5 values after the two records are always 0 in every captured
+        // response
         let trailing = FIGHTER_RECORD_LEN * 2..data.len();
         data.ignore_unmodelled(
             &[trailing],
@@ -248,7 +251,9 @@ impl SingleFight {
             {
                 // Two effects: position 12 is the second effect-block's flag
                 // (1=Ability, 2=Minion, 3=Poison). In any other format,
-                // position 12 is the next action's actor_id (>3 or <0).
+                // position 12 is the next action's actor_id (>3 or <0). No
+                // captured response has used this stride so far, every effect
+                // round in the logs is 12 values
                 ROUND_LEN_TWO_EFFECTS
             } else if i + ROUND_LEN_ONE_EFFECT <= data.len() {
                 ROUND_LEN_ONE_EFFECT
@@ -327,8 +332,13 @@ pub struct Fighter {
     pub name: Option<String>,
     /// The level of the fighter
     pub level: u32,
-    /// The amount of hp this fighter has at the start of a battle
+    /// The maximum amount of hp this fighter has, i.e. its hp at the start of
+    /// a battle
     pub life: u32,
+    /// The amount of hp this fighter has left when the fight header was sent.
+    /// This is its start of battle hp for the first header of a fight and is
+    /// lower from the second one on
+    pub current_life: u32,
     /// The total attributes this fighter has
     pub attributes: EnumMap<AttributeType, u32>,
     /// The class of the fighter
@@ -339,16 +349,24 @@ impl Fighter {
     /// Parses one [`FIGHTER_RECORD_LEN`] value fighter record of a
     /// `fightheader*.fighters` response. Index 5 is the raw id and doubles as
     /// the fighter type (see [`FighterTyp`]), index 6 the name, 7 the level, 8
-    /// the life, 10-14 the attributes and 27 the class. Index 15 is a name
-    /// fallback that marks underworld minions.
+    /// the max hp, 9 the remaining hp, 10-14 the attributes and 27 the class.
+    /// Index 15 is a name fallback that marks underworld minions.
     ///
     /// # Errors
     /// [`SFError::ParsingErrorV2`] if the record is too short, contains an
     /// unparsable number or has an unknown class.
     pub(crate) fn parse(data: &Vals<'_>) -> Result<Fighter> {
-        // The fields we do not model yet: 0-4, 9, 16-26 and 28-46.
+        // The fields of the record that are still unmodelled:
+        // - 0:     the category of the own side (2 player, 3, 8 fortress
+        //   soldier, 12 companion, 14 pet), always 0 for the opponent
+        // - 1, 2:  always 0 in every captured record
+        // - 4:     the side, 1 for fighter_a and 0 for fighter_b
+        // - 16-26: values in the 100-400 range with small counters for players,
+        //   0 for companions and pets. They do not match the ids of the
+        //   `fightequipment` response
+        // - 28-46: always 0 in every captured record
         data.ignore_unmodelled(
-            &[0..5, 9..10, 16..27, 28..FIGHTER_RECORD_LEN],
+            &[0..5, 16..27, 28..FIGHTER_RECORD_LEN],
             "fighter field that is not modelled",
         );
 
@@ -425,6 +443,7 @@ impl Fighter {
             name,
             level: data.u32(7)?,
             life: data.u32(8)?,
+            current_life: data.u32(9)?,
             attributes,
             class,
         })
@@ -810,6 +829,7 @@ mod tests {
         assert_eq!(a.name.as_deref(), Some("bruhbruh"));
         assert_eq!(a.level, 50);
         assert_eq!(a.life, 236_232);
+        assert_eq!(a.current_life, 236_232);
         assert_eq!(a.class, Class::Necromancer);
         assert_eq!(a.attributes[AttributeType::Strength], 95);
         assert_eq!(a.attributes[AttributeType::Luck], 428);
@@ -819,6 +839,7 @@ mod tests {
         assert_eq!(b.name.as_deref(), Some("FrozenTenno (w34net)"));
         assert_eq!(b.level, 51);
         assert_eq!(b.life, 164_736);
+        assert_eq!(b.current_life, 164_736);
     }
 
     #[test]
@@ -897,6 +918,42 @@ mod tests {
 
         for (record, expected) in cases {
             assert_eq!(parse_fighter(record).typ, expected, "in {record}");
+        }
+    }
+
+    #[test]
+    fn test_fighter_current_life() {
+        // Real records from a companion dungeon, where the same fighter is
+        // carried into later fights at 10% and 1% of its maximum hp, and a
+        // fighter that entered a fight at 94%
+        let cases = [
+            (
+                "0/0/0/0/0/270791/Biest2 \
+                 (s5de)/239/3076684/307668/3173/3126/7763/5723/5249/6/101/102/\
+                 3/0/5/7/3/0/0/2/2/2/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0",
+                3_076_684,
+                307_668,
+            ),
+            (
+                "0/0/0/0/0/270791/Biest2 \
+                 (s5de)/239/3076684/28374/3173/3126/7763/5723/5249/6/101/102/\
+                 3/0/5/7/3/0/0/2/2/2/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0",
+                3_076_684,
+                28_374,
+            ),
+            (
+                "2/0/0/0/1/464307/Gnork34/257/18549297/17422335/3400/13083/\
+                 3400/12290/8286/1/302/303/4/308/1/6/7/1/0/4/1/3/0/0/0/0/0/0/\
+                 0/0/0/0/0/0/0/0/0/0/0/0/0",
+                18_549_297,
+                17_422_335,
+            ),
+        ];
+
+        for (record, life, current_life) in cases {
+            let fighter = parse_fighter(record);
+            assert_eq!(fighter.life, life, "in {record}");
+            assert_eq!(fighter.current_life, current_life, "in {record}");
         }
     }
 
