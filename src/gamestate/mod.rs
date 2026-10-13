@@ -416,29 +416,31 @@ impl GameState {
         data: &Vals<'_>,
         server_time: ServerTime,
     ) -> Result<()> {
+        // The own player id, a 0 and a constant 100
+        data.ignore(0, "own player id");
+        data.ignore(1, "always 0");
+        data.ignore(2, "always 100");
+
         let companions = self.dungeons.companions.get_or_insert_default();
         for (i, class) in CompanionClass::iter().enumerate() {
             // A block is TOWER_BLOCK_LEN values: the companion, its underworld
             // unit and the trailing value after it
-            let start = 3 + i * TOWER_BLOCK_LEN;
+            let start = TOWER_BLOCK_OFFSET + i * TOWER_BLOCK_LEN;
             companions
                 .get_mut(class)
                 .update(&data.window(start..start + TOWER_BLOCK_LEN))?;
         }
 
-        // Why would they include this in the tower response???
-        self.underworld
-            .get_or_insert_default()
-            .update(data, server_time)?;
-
-        // The own player id, a 0 and a constant 100
-        data.ignore(0, "own player id");
-        data.ignore(1, "always 0");
-        data.ignore(2, "always 100");
-        // The 0 gaps in the underworld tail
-        data.ignore(447, "always 0");
-        data.ignore(458, "always 0");
-        data.ignore(462, "always 0");
+        let underworld = self.underworld.get_or_insert_default();
+        for (i, unit) in underworld.units.values_mut().enumerate() {
+            // The unit is the four values before its block's trailing value
+            let start = 146 + i * TOWER_BLOCK_LEN;
+            unit.update(&data.window(start..start + 4))?;
+        }
+        // The rest of the underworld state follows the last block
+        let tail = TOWER_BLOCK_OFFSET + CompanionClass::COUNT * TOWER_BLOCK_LEN;
+        underworld
+            .update(&data.window(tail..TOWER_RESPONSE_LEN), server_time)?;
         Ok(())
     }
 
