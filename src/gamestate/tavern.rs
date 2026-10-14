@@ -87,8 +87,8 @@ impl ExpeditionsEvent {
         self.active.as_mut().filter(|a| !a.is_finished())
     }
 
-    /// Updates the event start and end time from a 2-value `expeditionevent`
-    /// response: `[start, end]`.
+    /// Updates the event start and end time from an `expeditionevent`
+    /// response: `[start, end, ...]`.
     pub(crate) fn update_event(
         &mut self,
         data: &Vals<'_>,
@@ -96,6 +96,9 @@ impl ExpeditionsEvent {
     ) {
         self.start = data.server_time_opt(0, server_time);
         self.end = data.server_time_opt(1, server_time);
+        if data.len() > 2 {
+            data.ignore(2..data.len(), "unknown expedition event fields");
+        }
     }
 
     /// Updates available expeditions from repeating 8-value chunks.
@@ -1034,6 +1037,14 @@ mod tests {
         assert!(
             event_data.unaccessed_indices().is_empty(),
             "unread values in {event_data}"
+        );
+
+        let event_raw_4 = "1600000000/1700000000/1/1792001382";
+        let event_data_4 = Vals::from(event_raw_4);
+        event.update_event(&event_data_4, ServerTime::default());
+        assert!(
+            event_data_4.unaccessed_indices().is_empty(),
+            "unread values in {event_data_4}"
         );
 
         let avail_raw = "22/0/0/0/1/2/600/1";

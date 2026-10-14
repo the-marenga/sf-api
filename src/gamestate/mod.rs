@@ -1008,7 +1008,7 @@ impl GameState {
             "expeditionevent" => {
                 self.tavern
                     .expeditions
-                    .update_event(&val.values::<2>()?, server_time);
+                    .update_event(&val.list(), server_time);
             }
             "expeditions" => {
                 self.tavern.expeditions.update_available(&val.list());
