@@ -345,7 +345,7 @@ impl Guild {
         self.own_pet_lvl = data.u16_or(4, 0);
         self.joined = data.server_time_opt(5, server_time);
         if data.len() > 6 {
-            data.ignore(6, "unknown charactergroup tail");
+            data.ignore(6..8, "unknown charactergroup tail");
         }
     }
 
@@ -756,6 +756,20 @@ mod tests {
         assert!(
             data.unaccessed_indices().is_empty(),
             "unread values in {data}"
+        );
+
+        // 8-value response with full tail
+        let raw_8 = "28/31/0/1/180/1518563942/2599294/0";
+        let data_8 = Vals::from(raw_8);
+        let mut guild_8 = Guild::default();
+        guild_8.update_character_group(&data_8, ServerTime::default());
+        assert_eq!(guild_8.own_treasure_skill, 28);
+        assert_eq!(guild_8.own_instructor_skill, 31);
+        assert_eq!(guild_8.hydra.remaining_fights, 1);
+        assert_eq!(guild_8.own_pet_lvl, 180);
+        assert!(
+            data_8.unaccessed_indices().is_empty(),
+            "unread values in {data_8}"
         );
     }
 }
