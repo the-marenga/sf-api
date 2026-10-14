@@ -265,7 +265,6 @@ impl Response {
 /// often requires extra conversions/parsing to use practically, so we associate
 /// the most common parsing functions as methods to this data.
 #[derive(Debug, Clone, Copy)]
-#[allow(clippy::module_name_repetitions)]
 pub struct ResponseVal<'a> {
     key: &'a str,
     value: &'a str,

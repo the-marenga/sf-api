@@ -1,4 +1,3 @@
-#![allow(clippy::module_name_repetitions)]
 use chrono::{DateTime, Local, NaiveTime};
 use enum_map::{Enum, EnumMap};
 use log::warn;

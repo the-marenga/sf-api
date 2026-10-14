@@ -1,4 +1,3 @@
-#![allow(clippy::module_name_repetitions)]
 use std::time::Duration;
 
 use chrono::{DateTime, Local};

@@ -7,7 +7,6 @@ pub type Result<T, E = SFError> = std::result::Result<T, E>;
 /// of requests to the S&F server
 #[derive(Debug, Error)]
 #[non_exhaustive]
-#[allow(clippy::module_name_repetitions)]
 pub enum SFError {
     /// Whatever you were trying to send was not possible to send. This is
     /// either our issue when you were doing something normal, or you were
