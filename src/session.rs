@@ -368,10 +368,15 @@ impl Session {
         account: std::sync::Arc<tokio::sync::Mutex<crate::sso::SFAccount>>,
         server_lookup: &crate::sso::ServerLookup,
     ) -> Result<Session, SFError> {
-        let url = server_lookup.get(character.server_id)?;
-        let session = account.lock().await.session.clone();
-        let client = account.lock().await.client.clone();
-        let options = account.lock().await.options.clone();
+        let server = server_lookup.get(character.server_id).ok_or(
+            SFError::InvalidRequest("There is no server with this id"),
+        )?;
+        let url = server.url.clone();
+        let acct = account.lock().await;
+        let session = acct.session.clone();
+        let client = acct.client.clone();
+        let options = acct.options.clone();
+        drop(acct);
 
         let ld = LoginData::SSO {
             username: character.name,
@@ -702,5 +707,17 @@ impl SimpleSession {
         }
 
         Ok(self.gamestate.as_deref_mut().unwrap())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_login_future_size() {
+        let fut = SimpleSession::login("", "", "");
+        // Ensure the login future does not embed GameState (22+ KB)
+        assert!(std::mem::size_of_val(&fut) < std::mem::size_of::<GameState>());
     }
 }
