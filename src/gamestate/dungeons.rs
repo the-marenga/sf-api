@@ -5,8 +5,9 @@ use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
 use super::{
-    AttributeType, Class, Item, Result, ServerTime,
-    items::{EQUIPMENT_PARSE_LEN, Equipment},
+    AttributeType, Result, ServerTime,
+    character::Class,
+    items::{EQUIPMENT_PARSE_LEN, Equipment, Item},
 };
 use crate::response::Vals;
 

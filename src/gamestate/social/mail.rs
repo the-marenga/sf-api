@@ -5,8 +5,8 @@ use num_derive::FromPrimitive;
 use crate::{
     error::{Result, SFError},
     gamestate::{
-        Item, ServerTime,
-        items::ITEM_PARSE_LEN,
+        ServerTime,
+        items::{ITEM_PARSE_LEN, Item},
         rewards::{Reward, RewardType},
     },
     misc::from_sf_string,

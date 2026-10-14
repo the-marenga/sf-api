@@ -30,48 +30,19 @@ pub mod unlockables;
 use std::{borrow::Borrow, collections::HashMap};
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime};
+use dungeons::CompanionClass;
 use enum_map::EnumMap;
 pub use event::{hellevator, legendary_dungeon, world_boss};
+use fortress::{FortressResourceType, FortressUnitType};
+use items::{EQUIPMENT_PARSE_LEN, ITEM_PARSE_LEN};
 use log::{error, warn};
 use strum::{EnumCount, IntoEnumIterator};
+use underworld::{TOWER_BLOCK_LEN, TOWER_RESPONSE_LEN, UnderworldBuildingType};
+use unlockables::{HabitatType, HellevatorDailyReward};
 
 pub use crate::error::{Result, SFError};
 use crate::{
-    command::{AttributeType, ExpeditionSetting, Flag, Language, ShopType},
-    gamestate::{
-        arena::{Arena, Fight, SingleFight},
-        character::{Character, Class, Mount},
-        dungeons::{CompanionClass, DungeonType, Dungeons, LightDungeon},
-        event::{
-            EventStatus, WorldBossBattle, WorldBossCatapult, WorldBossEvent,
-            WorldBossProjectile, hellevator::HellevatorEvent,
-            legendary_dungeon::LegendaryDungeonEvent,
-        },
-        fortress::{
-            Fortress, FortressCost, FortressResourceType, FortressUnitType,
-        },
-        guild::{ChatMessage, Guild},
-        idle::{IdleBuildingType, IdleGame},
-        items::{
-            EQUIPMENT_PARSE_LEN, Equipment, EquipmentSlot, ITEM_PARSE_LEN,
-            Inventory, Item, Potion,
-        },
-        legendary_dungeon::{Stats, TotalStats},
-        rewards::TimedSpecials,
-        social::{
-            HallOfFames, Lookup, Mail, OtherGuild, OtherPlayer, RelationEntry,
-        },
-        tavern::{CurrentAction, ExpeditionBoss, GambleResult, Tavern},
-        underworld::{
-            LureSuggestion, TOWER_BLOCK_LEN, TOWER_RESPONSE_LEN, Underworld,
-            UnderworldBuildingType,
-        },
-        unlockables::{
-            Achievements, Blacksmith, HabitatType, HellevatorDailyReward,
-            HellevatorMonster, HellevatorTreatBonus, Pets, ScrapBook,
-            Unlockable, Witch,
-        },
-    },
+    command::{AttributeType, ExpeditionSetting, Language, ShopType},
     misc::{EnumMapGet, from_sf_string},
     response::{Response, ResponseVal, Vals},
 };
@@ -82,58 +53,58 @@ use crate::{
 pub struct GameState {
     /// Everything, that can be considered part of the character, or his
     /// immediate surrounding and not the rest of the world
-    pub character: Character,
+    pub character: character::Character,
     /// Information about quests and work
-    pub tavern: Tavern,
+    pub tavern: tavern::Tavern,
     /// The place to fight other players
-    pub arena: Arena,
+    pub arena: arena::Arena,
     /// The last fight, that this player was involved in
-    pub last_fight: Option<Fight>,
+    pub last_fight: Option<arena::Fight>,
     /// Both shops. You can access a specific one either with `get()`,
     /// `get_mut()`, or `[]` and the `ShopType` as the key.
     pub shops: EnumMap<ShopType, Shop>,
     /// The average item level offered in the shops
     pub shop_item_lvl: u32,
     /// If the player is in a guild, this will contain information about it
-    pub guild: Option<Guild>,
+    pub guild: Option<guild::Guild>,
     /// Everything, that is time sensitive, like events, calendar, etc.
-    pub specials: TimedSpecials,
+    pub specials: rewards::TimedSpecials,
     /// Everything, that can be found under the Dungeon tab
-    pub dungeons: Dungeons,
+    pub dungeons: dungeons::Dungeons,
     /// Contains information about the underworld, if it has been unlocked
-    pub underworld: Option<Underworld>,
+    pub underworld: Option<underworld::Underworld>,
     /// Contains information about the fortress, if it has been unlocked
-    pub fortress: Option<Fortress>,
+    pub fortress: Option<fortress::Fortress>,
     /// Information the pet collection, that a player can build over time
-    pub pets: Option<Pets>,
+    pub pets: Option<unlockables::Pets>,
     /// Contains information about the hellevator, if it is currently active
-    pub hellevator: HellevatorEvent,
+    pub hellevator: hellevator::HellevatorEvent,
     /// Contains information about the legendary dungeons event, if it is
     /// currently active
-    pub legendary_dungeon: LegendaryDungeonEvent,
+    pub legendary_dungeon: legendary_dungeon::LegendaryDungeonEvent,
     /// Contains information about the blacksmith, if it has been unlocked
-    pub blacksmith: Option<Blacksmith>,
+    pub blacksmith: Option<unlockables::Blacksmith>,
     /// Contains information about the witch, if it has been unlocked
-    pub witch: Option<Witch>,
+    pub witch: Option<unlockables::Witch>,
     /// Tracker for small challenges, that a player can complete
-    pub achievements: Achievements,
+    pub achievements: unlockables::Achievements,
     /// The boring idle game
-    pub idle_game: Option<IdleGame>,
+    pub idle_game: Option<idle::IdleGame>,
     /// Contains the features this char is able to unlock right now
-    pub pending_unlocks: Vec<Unlockable>,
+    pub pending_unlocks: Vec<unlockables::Unlockable>,
     /// Anything related to hall of fames
-    pub hall_of_fames: HallOfFames,
+    pub hall_of_fames: social::HallOfFames,
     /// Contains both other guilds & players, that you can look at via commands
-    pub lookup: Lookup,
+    pub lookup: social::Lookup,
     /// Anything you can find in the mail tab of the official client
-    pub mail: Mail,
+    pub mail: social::Mail,
     /// Information about an upcoming, or currently running event. Basically
     /// the tab above Tavern in the official GUI
-    pub special_event: Option<EventStatus>,
+    pub special_event: Option<event::EventStatus>,
     /// The current state of the world boss. Note that this here does not
     /// remove itself. You should always make sure `special_event` is ongoing
     /// before acting upon any world boss information
-    pub world_boss: Option<WorldBossEvent>,
+    pub world_boss: Option<world_boss::WorldBossEvent>,
     /// The language, that the player has set in the client. This will affect
     /// the language of news messages in the inbox (Mail)
     pub language: Option<Language>,
@@ -196,8 +167,8 @@ impl GameState {
         self.last_fight = None;
         self.mail.open_claimable = None;
 
-        let mut other_player: Option<OtherPlayer> = None;
-        let mut other_guild: Option<OtherGuild> = None;
+        let mut other_player: Option<social::OtherPlayer> = None;
+        let mut other_guild: Option<social::OtherGuild> = None;
 
         let mut errors = vec![];
         for (key, val) in new_vals.iter().map(|(a, b)| (*a, *b)) {
@@ -394,7 +365,7 @@ impl GameState {
         data.ignore(0, "status version? seen 1 or 2");
 
         self.tavern.current_action =
-            CurrentAction::parse(&data.window(1..4), server_time)?;
+            tavern::CurrentAction::parse(&data.window(1..4), server_time)?;
 
         data.ignore(4, "action start timestamp");
         self.tavern.beer_max = data.u8_or(5, 0);
@@ -432,12 +403,12 @@ impl GameState {
     /// corresponding fight[3]. In case that does not exist, it will be created
     /// w/ the default
     #[must_use]
-    fn get_fight(&mut self, header_name: &str) -> &mut SingleFight {
+    fn get_fight(&mut self, header_name: &str) -> &mut arena::SingleFight {
         let id = fight_no_from_header(header_name);
         let fights = &mut self.last_fight.get_or_insert_default().fights;
 
         if fights.len() < id {
-            fights.resize(id, SingleFight::default());
+            fights.resize(id, arena::SingleFight::default());
         }
         #[allow(clippy::unwrap_used)]
         fights.get_mut(id - 1).unwrap()
@@ -449,8 +420,8 @@ impl GameState {
         &mut self,
         key: &str,
         val: ResponseVal<'_>,
-        other_player: &mut Option<OtherPlayer>,
-        other_guild: &mut Option<OtherGuild>,
+        other_player: &mut Option<social::OtherPlayer>,
+        other_guild: &mut Option<social::OtherGuild>,
         server_time: ServerTime,
         all_values: &HashMap<&str, ResponseVal<'_>>,
     ) -> Result<(), SFError> {
@@ -540,7 +511,7 @@ impl GameState {
             "dummieequipment" => {
                 let data = val.values::<EQUIPMENT_PARSE_LEN>()?;
                 self.character.mannequin =
-                    Some(Equipment::parse(&data, server_time)?);
+                    Some(items::Equipment::parse(&data, server_time)?);
             }
             "owntower" => self.update_tower(
                 &val.values::<TOWER_RESPONSE_LEN>()?,
@@ -583,11 +554,11 @@ impl GameState {
             }
             "chathistory" => {
                 self.guild.get_or_insert_default().chat =
-                    ChatMessage::parse_messages(val.as_str());
+                    guild::ChatMessage::parse_messages(val.as_str());
             }
             "chatwhisper" => {
                 self.guild.get_or_insert_default().whispers =
-                    ChatMessage::parse_messages(val.as_str());
+                    guild::ChatMessage::parse_messages(val.as_str());
             }
             "upgradeprice" => {
                 self.fortress
@@ -606,8 +577,11 @@ impl GameState {
             }
             "Arenarank" => {
                 if let Some(uw) = self.underworld.as_mut() {
-                    uw.lure_suggestion =
-                        val.as_str().parse::<u32>().ok().map(LureSuggestion);
+                    uw.lure_suggestion = val
+                        .as_str()
+                        .parse::<u32>()
+                        .ok()
+                        .map(underworld::LureSuggestion);
                 }
             }
             "witch" => {
@@ -622,14 +596,17 @@ impl GameState {
                     .update_underworld_unit_prices(&val.values::<9>()?)?;
             }
             "unlockfeature" => {
-                self.pending_unlocks = Unlockable::parse(&val.list())?;
+                self.pending_unlocks =
+                    unlockables::Unlockable::parse(&val.list())?;
             }
-            "dungeonprogresslight" => self
-                .dungeons
-                .update_progress(&val.values::<37>()?, DungeonType::Light)?,
-            "dungeonprogressshadow" => self
-                .dungeons
-                .update_progress(&val.values::<37>()?, DungeonType::Shadow)?,
+            "dungeonprogresslight" => self.dungeons.update_progress(
+                &val.values::<37>()?,
+                dungeons::DungeonType::Light,
+            )?,
+            "dungeonprogressshadow" => self.dungeons.update_progress(
+                &val.values::<37>()?,
+                dungeons::DungeonType::Shadow,
+            )?,
             "portalprogress" => {
                 self.dungeons
                     .portal
@@ -673,7 +650,9 @@ impl GameState {
             "eventstatus" => {
                 self.special_event = val
                     .values::<5>()
-                    .and_then(|data| EventStatus::parse(&data, server_time))
+                    .and_then(|data| {
+                        event::EventStatus::parse(&data, server_time)
+                    })
                     .inspect_err(|a| {
                         log::warn!("Could not parse event status: {a}");
                     })
@@ -685,8 +664,9 @@ impl GameState {
                     .update(&val.values::<15>()?, server_time)?;
             }
             "wbtower" => {
-                self.world_boss.get_or_insert_default().battle =
-                    Some(WorldBossBattle::parse(&val.values::<106>()?));
+                self.world_boss.get_or_insert_default().battle = Some(
+                    world_boss::WorldBossBattle::parse(&val.values::<106>()?),
+                );
             }
             "wbupgradestore" => {
                 self.world_boss
@@ -700,12 +680,13 @@ impl GameState {
             }
             "wbammo" => {
                 // Special ammo
-                let ammo = WorldBossProjectile::parse(&val.values::<3>()?);
+                let ammo =
+                    world_boss::WorldBossProjectile::parse(&val.values::<3>()?);
                 self.world_boss.get_or_insert_default().projectile = ammo;
             }
             "wbupgrade" => {
                 self.world_boss.get_or_insert_default().catapult =
-                    WorldBossCatapult::parse(
+                    world_boss::WorldBossCatapult::parse(
                         &val.values::<17>()?,
                         server_time,
                     )?;
@@ -754,7 +735,8 @@ impl GameState {
                 .get_or_insert_default()
                 .update_description_embed(val.as_str()),
             "idle" => {
-                self.idle_game = IdleGame::parse(&val.list(), server_time);
+                self.idle_game =
+                    idle::IdleGame::parse(&val.list(), server_time);
             }
             "resources" => {
                 self.update_resources(&val.list());
@@ -871,12 +853,15 @@ impl GameState {
             }
             "gamblegoldvalue" => {
                 self.tavern.gamble_result =
-                    Some(GambleResult::SilverChange(val.into("gold gamble")?));
+                    Some(tavern::GambleResult::SilverChange(
+                        val.into("gold gamble")?,
+                    ));
             }
             "gamblecoinvalue" => {
-                self.tavern.gamble_result = Some(GambleResult::MushroomChange(
-                    val.into("gold gamble")?,
-                ));
+                self.tavern.gamble_result =
+                    Some(tavern::GambleResult::MushroomChange(
+                        val.into("gold gamble")?,
+                    ));
             }
             "maxrankFortress" => {
                 self.hall_of_fames.fortresses_total =
@@ -907,7 +892,7 @@ impl GameState {
                 self.fortress
                     .get_or_insert_default()
                     .hall_of_knights_upgrade_price =
-                    FortressCost::parse(&val.values::<4>()?)?;
+                    fortress::FortressCost::parse(&val.values::<4>()?)?;
             }
             "goldperhournextlevel" => {
                 // I dont think this matters
@@ -941,7 +926,7 @@ impl GameState {
             }
             "expeditionmonster" => {
                 self.tavern.expeditions.active.get_or_insert_default().boss =
-                    ExpeditionBoss::parse(&val.values::<2>()?);
+                    tavern::ExpeditionBoss::parse(&val.values::<2>()?);
             }
             "expeditionhalftime" => {
                 self.tavern
@@ -980,7 +965,8 @@ impl GameState {
                     .update_info(&val.values::<3>()?, server_time)?;
             }
             "scrapbook" => {
-                self.character.scrapbook = ScrapBook::parse(&val.list());
+                self.character.scrapbook =
+                    unlockables::ScrapBook::parse(&val.list());
             }
             "dungeonfaces" | "shadowfaces" => {
                 // Gets returned after winning a dungeon fight. This looks a
@@ -1099,7 +1085,7 @@ impl GameState {
             "battlerewarditem" => {
                 // The item won in the fight, encoded like a regular item
                 let data = val.values::<ITEM_PARSE_LEN>()?;
-                let item = Item::parse(&data, server_time)?;
+                let item = items::Item::parse(&data, server_time)?;
                 self.last_fight.get_or_insert_default().item_won = item;
             }
             x if x.starts_with("fightheader") => match val.values::<99>() {
@@ -1281,14 +1267,14 @@ impl GameState {
                     .active
                     .get_or_insert_default()
                     .current_monster =
-                    HellevatorMonster::parse(&val.list()).ok();
+                    unlockables::HellevatorMonster::parse(&val.list()).ok();
             }
             "gtbonus" => {
                 self.hellevator
                     .active
                     .get_or_insert_default()
                     .daily_treat_bonus =
-                    HellevatorTreatBonus::parse(&val.list()).ok();
+                    unlockables::HellevatorTreatBonus::parse(&val.list()).ok();
             }
             "pendingrewards" => {
                 self.mail.update_claimables(&val.list(), server_time);
@@ -1425,12 +1411,14 @@ impl GameState {
             "iadungeonstatstotal" => {
                 let dungeons =
                     self.legendary_dungeon.active.get_or_insert_default();
-                dungeons.total_stats = TotalStats::parse(&val.list())?;
+                dungeons.total_stats =
+                    legendary_dungeon::TotalStats::parse(&val.list())?;
             }
             "iadungeonstats" => {
                 let dungeons =
                     self.legendary_dungeon.active.get_or_insert_default();
-                dungeons.stats = Stats::parse(&val.values::<5>()?)?;
+                dungeons.stats =
+                    legendary_dungeon::Stats::parse(&val.values::<5>()?)?;
             }
             "iadungeon" => {
                 let dungeons =
@@ -1728,7 +1716,7 @@ mod tests {
         data.assert_all_read();
 
         match state.tavern.current_action {
-            CurrentAction::CityGuard { hours, .. } => {
+            tavern::CurrentAction::CityGuard { hours, .. } => {
                 assert_eq!(hours, 1);
             }
             _ => panic!("expected CityGuard action"),

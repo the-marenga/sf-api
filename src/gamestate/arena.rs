@@ -2,7 +2,10 @@ use chrono::{DateTime, Local};
 use enum_map::EnumMap;
 use log::warn;
 
-use super::{AttributeType, Class, CompanionClass, Item, Result, ServerTime};
+use super::{
+    AttributeType, Result, ServerTime, character::Class,
+    dungeons::CompanionClass, items::Item,
+};
 use crate::{PlayerId, error::SFError, response::Vals};
 
 /// The number of values a single fighter record of a `fightheader*.fighters`
