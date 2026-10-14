@@ -5,8 +5,10 @@ use enum_map::EnumMap;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use super::{NormalCost, RelationEntry, SFError, ScrapBook};
-use crate::{PlayerId, command::*, gamestate::items::*, misc::*};
+use super::{NormalCost, RelationEntry, Result, SFError, ScrapBook};
+use crate::{
+    PlayerId, command::*, gamestate::items::*, misc::*, response::Vals,
+};
 
 /// Everything, that can be considered part of the character and not the rest
 /// of the world
@@ -115,7 +117,30 @@ pub struct Portrait {
 }
 
 impl Portrait {
-    pub(crate) fn parse(data: &[i64]) -> Result<Portrait, SFError> {
+    /// Parses portrait features from response values.
+    #[must_use]
+    pub(crate) fn parse(data: &Vals<'_>) -> Portrait {
+        let hair_val = data.u32_or(1, 100);
+        data.ignore(10, "unused in portrait");
+        Self {
+            mouth: data.u8_or(0, 1),
+            hair_color: ((hair_val / 100) % 100) as u8,
+            hair: (hair_val % 100) as u8,
+            brows: (data.u32_or(2, 1) % 100) as u8,
+            eyes: data.u8_or(3, 1),
+            beards: (data.u32_or(4, 1) % 100) as u8,
+            nose: data.u8_or(5, 1),
+            ears: data.u8_or(6, 1),
+            extra: data.u8_or(7, 1),
+            horns: (data.u32_or(8, 1) % 100) as u8,
+            special_portrait: data.i64_or(9, 0),
+            gender: data.enum_map(11, |a| a % 2).unwrap_or_default(),
+        }
+    }
+
+    /// Legacy slice-based portrait parser.
+    #[deprecated(note = "use Portrait::parse with Vals instead")]
+    pub(crate) fn parse_slice(data: &[i64]) -> Result<Portrait, SFError> {
         Ok(Self {
             mouth: data.csiget(0, "mouth", 1)?,
             hair_color: data.csimget(1, "hair color", 100, |a| a / 100)?,
@@ -345,5 +370,37 @@ impl Mount {
                 mushrooms: 25,
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_portrait_parse() {
+        let raw = "4/206/203/2/0/2/7/2/0/0/2/1";
+        let vals = Vals::from(raw);
+        let portrait = Portrait::parse(&vals);
+
+        assert_eq!(portrait.mouth, 4);
+        assert_eq!(portrait.hair_color, 2);
+        assert_eq!(portrait.hair, 6);
+        assert_eq!(portrait.brows, 3);
+        assert_eq!(portrait.eyes, 2);
+        assert_eq!(portrait.beards, 0);
+        assert_eq!(portrait.nose, 2);
+        assert_eq!(portrait.ears, 7);
+        assert_eq!(portrait.extra, 2);
+        assert_eq!(portrait.horns, 0);
+        assert_eq!(portrait.special_portrait, 0);
+        assert_eq!(portrait.gender, Gender::Male);
+        assert!(vals.unaccessed_indices().is_empty());
+
+        #[allow(deprecated)]
+        let slice_portrait =
+            Portrait::parse_slice(&[4, 206, 203, 2, 0, 2, 7, 2, 0, 0, 2, 1])
+                .unwrap();
+        assert_eq!(portrait, slice_portrait);
     }
 }

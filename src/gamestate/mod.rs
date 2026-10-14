@@ -15,10 +15,7 @@ pub mod tavern;
 pub mod underworld;
 pub mod unlockables;
 
-use std::{
-    borrow::Borrow,
-    collections::{HashMap, HashSet},
-};
+use std::{borrow::Borrow, collections::HashMap};
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use enum_map::EnumMap;
@@ -586,7 +583,7 @@ impl GameState {
                 self.mail.news_inbox.clear();
                 let data = val.as_str();
                 for msg in data.split(';').filter(|a| !a.trim().is_empty()) {
-                    match NewsEntry::parse(msg, server_time) {
+                    match NewsEntry::parse(&Vals::by(msg, ','), server_time) {
                         Ok(msg) => self.mail.news_inbox.push(msg),
                         Err(e) => warn!("Invalid msg: {msg} {e}"),
                     }
@@ -968,7 +965,7 @@ impl GameState {
                         break;
                     }
 
-                    match HallOfFamePlayer::parse(player) {
+                    match HallOfFamePlayer::parse(&Vals::by(player, ',')) {
                         Ok(x) => {
                             self.hall_of_fames.players.push(x);
                         }
@@ -979,7 +976,7 @@ impl GameState {
             "ranklistgroup" => {
                 self.hall_of_fames.guilds.clear();
                 for guild in val.as_str().trim_matches(';').split(';') {
-                    match HallOfFameGuild::parse(guild) {
+                    match HallOfFameGuild::parse(&Vals::by(guild, ',')) {
                         Ok(x) => {
                             self.hall_of_fames.guilds.push(x);
                         }
@@ -996,7 +993,7 @@ impl GameState {
             "RanklistPets" => {
                 self.hall_of_fames.pets.clear();
                 for entry in val.as_str().trim_matches(';').split(';') {
-                    match HallOfFamePets::parse(entry) {
+                    match HallOfFamePets::parse(&Vals::by(entry, ',')) {
                         Ok(x) => {
                             self.hall_of_fames.pets.push(x);
                         }
@@ -1007,7 +1004,7 @@ impl GameState {
             "ranklistfortress" | "Ranklistfortress" => {
                 self.hall_of_fames.fortresses.clear();
                 for guild in val.as_str().trim_matches(';').split(';') {
-                    match HallOfFameFortress::parse(guild) {
+                    match HallOfFameFortress::parse(&Vals::by(guild, ',')) {
                         Ok(x) => {
                             self.hall_of_fames.fortresses.push(x);
                         }
@@ -1018,7 +1015,7 @@ impl GameState {
             "ranklistunderworld" => {
                 self.hall_of_fames.underworlds.clear();
                 for entry in val.as_str().trim_matches(';').split(';') {
-                    match HallOfFameUnderworld::parse(entry) {
+                    match HallOfFameUnderworld::parse(&Vals::by(entry, ',')) {
                         Ok(x) => {
                             self.hall_of_fames.underworlds.push(x);
                         }
@@ -1240,7 +1237,7 @@ impl GameState {
                 let data = val.as_str();
                 self.mail.inbox.clear();
                 for msg in data.split(';').filter(|a| !a.trim().is_empty()) {
-                    match InboxEntry::parse(msg, server_time) {
+                    match InboxEntry::parse(&Vals::by(msg, ','), server_time) {
                         Ok(msg) => self.mail.inbox.push(msg),
                         Err(e) => warn!("Invalid msg: {msg} {e}"),
                     }
@@ -1252,18 +1249,20 @@ impl GameState {
             "combatloglist" => {
                 self.mail.combat_log.clear();
                 for entry in val.as_str().split(';') {
-                    let parts = entry.split(',').collect::<Vec<_>>();
-                    if parts.iter().all(|a| a.is_empty()) {
+                    if entry.is_empty()
+                        || entry.split(',').all(|a| a.is_empty())
+                    {
                         continue;
                     }
-                    match CombatLogEntry::parse(&parts, server_time) {
+                    let data = Vals::by(entry, ',');
+                    match CombatLogEntry::parse(&data, server_time) {
                         Ok(cle) => {
                             self.mail.combat_log.push(cle);
                         }
                         Err(e) => {
                             warn!(
-                                "Unable to parse combat log entry: {parts:?} \
-                                 - {e}"
+                                "Unable to parse combat log entry: {entry} - \
+                                 {e}"
                             );
                         }
                     }
@@ -1300,7 +1299,7 @@ impl GameState {
             "otherplayersavecharacter" => {
                 other_player
                     .get_or_insert_default()
-                    .update(&val.into_list("other player")?, server_time)?;
+                    .update(&val.list(), server_time)?;
             }
             "otherplayersavepotions" => {
                 other_player.get_or_insert_default().active_potions =
@@ -1310,11 +1309,11 @@ impl GameState {
                     );
             }
             "otherplayer" => {
-                let data: Vec<i64> = val.into_list("other player")?;
+                let data = val.list();
                 #[allow(deprecated)]
                 {
                     other_player.get_or_insert_default().guild_joined =
-                        data.cstget(166, "other joined guild", server_time)?;
+                        data.server_time(166, server_time)?;
                 }
             }
             "otherplayerfriendstatus" => {
@@ -1329,7 +1328,7 @@ impl GameState {
             "otherplayerpetbonus" => {
                 other_player
                     .get_or_insert_default()
-                    .update_pet_bonus(&val.into_list("o pet bonus")?)?;
+                    .update_pet_bonus(&val.values::<6>()?)?;
             }
             "otherplayerunitlevel" => {
                 let data: Vec<i64> =
@@ -1450,7 +1449,7 @@ impl GameState {
             "othergroup" => {
                 other_guild
                     .get_or_insert_default()
-                    .update(val.as_str(), server_time)?;
+                    .update(&val.list(), server_time)?;
             }
             "reward" => {
                 // This is the task reward, which you should already know
@@ -1645,13 +1644,8 @@ impl GameState {
                     .as_str()
                     .split(';')
                     .filter(|a| !a.is_empty())
-                    .map(|chunk| chunk.split(',').collect())
-                    .flat_map(|chunk: Vec<_>| -> Result<_, SFError> {
-                        Ok(HallOfFameHellevator {
-                            rank: chunk.cfsuget(0, "hh rank")?,
-                            name: chunk.cget(1, "hh name")?.to_string(),
-                            tokens: chunk.cfsuget(2, "hh tokens")?,
-                        })
+                    .filter_map(|chunk| {
+                        HallOfFameHellevator::parse(&Vals::by(chunk, ',')).ok()
                     })
                     .collect();
             }
@@ -1924,7 +1918,7 @@ impl GameState {
                 self.character.honor = data.csiget(6, "honor", 0)?;
                 self.character.rank = data.csiget(7, "rank", 0)?;
                 self.character.portrait =
-                    Portrait::parse(data.skip(8, "portrait")?)
+                    Portrait::parse_slice(data.skip(8, "portrait")?)
                         .unwrap_or_default();
                 ///// Portrait
                 // 4
@@ -2143,7 +2137,7 @@ impl GameState {
             "otherplayerfortressinfo" => {
                 other_player
                     .get_or_insert_default()
-                    .update_fortress(&val.into_list("other ft")?)?;
+                    .update_fortress(&val.values::<6>()?)?;
             }
             x if x.contains("average") && x.ends_with("level") => {
                 // We do not care about avg. item lvl
