@@ -221,7 +221,6 @@ pub(crate) fn parse_chests(data: &Vals<'_>) -> Result<[RewardChest; 3]> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
     use super::*;
 
     fn assert_all_read(data: &Vals<'_>) {

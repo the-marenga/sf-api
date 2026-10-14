@@ -395,7 +395,6 @@ fn parse_scrapbook_item(item_idx: i64) -> Option<EquipmentIdent> {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
     use super::*;
 
     fn assert_all_read(data: &Vals<'_>) {

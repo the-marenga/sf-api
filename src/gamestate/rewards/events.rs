@@ -92,7 +92,6 @@ impl Events {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
     use super::*;
 
     fn assert_all_read(data: &Vals<'_>) {

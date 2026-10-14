@@ -9,6 +9,7 @@
     missing_docs
 )]
 #![allow(clippy::module_name_repetitions, clippy::too_many_lines)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::indexing_slicing))]
 #![deny(unsafe_code)]
 
 pub mod command;

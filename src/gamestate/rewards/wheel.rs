@@ -158,7 +158,6 @@ impl Wheel {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
     use super::*;
     use crate::gamestate::unlockables::HabitatType;
 

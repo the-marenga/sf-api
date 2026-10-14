@@ -501,7 +501,6 @@ impl Task {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
     use super::*;
     use crate::gamestate::rewards::{Reward, RewardType};
 
