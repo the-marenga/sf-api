@@ -668,11 +668,7 @@ impl<'a> Vals<'a> {
     /// [`SFError::ParsingErrorV2`] if `pos` is out of bounds or the value does
     /// not parse.
     #[track_caller]
-    fn parse<T: FromStr>(
-        &self,
-        pos: usize,
-        ty: &str,
-    ) -> Result<T, SFError> {
+    fn parse<T: FromStr>(&self, pos: usize, ty: &str) -> Result<T, SFError> {
         let val = self.get(pos)?;
         val.trim().parse().map_err(|_| {
             let caller = std::panic::Location::caller();

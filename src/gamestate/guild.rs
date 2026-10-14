@@ -595,8 +595,8 @@ mod tests {
     fn test_update_fightable_targets() {
         // A `fightablegroups` response: two guilds of 9 values each.
         let resp = crate::response::Response::parse(
-            "fightablegroups:5060/Alpha/emblemA/20/10/30/25/5/1000/\
-             5061/Beta/emblemB/15/8/22/19/7/900"
+            "fightablegroups:5060/Alpha/emblemA/20/10/30/25/5/1000/5061/Beta/\
+             emblemB/15/8/22/19/7/900"
                 .to_string(),
             Local::now().naive_local(),
         )
