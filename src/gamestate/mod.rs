@@ -1771,7 +1771,7 @@ impl GameState {
             "fightablegroups" => {
                 self.guild
                     .get_or_insert_default()
-                    .update_fightable_targets(val.as_str())?;
+                    .update_fightable_targets(&val.list())?;
             }
             "adventscalendar" => {
                 let vals: Vec<i64> = val.into_list("advent door")?;

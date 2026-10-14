@@ -49,19 +49,18 @@ pub struct Guild {
 
     /// If the guild is defending against another guild, this will contain
     /// information about the upcoming battle
-    pub defending: Option<PlanedBattle>,
+    pub defending: Option<PlannedBattle>,
     /// If the guild is attacking another guild, this will contain
     /// information about the upcoming battle
-    pub attacking: Option<PlanedBattle>,
+    pub attacking: Option<PlannedBattle>,
     /// The next time the guild can attack another guild.
     pub next_attack_possible: Option<DateTime<Local>>,
 
     /// The id of the pet, that is currently selected as the guild pet
     pub pet_id: u32,
-    /// The level of your guild pet
+    /// The level you yourself contribute to the guild pet
     pub own_pet_lvl: u16,
-    /// The level of your guild pet
-    /// The maximum level, that the pet can be at
+    /// The maximum level that the pet can be at
     pub pet_max_lvl: u16,
     /// All information about the hydra the guild pet can fight
     pub hydra: GuildHydra,
@@ -138,9 +137,9 @@ pub struct Emblem {
 impl Emblem {
     /// Returns the guild emblem in its server encoded form
     #[must_use]
-    pub fn server_encode(&self) -> String {
+    pub fn server_encode(&self) -> &str {
         // TODO: Actually parse this
-        self.raw.clone()
+        &self.raw
     }
 
     pub(crate) fn update(&mut self, str: &str) {
@@ -222,9 +221,9 @@ impl Guild {
         self.finished_raids = data.u16_or(8, 0);
 
         self.attacking =
-            PlanedBattle::parse(&data.window(364..366), server_time)?;
+            PlannedBattle::parse(&data.window(364..366), server_time)?;
         self.defending =
-            PlanedBattle::parse(&data.window(366..368), server_time)?;
+            PlannedBattle::parse(&data.window(366..368), server_time)?;
         self.next_attack_possible = data.server_time(365, server_time)?;
 
         self.pet_id = data.u32_or(377, 0);
@@ -331,22 +330,16 @@ impl Guild {
         }
     }
 
-    #[allow(clippy::indexing_slicing)]
+    /// Parses a `fightablegroups` response: `SIZE` values per guild, with a
+    /// runtime-determined number of guilds.
     pub(crate) fn update_fightable_targets(
         &mut self,
-        data: &str,
-    ) -> Result<(), SFError> {
+        data: &Vals<'_>,
+    ) -> Result<()> {
         const SIZE: usize = 9;
 
-        // Delete any old data
-        self.fightable_guilds.clear();
-
-        let entries = data.trim_end_matches('/').split('/').collect::<Vec<_>>();
-
-        let target_counts = entries.len() / SIZE;
-
         // Check if the data is valid
-        if target_counts * SIZE != entries.len() {
+        if !data.len().is_multiple_of(SIZE) {
             warn!("Invalid fightable targets len");
             return Err(SFError::ParsingError(
                 "Fightable targets invalid length",
@@ -354,34 +347,26 @@ impl Guild {
             ));
         }
 
-        // Reserve space for the new data
-        self.fightable_guilds.reserve(entries.len() / SIZE);
+        // Delete any old data
+        self.fightable_guilds.clear();
 
-        for i in 0..entries.len() / SIZE {
-            let offset = i * SIZE;
-
-            self.fightable_guilds.push(FightableGuild {
-                id: entries[offset].parse().unwrap_or_default(),
-                name: from_sf_string(entries[offset + 1]),
+        // Reserve space for the new data, then add one guild per chunk
+        self.fightable_guilds.reserve(data.len() / SIZE);
+        self.fightable_guilds.extend(data.chunks(SIZE).map(|chunk| {
+            FightableGuild {
+                id: chunk.u32_or(0, 0),
+                name: from_sf_string(chunk.str_or(1, "")),
                 emblem: Emblem {
-                    raw: entries[offset + 2].to_string(),
+                    raw: chunk.str_or(2, "").to_string(),
                 },
-                number_of_members: entries[offset + 3]
-                    .parse()
-                    .unwrap_or_default(),
-                members_min_level: entries[offset + 4]
-                    .parse()
-                    .unwrap_or_default(),
-                members_max_level: entries[offset + 5]
-                    .parse()
-                    .unwrap_or_default(),
-                members_average_level: entries[offset + 6]
-                    .parse()
-                    .unwrap_or_default(),
-                rank: entries[offset + 7].parse().unwrap_or_default(),
-                honor: entries[offset + 8].parse().unwrap_or_default(),
-            });
-        }
+                number_of_members: chunk.u8_or(3, 0),
+                members_min_level: chunk.u32_or(4, 0),
+                members_max_level: chunk.u32_or(5, 0),
+                members_average_level: chunk.u32_or(6, 0),
+                rank: chunk.u32_or(7, 0),
+                honor: chunk.u32_or(8, 0),
+            }
+        }));
 
         Ok(())
     }
@@ -390,14 +375,14 @@ impl Guild {
 /// A guild battle, that is scheduled to take place at a certain place and time
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct PlanedBattle {
+pub struct PlannedBattle {
     /// The guild this battle will be against
     pub other: u32,
     /// The date & time this battle will be at
     pub date: DateTime<Local>,
 }
 
-impl PlanedBattle {
+impl PlannedBattle {
     /// Checks if the battle is a raid
     #[must_use]
     pub fn is_raid(&self) -> bool {
@@ -490,6 +475,9 @@ pub enum GuildRank {
 }
 
 /// Something the player can upgrade in the guild
+// NOTE: The explicit discriminants are wire values, not just declaration
+// order: `Command::GuildIncreaseSkill` serializes the skill with
+// `*skill as usize`, so they must not be reordered or renumbered.
 #[derive(Debug, Clone, Copy, PartialEq, Enum, Eq, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum GuildSkill {
@@ -604,11 +592,11 @@ mod tests {
     }
 
     #[test]
-    fn test_planed_battle_parse() {
+    fn test_planned_battle_parse() {
         // The `owngroupsave` attacking pair: a raid against the raid id
         // 1_000_000
         let data = Vals::from("1000000/1791924748");
-        let battle = PlanedBattle::parse(&data, ServerTime::default())
+        let battle = PlannedBattle::parse(&data, ServerTime::default())
             .unwrap()
             .unwrap();
         assert_eq!(battle.other, 1_000_000);
@@ -617,7 +605,7 @@ mod tests {
         // 0/0 is the sentinel for "no planned battle"
         let data = Vals::from("0/0");
         assert!(
-            PlanedBattle::parse(&data, ServerTime::default())
+            PlannedBattle::parse(&data, ServerTime::default())
                 .unwrap()
                 .is_none()
         );
