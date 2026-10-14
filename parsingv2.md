@@ -335,7 +335,9 @@ if building_type.required_min_fortress_level() > fortress_level {
 | --- | --- |
 | `arena.rs` | arena, fights, rounds; variable-length responses |
 | `fortress.rs` | the reference implementation |
-| `unlockables.rs` | scrapbook, pets, hellevator, blacksmith, witch, achievements |
+| `hellevator.rs` | hellevator event, treats, shop, monsters, floors, daily rewards |
+| `pets.rs` | pets, habitats, exploration, stats, opponents |
+| `unlockables.rs` | scrapbook, blacksmith, witch, achievements, pending unlocks |
 
 **Partly ported**: in `items.rs`, `Item::parse` and `ItemType::parse` work on
 `Vals`, but the deprecated `parse_slice` twins and their call sites in
