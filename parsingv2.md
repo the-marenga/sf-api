@@ -51,6 +51,7 @@ It replaced the fixed-length family the port went through — the `Vals` trait,
 | a fixed number of values | `val.values::<27>()?` |
 | a fixed number, other delimiter | `val.values_by::<4>(',')?` |
 | a response of unknown length | `val.list()` |
+| unknown length, other delimiter | `val.list_by(',')` |
 | a sub-range of an already split response | `data.window(47..94)` |
 | repeating blocks of equal size | `data.chunks(4)` |
 | a literal, e.g. in a test | `Vals::from("1/2/3")` |
@@ -92,19 +93,18 @@ will report it as unread:
 
 ```rust
 data.ignore(0, "might be max unit level");
+data.ignore(1..3, "an unmodelled region");
 data.ignore_all("nothing in this response is modelled yet");
-data.ignore_unmodelled(
-    &[1..2, 6..7, 9..data.len()],
-    "fight result field that is not modelled",
-);
 ```
 
-`ignore_unmodelled` takes half-open ranges, so a trailing "and everything
-after this" range is spelled `x..data.len()`. When you ignore something,
-write down what you know about it — "always 0 in every captured response",
-the value range you have seen, or what the field looks like it correlates
-with. A bare "not modelled yet" is the least useful form of that comment,
-and the next port is the one that has to re-derive it.
+`ignore` takes a single position or a half-open range, like `slice::get`, so a
+trailing "and everything after this" range is spelled `x..data.len()`.
+`ignore_unmodelled` is the shorthand for a list of such ranges sharing one
+reason. When you ignore something, write down what you know about it —
+"always 0 in every captured response", the value range you have seen, or what
+the field looks like it correlates with. A bare "not modelled yet" is the
+least useful form of that comment, and the next port is the one that has to
+re-derive it.
 
 ### 2.4 `_or` accessors vs `?`
 

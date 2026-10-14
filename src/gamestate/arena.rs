@@ -801,21 +801,21 @@ mod tests {
     #[test]
     fn test_arena_update() {
         let mut arena = Arena::default();
-        let data = Vals::from("1785018466/0/397200/157923/123916/1/1");
+        let data = Vals::from("1785018466/0/111111/222222/333333/1/1");
         arena.update(&data, ServerTime::default()).unwrap();
         assert_all_read(&data);
 
-        assert_eq!(arena.enemy_ids, [397_200, 157_923, 123_916]);
+        assert_eq!(arena.enemy_ids, [111_111, 222_222, 333_333]);
         assert_eq!(arena.fights_for_xp, 0);
         assert!(arena.next_free_fight.is_some());
     }
 
     #[test]
     fn test_update_fighters() {
-        let raw = "0/0/0/0/1/1039746/bruhbruh/50/236232/236232/95/73/757/1158/\
+        let raw = "0/0/0/0/1/111111/PlayerOne/50/236232/236232/95/73/757/1158/\
                    428/5/303/301/3/303/1/5/16/0/0/1/1/10/0/0/0/0/0/0/0/0/0/0/\
-                   0/0/0/0/0/0/0/0/0/0/0/0/0/0/581817/FrozenTenno \
-                   (w34net)/51/164736/164736/815/253/253/792/808/1/204/202/4/\
+                   0/0/0/0/0/0/0/0/0/0/0/0/0/0/222222/PlayerTwo \
+                   (s1de)/51/164736/164736/815/253/253/792/808/1/204/202/4/\
                    205/4/4/2/0/0/3/1/6/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
                    0/0/0/0/0";
         let mut fight = SingleFight::default();
@@ -825,8 +825,8 @@ mod tests {
 
         let a = fight.fighter_a.unwrap();
         assert_eq!(a.typ, FighterTyp::Player);
-        assert_eq!(a.id, 1_039_746);
-        assert_eq!(a.name.as_deref(), Some("bruhbruh"));
+        assert_eq!(a.id, 111_111);
+        assert_eq!(a.name.as_deref(), Some("PlayerOne"));
         assert_eq!(a.level, 50);
         assert_eq!(a.life, 236_232);
         assert_eq!(a.current_life, 236_232);
@@ -835,8 +835,8 @@ mod tests {
         assert_eq!(a.attributes[AttributeType::Luck], 428);
 
         let b = fight.fighter_b.unwrap();
-        assert_eq!(b.id, 581_817);
-        assert_eq!(b.name.as_deref(), Some("FrozenTenno (w34net)"));
+        assert_eq!(b.id, 222_222);
+        assert_eq!(b.name.as_deref(), Some("PlayerTwo (s1de)"));
         assert_eq!(b.level, 51);
         assert_eq!(b.life, 164_736);
         assert_eq!(b.current_life, 164_736);
@@ -844,9 +844,9 @@ mod tests {
 
     #[test]
     fn test_fighter_types() {
-        // Real `fightheader*.fighters` records. The underworld minion reuses
-        // one of them with the documented marker at index 15, as no capture
-        // of an underworld lure exists in `cache/`.
+        // Fighter records covering each kind. The underworld minion reuses one
+        // of them with the documented marker at index 15, as no underworld
+        // lure capture exists.
         let cases: [(&str, FighterTyp); 10] = [
             // companion warrior (-391)
             (
@@ -896,7 +896,7 @@ mod tests {
             ),
             // a pet repeats the player id in its name
             (
-                "14/0/0/0/1/470832/470832/1/328/328/20/41/20/41/30/-800/0/0/0/\
+                "14/0/0/0/1/111111/111111/1/328/328/20/41/20/41/30/-800/0/0/0/\
                  0/0/0/0/0/0/0/0/3/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0",
                 FighterTyp::Pet,
             ),
@@ -923,26 +923,26 @@ mod tests {
 
     #[test]
     fn test_fighter_current_life() {
-        // Real records from a companion dungeon, where the same fighter is
+        // A companion dungeon, where the same fighter is
         // carried into later fights at 10% and 1% of its maximum hp, and a
         // fighter that entered a fight at 94%
         let cases = [
             (
-                "0/0/0/0/0/270791/Biest2 \
-                 (s5de)/239/3076684/307668/3173/3126/7763/5723/5249/6/101/102/\
+                "0/0/0/0/0/333333/PlayerOne \
+                 (s1de)/239/3076684/307668/3173/3126/7763/5723/5249/6/101/102/\
                  3/0/5/7/3/0/0/2/2/2/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0",
                 3_076_684,
                 307_668,
             ),
             (
-                "0/0/0/0/0/270791/Biest2 \
-                 (s5de)/239/3076684/28374/3173/3126/7763/5723/5249/6/101/102/\
+                "0/0/0/0/0/333333/PlayerOne \
+                 (s1de)/239/3076684/28374/3173/3126/7763/5723/5249/6/101/102/\
                  3/0/5/7/3/0/0/2/2/2/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0",
                 3_076_684,
                 28_374,
             ),
             (
-                "2/0/0/0/1/464307/Gnork34/257/18549297/17422335/3400/13083/\
+                "2/0/0/0/1/444444/PlayerTwo/257/18549297/17422335/3400/13083/\
                  3400/12290/8286/1/302/303/4/308/1/6/7/1/0/4/1/3/0/0/0/0/0/0/\
                  0/0/0/0/0/0/0/0/0/0/0/0/0",
                 18_549_297,
@@ -970,12 +970,12 @@ mod tests {
 
     #[test]
     fn test_update_rounds() {
-        let raw = "1039746/0/0/4/0/167268/55080/0/0/641953/0/0/0/0/55080/\
-                   166066/0/0/1039746/0/1/4/0/166066/55080/0/0/641953/0/0/0/0/\
-                   55080/164601/0/0/1039746/0/11/0/0/164601/55080/1/2/3/4/0/\
-                   1039746/0/15/0/0/164601/27830/1/2/3/3/0/641953/0/0/0/0/\
-                   27830/162633/0/1/2/3/3/1039746/0/1/0/0/162633/-6030/1/2/3/\
-                   3/0";
+        let raw = "111111/0/0/4/0/167268/55080/0/0/222222/0/0/0/0/55080/\
+                   166066/0/0/111111/0/1/4/0/166066/55080/0/0/222222/0/0/0/0/\
+                   55080/164601/0/0/111111/0/11/0/0/164601/55080/1/2/3/4/0/\
+                   111111/0/15/0/0/164601/27830/1/2/3/3/0/222222/0/0/0/0/\
+                   27830/162633/0/1/2/3/3/111111/0/1/0/0/162633/-6030/1/2/3/3/\
+                   0";
         let mut fight = SingleFight::default();
         let data = Vals::from(raw);
         fight.update_rounds(&data, 2);
@@ -983,7 +983,7 @@ mod tests {
 
         assert_eq!(fight.actions.len(), 8);
         assert_eq!(fight.actions[0].outcome, FightOutcome::Evaded);
-        assert_eq!(fight.actions[1].acting_id, 641_953);
+        assert_eq!(fight.actions[1].acting_id, 222_222);
         assert_eq!(fight.actions[4].action, FightActionType::Summon);
         assert_eq!(
             fight.actions[4].actor_effect,
@@ -1069,7 +1069,7 @@ mod tests {
     #[test]
     fn test_update_result_underworld_lure() {
         let mut fight = Fight::default();
-        // No capture of `fightresult.underworldpillage` exists in `cache/`,
+        // No capture of `fightresult.underworldpillage` exists,
         // this is built from its documented layout: a short response with the
         // pillaged souls at index 3.
         let data = Vals::from("1/1/0/42/0/0/0/0/0/0/0/0");
@@ -1113,7 +1113,7 @@ mod tests {
     #[test]
     fn test_update_result_fortress_defense_units() {
         let mut fight = Fight::default();
-        // A real fortress defense, where the units at index 25 & 26 are set
+        // A fortress defense, where the units at index 25 & 26 are set
         let raw =
             "1/1/0/0/0/0/0/1533/1533/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/41/30/13";
         let data = Vals::from(raw);
@@ -1140,7 +1140,7 @@ mod tests {
     #[test]
     fn test_update_groups() {
         let resp = crate::response::Response::parse(
-            "fightgroups.r:470832,554968,Mavello,Pestorius".to_string(),
+            "fightgroups.r:111111,222222,PlayerOne,PlayerTwo".to_string(),
             Local::now().naive_local(),
         )
         .unwrap();
@@ -1149,9 +1149,9 @@ mod tests {
         let mut fight = Fight::default();
         fight.update_groups(&data);
 
-        assert_eq!(fight.group_attacker_id, Some(470_832));
-        assert_eq!(fight.group_defender_id, Some(554_968));
-        assert_eq!(fight.group_attacker_name.as_deref(), Some("Mavello"));
-        assert_eq!(fight.group_defender_name.as_deref(), Some("Pestorius"));
+        assert_eq!(fight.group_attacker_id, Some(111_111));
+        assert_eq!(fight.group_defender_id, Some(222_222));
+        assert_eq!(fight.group_attacker_name.as_deref(), Some("PlayerOne"));
+        assert_eq!(fight.group_defender_name.as_deref(), Some("PlayerTwo"));
     }
 }

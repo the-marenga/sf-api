@@ -559,14 +559,14 @@ mod tests {
     #[test]
     fn test_fortress_update() {
         let raw = "19/15/18/18/18/18/15/15/15/18/18/18/3/1786227769/\
-                   1785018169/376/7053/1565/1785024031/278315/1459278099/\
+                   1785018169/376/7053/1565/1785024031/111111/1459278099/\
                    1784875170/0/0/0/18/348143";
         let mut fortress = Fortress::default();
         crate::parse_test!(update: fortress(raw, ServerTime::default()), {
             upgrades: 376,
             honor: 7053,
             rank: Some(1565),
-            attack_target: Some(278_315),
+            attack_target: Some(111_111),
             hall_of_knights_level: 18,
         });
 
@@ -595,14 +595,14 @@ mod tests {
     #[test]
     fn test_fortress_update_idle_and_gem_search() {
         let raw = "19/15/19/18/18/18/15/15/15/18/18/18/0/0/0/377/7069/1583/\
-                   1790325015/370262/1459278099/1791987830/13/1790346770/\
+                   1790325015/222222/1459278099/1791987830/13/1790346770/\
                    1790323370/18/521703";
         let mut fortress = Fortress::default();
         crate::parse_test!(update: fortress(raw, ServerTime::default()), {
             upgrades: 377,
             honor: 7069,
             rank: Some(1583),
-            attack_target: Some(370_262),
+            attack_target: Some(222_222),
             hall_of_knights_level: 18,
         });
 

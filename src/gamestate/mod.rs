@@ -620,16 +620,16 @@ impl GameState {
             "owngroupsave" => {
                 self.guild
                     .get_or_insert_default()
-                    .update_group_save(val.as_str(), server_time)?;
+                    .update_group_save(&val.list(), server_time)?;
             }
             "owngroupmember" => self
                 .guild
                 .get_or_insert_default()
-                .update_member_names(val.as_str()),
+                .update_member_names(&val.list_by(',')),
             "owngrouppotion" => {
                 self.guild
                     .get_or_insert_default()
-                    .update_member_potions(val.as_str());
+                    .update_member_potions(&val.list_by(','));
             }
             "unitprice" => {
                 self.fortress
@@ -835,9 +835,9 @@ impl GameState {
                 self.achievements.update(&val.into_list("achievements")?)?;
             }
             "groupskillprice" => {
-                self.guild.get_or_insert_default().update_group_prices(
-                    &val.into_list("guild skill prices")?,
-                )?;
+                self.guild
+                    .get_or_insert_default()
+                    .update_group_prices(&val.values::<6>()?);
             }
             "soldieradvice" => {
                 let advice: u16 = val.into("soldier advice")?;
@@ -1055,7 +1055,7 @@ impl GameState {
             "owngroupknights" => self
                 .guild
                 .get_or_insert_default()
-                .update_group_knights(val.as_str()),
+                .update_group_knights(&val.list_by(',')),
             "friendlist" => self.updatete_relation_list(val.as_str()),
             "legendaries" => {
                 if val.as_str().chars().any(|a| a != 'A') {
@@ -2008,7 +2008,7 @@ impl GameState {
                 // 0
                 // 0
                 // 0
-                // 80315    // guild_id ?
+                // guild_id ?
                 // 12122    // sb count
                 // 0
                 // 31
@@ -2327,9 +2327,8 @@ mod tests {
     /// The whole `owntower` response: companions, underworld and ignored.
     #[test]
     fn test_update_tower() {
-        // From `cache/marenga.login`, `owntower.towerSave`.
         let raw =
-            "446275/0/100/360/1/0/0/4147/2539/2422/3743/2900/7153/2622/2391/\
+            "100001/0/100/360/1/0/0/4147/2539/2422/3743/2900/7153/2622/2391/\
              6428/4079/0/0/0/0/0/17534/481/951/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
              0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
              0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\

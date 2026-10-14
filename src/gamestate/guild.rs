@@ -6,12 +6,10 @@ use num_derive::FromPrimitive;
 use strum::{EnumIter, IntoEnumIterator};
 
 use super::{
-    ArrSkip, AttributeType, CCGet, CFPGet, CGet, CSTGet, NormalCost, Potion,
-    SFError, ServerTime,
+    AttributeType, NormalCost, Potion, Result, SFError, ServerTime,
     items::{ItemType, PotionSize, PotionType},
-    update_enum_map,
 };
-use crate::misc::{from_sf_string, soft_into, warning_parse};
+use crate::{misc::from_sf_string, response::Vals};
 
 /// Information about the characters current guild
 #[derive(Debug, Clone, Default)]
@@ -184,32 +182,28 @@ impl ChatMessage {
 }
 
 impl Guild {
+    /// Updates the guild from an `owngroupsave` (`groupSave`) response. The
+    /// member fields are 50-slot columns, only the first `member_count` used.
     pub(crate) fn update_group_save(
         &mut self,
-        val: &str,
+        data: &Vals<'_>,
         server_time: ServerTime,
-    ) -> Result<(), SFError> {
-        let data: Vec<_> = val
-            .split('/')
-            .map(|c| c.trim().parse::<i64>().unwrap_or_default())
-            .collect();
-
-        let member_count = data.csiget(3, "member count", 0)?;
+    ) -> Result<()> {
+        self.id = data.u32_or(0, 0);
+        let member_count = data.u8_or(3, 0);
         self.member_count = member_count;
         self.members
-            .resize_with(member_count as usize, Default::default);
+            .resize_with(usize::from(member_count), Default::default);
 
         for (offset, member) in self.members.iter_mut().enumerate() {
-            member.battles_joined =
-                data.cfpget(445 + offset, "member fights joined", |x| x % 100)?;
-            member.level = data.csiget(64 + offset, "member level", 0)?;
-            member.last_online =
-                data.cstget(114 + offset, "member last online", server_time)?;
-            member.treasure_skill =
-                data.csiget(214 + offset, "member treasure skill", 0)?;
-            member.instructor_skill =
-                data.csiget(264 + offset, "member master skill", 0)?;
-            member.guild_rank = match data.cget(314 + offset, "member rank")? {
+            // The first member column (base 14) is not modelled
+            data.ignore(14 + offset, "unmodelled member column");
+            member.battles_joined = data.enum_map(445 + offset, |x| x % 100);
+            member.level = data.u16_or(64 + offset, 0);
+            member.last_online = data.server_time(114 + offset, server_time)?;
+            member.treasure_skill = data.u16_or(214 + offset, 0);
+            member.instructor_skill = data.u16_or(264 + offset, 0);
+            member.guild_rank = match data.i64(314 + offset)? {
                 1 => GuildRank::Leader,
                 2 => GuildRank::Officer,
                 3 => GuildRank::Member,
@@ -220,97 +214,86 @@ impl Guild {
                 }
             };
             member.portal_fought =
-                data.cstget(164 + offset, "member portal fought", server_time)?;
-            member.guild_pet_lvl =
-                data.csiget(390 + offset, "member pet skill", 0)?;
+                data.server_time(164 + offset, server_time)?;
+            member.guild_pet_lvl = data.u16_or(390 + offset, 0);
         }
 
-        self.honor = data.csiget(13, "guild honor", 0)?;
-        self.id = data.csiget(0, "guild id", 0)?;
+        self.honor = data.u32_or(13, 0);
+        self.finished_raids = data.u16_or(8, 0);
 
-        self.finished_raids = data.csiget(8, "finished raids", 0)?;
+        self.attacking =
+            PlanedBattle::parse(&data.window(364..366), server_time)?;
+        self.defending =
+            PlanedBattle::parse(&data.window(366..368), server_time)?;
+        self.next_attack_possible = data.server_time(365, server_time)?;
 
-        self.attacking = PlanedBattle::parse(
-            data.skip(364, "attacking guild")?,
-            server_time,
-        )?;
+        self.pet_id = data.u32_or(377, 0);
+        self.pet_max_lvl = data.u16_or(378, 0);
 
-        self.defending = PlanedBattle::parse(
-            data.skip(366, "attacking guild")?,
-            server_time,
-        )?;
+        self.hydra.last_battle = data.server_time(382, server_time)?;
+        self.hydra.last_full = data.server_time(381, server_time)?;
+        self.hydra.current_life = data.u64_or(383, u64::MAX);
+        self.hydra.max_life = data.u64_or(384, u64::MAX);
 
-        self.next_attack_possible =
-            data.cstget(365, "guild next attack time", server_time)?;
+        for (idx, attr) in self.hydra.attributes.values_mut().enumerate() {
+            *attr = data.u32_or(385 + idx, 0);
+        }
 
-        self.pet_id = data.csiget(377, "gpet id", 0)?;
-        self.pet_max_lvl = data.csiget(378, "gpet max lvl", 0)?;
-
-        self.hydra.last_battle =
-            data.cstget(382, "hydra pet lb", server_time)?;
-        self.hydra.last_full =
-            data.cstget(381, "hydra last defeat", server_time)?;
-
-        self.hydra.current_life = data.csiget(383, "ghydra clife", u64::MAX)?;
-        self.hydra.max_life = data.csiget(384, "ghydra max clife", u64::MAX)?;
-
-        update_enum_map(
-            &mut self.hydra.attributes,
-            data.skip(385, "hydra attributes")?,
-        );
-
+        // Index 6 packs the portal life in the high and the total treasure
+        // skill in the low 16 bits, index 7 does the same for the defeated
+        // count and the total instructor skill
+        let treasure = data.u32_or(6, 0);
         self.total_treasure_skill =
-            data.csimget(6, "guild total treasure skill", 0, |x| x & 0xFFFF)?;
-        self.total_instructor_skill =
-            data.csimget(7, "guild total instructor skill", 0, |x| x & 0xFFFF)?;
-
+            u16::try_from(treasure & 0xFFFF).unwrap_or(0);
         self.portal.life_percentage =
-            data.csimget(6, "guild portal life p", 100, |x| x >> 16)?;
+            u8::try_from(treasure >> 16).unwrap_or(100);
+
+        let instructor = data.u32_or(7, 0);
+        self.total_instructor_skill =
+            u16::try_from(instructor & 0xFFFF).unwrap_or(0);
         self.portal.defeated_count =
-            data.csimget(7, "guild portal progress", 0, |x| x >> 16)?;
+            u8::try_from(instructor >> 16).unwrap_or(0);
+
+        // Everything from `member_count` to the next column is an unused
+        // (always 0) tail; the rest is a field that is not modelled yet
+        let members = usize::from(member_count);
+        data.ignore(1..3, "the guild emblem strip & an unmodelled timestamp");
+        data.ignore(4..6, "always 0 in every captured response");
+        data.ignore(9..13, "9 is always 1, the rest is always 0");
+        data.ignore(14 + members..64, "unused tail of the first member column");
+        data.ignore(64 + members..114, "unused tail of the level column");
+        data.ignore(114 + members..164, "unused tail of the online column");
+        data.ignore(164 + members..214, "unused tail of the portal column");
+        data.ignore(214 + members..264, "unused tail of the treasure column");
+        data.ignore(264 + members..314, "unused tail of the instructor column");
+        data.ignore(314 + members..364, "unused tail of the rank column");
+        data.ignore(368..377, "370, 371 and 374 are set, the rest is 0");
+        data.ignore(379..381, "always 0 in every captured response");
+        data.ignore(390 + members..445, "unused tail of the pet level column");
+        data.ignore(
+            445 + members..data.len(),
+            "unused tail of the battles column & the trailer",
+        );
 
         Ok(())
     }
 
-    pub(crate) fn update_member_names(&mut self, val: &str) {
-        let names: Vec<_> = val
-            .split(',')
-            .map(std::string::ToString::to_string)
-            .collect();
-        self.members.resize_with(names.len(), Default::default);
-        for (member, name) in self.members.iter_mut().zip(names) {
-            member.name = name;
-        }
-    }
-
-    pub(crate) fn update_group_knights(&mut self, val: &str) {
-        let data: Vec<i64> = val
-            .trim_end_matches(',')
-            .split(',')
-            .flat_map(str::parse)
-            .collect();
-
+    pub(crate) fn update_member_names(&mut self, data: &Vals<'_>) {
         self.members.resize_with(data.len(), Default::default);
-        for (member, count) in self.members.iter_mut().zip(data) {
-            member.knights = soft_into(count, "guild knight", 0);
+        for (member, name) in self.members.iter_mut().zip(data.iter()) {
+            member.name = name.to_string();
         }
     }
 
-    pub(crate) fn update_member_potions(&mut self, val: &str) {
-        let data = val
-            .trim_end_matches(',')
-            .split(',')
-            .map(|c| {
-                warning_parse(c, "member potion", |a| a.parse::<i64>().ok())
-                    .unwrap_or_default()
-            })
-            .collect::<Vec<_>>();
+    pub(crate) fn update_group_knights(&mut self, data: &Vals<'_>) {
+        self.members.resize_with(data.len(), Default::default);
+        for (idx, member) in self.members.iter_mut().enumerate() {
+            member.knights = data.u8_or(idx, 0);
+        }
+    }
 
-        let potions = data.len() / 2;
-        let member = potions / 3;
-        self.members.resize_with(member, Default::default);
-
-        let mut data = data.into_iter();
+    pub(crate) fn update_member_potions(&mut self, data: &Vals<'_>) {
+        self.members.resize_with(data.len() / 6, Default::default);
 
         let quick_potion = |int: i64| {
             Some(ItemType::Potion(Potion {
@@ -320,16 +303,10 @@ impl Guild {
             }))
         };
 
-        for member in &mut self.members {
-            for potion in &mut member.potions {
-                *potion = data
-                    .next()
-                    .or_else(|| {
-                        warn!("Invalid member potion len");
-                        None
-                    })
-                    .and_then(quick_potion);
-                _ = data.next();
+        // One 6-value chunk per member: three `[potion, unused]` pairs
+        for (member, chunk) in self.members.iter_mut().zip(data.chunks(6)) {
+            for (slot, potion) in member.potions.iter_mut().enumerate() {
+                *potion = quick_potion(chunk.i64_or(slot * 2, 0));
             }
         }
     }
@@ -344,18 +321,14 @@ impl Guild {
         self.emblem.update(emblem);
     }
 
-    pub(crate) fn update_group_prices(
-        &mut self,
-        data: &[i64],
-    ) -> Result<(), SFError> {
+    /// Updates the skill upgrade prices from a 6-value `groupskillprice`
+    /// response: `[silver, mushrooms]` per [`GuildSkill`].
+    pub(crate) fn update_group_prices(&mut self, data: &Vals<'_>) {
         for (idx, skill) in GuildSkill::iter().enumerate() {
             let skill = &mut self.upgrade_price[skill];
-            skill.silver =
-                data.csiget(idx * 2, "guild upgr. silver", u64::MAX)?;
-            skill.mushrooms =
-                data.csiget(1 + idx * 2, "guild upgr. mush", u16::MAX)?;
+            skill.silver = data.u64_or(idx * 2, u64::MAX);
+            skill.mushrooms = data.u16_or(1 + idx * 2, u16::MAX);
         }
-        Ok(())
     }
 
     #[allow(clippy::indexing_slicing)]
@@ -432,17 +405,9 @@ impl PlanedBattle {
     }
 
     #[allow(clippy::similar_names)]
-    fn parse(
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<Option<Self>, SFError> {
-        let other = data.cget(0, "gbattle other")?;
-        let other = match other.try_into() {
-            Ok(x) if x > 1 => Some(x),
-            _ => None,
-        };
-        let date = data.cget(1, "gbattle time")?;
-        let date = server_time.convert_to_local(date, "next guild fight");
+    fn parse(data: &Vals<'_>, server_time: ServerTime) -> Result<Option<Self>> {
+        let other = Some(data.u32(0)?).filter(|&x| x > 1);
+        let date = data.server_time(1, server_time)?;
         Ok(match (other, date) {
             (Some(other), Some(date)) => Some(Self { other, date }),
             _ => None,
@@ -464,7 +429,7 @@ pub struct GuildPortal {
 }
 
 /// Which battles a member will participate in
-#[derive(Debug, Copy, Clone, FromPrimitive)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BattlesJoined {
     /// The player has only joined the defense of the guild
@@ -510,23 +475,215 @@ pub struct GuildMemberData {
 }
 
 /// The rank a member can have in a guild
-#[derive(Debug, Clone, Copy, FromPrimitive, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum GuildRank {
+    /// The leader of the guild
     Leader = 1,
+    /// An officer of the guild
     Officer = 2,
+    /// A regular member of the guild
     #[default]
     Member = 3,
+    /// Invited to the guild, but not a member yet
     Invited = 4,
 }
 
 /// Something the player can upgrade in the guild
 #[derive(Debug, Clone, Copy, PartialEq, Enum, Eq, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum GuildSkill {
+    /// Upgrades the treasure skill of the guild
     Treasure = 0,
-    Instructor,
-    Pet,
+    /// Upgrades the instructor skill of the guild
+    Instructor = 1,
+    /// Upgrades the guild pet
+    Pet = 2,
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
+    use super::*;
+
+    #[test]
+    fn test_update_group_save() {
+        // An `owngroupsave` (`groupSave`) response with 29 members.
+        let raw =
+            "12345/04120701140F3206060303/1788480001/29/0/0/6488564/1638900/\
+             53/1/500000/0/0/1288/500001/500002/500003/500004/500005/500006/\
+             500007/500008/500009/500010/500011/500012/500013/500014/500015/\
+             500016/500017/500018/500019/500020/500021/500022/500023/500024/\
+             500025/500026/500027/500028/500029/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+             0/0/0/0/0/0/248/365/360/337/285/189/187/358/345/342/340/335/335/\
+             330/330/329/328/325/322/317/314/311/174/166/150/131/106/40/9/0/0/\
+             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/1788549577/1788120187/\
+             1786553505/1788328260/1788054513/1612885231/1544315512/\
+             1786323865/1786237638/1785264635/1785264828/1785264778/\
+             1785442831/1701799732/1785265129/1785265196/1608702797/\
+             1785264806/1785264440/1785265175/1785265005/1785264415/\
+             1405532465/1405532459/1380365216/1406365933/1479561108/\
+             1785265073/1786458511/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+             1788480060/1785255024/1786553614/1772694957/1787883643/\
+             1608644333/1544315337/1785255012/1785678215/1785255026/\
+             1785255025/1785255042/1785255034/1608640816/1785255013/\
+             1785255019/1608643464/1785255040/1785255054/1785255044/\
+             1760214974/1785255038/0/0/0/1406365905/1478108248/0/0/0/0/0/0/0/\
+             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/28/28/28/28/28/0/28/28/29/28/28/\
+             28/28/28/28/28/28/28/28/28/31/28/28/28/28/28/28/0/3/0/0/0/0/0/0/\
+             0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/31/31/31/31/31/0/31/31/31/31/31/31/\
+             31/31/31/31/31/31/31/31/55/31/31/31/31/31/31/0/3/0/0/0/0/0/0/0/0/\
+             0/0/0/0/0/0/0/0/0/0/0/0/0/1/2/2/2/2/2/2/3/3/3/3/3/3/3/3/3/3/3/3/\
+             3/3/3/3/3/3/3/3/3/3/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+             0/0/0/0/0/318/17/0/0/3,201,207,6,210,2,3,4,1,0/0/0/36/296/0/0/1/\
+             0/199466330/200000000/30461/9572/9110/24992/18637/190/180/255/\
+             180/180/15/180/220/285/240/185/180/180/180/185/180/180/200/180/\
+             180/180/180/180/180/180/180/180/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+             0/0/0/0/0/0/0/0/0/0/242/0/100/000/000/000/000/000/000/000/000/\
+             000/000/000/000/000/000/000/000/000/000/000/000/000/000/000/000/\
+             000/000/000/000/000/000/000/000/000/000/000/000/000/000/000/000/\
+             000/000/000/000/000/000/000/000/000/0/0/0/1/4/2";
+
+        let data = Vals::from(raw);
+        let mut guild = Guild::default();
+        guild
+            .update_group_save(&data, ServerTime::default())
+            .unwrap();
+
+        assert!(
+            data.unaccessed_indices().is_empty(),
+            "unread values in {data}"
+        );
+
+        assert_eq!(guild.id, 12345);
+        assert_eq!(guild.honor, 1288);
+        assert_eq!(guild.finished_raids, 53);
+        assert_eq!(guild.total_treasure_skill, 500);
+        assert_eq!(guild.total_instructor_skill, 500);
+        assert_eq!(guild.pet_id, 36);
+        assert_eq!(guild.pet_max_lvl, 296);
+
+        assert_eq!(guild.members.len(), 29);
+        assert!(guild.attacking.is_none());
+        assert!(guild.defending.is_none());
+        assert!(guild.next_attack_possible.is_none());
+
+        let first = &guild.members[0];
+        assert_eq!(first.level, 248);
+        assert_eq!(first.treasure_skill, 28);
+        assert_eq!(first.instructor_skill, 31);
+        assert_eq!(first.guild_pet_lvl, 190);
+        assert_eq!(first.guild_rank, GuildRank::Leader);
+        assert!(first.last_online.is_some());
+        assert!(first.portal_fought.is_some());
+        // `battles_joined` is `100 % 100`, which is no variant
+        assert_eq!(first.battles_joined, None);
+
+        assert_eq!(guild.portal.life_percentage, 99);
+        assert_eq!(guild.portal.defeated_count, 25);
+        assert_eq!(guild.hydra.current_life, 199_466_330);
+        assert_eq!(guild.hydra.max_life, 200_000_000);
+        assert_eq!(guild.hydra.attributes[AttributeType::Strength], 30_461);
+    }
+
+    #[test]
+    fn test_update_group_prices() {
+        // A `groupskillprice(6)` response.
+        let data = Vals::from("1000000/10/1000000/10/1250000/2");
+        let mut guild = Guild::default();
+        guild.update_group_prices(&data);
+
+        assert!(
+            data.unaccessed_indices().is_empty(),
+            "unread values in {data}"
+        );
+        let treasure = guild.upgrade_price[GuildSkill::Treasure];
+        assert_eq!((treasure.silver, treasure.mushrooms), (1_000_000, 10));
+        let pet = guild.upgrade_price[GuildSkill::Pet];
+        assert_eq!((pet.silver, pet.mushrooms), (1_250_000, 2));
+    }
+
+    #[test]
+    fn test_planed_battle_parse() {
+        // The `owngroupsave` attacking pair: a raid against the raid id
+        // 1_000_000
+        let data = Vals::from("1000000/1791924748");
+        let battle = PlanedBattle::parse(&data, ServerTime::default())
+            .unwrap()
+            .unwrap();
+        assert_eq!(battle.other, 1_000_000);
+        assert!(battle.is_raid());
+
+        // 0/0 is the sentinel for "no planned battle"
+        let data = Vals::from("0/0");
+        assert!(
+            PlanedBattle::parse(&data, ServerTime::default())
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn test_update_member_names() {
+        // A `owngroupmember.r` response, first three names
+        let resp = crate::response::Response::parse(
+            "owngroupmember.r:MemberOne,MemberTwo,MemberThree".to_string(),
+            Local::now().naive_local(),
+        )
+        .unwrap();
+        let data = resp.values()["owngroupmember"].list_by(',');
+
+        let mut guild = Guild::default();
+        guild.update_member_names(&data);
+
+        assert!(
+            data.unaccessed_indices().is_empty(),
+            "unread values in {data}"
+        );
+        let names: Vec<_> = guild.members.iter().map(|m| &m.name).collect();
+        assert_eq!(names, ["MemberOne", "MemberTwo", "MemberThree"]);
+    }
+
+    #[test]
+    fn test_update_group_knights() {
+        // A `owngroupknights.r` response, first four members
+        let resp = crate::response::Response::parse(
+            "owngroupknights.r:13,18,18,0".to_string(),
+            Local::now().naive_local(),
+        )
+        .unwrap();
+        let data = resp.values()["owngroupknights"].list_by(',');
+
+        let mut guild = Guild::default();
+        guild.update_group_knights(&data);
+
+        assert!(
+            data.unaccessed_indices().is_empty(),
+            "unread values in {data}"
+        );
+        let knights: Vec<_> = guild.members.iter().map(|m| m.knights).collect();
+        assert_eq!(knights, [13, 18, 18, 0]);
+    }
+
+    #[test]
+    fn test_update_member_potions() {
+        // A `owngrouppotion.r` response, first two members
+        let resp = crate::response::Response::parse(
+            "owngrouppotion.r:9,15,11,25,12,25,11,25,4,10,12,25".to_string(),
+            Local::now().naive_local(),
+        )
+        .unwrap();
+        let data = resp.values()["owngrouppotion"].list_by(',');
+
+        let mut guild = Guild::default();
+        guild.update_member_potions(&data);
+
+        assert!(
+            data.unaccessed_indices().is_empty(),
+            "unread values in {data}"
+        );
+        assert_eq!(guild.members.len(), 2);
+        assert!(guild.members[0].potions[0].is_some());
+        assert!(guild.members[1].potions[0].is_some());
+    }
 }
