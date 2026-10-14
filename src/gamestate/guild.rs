@@ -8,7 +8,10 @@ use super::{
     AttributeType, NormalCost, Result, SFError, ServerTime,
     items::{ItemType, Potion, PotionSize, PotionType},
 };
-use crate::response::{Vals, from_sf_string};
+use crate::{
+    PlayerId,
+    response::{Vals, from_sf_string},
+};
 
 /// Information about the characters current guild
 #[derive(Debug, Clone, Default)]
@@ -194,8 +197,7 @@ impl Guild {
             .resize_with(usize::from(member_count), Default::default);
 
         for (offset, member) in self.members.iter_mut().enumerate() {
-            // The first member column (base 14) is not modelled
-            data.ignore(14 + offset, "unmodelled member column");
+            member.id = data.u32_or(14 + offset, 0);
             member.battles_joined = data.enum_map(445 + offset, |x| x % 100);
             member.level = data.u16_or(64 + offset, 0);
             member.last_online = data.server_time(114 + offset, server_time)?;
@@ -448,6 +450,8 @@ pub enum BattlesJoined {
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GuildMemberData {
+    /// The unique player ID of the guild member
+    pub id: PlayerId,
     /// The name of the member
     pub name: String,
     /// Which battles this member will participate in
@@ -574,6 +578,7 @@ mod tests {
         assert!(guild.next_attack_possible.is_none());
 
         let first = &guild.members[0];
+        assert_eq!(first.id, 500_001);
         assert_eq!(first.level, 248);
         assert_eq!(first.treasure_skill, 28);
         assert_eq!(first.instructor_skill, 31);

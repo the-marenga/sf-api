@@ -1,6 +1,7 @@
 use chrono::{DateTime, Local};
 
 use crate::{
+    PlayerId,
     error::Result,
     gamestate::{
         ServerTime,
@@ -43,6 +44,8 @@ pub struct OtherGuild {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct OtherGuildMember {
+    /// The unique player ID of the member
+    pub id: PlayerId,
     /// The name of the member
     pub name: String,
     /// The instructor upgrade level of the member
@@ -74,6 +77,7 @@ impl OtherGuild {
         self.members.resize_with(member_count, Default::default);
 
         for (i, member) in self.members.iter_mut().enumerate() {
+            member.id = data.u32_or(14 + i, 0);
             member.level = data.u16_or(64 + i, 0);
             member.last_active = data.server_time(114 + i, server_time)?;
             member.treasure_lvl = data.u16_or(214 + i, 0);
