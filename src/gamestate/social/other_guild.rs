@@ -6,8 +6,7 @@ use crate::{
         ServerTime,
         guild::{Emblem, GuildRank},
     },
-    misc::from_sf_string,
-    response::Vals,
+    response::{Vals, from_sf_string},
 };
 
 /// Information about another guild

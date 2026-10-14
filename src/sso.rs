@@ -11,8 +11,8 @@ use tokio::sync::Mutex;
 use url::Url;
 
 use crate::{
+    command::sha1_hash,
     error::SFError,
-    misc::sha1_hash,
     session::{ConnectionOptions, PWHash, Session, reqwest_client},
 };
 

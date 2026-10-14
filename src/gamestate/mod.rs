@@ -43,8 +43,7 @@ use unlockables::{HabitatType, HellevatorDailyReward};
 pub use crate::error::{Result, SFError};
 use crate::{
     command::{AttributeType, ExpeditionSetting, Language, ShopType},
-    misc::from_sf_string,
-    response::{Response, ResponseVal, Vals},
+    response::{Response, ResponseVal, Vals, from_sf_string},
 };
 
 /// Represent the full state of the game at some point in time

@@ -9,8 +9,7 @@ use crate::{
         items::{ITEM_PARSE_LEN, Item},
         rewards::{Reward, RewardType},
     },
-    misc::from_sf_string,
-    response::Vals,
+    response::{Vals, from_sf_string},
 };
 
 /// Information about the character's mailbox, combat log, and claimable

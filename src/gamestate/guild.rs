@@ -8,7 +8,7 @@ use super::{
     AttributeType, NormalCost, Result, SFError, ServerTime,
     items::{ItemType, Potion, PotionSize, PotionType},
 };
-use crate::{misc::from_sf_string, response::Vals};
+use crate::response::{Vals, from_sf_string};
 
 /// Information about the characters current guild
 #[derive(Debug, Clone, Default)]

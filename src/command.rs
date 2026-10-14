@@ -1074,7 +1074,7 @@ impl Command {
         use crate::{
             error::SFError,
             gamestate::dungeons::{LightDungeon, ShadowDungeon},
-            misc::{HASH_CONST, sha1_hash, to_sf_string},
+            response::to_sf_string,
         };
 
         Ok(match self {
@@ -1983,4 +1983,23 @@ generate_language_enum! {
     Spanish => "es",
     Hungarian => "hu",
     Polish => "pl"
+}
+
+/// Salt constant used in password hashing for the server.
+pub const HASH_CONST: &str = "ahHoj2woo1eeChiech6ohphoB7Aithoh";
+
+/// Computes the SHA-1 hexadecimal hash of a string.
+#[must_use]
+pub fn sha1_hash(val: &str) -> String {
+    use std::fmt::Write;
+
+    use sha1::{Digest, Sha1};
+    let mut hasher = Sha1::new();
+    hasher.update(val.as_bytes());
+    let hash = hasher.finalize();
+    let mut result = String::with_capacity(hash.len() * 2);
+    for byte in &hash {
+        _ = write!(result, "{byte:02x}");
+    }
+    result
 }
