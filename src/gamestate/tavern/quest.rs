@@ -189,13 +189,14 @@ mod tests {
     fn test_quest_update() {
         let mut quest = Quest::default();
         let raw = "366/3/-65/1/600/2239844/98169000";
-        crate::parse_test!(update: quest(raw), {
-            monster_id: 65,
-            location_id: Location::SprawlingJungle,
-            base_length: 600,
-            base_experience: 2_239_844,
-            base_silver: 98_169_000,
-        });
+        let data = Vals::from(raw);
+        quest.update(&data).unwrap();
+        data.assert_all_read();
+        assert_eq!(quest.monster_id, 65);
+        assert_eq!(quest.location_id, Location::SprawlingJungle);
+        assert_eq!(quest.base_length, 600);
+        assert_eq!(quest.base_experience, 2_239_844);
+        assert_eq!(quest.base_silver, 98_169_000);
         assert!(!quest.is_red());
     }
 
@@ -203,9 +204,10 @@ mod tests {
     fn test_red_quest() {
         let mut quest = Quest::default();
         let raw = "366/3/-139/1/600/2239844/98169000";
-        crate::parse_test!(update: quest(raw), {
-            monster_id: 139,
-        });
+        let data = Vals::from(raw);
+        quest.update(&data).unwrap();
+        data.assert_all_read();
+        assert_eq!(quest.monster_id, 139);
         assert!(quest.is_red());
     }
 

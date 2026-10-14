@@ -578,19 +578,21 @@ mod tests {
 
     #[test]
     fn test_hellevator_treat_bonus_parse() {
-        crate::parse_test!(HellevatorTreatBonus("14/30"), {
-            typ: HellevatorTreatBonusType::ExtraDamage,
-            amount: 30,
-        });
+        let data = Vals::from("14/30");
+        let bonus = HellevatorTreatBonus::parse(&data).unwrap();
+        assert_all_read(&data);
+        assert_eq!(bonus.typ, HellevatorTreatBonusType::ExtraDamage);
+        assert_eq!(bonus.amount, 30);
     }
 
     #[test]
     fn test_hellevator_monster_parse() {
-        crate::parse_test!(HellevatorMonster("123/50/2"), {
-            id: 123,
-            level: 50,
-            typ: HellevatorMonsterElement::Cold,
-        });
+        let data = Vals::from("123/50/2");
+        let monster = HellevatorMonster::parse(&data).unwrap();
+        assert_all_read(&data);
+        assert_eq!(monster.id, 123);
+        assert_eq!(monster.level, 50);
+        assert_eq!(monster.typ, HellevatorMonsterElement::Cold);
     }
 
     #[test]

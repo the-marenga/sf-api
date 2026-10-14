@@ -1644,15 +1644,11 @@ mod tests {
 
     #[test]
     fn test_item_parse() {
-        crate::parse_test!(
-            opt: Item(
-                "1/0/0/1010/0/149/265/5/4/0/108/72/0/83940/10/0/0/45/0",
-                ServerTime::default()
-            ),
-            {
-                price: 83940,
-            }
-        );
+        let raw = "1/0/0/1010/0/149/265/5/4/0/108/72/0/83940/10/0/0/45/0";
+        let vals = Vals::from(raw);
+        let item = Item::parse(&vals, ServerTime::default()).unwrap().unwrap();
+        vals.assert_all_read();
+        assert_eq!(item.price, 83940);
     }
 
     #[test]

@@ -54,9 +54,10 @@ impl Witch {
         } else if current < 0 || target <= 0 {
             self.progress = 100;
         } else {
-            let current = current as u64;
-            let target = target as u64;
-            self.progress = ((current * 100) / target).min(100) as u32;
+            let current = u64::try_from(current).unwrap_or_default();
+            let target = u64::try_from(target).unwrap_or(1);
+            let progress = ((current * 100) / target).min(100);
+            self.progress = u32::try_from(progress).unwrap_or(100);
         }
 
         let e_count = data.u8_or(4, 0);
@@ -165,7 +166,7 @@ impl Achievements {
     /// The amount of achievements, that have been earned
     #[must_use]
     pub fn owned(&self) -> u32 {
-        self.0.iter().filter(|a| a.achieved).count() as u32
+        u32::try_from(self.0.iter().filter(|a| a.achieved).count()).unwrap_or(0)
     }
 }
 

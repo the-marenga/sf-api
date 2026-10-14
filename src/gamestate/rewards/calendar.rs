@@ -144,15 +144,20 @@ mod tests {
 
     #[test]
     fn test_calendar_reward_parse() {
-        crate::parse_test!(CalendarReward("12/1"), {
-            typ: CalendarRewardType::Attribute(AttributeType::Dexterity),
-            amount: 1,
-        });
+        let data = Vals::from("12/1");
+        let reward = CalendarReward::parse(&data).unwrap();
+        assert_eq!(
+            reward.typ,
+            CalendarRewardType::Attribute(AttributeType::Dexterity)
+        );
+        assert_eq!(reward.amount, 1);
+        assert_all_read(&data);
 
-        crate::parse_test!(CalendarReward("21/1"), {
-            typ: CalendarRewardType::LevelUp,
-            amount: 1,
-        });
+        let data = Vals::from("21/1");
+        let reward = CalendarReward::parse(&data).unwrap();
+        assert_eq!(reward.typ, CalendarRewardType::LevelUp);
+        assert_eq!(reward.amount, 1);
+        assert_all_read(&data);
 
         let data = Vals::from("16/5");
         let reward = CalendarReward::parse(&data).unwrap();

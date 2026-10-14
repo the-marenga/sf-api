@@ -512,12 +512,13 @@ mod tests {
 
     #[test]
     fn test_task_parse() {
-        crate::parse_test!(Task("2/0/320/1"), {
-            typ: TaskType::ConsumeThirstForAdventure,
-            current: 0,
-            target: 320,
-            point_reward: 1,
-        });
+        let data = Vals::from("2/0/320/1");
+        let task = Task::parse(&data).unwrap();
+        assert_all_read(&data);
+        assert_eq!(task.typ, TaskType::ConsumeThirstForAdventure);
+        assert_eq!(task.current, 0);
+        assert_eq!(task.target, 320);
+        assert_eq!(task.point_reward, 1);
     }
 
     #[test]

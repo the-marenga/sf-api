@@ -272,11 +272,12 @@ mod tests {
 
     #[test]
     fn test_underworld_cost_parse() {
-        crate::parse_test!(UnderworldCost("7200/4000/1100"), {
-            time: Duration::from_secs(7200),
-            silver: 4000,
-            souls: 1100,
-        });
+        let vals = Vals::from("7200/4000/1100");
+        let cost = UnderworldCost::parse(&vals).unwrap();
+        vals.assert_all_read();
+        assert_eq!(cost.time, Duration::from_secs(7200));
+        assert_eq!(cost.silver, 4000);
+        assert_eq!(cost.souls, 1100);
     }
 
     #[test]
@@ -286,7 +287,9 @@ mod tests {
         let raw = "0/0/0/0/0/0/1296000/1000000000/162518400/0/0/0/0/0/0/0/0/0/\
                    0/0/0/0/0/0/0/0/0/0/0/0";
         let mut uw = Underworld::default();
-        crate::parse_test!(update: uw.update_building_prices(raw), {});
+        let vals = Vals::from(raw);
+        uw.update_building_prices(&vals).unwrap();
+        vals.assert_all_read();
 
         let gold_pit =
             uw.buildings[UnderworldBuildingType::GoldPit].upgrade_cost;
@@ -307,10 +310,9 @@ mod tests {
         // A `underworldupgradeprice` response.
         let raw = "417/500000/425800/359/500000/340150/369/500000/354450";
         let mut uw = Underworld::default();
-        crate::parse_test!(
-            update: uw.update_underworld_unit_prices(raw),
-            {}
-        );
+        let vals = Vals::from(raw);
+        uw.update_underworld_unit_prices(&vals).unwrap();
+        vals.assert_all_read();
 
         let goblin = &uw.units[UnderworldUnitType::Goblin];
         assert_eq!(goblin.upgrade_next_lvl, 417);

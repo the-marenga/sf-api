@@ -523,12 +523,13 @@ mod tests {
 
     #[test]
     fn test_fortress_cost_parse() {
-        crate::parse_test!(FortressCost("7200/4000/1100/333"), {
-            time: Duration::from_secs(7200),
-            silver: 4000,
-            wood: 1100,
-            stone: 333,
-        });
+        let vals = Vals::from("7200/4000/1100/333");
+        let cost = FortressCost::parse(&vals).unwrap();
+        vals.assert_all_read();
+        assert_eq!(cost.time, Duration::from_secs(7200));
+        assert_eq!(cost.silver, 4000);
+        assert_eq!(cost.wood, 1100);
+        assert_eq!(cost.stone, 333);
     }
 
     #[test]
@@ -538,7 +539,9 @@ mod tests {
                    41/7/765/400/20/14/765/600/61/20/7200/10000/1173/356/765/\
                    400/25/8/765/15000/30/13/9180/45000/29/9";
         let mut fortress = Fortress::default();
-        crate::parse_test!(update: fortress.update_prices(raw), {});
+        let vals = Vals::from(raw);
+        fortress.update_prices(&vals).unwrap();
+        vals.assert_all_read();
 
         let ft =
             fortress.buildings[FortressBuildingType::Fortress].upgrade_cost;
@@ -560,13 +563,14 @@ mod tests {
                    1785018169/376/7053/1565/1785024031/111111/1459278099/\
                    1784875170/0/0/0/18/348143";
         let mut fortress = Fortress::default();
-        crate::parse_test!(update: fortress(raw, ServerTime::default()), {
-            upgrades: 376,
-            honor: 7053,
-            rank: Some(1565),
-            attack_target: Some(111_111),
-            hall_of_knights_level: 18,
-        });
+        let vals = Vals::from(raw);
+        fortress.update(&vals, ServerTime::default()).unwrap();
+        vals.assert_all_read();
+        assert_eq!(fortress.upgrades, 376);
+        assert_eq!(fortress.honor, 7053);
+        assert_eq!(fortress.rank, Some(1565));
+        assert_eq!(fortress.attack_target, Some(111_111));
+        assert_eq!(fortress.hall_of_knights_level, 18);
 
         assert_eq!(
             fortress.buildings[FortressBuildingType::Fortress].level,
@@ -596,13 +600,14 @@ mod tests {
                    1790325015/222222/1459278099/1791987830/13/1790346770/\
                    1790323370/18/521703";
         let mut fortress = Fortress::default();
-        crate::parse_test!(update: fortress(raw, ServerTime::default()), {
-            upgrades: 377,
-            honor: 7069,
-            rank: Some(1583),
-            attack_target: Some(222_222),
-            hall_of_knights_level: 18,
-        });
+        let vals = Vals::from(raw);
+        fortress.update(&vals, ServerTime::default()).unwrap();
+        vals.assert_all_read();
+        assert_eq!(fortress.upgrades, 377);
+        assert_eq!(fortress.honor, 7069);
+        assert_eq!(fortress.rank, Some(1583));
+        assert_eq!(fortress.attack_target, Some(222_222));
+        assert_eq!(fortress.hall_of_knights_level, 18);
 
         assert_eq!(fortress.building_upgrade.target, None);
         assert_eq!(fortress.building_upgrade.start, None);
@@ -617,7 +622,9 @@ mod tests {
         let raw =
             "45/0/0/0/0/0/1790341727/1790327907/1790327907/0/0/0/18/18/18";
         let mut fortress = Fortress::default();
-        crate::parse_test!(update: fortress.update_units(raw, ServerTime::default()), {});
+        let vals = Vals::from(raw);
+        fortress.update_units(&vals, ServerTime::default()).unwrap();
+        vals.assert_all_read();
 
         assert_eq!(fortress.units[FortressUnitType::Soldier].count, 45);
         assert_eq!(fortress.units[FortressUnitType::Soldier].in_training, 0);
@@ -663,7 +670,9 @@ mod tests {
     fn test_fortress_update_levels() {
         let raw = "190/140/140/140";
         let mut fortress = Fortress::default();
-        crate::parse_test!(update: fortress.update_levels(raw), {});
+        let vals = Vals::from(raw);
+        fortress.update_levels(&vals).unwrap();
+        vals.assert_all_read();
 
         assert_eq!(fortress.units[FortressUnitType::Soldier].level, 140);
         assert_eq!(fortress.units[FortressUnitType::Magician].level, 140);
@@ -675,7 +684,9 @@ mod tests {
         let raw = "145/49500000/37800000/145/132000000/10800000/145/66000000/\
                    32400000";
         let mut fortress = Fortress::default();
-        crate::parse_test!(update: fortress.update_unit_upgrade_info(raw), {});
+        let vals = Vals::from(raw);
+        fortress.update_unit_upgrade_info(&vals).unwrap();
+        vals.assert_all_read();
 
         let soldier = &fortress.units[FortressUnitType::Soldier];
         assert_eq!(soldier.upgrade_next_lvl, 145);
@@ -697,7 +708,9 @@ mod tests {
     fn test_fortress_update_unit_prices() {
         let raw = "600/0/20250/6750/600/0/15187/8437/300/0/25312/5062";
         let mut fortress = Fortress::default();
-        crate::parse_test!(update: fortress.update_unit_prices(raw), {});
+        let vals = Vals::from(raw);
+        fortress.update_unit_prices(&vals).unwrap();
+        vals.assert_all_read();
 
         let soldier_cost =
             fortress.units[FortressUnitType::Soldier].training.cost;
@@ -724,7 +737,9 @@ mod tests {
                    54000000/225000/50000/454785/1791911255/300000000/\
                    100000000/49500000/16200000";
         let mut fortress = Fortress::default();
-        crate::parse_test!(update: fortress.update_resources(raw, ServerTime::default()), {});
+        let vals = Vals::from(raw);
+        fortress.update_resources(&vals, ServerTime::default()).unwrap();
+        vals.assert_all_read();
 
         let wood = &fortress.resources[FortressResourceType::Wood];
         assert_eq!(wood.production.last_collectable, 614_062);
