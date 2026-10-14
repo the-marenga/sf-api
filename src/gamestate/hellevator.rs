@@ -1,5 +1,6 @@
 use chrono::{DateTime, Local};
 use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 
 use super::{Result, ServerTime, pets::HabitatType};
 use crate::response::Vals;
@@ -41,7 +42,7 @@ impl HellevatorEvent {
     #[must_use]
     pub fn is_event_ongoing(&self) -> bool {
         let now = Local::now();
-        matches!((self.start, self.end), (Some(start), Some(end)) if end > now && start < now)
+        matches!((self.start, self.end), (Some(start), Some(end)) if (start..end).contains(&now))
     }
 
     /// If the Hellevator event is active, this returns a reference to the
@@ -257,11 +258,9 @@ impl HellevatorMonsterRewardTyp {
             8 => HellevatorMonsterRewardTyp::Arcane,
             9 => HellevatorMonsterRewardTyp::Metal,
             10 => HellevatorMonsterRewardTyp::Souls,
-            11 => HellevatorMonsterRewardTyp::Fruit(HabitatType::Shadow),
-            12 => HellevatorMonsterRewardTyp::Fruit(HabitatType::Light),
-            13 => HellevatorMonsterRewardTyp::Fruit(HabitatType::Earth),
-            14 => HellevatorMonsterRewardTyp::Fruit(HabitatType::Fire),
-            15 => HellevatorMonsterRewardTyp::Fruit(HabitatType::Water),
+            11..=15 => HabitatType::from_typ_id(data - 10)
+                .map(HellevatorMonsterRewardTyp::Fruit)
+                .unwrap_or(HellevatorMonsterRewardTyp::Unknown),
 
             _ => HellevatorMonsterRewardTyp::Unknown,
         }
@@ -403,6 +402,9 @@ impl Hellevator {
     /// is returned here.
     #[must_use]
     pub fn rank_to_rewards_rank(&self, rank: u32) -> Option<u32> {
+        if rank == 0 {
+            return None;
+        }
         let mut rank_limit = 0;
         let mut bracket = 0;
         for bracket_len in &self.brackets {
@@ -445,7 +447,8 @@ impl Hellevator {
         let effect_strength = data.u32_or(26, 0);
         self.current_treat = if c_typ > 0 {
             Some(HellevatorShopTreat {
-                typ: data.enum_or(23, HellevatorTreatType::Unknown),
+                typ: FromPrimitive::from_i64(c_typ)
+                    .unwrap_or(HellevatorTreatType::Unknown),
                 is_special,
                 price: 0,
                 duration,
@@ -521,5 +524,38 @@ mod tests {
         let data = Vals::from(raw);
         hellevator.update(&data, server_time).unwrap();
         assert_all_read(&data);
+    }
+
+    #[test]
+    fn test_rank_to_rewards_rank() {
+        let mut hellevator = Hellevator::default();
+        hellevator.brackets = vec![1, 4, 10]; // Bracket 1: 1, Bracket 2: 2..=5, Bracket 3: 6..=15
+        assert_eq!(hellevator.rank_to_rewards_rank(0), None);
+        assert_eq!(hellevator.rank_to_rewards_rank(1), Some(1));
+        assert_eq!(hellevator.rank_to_rewards_rank(2), Some(2));
+        assert_eq!(hellevator.rank_to_rewards_rank(5), Some(2));
+        assert_eq!(hellevator.rank_to_rewards_rank(6), Some(3));
+        assert_eq!(hellevator.rank_to_rewards_rank(15), Some(3));
+        assert_eq!(hellevator.rank_to_rewards_rank(16), None);
+    }
+
+    #[test]
+    fn test_monster_reward_type_parse() {
+        assert_eq!(
+            HellevatorMonsterRewardTyp::parse(1),
+            HellevatorMonsterRewardTyp::Points
+        );
+        assert_eq!(
+            HellevatorMonsterRewardTyp::parse(11),
+            HellevatorMonsterRewardTyp::Fruit(HabitatType::Shadow)
+        );
+        assert_eq!(
+            HellevatorMonsterRewardTyp::parse(15),
+            HellevatorMonsterRewardTyp::Fruit(HabitatType::Water)
+        );
+        assert_eq!(
+            HellevatorMonsterRewardTyp::parse(999),
+            HellevatorMonsterRewardTyp::Unknown
+        );
     }
 }

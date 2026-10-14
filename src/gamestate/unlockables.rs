@@ -40,13 +40,8 @@ impl Witch {
         self.required_item = None;
         if data.i64_or(33, 1) == 0 {
             let raw_required = data.i64_or(34, 0);
-            for slot in EquipmentSlot::iter() {
-                let id = i64::from(slot.raw_id());
-                if id == raw_required {
-                    self.required_item = Some(slot);
-                    break;
-                }
-            }
+            self.required_item = EquipmentSlot::iter()
+                .find(|slot| i64::from(slot.raw_id()) == raw_required);
         } else {
             data.ignore(34, "required item slot when cauldron is full");
         }
@@ -55,40 +50,27 @@ impl Witch {
         let target = data.i32_or(3, 0);
         if self.required_item.is_none() {
             self.cauldron_bubbling = true;
+            self.progress = 100;
+        } else if current < 0 || target <= 0 {
+            self.progress = 100;
         } else {
-            // I would like to offer the raw values here, but the -1 just
-            // makes this annoying. A Option<(u32, u32)> is also weird
-            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
-            if current < 0 || target <= 0 {
-                self.progress = 100;
-            } else {
-                let current = f64::from(current);
-                let target = f64::from(target);
-                self.progress = ((current / target) * 100.0) as u32;
-            }
+            let current = current as u64;
+            let target = target as u64;
+            self.progress = ((current * 100) / target).min(100) as u32;
         }
 
         let e_count = data.u8_or(4, 0);
         for i in 0..e_count {
             let base = 5 + 3 * usize::from(i);
             data.ignore(base, "enchantment slot / index");
-            let iid = data.i64_or(base + 1, 0) - 1;
+            let raw_iid = data.i64_or(base + 1, 0);
             data.ignore(base + 2, "enchantment unlock timestamp");
-            let key = match iid {
-                0 => continue,
-                10 => Enchantment::SwordOfVengeance,
-                30 => Enchantment::MariosBeard,
-                40 => Enchantment::ManyFeetBoots,
-                50 => Enchantment::ShadowOfTheCowboy,
-                60 => Enchantment::AdventurersArchaeologicalAura,
-                70 => Enchantment::ThirstyWanderer,
-                80 => Enchantment::UnholyAcquisitiveness,
-                90 => Enchantment::TheGraveRobbersPrayer,
-                100 => Enchantment::RobberBaronRitual,
-                x => {
-                    warn!("Unknown witch enchant itemtype: {x}");
-                    continue;
-                }
+            if raw_iid == 0 {
+                continue;
+            }
+            let Some(key) = num_traits::FromPrimitive::from_i64(raw_iid) else {
+                warn!("Unknown witch enchant itemtype: {raw_iid}");
+                continue;
             };
             if let Some(val) = NonZeroU8::new(i + 1) {
                 self.enchantments[key] = Some(EnchantmentIdent(val));
@@ -171,7 +153,33 @@ impl Achievements {
     /// The amount of achievements, that have been earned
     #[must_use]
     pub fn owned(&self) -> u32 {
-        self.0.iter().map(|a| u32::from(a.achieved)).sum()
+        self.0.iter().filter(|a| a.achieved).count() as u32
+    }
+}
+
+impl std::ops::Deref for Achievements {
+    type Target = [Achievement];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl IntoIterator for Achievements {
+    type Item = Achievement;
+    type IntoIter = std::vec::IntoIter<Achievement>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a Achievements {
+    type Item = &'a Achievement;
+    type IntoIter = std::slice::Iter<'a, Achievement>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
     }
 }
 
@@ -276,10 +284,15 @@ impl Display for EquipmentIdent {
 }
 
 #[allow(clippy::enum_glob_use)]
-fn parse_scrapbook_item(item_idx: i64) -> Option<EquipmentIdent> {
+const SCRAPBOOK_SLOTS: [(
+    std::ops::Range<i64>,
+    EquipmentSlot,
+    Option<Class>,
+    &'static [i64],
+); 44] = {
     use Class::*;
     use EquipmentSlot::*;
-    let slots: [(_, _, _, &[_]); 44] = [
+    [
         (801..1011, Amulet, None, &[]),
         (1011..1051, Amulet, None, &[]),
         (1051..1211, Ring, None, &[]),
@@ -324,10 +337,13 @@ fn parse_scrapbook_item(item_idx: i64) -> Option<EquipmentIdent> {
         (4045..4085, Hat, Some(Scout), &[4054, 4055]),
         (4085..4185, Belt, Some(Scout), &[]),
         (4185..4225, Belt, Some(Scout), &[4194, 4195]),
-    ];
+    ]
+};
 
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    for (pos, (range, typ, class, ignore)) in slots.into_iter().enumerate() {
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn parse_scrapbook_item(item_idx: i64) -> Option<EquipmentIdent> {
+    for (pos, (range, typ, class, ignore)) in SCRAPBOOK_SLOTS.iter().enumerate()
+    {
         if !range.contains(&item_idx) {
             continue;
         }
@@ -338,23 +354,27 @@ fn parse_scrapbook_item(item_idx: i64) -> Option<EquipmentIdent> {
         let is_epic = pos % 2 == 1;
         let relative_pos = item_idx - range.start + 1;
 
-        let color = match relative_pos % 10 {
-            _ if typ == Talisman || is_epic => 1,
-            0 => 5,
-            1..=5 => relative_pos % 10,
-            _ => relative_pos % 10 - 5,
+        let color = if *typ == EquipmentSlot::Talisman || is_epic {
+            1
+        } else {
+            match relative_pos % 10 {
+                0 => 5,
+                1..=5 => relative_pos % 10,
+                _ => relative_pos % 10 - 5,
+            }
         } as u8;
 
-        let model_id = match () {
-            () if is_epic => relative_pos + 49,
-            () if typ == Talisman => relative_pos,
-            () if relative_pos % 5 != 0 => relative_pos / 5 + 1,
-            () => relative_pos / 5,
+        let model_id = if is_epic {
+            relative_pos + 49
+        } else if *typ == EquipmentSlot::Talisman {
+            relative_pos
+        } else {
+            (relative_pos + 4) / 5
         } as u16;
 
         return Some(EquipmentIdent {
-            class,
-            typ,
+            class: *class,
+            typ: *typ,
             model_id,
             color,
         });
@@ -434,5 +454,25 @@ mod tests {
         let empty_data = Vals::from("AAAAAAAAAA==");
         assert!(ScrapBook::parse(&empty_data).is_none());
         assert_all_read(&empty_data);
+    }
+
+    #[test]
+    fn test_achievements_deref_and_iter() {
+        let achievements = Achievements(vec![
+            Achievement {
+                achieved: true,
+                progress: 10,
+            },
+            Achievement {
+                achieved: false,
+                progress: 5,
+            },
+        ]);
+        assert_eq!(achievements.len(), 2);
+        assert!(!achievements.is_empty());
+        assert_eq!(achievements[0].progress, 10);
+        assert_eq!(achievements.owned(), 1);
+        let count = (&achievements).into_iter().count();
+        assert_eq!(count, 2);
     }
 }
