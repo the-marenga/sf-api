@@ -4,39 +4,56 @@ use chrono::{DateTime, Local};
 use log::warn;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use strum::EnumIter;
+use strum::{EnumIter, IntoEnumIterator};
 
 use super::{
-    ArrSkip, CCGet, CGet, IdleBuildingType, LightDungeon, Mount, ShopType,
-    character::Class, items::*, tavern::Location, unlockables::HabitatType,
+    IdleBuildingType, LightDungeon, Mount, Result, ServerTime, ShopType,
+    character::Class,
+    items::{PetItem, PotionType},
+    tavern::Location,
+    unlockables::HabitatType,
 };
-use crate::{command::AttributeType, error::SFError};
+use crate::{command::AttributeType, error::SFError, response::Vals};
 
 /// The type of a reward you can win by spinning the wheel. The wheel can be
 /// upgraded, so some rewards may not always be available
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
-#[allow(missing_docs)]
 pub enum WheelRewardType {
+    /// Mushrooms currency.
     Mushrooms,
+    /// Stone fortress resource.
     Stone,
+    /// Large stone fortress resource.
     StoneXL,
+    /// Wood fortress resource.
     Wood,
+    /// Large wood fortress resource.
     WoodXL,
+    /// Experience points.
     Experience,
+    /// Large experience points.
     ExperienceXL,
+    /// Silver coins.
     Silver,
+    /// Large silver coins.
     SilverXL,
+    /// Arcane splinters blacksmith resource.
     Arcane,
+    /// Souls underworld resource.
     Souls,
+    /// An equipment item or potion.
     Item,
+    /// A pet food or egg item.
     PetItem(PetItem),
+    /// An unknown wheel reward type.
+    #[default]
     Unknown,
 }
 
 /// The thing you won from spinning the wheel
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WheelReward {
     /// The type of item you have won
@@ -46,12 +63,13 @@ pub struct WheelReward {
 }
 
 impl WheelReward {
+    /// Parses a wheel reward from a 2-value window: `[raw_typ, amount]`.
     pub(crate) fn parse(
-        data: &[i64],
+        data: &Vals<'_>,
         upgraded: bool,
-    ) -> Result<WheelReward, SFError> {
-        let raw_typ = data.cget(0, "wheel reward typ")?;
-        let mut amount = data.cget(1, "wheel reward amount")?;
+    ) -> Result<WheelReward> {
+        let raw_typ = data.i64(0)?;
+        let mut amount = data.i64(1)?;
         // NOTE: I have only tested upgraded and inferred not upgraded from that
         let typ = match raw_typ {
             0 => WheelRewardType::Mushrooms,
@@ -107,44 +125,61 @@ impl WheelReward {
 }
 
 /// A possible reward on the calendar
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CalendarReward {
     /// Note that this is technically correct, but at low levels, these are
     /// often overwritten to silver
     // FIXME: figure out how exactly
     pub typ: CalendarRewardType,
-    /// The mount of the type this reward yielded
+    /// The amount of the type this reward yielded
     pub amount: i64,
 }
 
 /// The type of reward gainable by collecting the calendar
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum CalendarRewardType {
+    /// Silver coins.
     Silver,
+    /// Mushrooms currency.
     Mushrooms,
+    /// Experience points.
     Experience,
+    /// Wood fortress resource.
     Wood,
+    /// Stone fortress resource.
     Stone,
+    /// Souls underworld resource.
     Souls,
+    /// Arcane splinters blacksmith resource.
     Arcane,
+    /// Runes resource.
     Runes,
+    /// An equipment item.
     Item,
+    /// Direct attribute increase.
     Attribute(AttributeType),
+    /// Pet fruit of a specific habitat.
     Fruit(HabitatType),
+    /// Level reward.
     Level,
+    /// A potion.
     Potion(PotionType),
+    /// Ten quicksand glasses / hourglasses.
     TenQuicksandGlasses,
+    /// Level up reward.
     LevelUp,
+    /// An unknown calendar reward type.
+    #[default]
     Unknown,
 }
 
 impl CalendarReward {
-    pub(crate) fn parse(data: &[i64]) -> Result<CalendarReward, SFError> {
-        let amount = data.cget(1, "c reward amount")?;
-        let typ = data.cget(0, "c reward typ")?;
+    /// Parses a calendar reward from a 2-value window: `[typ, amount]`.
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<CalendarReward> {
+        let typ = data.i64(0)?;
+        let amount = data.i64(1)?;
         let typ = match typ {
             1 => CalendarRewardType::Silver,
             2 => CalendarRewardType::Mushrooms,
@@ -187,7 +222,7 @@ impl CalendarReward {
 }
 
 /// Everything, that changes over time
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TimedSpecials {
     /// All of the events active in the tavern
@@ -202,8 +237,24 @@ pub struct TimedSpecials {
     pub advent_calendar: Option<Reward>,
 }
 
+impl TimedSpecials {
+    /// Updates the advent calendar reward from an `adventscalendar` response.
+    pub(crate) fn update_advent_calendar(
+        &mut self,
+        data: &Vals<'_>,
+    ) -> Result<()> {
+        if data.is_empty() || data.u32_or(0, 0) == 0 {
+            self.advent_calendar = None;
+            data.ignore_all("empty or zero advent calendar reward");
+            return Ok(());
+        }
+        self.advent_calendar = Some(Reward::parse(data)?);
+        Ok(())
+    }
+}
+
 /// Information about the events active in the tavern
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Events {
     /// All of the events active in the tavern
@@ -212,8 +263,36 @@ pub struct Events {
     pub ends: Option<DateTime<Local>>,
 }
 
+impl Events {
+    /// Updates the active events and their end time from an `events` response:
+    /// `theme / flags / theme_end / ? / event_end / ...`.
+    pub(crate) fn update(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) -> Result<()> {
+        if data.len() < 8 {
+            data.ignore_all("too short events response");
+            return Ok(());
+        }
+        data.ignore(0, "event theme / tavern decoration");
+        self.active.clear();
+        let flags = data.u64(1)?;
+        for (idx, event) in Event::iter().enumerate() {
+            if (flags & (1_u64 << idx)) != 0 {
+                self.active.insert(event);
+            }
+        }
+        data.ignore(2, "theme end timestamp");
+        data.ignore(3, "unknown flag");
+        self.ends = data.server_time(4, server_time)?;
+        data.ignore(5..9, "trailing event values");
+        Ok(())
+    }
+}
+
 /// Grants rewards once a day
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[doc(alias = "DailyLoginBonus")]
 pub struct Calendar {
@@ -228,8 +307,20 @@ pub struct Calendar {
     pub next_possible: Option<DateTime<Local>>,
 }
 
+impl Calendar {
+    /// Updates the available calendar rewards from a repeating
+    /// `[reward_type, amount]` list.
+    pub(crate) fn update_rewards(&mut self, data: &Vals<'_>) -> Result<()> {
+        self.rewards.clear();
+        for chunk in data.chunks(2) {
+            self.rewards.push(CalendarReward::parse(&chunk)?);
+        }
+        Ok(())
+    }
+}
+
 /// The tasks you get from the goblin gleeman
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Tasks {
     /// The tasks, that update daily
@@ -239,7 +330,7 @@ pub struct Tasks {
 }
 
 /// Information about the tasks, that reset every day
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DailyTasks {
     /// The tasks you have to do
@@ -248,8 +339,29 @@ pub struct DailyTasks {
     pub rewards: [RewardChest; 3],
 }
 
+impl DailyTasks {
+    /// Updates the daily tasks from a `dailytasklist` response.
+    /// The first value is ignored, followed by repeating 4-value task records:
+    /// `typ / current / target / point_reward`.
+    pub(crate) fn update_tasks(&mut self, data: &Vals<'_>) -> Result<()> {
+        data.ignore(0, "amount of > 1 bell quests");
+        self.tasks.clear();
+        for chunk in data.window(1..data.len()).chunks(4) {
+            self.tasks.push(Task::parse(&chunk)?);
+        }
+        Ok(())
+    }
+
+    /// Updates the daily task reward chests from a `dailytaskrewardpreview`
+    /// response: 3 variable-length chest records.
+    pub(crate) fn update_rewards(&mut self, data: &Vals<'_>) -> Result<()> {
+        self.rewards = parse_chests(data)?;
+        Ok(())
+    }
+}
+
 /// Information about the tasks, that are based on some event theme
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EventTasks {
     /// The "theme" the event task has. This is mainly irrelevant
@@ -262,6 +374,39 @@ pub struct EventTasks {
     pub tasks: Vec<Task>,
     /// The rewards available for completing tasks.
     pub rewards: [RewardChest; 3],
+}
+
+impl EventTasks {
+    /// Updates event tasks from an `eventtasklist` response:
+    /// repeating 4-value task records:
+    /// `typ / current / target / point_reward`.
+    pub(crate) fn update_tasks(&mut self, data: &Vals<'_>) -> Result<()> {
+        self.tasks.clear();
+        for chunk in data.chunks(4) {
+            self.tasks.push(Task::parse(&chunk)?);
+        }
+        Ok(())
+    }
+
+    /// Updates event task reward chests from an `eventtaskrewardpreview`
+    /// response: 3 variable-length chest records.
+    pub(crate) fn update_rewards(&mut self, data: &Vals<'_>) -> Result<()> {
+        self.rewards = parse_chests(data)?;
+        Ok(())
+    }
+
+    /// Updates event task information from a 3-value `eventtaskinfo` response:
+    /// `start / end / theme`.
+    pub(crate) fn update_info(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) -> Result<()> {
+        self.start = data.server_time(0, server_time)?;
+        self.end = data.server_time(1, server_time)?;
+        self.theme = data.enum_or(2, EventTaskTheme::Unknown);
+        Ok(())
+    }
 }
 
 macro_rules! impl_tasks {
@@ -331,7 +476,7 @@ impl_tasks!(DailyTasks);
 impl_tasks!(EventTasks);
 
 impl Task {
-    /// The amount of tasks you have collected
+    /// Whether the task requirements have been satisfied
     #[must_use]
     pub fn is_completed(&self) -> bool {
         self.current >= self.target
@@ -339,10 +484,10 @@ impl Task {
 }
 
 /// Dr. Abawuwu's wheel
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Wheel {
-    /// The amount of lucky coins you have to spin the weel
+    /// The amount of lucky coins you have to spin the wheel
     pub lucky_coins: u32,
     /// The amount of times you have spun the wheel today already (0 -> 20)
     pub spins_today: u8,
@@ -352,36 +497,79 @@ pub struct Wheel {
     pub result: Option<WheelReward>,
 }
 
+impl Wheel {
+    /// Updates the wheel from a 3-value `wheel` response:
+    /// `? / spins_today / next_free_spin`.
+    pub(crate) fn update(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) -> Result<()> {
+        data.ignore(0, "unknown wheel state or version");
+        self.spins_today = data.u8(1)?;
+        self.next_free_spin = data.server_time(2, server_time)?;
+        Ok(())
+    }
+
+    /// Updates the wheel result from a 2-value `wheelresult` response:
+    /// `typ / amount`.
+    pub(crate) fn update_result(
+        &mut self,
+        data: &Vals<'_>,
+        upgraded: bool,
+    ) -> Result<()> {
+        self.result = Some(WheelReward::parse(data, upgraded)?);
+        Ok(())
+    }
+}
+
 /// The theme the event tasks have
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Default, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
-#[allow(missing_docs)]
 pub enum EventTaskTheme {
     // 1 is not set
+    /// Gambler theme.
     Gambler = 2,
+    /// Rank climber theme.
     RankClimber = 3,
+    /// Shopping spree theme.
     ShoppingSpree = 4,
+    /// Time skipper theme.
     TimeSkipper = 5,
+    /// Ruffian reset theme.
     RuffianReset = 6,
+    /// Part time nudist theme.
     PartTimeNudist = 7,
+    /// Scrimper theme.
     Scrimper = 8,
+    /// Scholar theme.
     Scholar = 9,
+    /// Maximizer theme.
     Maximizer = 10,
+    /// Underworld figure theme.
     UnderworldFigure = 11,
+    /// Egg hunt theme.
     EggHunt = 12,
+    /// Summer collectifun theme.
     SummerCollectifun = 13,
+    /// Walpurgis theme.
     Walpurgis = 14,
+    /// Pet trainer theme.
     PetTrainer = 15,
+    /// Fortress master theme.
     FortressMaster = 16,
+    /// Legendary dungeon theme.
     LegendaryDungeon = 17,
+    /// Hellevator theme.
     Hellevator = 18,
+    /// Unknown theme.
     #[default]
     Unknown = 245,
 }
 
 /// The type of task you have to do
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 #[allow(missing_docs)]
@@ -485,6 +673,7 @@ pub enum TaskType {
     UpgradeArenaManagerBuilding(IdleBuildingType),
     EarnMoneyFromExpeditions,
 
+    #[default]
     Unknown,
 }
 
@@ -623,7 +812,7 @@ impl TaskType {
 }
 
 /// Something to do to get a point reward
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Task {
     /// The thing you are tasked with doing or getting for this task
@@ -637,24 +826,26 @@ pub struct Task {
 }
 
 impl Task {
-    pub(crate) fn parse(data: &[i64]) -> Result<Task, SFError> {
-        let raw_typ = data.cget(0, "task typ")?;
+    /// Parses a task from a 4-value slice:
+    /// `typ / current / target / point_reward`.
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Task> {
+        let raw_typ = data.i64(0)?;
         let typ = TaskType::parse(raw_typ);
 
         if typ == TaskType::Unknown {
-            warn!("Unknown task: {data:?} {raw_typ}");
+            warn!("Unknown task: {data} {raw_typ}");
         }
         Ok(Task {
             typ,
-            current: data.csiget(1, "current ti", 0)?,
-            target: data.csiget(2, "target ti", u64::MAX)?,
-            point_reward: data.csiget(3, "reward ti", 0)?,
+            current: data.u64_or(1, 0),
+            target: data.u64_or(2, u64::MAX),
+            point_reward: data.u32_or(3, 0),
         })
     }
 }
 
 /// Something you can unlock for completing tasks
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RewardChest {
     /// Whether or not this chest has been unlocked
@@ -666,7 +857,7 @@ pub struct RewardChest {
 }
 
 /// The reward for opening a chest
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Reward {
     /// The type of the thing you are getting
@@ -675,33 +866,60 @@ pub struct Reward {
     pub amount: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
+/// The type of reward contained in a reward chest or advent calendar door
+#[derive(Debug, Default, Clone, PartialEq, Eq, Copy, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RewardType {
+    /// Points for the Hellevator event.
     HellevatorPoints,
+    /// Key cards for the Hellevator event.
     HellevatorCards,
+    /// Mushrooms currency.
     Mushrooms,
+    /// Silver coins.
     Silver,
+    /// Lucky coins for the wheel.
     LuckyCoins,
+    /// Wood fortress resource.
     Wood,
+    /// Stone fortress resource.
     Stone,
+    /// Arcane splinters blacksmith resource.
     Arcane,
+    /// Metal blacksmith resource.
     Metal,
+    /// Souls underworld resource.
     Souls,
+    /// Pet fruit of a specific habitat.
     Fruit(HabitatType),
+    /// A legendary gem.
     LegendaryGem,
+    /// Gold fidget spinner.
     GoldFidget,
+    /// Silver fidget spinner.
     SilverFidget,
+    /// Bronze fidget spinner.
     BronzeFidget,
+    /// A gem.
     Gem,
+    /// A fruit basket.
     FruitBasket,
+    /// Experience points.
     XP,
+    /// A pet egg.
     Egg,
+    /// Quicksand glasses / hourglasses.
     QuicksandGlass,
+    /// Hall of Fame honor.
     Honor,
+    /// Tavern beer.
     Beer,
+    /// A portrait frame.
     Frame,
+    /// A rented mount.
     Mount(Mount),
+    /// An unknown reward type.
+    #[default]
     Unknown,
 }
 
@@ -749,23 +967,26 @@ impl RewardType {
 }
 
 impl Reward {
-    pub(crate) fn parse(data: &[i64]) -> Result<Reward, SFError> {
+    /// Parses a single reward `[typ, amount]`.
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Reward> {
         Ok(Reward {
-            typ: RewardType::parse(data.cget(0, "reward typ")?),
-            amount: data.csiget(1, "reward amount", 0)?,
+            typ: RewardType::parse(data.i64(0)?),
+            amount: data.u64_or(1, 0),
         })
     }
 }
 
 impl RewardChest {
-    pub(crate) fn parse(data: &[i64]) -> Result<RewardChest, SFError> {
-        let opened = data.cget(0, "rchest opened")? != 0;
-        let required_points = data.ciget(1, "reward chest required points")?;
-        let reward_count: usize = data.ciget(2, "reward chest count")?;
-        let mut rewards = Vec::new();
+    /// Parses a reward chest from a window of values:
+    /// `opened / required_points / reward_count / [typ / amount]...`
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<RewardChest> {
+        let opened = data.i64_or(0, 0) != 0;
+        let required_points = data.u32(1)?;
+        let reward_count: usize = data.usize(2)?;
+        let mut rewards = Vec::with_capacity(reward_count);
         for pos in 0..reward_count {
-            let data = data.skip(3 + pos * 2, "rchest rewards")?;
-            rewards.push(Reward::parse(data)?);
+            let reward_data = data.window(3 + pos * 2..3 + (pos + 1) * 2);
+            rewards.push(Reward::parse(&reward_data)?);
         }
         Ok(RewardChest {
             opened,
@@ -778,44 +999,299 @@ impl RewardChest {
 /// The type of event, that is currently happening on the server
 #[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum Event {
+    /// Exceptional XP event (+100% XP from quests).
     ExceptionalXPEvent = 0,
+    /// Glorious Gold Galore event (extra gold).
     GloriousGoldGalore,
+    /// Tidy Toilet Time event (mana from toilet).
     TidyToiletTime,
+    /// Assembly of Awesome Animals event (pet food/find chance).
     AssemblyOfAwesomeAnimals,
+    /// Fantastic Fortress Festivity event (faster fortress production/search).
     FantasticFortressFestivity,
+    /// Days of Doomed Souls event (extra souls).
     DaysOfDoomedSouls,
+    /// Witches' Dance event (witch cauldron boosts).
     WitchesDance,
+    /// Sands of Time Special event (more hourglasses).
     SandsOfTimeSpecial,
+    /// Forge Frenzy Festival event (blacksmith resources).
     ForgeFrenzyFestival,
+    /// Epic Shopping Spree Extravaganza event (increased epic chance in shops).
     EpicShoppingSpreeExtravaganza,
+    /// Epic Quest Extravaganza event (epics from quests).
     EpicQuestExtravaganza,
+    /// Epic Good Luck Extravaganza event (wheel dice lucky rewards).
     EpicGoodLuckExtravaganza,
+    /// One Beer, Two Beer, Free Beer event (free tavern beer).
     OneBeerTwoBeerFreeBeer,
+    /// Piecework Party event (quick work).
     PieceworkParty,
+    /// Lucky Day event (lucky coins and wheel spins).
     LuckyDay,
+    /// Crazy Mushroom Harvest event (20% more mushrooms).
     CrazyMushroomHarvest,
+    /// Holiday sale event.
     HolidaySale,
+    /// Valentine's blessing event.
     ValentinesBlessing,
+    /// Black Gem Rush event (higher black gem chance).
     BlackGemRush,
+    /// Rumble for Riches event.
     RumbleForRiches,
 }
 
-pub(crate) fn parse_rewards(vals: &[i64]) -> [RewardChest; 3] {
+/// Parses the 3 reward chests from a response of variable length:
+/// each chest starts with `[opened, required_points, reward_count]`,
+/// followed by `reward_count` pairs of `[typ, amount]`.
+pub(crate) fn parse_chests(data: &Vals<'_>) -> Result<[RewardChest; 3]> {
     let mut start = 0;
-    core::array::from_fn(|_| -> Result<RewardChest, SFError> {
-        let vals = vals.skip(start, "multi reward chest")?;
-        let chest = RewardChest::parse(vals)?;
-        let consumed = 3 + chest.rewards.len() * 2;
-        start += consumed;
+    let mut next = || -> Result<RewardChest> {
+        let chest = RewardChest::parse(&data.window(start..data.len()))?;
+        start += 3 + chest.rewards.len() * 2;
         Ok(chest)
-    })
-    .map(|res| match res {
-        Ok(res) => res,
-        Err(err) => {
-            warn!("Bad task rewards: {err}");
-            RewardChest::default()
-        }
-    })
+    };
+    let chests = [next()?, next()?, next()?];
+    Ok(chests)
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(
+        clippy::unwrap_used,
+        clippy::indexing_slicing,
+        clippy::assert_is_empty
+    )]
+    use super::*;
+
+    #[test]
+    fn test_wheel_reward_parse() {
+        crate::parse_test!(WheelReward("0/5", false), {
+            typ: WheelRewardType::Mushrooms,
+            amount: 5,
+        });
+
+        crate::parse_test!(WheelReward("1/10", true), {
+            typ: WheelRewardType::Arcane,
+            amount: 10,
+        });
+
+        crate::parse_test!(WheelReward("1/10", false), {
+            typ: WheelRewardType::Wood,
+            amount: 10,
+        });
+
+        let data = Vals::from("3/1");
+        let reward = WheelReward::parse(&data, true).unwrap();
+        assert_eq!(
+            reward.typ,
+            WheelRewardType::PetItem(PetItem::Egg(HabitatType::Shadow))
+        );
+        assert_eq!(reward.amount, 1);
+        assert!(data.unaccessed_indices().is_empty());
+    }
+
+    #[test]
+    fn test_wheel_update() {
+        let raw = "2/0/1762300801";
+        let mut wheel = Wheel::default();
+        let server_time = ServerTime::default();
+        let data = Vals::from(raw);
+        wheel.update(&data, server_time).unwrap();
+        assert_eq!(wheel.spins_today, 0);
+        assert!(wheel.next_free_spin.is_some());
+        assert!(data.unaccessed_indices().is_empty());
+    }
+
+    #[test]
+    fn test_wheel_update_result() {
+        let mut wheel = Wheel::default();
+        let data = Vals::from("0/5");
+        wheel.update_result(&data, false).unwrap();
+        assert_eq!(
+            wheel.result,
+            Some(WheelReward {
+                typ: WheelRewardType::Mushrooms,
+                amount: 5,
+            })
+        );
+        assert!(data.unaccessed_indices().is_empty());
+    }
+
+    #[test]
+    fn test_calendar_reward_parse() {
+        crate::parse_test!(CalendarReward("12/1"), {
+            typ: CalendarRewardType::Attribute(AttributeType::Dexterity),
+            amount: 1,
+        });
+
+        crate::parse_test!(CalendarReward("21/1"), {
+            typ: CalendarRewardType::LevelUp,
+            amount: 1,
+        });
+
+        let data = Vals::from("16/5");
+        let reward = CalendarReward::parse(&data).unwrap();
+        assert_eq!(reward.typ, CalendarRewardType::Fruit(HabitatType::Shadow));
+        assert_eq!(reward.amount, 5);
+        assert!(data.unaccessed_indices().is_empty());
+    }
+
+    #[test]
+    fn test_calendar_update_rewards() {
+        let raw = "12/1/8/1/3/1/25/1/5/1/2/1/3/2/1/1/24/1/18/5/6/1/22/1/7/1/6/\
+                   2/8/2/22/2/5/2/2/2/3/3/21/1";
+        let mut calendar = Calendar::default();
+        let data = Vals::from(raw);
+        calendar.update_rewards(&data).unwrap();
+        assert_eq!(calendar.rewards.len(), 20);
+        assert_eq!(
+            calendar.rewards[0],
+            CalendarReward {
+                typ: CalendarRewardType::Attribute(AttributeType::Dexterity),
+                amount: 1,
+            }
+        );
+        assert_eq!(
+            calendar.rewards[19],
+            CalendarReward {
+                typ: CalendarRewardType::LevelUp,
+                amount: 1,
+            }
+        );
+        assert!(data.unaccessed_indices().is_empty());
+    }
+
+    #[test]
+    fn test_events_update() {
+        let raw = "52/2097664/1792108740/0/1792108740/0/0/0/0";
+        let mut events = Events::default();
+        let data = Vals::from(raw);
+        events.update(&data, ServerTime::default()).unwrap();
+        assert!(events.ends.is_some());
+        assert!(!events.active.is_empty());
+        assert!(data.unaccessed_indices().is_empty());
+    }
+
+    #[test]
+    fn test_task_parse() {
+        crate::parse_test!(Task("2/0/320/1"), {
+            typ: TaskType::ConsumeThirstForAdventure,
+            current: 0,
+            target: 320,
+            point_reward: 1,
+        });
+    }
+
+    #[test]
+    fn test_daily_tasks_update_tasks() {
+        let raw = "4/2/0/320/1/3/0/10/2/4/0/20/2/5/0/1/1/6/0/1/1/7/0/1/1/8/0/\
+                   5/1/9/0/5/1/10/0/1/1/11/0/10/1/12/0/5/1/13/0/1/1/133/0/5/1/\
+                   18/0/1/2/136/0/3/2/57/0/1/2/14/0/3/4";
+        let mut daily = DailyTasks::default();
+        let data = Vals::from(raw);
+        daily.update_tasks(&data).unwrap();
+        assert_eq!(daily.tasks.len(), 17);
+        assert_eq!(daily.tasks[0].typ, TaskType::ConsumeThirstForAdventure);
+        assert_eq!(daily.tasks[0].target, 320);
+        assert_eq!(daily.tasks[16].typ, TaskType::DefeatGambler);
+        assert_eq!(daily.tasks[16].point_reward, 4);
+        assert!(data.unaccessed_indices().is_empty());
+    }
+
+    #[test]
+    fn test_daily_tasks_update_rewards() {
+        let raw = "0/5/1/24/4291/0/10/1/24/4291/0/13/1/4/271840";
+        let mut daily = DailyTasks::default();
+        let data = Vals::from(raw);
+        daily.update_rewards(&data).unwrap();
+        assert!(!daily.rewards[0].opened);
+        assert_eq!(daily.rewards[0].required_points, 5);
+        assert_eq!(daily.rewards[0].rewards.len(), 1);
+        assert_eq!(
+            daily.rewards[0].rewards[0],
+            Reward {
+                typ: RewardType::XP,
+                amount: 4291,
+            }
+        );
+        assert_eq!(daily.rewards[2].required_points, 13);
+        assert_eq!(
+            daily.rewards[2].rewards[0],
+            Reward {
+                typ: RewardType::Silver,
+                amount: 271_840,
+            }
+        );
+        assert!(data.unaccessed_indices().is_empty());
+    }
+
+    #[test]
+    fn test_event_tasks_update_tasks() {
+        let raw = "77/0/10/1/57/0/10/1/75/0/10/1/76/0/10/1";
+        let mut event_tasks = EventTasks::default();
+        let data = Vals::from(raw);
+        event_tasks.update_tasks(&data).unwrap();
+        assert_eq!(event_tasks.tasks.len(), 4);
+        assert_eq!(
+            event_tasks.tasks[0].typ,
+            TaskType::WinFightsNoEpicsLegendaries
+        );
+        assert_eq!(event_tasks.tasks[3].typ, TaskType::WinFightsNoGear);
+        assert!(data.unaccessed_indices().is_empty());
+    }
+
+    #[test]
+    fn test_event_tasks_update_rewards() {
+        let raw = "0/1/1/26/50/0/2/1/4/543680/0/3/2/4/135920/28/1";
+        let mut event_tasks = EventTasks::default();
+        let data = Vals::from(raw);
+        event_tasks.update_rewards(&data).unwrap();
+        assert_eq!(event_tasks.rewards[0].required_points, 1);
+        assert_eq!(event_tasks.rewards[0].rewards.len(), 1);
+        assert_eq!(
+            event_tasks.rewards[0].rewards[0].typ,
+            RewardType::QuicksandGlass
+        );
+        assert_eq!(event_tasks.rewards[2].required_points, 3);
+        assert_eq!(event_tasks.rewards[2].rewards.len(), 2);
+        assert_eq!(event_tasks.rewards[2].rewards[0].typ, RewardType::Silver);
+        assert_eq!(event_tasks.rewards[2].rewards[1].typ, RewardType::Beer);
+        assert!(data.unaccessed_indices().is_empty());
+    }
+
+    #[test]
+    fn test_event_tasks_update_info() {
+        let raw = "1785110400/1785455999/7";
+        let mut event_tasks = EventTasks::default();
+        let data = Vals::from(raw);
+        event_tasks
+            .update_info(&data, ServerTime::default())
+            .unwrap();
+        assert!(event_tasks.start.is_some());
+        assert!(event_tasks.end.is_some());
+        assert_eq!(event_tasks.theme, EventTaskTheme::PartTimeNudist);
+        assert!(data.unaccessed_indices().is_empty());
+    }
+
+    #[test]
+    fn test_timed_specials_update_advent_calendar() {
+        let mut specials = TimedSpecials::default();
+        let data = Vals::from("0");
+        specials.update_advent_calendar(&data).unwrap();
+        assert_eq!(specials.advent_calendar, None);
+        assert!(data.unaccessed_indices().is_empty());
+
+        let data = Vals::from("3/10");
+        specials.update_advent_calendar(&data).unwrap();
+        assert_eq!(
+            specials.advent_calendar,
+            Some(Reward {
+                typ: RewardType::Mushrooms,
+                amount: 10,
+            })
+        );
+        assert!(data.unaccessed_indices().is_empty());
+    }
 }

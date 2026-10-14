@@ -26,7 +26,6 @@ use strum::{EnumCount, IntoEnumIterator};
 pub use crate::error::{Result, SFError};
 use crate::{
     command::*,
-    error::*,
     gamestate::{
         arena::*, character::*, dungeons::*, event::*, fortress::*, guild::*,
         idle::*, items::*, legendary_dungeon::*, rewards::*, social::*,
@@ -860,10 +859,9 @@ impl GameState {
                 let upgraded = self.character.level >= 95
                     && self.pets.is_some()
                     && self.underworld.is_some();
-                self.specials.wheel.result = Some(WheelReward::parse(
-                    &val.into_list("wheel result")?,
-                    upgraded,
-                )?);
+                self.specials
+                    .wheel
+                    .update_result(&val.values::<2>()?, upgraded)?;
             }
             "dailyreward" => {
                 // Dead since last update
@@ -899,12 +897,7 @@ impl GameState {
             "calenderinfo" => {
                 // This is twice in the original response.
                 // This API sucks LMAO
-                let data: Vec<i64> = val.into_list("calendar")?;
-                self.specials.calendar.rewards.clear();
-                for p in data.chunks_exact(2) {
-                    let reward = CalendarReward::parse(p)?;
-                    self.specials.calendar.rewards.push(reward);
-                }
+                self.specials.calendar.update_rewards(&val.list())?;
             }
             "othergroupattack" => {
                 other_guild.get_or_insert_default().attacks =
@@ -987,9 +980,7 @@ impl GameState {
                 // This should already be in resources
             }
             "dailytaskrewardpreview" => {
-                let vals: Vec<i64> =
-                    val.into_list("event task reward preview")?;
-                self.specials.tasks.daily.rewards = parse_rewards(&vals);
+                self.specials.tasks.daily.update_rewards(&val.list())?;
             }
             "expeditionevent" => {
                 self.tavern
@@ -1038,38 +1029,19 @@ impl GameState {
                     .update_encounters(&val.list());
             }
             "eventtasklist" => {
-                let data: Vec<i64> = val.into_list("etl")?;
-                self.specials.tasks.event.tasks.clear();
-                for c in data.chunks_exact(4) {
-                    let task = Task::parse(c)?;
-                    self.specials.tasks.event.tasks.push(task);
-                }
+                self.specials.tasks.event.update_tasks(&val.list())?;
             }
             "eventtaskrewardpreview" => {
-                let vals: Vec<i64> =
-                    val.into_list("event task reward preview")?;
-
-                self.specials.tasks.event.rewards = parse_rewards(&vals);
+                self.specials.tasks.event.update_rewards(&val.list())?;
             }
             "dailytasklist" => {
-                let data: Vec<i64> = val.into_list("daily tasks list")?;
-                self.specials.tasks.daily.tasks.clear();
-
-                // I think the first value here is the amount of > 1 bell
-                // quests
-                for d in data.skip(1, "daily tasks")?.chunks_exact(4) {
-                    self.specials.tasks.daily.tasks.push(Task::parse(d)?);
-                }
+                self.specials.tasks.daily.update_tasks(&val.list())?;
             }
             "eventtaskinfo" => {
-                let data: Vec<i64> = val.into_list("eti")?;
-                self.specials.tasks.event.theme = data
-                    .cfpget(2, "event task theme", |a| a)?
-                    .unwrap_or(EventTaskTheme::Unknown);
-                self.specials.tasks.event.start =
-                    data.cstget(0, "event t start", server_time)?;
-                self.specials.tasks.event.end =
-                    data.cstget(1, "event t end", server_time)?;
+                self.specials
+                    .tasks
+                    .event
+                    .update_info(&val.values::<3>()?, server_time)?;
             }
             "scrapbook" => {
                 self.character.scrapbook = ScrapBook::parse(&val.list());
@@ -1405,11 +1377,7 @@ impl GameState {
                     .update_fightable_targets(&val.list())?;
             }
             "adventscalendar" => {
-                let vals: Vec<i64> = val.into_list("advent door")?;
-                self.specials.advent_calendar = match vals.first() {
-                    Some(0) | None => None,
-                    _ => Reward::parse(&vals).ok(),
-                };
+                self.specials.update_advent_calendar(&val.list())?;
             }
             "fortresschances" => {
                 // chances for different gems to drop in the gem mine / 100
@@ -1459,12 +1427,9 @@ impl GameState {
                     .update(&val.values::<27>()?, server_time)?;
             }
             "wheel" => {
-                let data: Vec<i64> = val.into_list("wheel")?;
-                // [0] => 2 ??
-                self.specials.wheel.spins_today =
-                    data.csiget(1, "lucky turns", 0)?;
-                self.specials.wheel.next_free_spin =
-                    data.cstget(2, "next lucky turn", server_time)?;
+                self.specials
+                    .wheel
+                    .update(&val.values::<3>()?, server_time)?;
             }
             "dice" => {
                 self.tavern
@@ -1636,25 +1601,7 @@ impl GameState {
                 self.tavern.update_quests(&val.values::<23>()?)?;
             }
             "events" => {
-                let data: Vec<i64> = val.into_list("events")?;
-                if data.len() < 8 {
-                    return Ok(());
-                }
-                // [0] might be the events theme (tavern decoration)?
-                self.specials.events.active.clear();
-                let flags = data.cget(1, "events")?;
-                for (idx, event) in Event::iter().enumerate() {
-                    if (flags & (1 << idx)) > 0 {
-                        self.specials.events.active.insert(event);
-                    }
-                }
-                // NOTE: there are two end times, that seem to be identical.
-                // I will just guess, that [4] is the correct one and [2] is
-                // for the theme
-                self.specials.events.ends =
-                    data.cstget(4, "event end", server_time)?;
-
-                // [3],[5],[6],[7] are just 0, so no idea what they could be
+                self.specials.events.update(&val.list(), server_time)?;
             }
             "tavernspecialend" | "tavernspecialsub" | "tavernspecial" => {
                 // Removed old way to serve events
