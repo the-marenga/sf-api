@@ -778,7 +778,6 @@ pub enum FighterTyp {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
     use chrono::Local;
 
     use super::*;

@@ -509,7 +509,6 @@ pub enum GuildSkill {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
     use super::*;
 
     #[test]

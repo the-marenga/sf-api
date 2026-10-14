@@ -520,7 +520,6 @@ impl UpgradeOffer {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
     use super::*;
 
     fn assert_all_read(data: &Vals<'_>) {

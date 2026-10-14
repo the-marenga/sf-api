@@ -1686,7 +1686,6 @@ pub struct NormalCost {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
     use super::*;
 
     /// Asserts that every value of `data` was read or explicitly ignored.
