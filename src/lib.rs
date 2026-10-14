@@ -8,15 +8,7 @@
     clippy::pedantic,
     missing_docs
 )]
-#![allow(
-    clippy::module_name_repetitions,
-    // clippy::redundant_closure_for_method_calls,
-    // clippy::wildcard_imports,
-    clippy::too_many_lines,
-    // clippy::field_reassign_with_default,
-    // clippy::match_bool,
-    // clippy::chunks_exact_to_as_chunks
-)]
+#![allow(clippy::module_name_repetitions, clippy::too_many_lines)]
 #![deny(unsafe_code)]
 
 pub mod command;
