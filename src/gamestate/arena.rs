@@ -451,6 +451,16 @@ impl Fighter {
             class,
         })
     }
+
+    /// Returns the [`PlayerId`] if this fighter is a player.
+    #[must_use]
+    pub fn player_id(&self) -> Option<PlayerId> {
+        if self.typ == FighterTyp::Player && self.id > 0 {
+            u32::try_from(self.id).ok()
+        } else {
+            None
+        }
+    }
 }
 
 /// The outcome of a single round in a fight

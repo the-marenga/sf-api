@@ -7,6 +7,7 @@ use url::Url;
 
 pub use crate::response::*;
 use crate::{
+    PlayerId,
     command::{Command, HASH_CONST, sha1_hash},
     error::SFError,
     gamestate::{
@@ -31,8 +32,9 @@ pub struct Session {
     /// The id of our session. This will remain the same as long as our login
     /// is valid and nobody else logs in
     session_id: String,
+    /// The player id of the logged in character
+    player_id: PlayerId,
     /// The amount of commands we have sent
-    player_id: u32,
     login_count: u32,
     crypto_id: String,
     // We keep this instead of creating a new one, because as per the reqwest
@@ -395,6 +397,16 @@ impl Session {
                 username: character_name,
                 ..
             } => character_name,
+        }
+    }
+
+    /// The player ID of the character this session is responsible for, if known.
+    #[must_use]
+    pub fn player_id(&self) -> Option<PlayerId> {
+        if self.player_id == 0 {
+            None
+        } else {
+            Some(self.player_id)
         }
     }
 
