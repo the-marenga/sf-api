@@ -2,8 +2,10 @@ use chrono::{DateTime, Local};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use super::{Item, Result, ServerTime};
-use crate::response::Vals;
+use crate::{
+    gamestate::{Item, Result, ServerTime},
+    response::Vals,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
