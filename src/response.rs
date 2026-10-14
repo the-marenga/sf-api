@@ -761,13 +761,12 @@ impl<'a> Vals<'a> {
         pos: usize,
         name: &'static str,
     ) -> Result<T, SFError> {
-        let val = self.values().get(pos).ok_or_else(|| {
-            SFError::TooShortResponse {
+        let val =
+            self.get_str(pos).ok_or_else(|| SFError::TooShortResponse {
                 name,
                 pos,
                 array: format!("{:?}", self.values()),
-            }
-        })?;
+            })?;
         val.trim().parse::<T>().map_err(|_| {
             error!("Could not parse {name} from {val:?}");
             SFError::ParsingError(name, (*val).to_string())

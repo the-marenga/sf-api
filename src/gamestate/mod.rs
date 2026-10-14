@@ -1,16 +1,30 @@
+/// Arena fights against other players.
 pub mod arena;
+/// Character state, attributes, inventory, and equipment.
 pub mod character;
+/// Light and shadow dungeons, dungeon tower, and portal.
 pub mod dungeons;
+/// Special events: legendary dungeon, world boss, and hellevator.
 pub mod event;
+/// Fortress buildings, units, and resources.
 pub mod fortress;
+/// Guild information, chat, raid attacks, and guild portal.
 pub mod guild;
+/// The idle clicker minigame.
 pub mod idle;
+/// Items, equipment slots, shops, and active potions.
 pub mod items;
+/// Pets collection, exploration, and pet battles.
 pub mod pets;
+/// Time-sensitive rewards, advent calendar, and lucky wheel.
 pub mod rewards;
+/// Social interactions: lookup, mail, hall of fames, and other entities.
 pub mod social;
+/// Tavern activities, quests, dice game, toilet, and expeditions.
 pub mod tavern;
+/// The underworld buildings, units, and souls.
 pub mod underworld;
+/// Unlockable features like scrapbook, blacksmith, and witch.
 pub mod unlockables;
 
 use std::{borrow::Borrow, collections::HashMap};
@@ -19,18 +33,46 @@ use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use enum_map::EnumMap;
 pub use event::{hellevator, legendary_dungeon, world_boss};
 use log::{error, warn};
-use num_traits::FromPrimitive;
 use strum::{EnumCount, IntoEnumIterator};
 
 pub use crate::error::{Result, SFError};
 use crate::{
-    command::*,
+    command::{AttributeType, ExpeditionSetting, Flag, Language, ShopType},
     gamestate::{
-        arena::*, character::*, dungeons::*, event::*, fortress::*, guild::*,
-        hellevator::*, idle::*, items::*, legendary_dungeon::*, rewards::*,
-        social::*, tavern::*, underworld::*, unlockables::*,
+        arena::{Arena, Fight, SingleFight},
+        character::{Character, Class, Mount},
+        dungeons::{CompanionClass, DungeonType, Dungeons, LightDungeon},
+        event::{
+            EventStatus, WorldBossBattle, WorldBossCatapult, WorldBossEvent,
+            WorldBossProjectile, hellevator::HellevatorEvent,
+            legendary_dungeon::LegendaryDungeonEvent,
+        },
+        fortress::{
+            Fortress, FortressCost, FortressResourceType, FortressUnitType,
+        },
+        guild::{ChatMessage, Guild},
+        idle::{IdleBuildingType, IdleGame},
+        items::{
+            EQUIPMENT_PARSE_LEN, Equipment, EquipmentSlot, ITEM_PARSE_LEN,
+            Inventory, Item, Potion,
+        },
+        legendary_dungeon::{Stats, TotalStats},
+        rewards::TimedSpecials,
+        social::{
+            HallOfFames, Lookup, Mail, OtherGuild, OtherPlayer, RelationEntry,
+        },
+        tavern::{CurrentAction, ExpeditionBoss, GambleResult, Tavern},
+        underworld::{
+            LureSuggestion, TOWER_BLOCK_LEN, TOWER_RESPONSE_LEN, Underworld,
+            UnderworldBuildingType,
+        },
+        unlockables::{
+            Achievements, Blacksmith, HabitatType, HellevatorDailyReward,
+            HellevatorMonster, HellevatorTreatBonus, Pets, ScrapBook,
+            Unlockable, Witch,
+        },
     },
-    misc::*,
+    misc::{EnumMapGet, from_sf_string},
     response::{Response, ResponseVal, Vals},
 };
 
@@ -228,37 +270,79 @@ impl GameState {
         }
     }
 
-    pub(crate) fn update_resources(
-        &mut self,
-        res: &[i64],
-    ) -> Result<(), SFError> {
-        self.character.mushrooms = res.csiget(1, "mushrooms", 0)?;
-        self.character.silver = res.csiget(2, "player silver", 0)?;
-        self.tavern.quicksand_glasses =
-            res.csiget(4, "quicksand glass count", 0)?;
+    /// Updates the account-wide resources from a `resources` response:
+    /// `[player_id, mushrooms, silver, lucky_coins, quicksand_glasses,
+    /// saved_wood, wood_limit, saved_stone, stone_limit, metal, arcane, souls,
+    /// fruits...]`.
+    pub(crate) fn update_resources(&mut self, data: &Vals<'_>) {
+        data.ignore(0, "character id");
+        self.character.mushrooms = data.u32_or(1, 0);
+        self.character.silver = data.u64_or(2, 0);
+        self.specials.wheel.lucky_coins = data.u32_or(3, 0);
+        self.tavern.quicksand_glasses = data.u32_or(4, 0);
 
-        self.specials.wheel.lucky_coins = res.csiget(3, "lucky coins", 0)?;
-        let bs = self.blacksmith.get_or_insert_default();
-        bs.metal = res.csiget(9, "bs metal", 0)?;
-        bs.arcane = res.csiget(10, "bs arcane", 0)?;
         let fortress = self.fortress.get_or_insert_default();
         fortress
             .resources
             .get_mut(FortressResourceType::Wood)
-            .current = res.csiget(5, "saved wood ", 0)?;
+            .current = data.u64_or(5, 0);
+        data.ignore(6, "fortress max secret wood");
         fortress
             .resources
             .get_mut(FortressResourceType::Stone)
-            .current = res.csiget(7, "saved stone", 0)?;
+            .current = data.u64_or(7, 0);
+        data.ignore(8, "fortress max secret stone");
+
+        let bs = self.blacksmith.get_or_insert_default();
+        bs.metal = data.u64_or(9, 0);
+        bs.arcane = data.u64_or(10, 0);
+
+        self.underworld.get_or_insert_default().souls_current =
+            data.u64_or(11, 0);
 
         let pets = self.pets.get_or_insert_default();
         for (e_pos, element) in HabitatType::iter().enumerate() {
-            pets.habitats.get_mut(element).fruits =
-                res.csiget(12 + e_pos, "fruits", 0)?;
+            pets.habitats.get_mut(element).fruits = data.u16_or(12 + e_pos, 0);
         }
 
-        self.underworld.get_or_insert_default().souls_current =
-            res.csiget(11, "uu souls saved", 0)?;
+        if data.len() > 17 {
+            data.ignore(17..data.len(), "unmodelled trailing resource fields");
+        }
+    }
+
+    /// Updates language and questing preference settings from a `usersettings`
+    /// response.
+    pub(crate) fn update_user_settings(&mut self, data: &Vals<'_>) {
+        if let Some(lang_str) = data.get_str(0) {
+            self.language = Language::parse(lang_str);
+        }
+        data.ignore(1..4, "unmodelled user settings flags");
+        self.tavern.questing_preference = match data.get_str(4) {
+            Some("a") => ExpeditionSetting::PreferExpeditions,
+            Some("0" | "b") | None => ExpeditionSetting::PreferQuests,
+            Some(x) => {
+                error!("Weird expedition settings: {x}");
+                ExpeditionSetting::PreferQuests
+            }
+        };
+        if data.len() > 5 {
+            data.ignore(5..data.len(), "unmodelled trailing user settings");
+        }
+    }
+
+    /// Updates the character, guild demon portal damage bonus, and dungeon
+    /// portal player HP bonus from an `ownplayersavecharacter` response of 70
+    /// values.
+    pub(crate) fn update_character_save(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) -> Result<()> {
+        self.character.update(data, server_time)?;
+        self.guild.get_or_insert_default().portal.damage_bonus =
+            data.u8_or(26, 0);
+        self.dungeons.portal.get_or_insert_default().player_hp_bonus =
+            data.u16_or(28, 0);
         Ok(())
     }
 
@@ -664,20 +748,16 @@ impl GameState {
                         .get_or_insert_default()
                         .soldier_advice = advice;
                 }
-                // Replaced
             }
             "owngroupdescription" => self
                 .guild
                 .get_or_insert_default()
                 .update_description_embed(val.as_str()),
             "idle" => {
-                self.idle_game = IdleGame::parse_idle_game(
-                    &val.into_list("idle game")?,
-                    server_time,
-                );
+                self.idle_game = IdleGame::parse(&val.list(), server_time);
             }
             "resources" => {
-                self.update_resources(&val.into_list("resources")?)?;
+                self.update_resources(&val.list());
             }
             "chattime" => {
                 // let _chat_time = server_time
@@ -743,19 +823,7 @@ impl GameState {
                 }
             }
             "usersettings" => {
-                // Contains language and flag settings
-                let vals = &val.as_str().split('/').collect::<Vec<_>>();
-                self.language = Language::parse(vals.cget(0, "client lang")?);
-
-                let v = match vals.cget(4, "questing setting")? {
-                    "a" => ExpeditionSetting::PreferExpeditions,
-                    "0" | "b" => ExpeditionSetting::PreferQuests,
-                    x => {
-                        error!("Weird expedition settings: {x}");
-                        ExpeditionSetting::PreferQuests
-                    }
-                };
-                self.tavern.questing_preference = v;
+                self.update_user_settings(&val.list());
             }
             "mailinvoice" => {
                 // Incomplete email address
@@ -977,12 +1045,10 @@ impl GameState {
                 }
             }
             "otherplayerfriendstatus" => {
-                other_player.get_or_insert_default().relationship =
-                    warning_parse(
-                        val.into::<i32>("other friend")?,
-                        "other friend",
-                        FromPrimitive::from_i32,
-                    )
+                other_player.get_or_insert_default().relationship = val
+                    .into::<i32>("other friend")
+                    .ok()
+                    .and_then(num_traits::FromPrimitive::from_i32)
                     .unwrap_or_default();
             }
             "otherplayerpetbonus" => {
@@ -1318,8 +1384,6 @@ impl GameState {
             }
             "arcanetoilet" => {
                 let data = val.values::<4>()?;
-
-                // Toilet remains none as long as its level is 0
                 let toilet_lvl = data.u32_or(0, 0);
                 if toilet_lvl > 0 {
                     self.tavern.toilet.get_or_insert_default().update(&data)?;
@@ -1338,12 +1402,7 @@ impl GameState {
                 )?;
             }
             "ownplayersavecharacter" => {
-                let data = val.values::<70>()?;
-                self.character.update(&data, server_time)?;
-                self.guild.get_or_insert_default().portal.damage_bonus =
-                    data.u8_or(26, 0);
-                self.dungeons.portal.get_or_insert_default().player_hp_bonus =
-                    data.u16_or(28, 0);
+                self.update_character_save(&val.values::<70>()?, server_time)?;
             }
             "adventure" => {
                 self.tavern.update_quests(&val.values::<23>()?)?;
@@ -1511,6 +1570,7 @@ impl ServerTime {
 
     /// Converts the raw timestamp from the server to the local time.
     #[must_use]
+    #[allow(unused)]
     pub(crate) fn convert_to_local(
         self,
         timestamp: i64,
@@ -1540,6 +1600,7 @@ impl ServerTime {
         Local::now().naive_local() + Duration::seconds(self.0)
     }
 
+    /// Returns the duration remaining until the next midnight on the server.
     #[must_use]
     pub fn next_midnight(&self) -> std::time::Duration {
         let current = self.current();
@@ -1580,6 +1641,10 @@ pub struct NormalCost {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        command::AttributeType,
+        gamestate::underworld::{UnderworldResourceType, UnderworldUnitType},
+    };
 
     /// The whole `owntower` response: companions, underworld and ignored.
     #[test]
@@ -1684,5 +1749,90 @@ mod tests {
                 .healing_start
                 .is_some()
         );
+    }
+
+    #[test]
+    fn test_update_resources() {
+        let raw = "12345/150/987654/12/35/500000/1000000/250000/500000/15000/\
+                   3200/88000/10/20/30/40/50";
+        let data = Vals::from(raw);
+        assert_eq!(data.len(), 17);
+
+        let mut state = GameState::default();
+        state.update_resources(&data);
+        data.assert_all_read();
+
+        assert_eq!(state.character.mushrooms, 150);
+        assert_eq!(state.character.silver, 987_654);
+        assert_eq!(state.specials.wheel.lucky_coins, 12);
+        assert_eq!(state.tavern.quicksand_glasses, 35);
+
+        let ft = state.fortress.as_ref().unwrap();
+        assert_eq!(ft.resources[FortressResourceType::Wood].current, 500_000);
+        assert_eq!(ft.resources[FortressResourceType::Stone].current, 250_000);
+
+        let bs = state.blacksmith.as_ref().unwrap();
+        assert_eq!(bs.metal, 15_000);
+        assert_eq!(bs.arcane, 3200);
+
+        let uw = state.underworld.as_ref().unwrap();
+        assert_eq!(uw.souls_current, 88_000);
+
+        let pets = state.pets.as_ref().unwrap();
+        assert_eq!(pets.habitats[HabitatType::Shadow].fruits, 10);
+        assert_eq!(pets.habitats[HabitatType::Light].fruits, 20);
+        assert_eq!(pets.habitats[HabitatType::Earth].fruits, 30);
+        assert_eq!(pets.habitats[HabitatType::Fire].fruits, 40);
+        assert_eq!(pets.habitats[HabitatType::Water].fruits, 50);
+    }
+
+    #[test]
+    fn test_update_user_settings() {
+        let raw = "de/0/1/0/a/extra";
+        let data = Vals::from(raw);
+        let mut state = GameState::default();
+        state.update_user_settings(&data);
+        data.assert_all_read();
+
+        assert_eq!(state.language, Some(Language::German));
+        assert_eq!(
+            state.tavern.questing_preference,
+            ExpeditionSetting::PreferExpeditions
+        );
+
+        let raw2 = "en/0/0/0/b";
+        let data2 = Vals::from(raw2);
+        state.update_user_settings(&data2);
+        data2.assert_all_read();
+
+        assert_eq!(state.language, Some(Language::English));
+        assert_eq!(
+            state.tavern.questing_preference,
+            ExpeditionSetting::PreferQuests
+        );
+    }
+
+    #[test]
+    fn test_update_character_save() {
+        let mut parts = vec!["0".to_string(); 70];
+        parts[1] = "12345".to_string(); // player_id
+        parts[3] = "100".to_string(); // level
+        parts[18] = "1".to_string(); // race (Human = 1)
+        parts[20] = "1".to_string(); // class (Warrior = 1)
+        parts[26] = "15".to_string(); // portal dmg bonus
+        parts[28] = "25".to_string(); // portal hp bonus
+
+        let raw = parts.join("/");
+        let data = Vals::from(raw.as_str());
+        let mut state = GameState::default();
+        state
+            .update_character_save(&data, ServerTime::default())
+            .unwrap();
+        data.assert_all_read();
+
+        assert_eq!(state.character.player_id, 12345);
+        assert_eq!(state.character.level, 100);
+        assert_eq!(state.guild.unwrap().portal.damage_bonus, 15);
+        assert_eq!(state.dungeons.portal.unwrap().player_hp_bonus, 25);
     }
 }
