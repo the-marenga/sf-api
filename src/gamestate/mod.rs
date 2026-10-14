@@ -362,18 +362,6 @@ impl GameState {
         }
     }
 
-    pub(crate) fn update_gttime(
-        &mut self,
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<(), SFError> {
-        let d = &mut self.hellevator;
-        d.start = data.cstget(0, "event start", server_time)?;
-        d.end = data.cstget(1, "event end", server_time)?;
-        d.collect_time_end = data.cstget(3, "claim time end", server_time)?;
-        Ok(())
-    }
-
     pub(crate) fn update_resources(
         &mut self,
         res: &[i64],
@@ -703,7 +691,7 @@ impl GameState {
                 // We just look at the db
             }
             "gttime" => {
-                self.update_gttime(&val.into_list("gttime")?, server_time)?;
+                self.hellevator.update_time(&val.list(), server_time);
             }
             "gtsave" => {
                 self.hellevator
@@ -1288,69 +1276,20 @@ impl GameState {
                 // 407500/1/430000/2/452500/0/475000/1
             }
             "gtraidparticipants" => {
-                let all: Vec<_> = val.as_str().split('/').collect();
-                let hellevator = self.hellevator.active.get_or_insert_default();
-
-                for floor in &mut hellevator.guild_raid_floors {
-                    floor.today_assigned.clear();
-                }
-
-                #[allow(clippy::indexing_slicing)]
-                for part in all.chunks_exact(2) {
-                    // The name of the guild member
-                    let name = part[0];
-                    // should be the dungeon they signed up for today
-                    let val: usize = part
-                        .cget(1, "hell raid part")
-                        .ok()
-                        .and_then(|a| a.parse().ok())
-                        .unwrap_or(0);
-                    if val > 0 {
-                        if val > hellevator.guild_raid_floors.len() {
-                            hellevator
-                                .guild_raid_floors
-                                .resize_with(val, Default::default);
-                        }
-                        if let Some(floor) =
-                            hellevator.guild_raid_floors.get_mut(val - 1)
-                        {
-                            floor.today_assigned.push(name.to_string());
-                        }
-                    }
-                }
+                self.hellevator
+                    .active
+                    .get_or_insert_default()
+                    .update_raid_participants(&val.list(), |f| {
+                        &mut f.today_assigned
+                    });
             }
             "gtraidparticipantsyesterday" => {
-                let all: Vec<_> = val.as_str().split('/').collect();
-
-                let hellevator = self.hellevator.active.get_or_insert_default();
-
-                for floor in &mut hellevator.guild_raid_floors {
-                    floor.yesterday_assigned.clear();
-                }
-
-                #[allow(clippy::indexing_slicing)]
-                for part in all.chunks_exact(2) {
-                    // The name of the guild member
-                    let name = part[0];
-                    // should be the dungeon they signed up for today
-                    let val: usize = part
-                        .cget(1, "hell raid part yd")
-                        .ok()
-                        .and_then(|a| a.parse().ok())
-                        .unwrap_or(0);
-                    if val > 0 {
-                        if val > hellevator.guild_raid_floors.len() {
-                            hellevator
-                                .guild_raid_floors
-                                .resize_with(val, Default::default);
-                        }
-                        if let Some(floor) =
-                            hellevator.guild_raid_floors.get_mut(val - 1)
-                        {
-                            floor.yesterday_assigned.push(name.to_string());
-                        }
-                    }
-                }
+                self.hellevator
+                    .active
+                    .get_or_insert_default()
+                    .update_raid_participants(&val.list(), |f| {
+                        &mut f.yesterday_assigned
+                    });
             }
             "gtrank" => {
                 self.hellevator.active.get_or_insert_default().guild_rank =
@@ -1361,70 +1300,22 @@ impl GameState {
                     val.into("gt rank max").ok();
             }
             "gtbracketlist" => {
-                self.hellevator.active.get_or_insert_default().brackets =
-                    val.into_list("gtbracketlist").unwrap_or_default();
+                self.hellevator
+                    .active
+                    .get_or_insert_default()
+                    .update_brackets(&val.list());
             }
             "gtraidfights" => {
-                let data: Vec<i64> =
-                    val.into_list("gt raids").unwrap_or_default();
-
-                let hellevator = self.hellevator.active.get_or_insert_default();
-
-                hellevator.guild_raid_signup_start = data
-                    .cstget(0, "h raid signup start", server_time)?
-                    .unwrap_or_default();
-
-                hellevator.guild_raid_start = data
-                    .cstget(1, "h raid next attack", server_time)?
-                    .unwrap_or_default();
-
-                let start = data.skip(2, "hellevator_fights")?;
-
-                let floor_count = start.len() / 5;
-
-                if floor_count > hellevator.guild_raid_floors.len() {
-                    hellevator
-                        .guild_raid_floors
-                        .resize_with(floor_count, Default::default);
-                }
-                #[allow(clippy::indexing_slicing)]
-                for (data, floor) in
-                    start.chunks_exact(5).zip(&mut hellevator.guild_raid_floors)
-                {
-                    // FIXME: What are these?
-                    floor.today = data[1];
-                    floor.yesterday = data[2];
-                    floor.point_reward =
-                        data.csiget(3, "floor t-reward", 0).unwrap_or(0);
-                    floor.silver_reward =
-                        data.csiget(4, "floor c-reward", 0).unwrap_or(0);
-                }
+                self.hellevator
+                    .active
+                    .get_or_insert_default()
+                    .update_raid_fights(&val.list(), server_time);
             }
             "gtmonsterreward" => {
-                let data: Vec<i64> =
-                    val.into_list("gt m reward").unwrap_or_default();
-
-                let hellevator = self.hellevator.active.get_or_insert_default();
-                hellevator.monster_rewards.clear();
-
-                for chunk in data.chunks_exact(3) {
-                    let raw_typ = chunk.cget(0, "gt monster reward typ")?;
-                    if raw_typ <= 0 {
-                        continue;
-                    }
-                    let one = chunk
-                        .csiget(1, "gt monster reward typ", 0)
-                        .unwrap_or(0);
-                    if one != 0 {
-                        warn!("hellevator monster t: {one}");
-                    }
-                    let typ = HellevatorMonsterRewardTyp::parse(raw_typ);
-                    let amount: u64 =
-                        chunk.csiget(2, "gt monster reward amount", 0)?;
-                    hellevator
-                        .monster_rewards
-                        .push(HellevatorMonsterReward { typ, amount });
-                }
+                self.hellevator
+                    .active
+                    .get_or_insert_default()
+                    .update_monster_rewards(&val.list());
             }
             "gtdailyreward" => {
                 self.hellevator.active.get_or_insert_default().rewards_today =

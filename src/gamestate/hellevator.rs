@@ -1,4 +1,5 @@
 use chrono::{DateTime, Local};
+use log::warn;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
@@ -63,6 +64,22 @@ impl HellevatorEvent {
             }
             Some(h) if h.current_floor == 0 => HellevatorStatus::NotEntered,
             Some(h) => HellevatorStatus::Active(h),
+        }
+    }
+
+    /// Updates the event timing from a `gttime` response:
+    /// `[event_start, event_end, unknown, claim_time_end, ...]`.
+    pub(crate) fn update_time(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        self.start = data.server_time_opt(0, server_time);
+        self.end = data.server_time_opt(1, server_time);
+        data.ignore(2, "unknown gttime field");
+        self.collect_time_end = data.server_time_opt(3, server_time);
+        if data.len() > 4 {
+            data.ignore(4..data.len(), "unknown gttime tail");
         }
     }
 }
@@ -465,6 +482,89 @@ impl Hellevator {
         data.ignore(31, "unknown hellevator field");
         Ok(())
     }
+
+    /// Updates guild members assigned to raid floors from a
+    /// `gtraidparticipants` or `gtraidparticipantsyesterday` response:
+    /// pairs of `[player_name, floor_number]`.
+    pub(crate) fn update_raid_participants(
+        &mut self,
+        data: &Vals<'_>,
+        target: fn(&mut HellevatorRaidFloor) -> &mut Vec<String>,
+    ) {
+        for floor in &mut self.guild_raid_floors {
+            target(floor).clear();
+        }
+
+        for chunk in data.chunks(2) {
+            let Some(name) = chunk.get_str(0) else {
+                continue;
+            };
+            let val = chunk.usize_or(1, 0);
+            if val > 0 {
+                if val > self.guild_raid_floors.len() {
+                    self.guild_raid_floors.resize_with(val, Default::default);
+                }
+                if let Some(floor) = self.guild_raid_floors.get_mut(val - 1) {
+                    target(floor).push(name.to_string());
+                }
+            }
+        }
+    }
+
+    /// Updates guild raid fights from a `gtraidfights` response:
+    /// `[signup_start, attack_start, (unused, today, yesterday, points,
+    /// silver)*]`.
+    pub(crate) fn update_raid_fights(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        self.guild_raid_signup_start =
+            data.server_time_opt(0, server_time).unwrap_or_default();
+        self.guild_raid_start =
+            data.server_time_opt(1, server_time).unwrap_or_default();
+
+        let tail = data.window(2..data.len());
+        let floor_count = tail.len() / 5;
+        if floor_count > self.guild_raid_floors.len() {
+            self.guild_raid_floors
+                .resize_with(floor_count, Default::default);
+        }
+
+        for (chunk, floor) in tail.chunks(5).zip(&mut self.guild_raid_floors) {
+            chunk.ignore(0, "unknown floor field");
+            floor.today = chunk.i64_or(1, 0);
+            floor.yesterday = chunk.i64_or(2, 0);
+            floor.point_reward = chunk.u32_or(3, 0);
+            floor.silver_reward = chunk.u64_or(4, 0);
+        }
+    }
+
+    /// Updates defeated monster rewards from a `gtmonsterreward` response:
+    /// repeating 3-value chunks `[typ, flag, amount]`.
+    pub(crate) fn update_monster_rewards(&mut self, data: &Vals<'_>) {
+        self.monster_rewards.clear();
+        for chunk in data.chunks(3) {
+            let raw_typ = chunk.i64_or(0, 0);
+            if raw_typ <= 0 {
+                chunk.ignore(1..3, "unused empty reward");
+                continue;
+            }
+            let one = chunk.i64_or(1, 0);
+            if one != 0 {
+                warn!("hellevator monster t: {one}");
+            }
+            let typ = HellevatorMonsterRewardTyp::parse(raw_typ);
+            let amount = chunk.u64_or(2, 0);
+            self.monster_rewards
+                .push(HellevatorMonsterReward { typ, amount });
+        }
+    }
+
+    /// Updates the brackets list from a `gtbracketlist` response.
+    pub(crate) fn update_brackets(&mut self, data: &Vals<'_>) {
+        self.brackets = data.iter().filter_map(|s| s.parse().ok()).collect();
+    }
 }
 
 #[cfg(test)]
@@ -557,5 +657,89 @@ mod tests {
             HellevatorMonsterRewardTyp::parse(999),
             HellevatorMonsterRewardTyp::Unknown
         );
+    }
+
+    #[test]
+    fn test_hellevator_event_update_time() {
+        let raw = "1600000000/1700000000/0/1800000000";
+        let data = Vals::from(raw);
+        let mut event = HellevatorEvent::default();
+        event.update_time(&data, ServerTime::default());
+        assert!(event.start.is_some());
+        assert!(event.end.is_some());
+        assert!(event.collect_time_end.is_some());
+        assert_all_read(&data);
+    }
+
+    #[test]
+    fn test_hellevator_update_raid_participants() {
+        let raw = "Player1/1/Player2/2";
+        let data = Vals::from(raw);
+        let mut hellevator = Hellevator::default();
+        hellevator.update_raid_participants(&data, |f| &mut f.today_assigned);
+        assert_eq!(hellevator.guild_raid_floors.len(), 2);
+        assert_eq!(
+            hellevator.guild_raid_floors[0].today_assigned,
+            vec!["Player1"]
+        );
+        assert_eq!(
+            hellevator.guild_raid_floors[1].today_assigned,
+            vec!["Player2"]
+        );
+        assert_all_read(&data);
+
+        let raw_yd = "Player3/1";
+        let data_yd = Vals::from(raw_yd);
+        hellevator
+            .update_raid_participants(&data_yd, |f| &mut f.yesterday_assigned);
+        assert_eq!(
+            hellevator.guild_raid_floors[0].yesterday_assigned,
+            vec!["Player3"]
+        );
+        assert_all_read(&data_yd);
+    }
+
+    #[test]
+    fn test_hellevator_update_raid_fights() {
+        let raw = "1600000000/1700000000/0/10/5/100/50000";
+        let data = Vals::from(raw);
+        let mut hellevator = Hellevator::default();
+        hellevator.update_raid_fights(&data, ServerTime::default());
+        assert_eq!(hellevator.guild_raid_floors.len(), 1);
+        assert_eq!(hellevator.guild_raid_floors[0].today, 10);
+        assert_eq!(hellevator.guild_raid_floors[0].yesterday, 5);
+        assert_eq!(hellevator.guild_raid_floors[0].point_reward, 100);
+        assert_eq!(hellevator.guild_raid_floors[0].silver_reward, 50000);
+        assert_all_read(&data);
+    }
+
+    #[test]
+    fn test_hellevator_update_monster_rewards() {
+        let raw = "1/0/500/10/0/200/0/0/0";
+        let data = Vals::from(raw);
+        let mut hellevator = Hellevator::default();
+        hellevator.update_monster_rewards(&data);
+        assert_eq!(hellevator.monster_rewards.len(), 2);
+        assert_eq!(
+            hellevator.monster_rewards[0].typ,
+            HellevatorMonsterRewardTyp::Points
+        );
+        assert_eq!(hellevator.monster_rewards[0].amount, 500);
+        assert_eq!(
+            hellevator.monster_rewards[1].typ,
+            HellevatorMonsterRewardTyp::Souls
+        );
+        assert_eq!(hellevator.monster_rewards[1].amount, 200);
+        assert_all_read(&data);
+    }
+
+    #[test]
+    fn test_hellevator_update_brackets() {
+        let raw = "1/4/10";
+        let data = Vals::from(raw);
+        let mut hellevator = Hellevator::default();
+        hellevator.update_brackets(&data);
+        assert_eq!(hellevator.brackets, vec![1, 4, 10]);
+        assert_all_read(&data);
     }
 }
