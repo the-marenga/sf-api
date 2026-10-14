@@ -680,6 +680,10 @@ impl<'a> Vals<'a> {
     }
 
     /// Asserts that all values in this response were read.
+    ///
+    /// # Panics
+    ///
+    /// Panics if any value in `self` was not accessed.
     #[cfg(test)]
     #[track_caller]
     pub fn assert_all_read(&self) {
