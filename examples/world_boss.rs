@@ -116,20 +116,22 @@ pub async fn main() -> Result<(), SFError> {
                     RewardType::LuckyCoins => {
                         gs.specials.wheel.lucky_coins as u64
                     }
-                    RewardType::Wood => gs
-                        .fortress
-                        .as_ref()
-                        .map(|a| a.resources[FortressResourceType::Wood].current)
-                        .unwrap_or(0)
-                        as u64,
-                    RewardType::Stone => gs
-                        .fortress
-                        .as_ref()
-                        .map(|a| {
-                            a.resources[FortressResourceType::Stone].current
-                        })
-                        .unwrap_or(0)
-                        as u64,
+                    RewardType::Wood => {
+                        gs.fortress
+                            .as_ref()
+                            .map(|a| {
+                                a.resources[FortressResourceType::Wood].current
+                            })
+                            .unwrap_or(0) as u64
+                    }
+                    RewardType::Stone => {
+                        gs.fortress
+                            .as_ref()
+                            .map(|a| {
+                                a.resources[FortressResourceType::Stone].current
+                            })
+                            .unwrap_or(0) as u64
+                    }
                     RewardType::Souls => {
                         gs.underworld
                             .as_ref()

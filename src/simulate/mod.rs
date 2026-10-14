@@ -46,7 +46,8 @@ pub struct Weapon {
     pub damage: DamageRange,
 }
 
-/// The result of a fight simulation containing the win ratio and number of won fights.
+/// The result of a fight simulation containing the win ratio and number of won
+/// fights.
 #[derive(Debug, Clone, Default)]
 pub struct FightSimulationResult {
     /// The amount percentage of fights, that were won (0.0-1.0)
@@ -298,7 +299,8 @@ enum FightOutcome {
     SimulationBroken,
 }
 
-/// The elemental types available in the game, affecting rune damage and resistances.
+/// The elemental types available in the game, affecting rune damage and
+/// resistances.
 #[derive(Debug, Clone, Copy, Enum, EnumIter, Hash, PartialEq, Eq)]
 pub enum Element {
     /// Fire element.

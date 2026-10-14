@@ -627,16 +627,14 @@ impl GameState {
                 // Handled in session
             }
             "stoneperhournextlevel" => {
-                self.fortress
-                    .get_or_insert_default()
-                    .resources[FortressResourceType::Stone]
+                self.fortress.get_or_insert_default().resources
+                    [FortressResourceType::Stone]
                     .production
                     .per_hour_next_lvl = val.into("stone next lvl")?;
             }
             "woodperhournextlevel" => {
-                self.fortress
-                    .get_or_insert_default()
-                    .resources[FortressResourceType::Wood]
+                self.fortress.get_or_insert_default().resources
+                    [FortressResourceType::Wood]
                     .production
                     .per_hour_next_lvl = val.into("wood next lvl")?;
             }

@@ -1058,8 +1058,8 @@ pub fn from_sf_string(val: &str) -> String {
     new
 }
 
-/// Makes a user controlled string, like a new character description, safe to use
-/// in a request.
+/// Makes a user controlled string, like a new character description, safe to
+/// use in a request.
 #[must_use]
 pub fn to_sf_string(val: &str) -> String {
     let mut new = String::with_capacity(val.len());

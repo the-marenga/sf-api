@@ -403,7 +403,8 @@ impl Session {
         }
     }
 
-    /// The player ID of the character this session is responsible for, if known.
+    /// The player ID of the character this session is responsible for, if
+    /// known.
     #[must_use]
     pub fn player_id(&self) -> Option<PlayerId> {
         if self.player_id == 0 {
@@ -581,7 +582,8 @@ impl Default for ConnectionOptions {
     }
 }
 
-/// A high-level session wrapper that maintains and updates the local [`GameState`].
+/// A high-level session wrapper that maintains and updates the local
+/// [`GameState`].
 #[derive(Debug)]
 pub struct SimpleSession {
     session: Session,
