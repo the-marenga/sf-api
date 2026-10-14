@@ -8,7 +8,6 @@ use sf_api::{
     gamestate::{
         event::*, fortress::FortressResourceType, rewards::RewardType,
     },
-    misc::EnumMapGet,
     session::SimpleSession,
 };
 use tokio::time::sleep;
@@ -120,16 +119,14 @@ pub async fn main() -> Result<(), SFError> {
                     RewardType::Wood => gs
                         .fortress
                         .as_ref()
-                        .map(|a| {
-                            a.resources.get(FortressResourceType::Wood).current
-                        })
+                        .map(|a| a.resources[FortressResourceType::Wood].current)
                         .unwrap_or(0)
                         as u64,
                     RewardType::Stone => gs
                         .fortress
                         .as_ref()
                         .map(|a| {
-                            a.resources.get(FortressResourceType::Stone).current
+                            a.resources[FortressResourceType::Stone].current
                         })
                         .unwrap_or(0)
                         as u64,

@@ -9,7 +9,6 @@ use sf_api::{
         tavern::{AvailableTasks, CurrentAction},
         unlockables::HellevatorStatus,
     },
-    misc::EnumMapGet,
     session::SimpleSession,
 };
 use sha1::digest::Update;

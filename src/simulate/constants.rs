@@ -35,7 +35,7 @@ mod tests {
     fn test_dungeon_access() {
         let monsters =
             get_dungeon_enemies(LightDungeon::DesecratedCatacombs.into());
-        assert!(!monsters.is_empty());
+        assert_ne!(monsters, []);
     }
 
     #[test]

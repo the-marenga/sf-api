@@ -14,8 +14,7 @@ use crate::{
         character::{Class, Gender, Race},
     },
     misc::{
-        DEFAULT_CRYPTO_ID, DEFAULT_CRYPTO_KEY, DEFAULT_SESSION_ID, HASH_CONST,
-        sha1_hash,
+        DEFAULT_CRYPTO_ID, DEFAULT_SESSION_ID, HASH_CONST, sha1_hash,
     },
 };
 
@@ -34,7 +33,6 @@ pub struct Session {
     player_id: u32,
     login_count: u32,
     crypto_id: String,
-    crypto_key: String,
     // We keep this instead of creating a new one, because as per the reqwest
     // docs: "The Client holds a connection pool internally, so it is advised
     // that you create one and reuse it."
@@ -108,7 +106,6 @@ impl Session {
             client,
             session_id: DEFAULT_SESSION_ID.to_string(),
             crypto_id: DEFAULT_CRYPTO_ID.to_string(),
-            crypto_key: DEFAULT_CRYPTO_KEY.to_string(),
             login_count: 1,
             options,
             player_id: 0,
@@ -119,7 +116,6 @@ impl Session {
     /// back to the "not logged in" state. This is basically the equivalent of
     /// clearing browserdata, to logout
     fn logout(&mut self) {
-        self.crypto_key = DEFAULT_CRYPTO_KEY.to_string();
         self.crypto_id = DEFAULT_CRYPTO_ID.to_string();
         self.login_count = 1;
         self.session_id = DEFAULT_SESSION_ID.to_string();

@@ -1,24 +1,33 @@
-use std::hash::Hash;
+use std::{hash::Hash, sync::Arc};
 
 use enum_map::EnumMap;
 use fastrand::Rng;
 
 use crate::{
     command::AttributeType,
-    gamestate::{arena::Minion, character::Class, items::*},
-    misc::EnumMapGet,
-    simulate::{damage::*, upgradeable::UpgradeableFighter, *},
+    gamestate::{
+        arena::Minion,
+        character::Class,
+        items::{Enchantment, EquipmentSlot, ItemType, RuneType},
+    },
+    simulate::{
+        Element, Monster, Weapon,
+        damage::{
+            DamageRange, calculate_damage, calculate_damage_multiplier,
+            calculate_damage_reduction, calculate_fire_ball_damage,
+            calculate_hit_damage, calculate_swoop_damage,
+        },
+        upgradeable::UpgradeableFighter,
+    },
 };
 
 /// Contains all information, that is necessary for battles to be simulated.
 /// It is derived by converting any of the things that can fight (player,
-/// companion, etc.) to a fighter through the From<T> traits.
-/// Contains all information, that is necessary for battles to be simulated.
-/// It is derived by converting any of the things that can fight (player,
-/// companion, etc.) to a fighter through the From<T> traits.
+/// companion, etc.) to a fighter through the `From<T>` traits.
 /// Further information is available on the `simulate_battle` function.
 #[derive(Debug, Clone)]
 pub struct Fighter {
+    /// A unique identifier for the fighter during simulation.
     pub ident: FighterIdent,
     /// The name, or alternative identification of this fighter. Only used for
     /// display purposes, does not affect combat.
@@ -140,7 +149,7 @@ impl From<&UpgradeableFighter> for Fighter {
 
             if let Some(rune) = item.rune {
                 let mut apply = |element| {
-                    *resistances.get_mut(element) += i32::from(rune.value);
+                    resistances[element] += i32::from(rune.value);
                 };
                 match rune.typ {
                     RT::FireResistance => apply(Element::Fire),
