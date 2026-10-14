@@ -738,7 +738,9 @@ mod tests {
                    100000000/49500000/16200000";
         let mut fortress = Fortress::default();
         let vals = Vals::from(raw);
-        fortress.update_resources(&vals, ServerTime::default()).unwrap();
+        fortress
+            .update_resources(&vals, ServerTime::default())
+            .unwrap();
         vals.assert_all_read();
 
         let wood = &fortress.resources[FortressResourceType::Wood];

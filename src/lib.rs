@@ -19,7 +19,8 @@
 pub mod command;
 /// Error and Result types used across this crate.
 pub mod error;
-/// Types representing the parsed game state (character, inventory, dungeons, etc.).
+/// Types representing the parsed game state (character, inventory, dungeons,
+/// etc.).
 pub mod gamestate;
 /// Parsing and decoding utilities for raw server response strings.
 pub mod response;
@@ -39,8 +40,6 @@ pub mod simulate;
 /// Single Sign-On (SSO) authentication and account management.
 #[cfg(feature = "sso")]
 pub mod sso;
-
-
 
 /// This is the numerical id of a player on a server. Note that in rare edge
 /// cases this might be 0 (you are the first person to unlock the Dungeon. Who

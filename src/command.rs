@@ -632,7 +632,8 @@ pub enum Command {
     FortressBuildFinish {
         /// The fortress building whose construction or upgrade to finish
         f_type: FortressBuildingType,
-        /// The amount of mushrooms to use to skip the build timer (0 if the timer has expired)
+        /// The amount of mushrooms to use to skip the build timer (0 if the
+        /// timer has expired)
         mushrooms: u32,
     },
     /// Builds new units of the selected type
@@ -666,7 +667,8 @@ pub enum Command {
     },
     /// Sets the fortress enemy to the counterattack target of the message
     FortressSetCAEnemy {
-        /// The ID of the combat log message containing the counterattack target
+        /// The ID of the combat log message containing the counterattack
+        /// target
         msg_id: u32,
     },
     /// Views the replay of a combat log entry
@@ -715,7 +717,8 @@ pub enum Command {
     UnderworldUpgradeFinish {
         /// The underworld building whose upgrade to finish
         building: UnderworldBuildingType,
-        /// The amount of mushrooms to spend to finish immediately (0 if timer finished)
+        /// The amount of mushrooms to spend to finish immediately (0 if timer
+        /// finished)
         mushrooms: u32,
     },
     /// Lures a player into the underworld
@@ -744,7 +747,8 @@ pub enum Command {
     },
     /// Fights with the guild pet against the hydra
     GuildPetBattle {
-        /// Whether to spend a mushroom to fight if the daily free attempt was already used
+        /// Whether to spend a mushroom to fight if the daily free attempt was
+        /// already used
         use_mushroom: bool,
     },
     /// Upgrades an idle building by the requested amount
@@ -788,7 +792,8 @@ pub enum Command {
     SwapMannequin,
     /// Updates your flag in the Hall of Fame
     UpdateFlag {
-        /// The country flag to display in the Hall of Fame, or `None` to clear it
+        /// The country flag to display in the Hall of Fame, or `None` to clear
+        /// it
         flag: Option<Flag>,
     },
     /// Changes if you can receive invites or not
@@ -966,7 +971,8 @@ pub enum Command {
         /// The type of Gem of Fate to select
         gem_type: GemOfFateType,
     },
-    /// Interacts with an object or action in the legendary dungeon using a raw action ID
+    /// Interacts with an object or action in the legendary dungeon using a raw
+    /// action ID
     LegendaryDungeonInteract {
         /// The raw action ID to send
         val: usize,

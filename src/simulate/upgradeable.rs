@@ -176,7 +176,8 @@ impl UpgradeableFighter {
         }
     }
 
-    /// Calculates the total attributes including bonuses from equipment, gems, and potions.
+    /// Calculates the total attributes including bonuses from equipment, gems,
+    /// and potions.
     #[must_use]
     pub fn attributes(&self) -> EnumMap<AttributeType, u32> {
         let mut total = EnumMap::default();
@@ -238,7 +239,8 @@ impl UpgradeableFighter {
         total
     }
 
-    /// Calculates total hit points based on constitution, class, level, potions, portals, and runes.
+    /// Calculates total hit points based on constitution, class, level,
+    /// potions, portals, and runes.
     #[must_use]
     #[allow(clippy::enum_glob_use)]
     pub fn hit_points(&self, attributes: &EnumMap<AttributeType, u32>) -> i64 {
@@ -294,7 +296,8 @@ pub struct PlayerFighterSquad {
 }
 
 impl PlayerFighterSquad {
-    /// Creates a new squad containing the character and companions extracted from the game state.
+    /// Creates a new squad containing the character and companions extracted
+    /// from the game state.
     #[must_use]
     pub fn new(gs: &GameState) -> PlayerFighterSquad {
         let mut pet_attribute_bonus_perc = EnumMap::default();
