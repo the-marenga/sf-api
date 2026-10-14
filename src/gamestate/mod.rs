@@ -982,11 +982,9 @@ impl GameState {
                 }
             }
             "smith" => {
-                let data: Vec<i64> = val.into_list("smith")?;
-                let bs = self.blacksmith.get_or_insert_default();
-
-                bs.dismantle_left = data.csiget(0, "dismantles left", 0)?;
-                bs.last_dismantled = data.cstget(1, "bs time", server_time)?;
+                self.blacksmith
+                    .get_or_insert_default()
+                    .update(&val.list(), server_time);
             }
             "fortressGroupPrice" => {
                 self.fortress
@@ -1583,19 +1581,9 @@ impl GameState {
                     .update(&val.values::<2>()?, server_time);
             }
             "charactergroup" => {
-                let data: Vec<i64> = val.into_list("c group")?;
-                let guild = self.guild.get_or_insert_default();
-                guild.own_treasure_skill =
-                    data.csiget(0, "own treasure skill", 0)?;
-                guild.own_instructor_skill =
-                    data.csiget(1, "own instruction skill", 0)?;
-                guild.hydra.next_battle =
-                    data.cstget(2, "pet battle", server_time)?;
-                guild.hydra.remaining_fights =
-                    data.csiget(3, "remaining pet battles", 0)?;
-                guild.own_pet_lvl = data.csiget(4, "own pet lvl", 0)?;
-                guild.joined = data.cstget(5, "guild joined", server_time)?;
-                // [6] => ????
+                self.guild
+                    .get_or_insert_default()
+                    .update_character_group(&val.list(), server_time);
             }
             "arena" => self.arena.update(&val.values::<7>()?, server_time)?,
             "ownplayersavepotions" => {

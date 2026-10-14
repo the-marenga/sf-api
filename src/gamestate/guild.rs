@@ -330,6 +330,25 @@ impl Guild {
         }
     }
 
+    /// Updates the player's personal guild attributes from a `charactergroup`
+    /// response: `own_treasure_skill, own_instructor_skill, hydra_next_battle,
+    /// hydra_remaining_fights, own_pet_lvl, joined, ...`.
+    pub(crate) fn update_character_group(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        self.own_treasure_skill = data.u16_or(0, 0);
+        self.own_instructor_skill = data.u16_or(1, 0);
+        self.hydra.next_battle = data.server_time_opt(2, server_time);
+        self.hydra.remaining_fights = data.u16_or(3, 0);
+        self.own_pet_lvl = data.u16_or(4, 0);
+        self.joined = data.server_time_opt(5, server_time);
+        if data.len() > 6 {
+            data.ignore(6..data.len(), "unknown charactergroup tail");
+        }
+    }
+
     /// Parses a `fightablegroups` response: `SIZE` values per guild, with a
     /// runtime-determined number of guilds.
     pub(crate) fn update_fightable_targets(
@@ -720,5 +739,23 @@ mod tests {
         assert_eq!(guild.members.len(), 2);
         assert!(guild.members[0].potions[0].is_some());
         assert!(guild.members[1].potions[0].is_some());
+    }
+
+    #[test]
+    fn test_update_character_group() {
+        let raw = "15/20/1600000000/3/10/1500000000/0";
+        let data = Vals::from(raw);
+        let mut guild = Guild::default();
+        guild.update_character_group(&data, ServerTime::default());
+        assert_eq!(guild.own_treasure_skill, 15);
+        assert_eq!(guild.own_instructor_skill, 20);
+        assert!(guild.hydra.next_battle.is_some());
+        assert_eq!(guild.hydra.remaining_fights, 3);
+        assert_eq!(guild.own_pet_lvl, 10);
+        assert!(guild.joined.is_some());
+        assert!(
+            data.unaccessed_indices().is_empty(),
+            "unread values in {data}"
+        );
     }
 }
