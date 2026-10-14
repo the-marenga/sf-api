@@ -2,10 +2,14 @@ use chrono::{DateTime, Local};
 use log::{error, warn};
 use num_derive::FromPrimitive;
 
-use super::{ExpeditionSetting, Result, items::Item};
+use super::{
+    ExpeditionSetting, Result, ServerTime,
+    items::{ITEM_PARSE_LEN, Item},
+    rewards::{Reward, RewardType},
+};
 use crate::{
     command::{DiceReward, DiceType},
-    gamestate::rewards::Reward,
+    error::SFError,
     response::Vals,
 };
 
@@ -82,6 +86,31 @@ impl ExpeditionsEvent {
     pub fn active_mut(&mut self) -> Option<&mut Expedition> {
         self.active.as_mut().filter(|a| !a.is_finished())
     }
+
+    /// Updates the event start and end time from a 2-value `expeditionevent`
+    /// response: `[start, end]`.
+    pub(crate) fn update_event(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        self.start = data.server_time_opt(0, server_time);
+        self.end = data.server_time_opt(1, server_time);
+    }
+
+    /// Updates available expeditions from repeating 8-value chunks.
+    pub(crate) fn update_available(&mut self, data: &Vals<'_>) {
+        if !data.len().is_multiple_of(8) {
+            warn!(
+                "Available expeditions have weird size: {} values",
+                data.len()
+            );
+        }
+        self.available = data
+            .chunks(8)
+            .map(|chunk| AvailableExpedition::parse(&chunk))
+            .collect();
+    }
 }
 
 /// Information about the current state of the dice game
@@ -97,6 +126,43 @@ pub struct DiceGame {
     pub current_dice: Vec<DiceType>,
     /// Whatever we won in the dice game
     pub reward: Option<DiceReward>,
+}
+
+impl DiceGame {
+    /// Updates the next free game time and remaining games from a 2-value
+    /// `dice` response: `[next_free, remaining]`.
+    pub(crate) fn update(&mut self, data: &Vals<'_>, server_time: ServerTime) {
+        self.next_free = data.server_time_opt(0, server_time);
+        self.remaining = data.u8_or(1, 0);
+    }
+
+    /// Updates the dice currently lying on the table from a `dicestatus`
+    /// response.
+    pub(crate) fn update_status(&mut self, data: &Vals<'_>) {
+        self.current_dice = data
+            .iter()
+            .filter_map(|x| {
+                x.parse::<u8>()
+                    .ok()
+                    .and_then(num_traits::FromPrimitive::from_u8)
+            })
+            .collect();
+    }
+
+    /// Updates the dice game reward from a 2-value `dicereward` response:
+    /// `[win_typ, amount]`.
+    pub(crate) fn update_reward(&mut self, data: &Vals<'_>) -> Result<()> {
+        let win_typ =
+            data.enum_map(0, |a| a.saturating_sub(1)).ok_or_else(|| {
+                SFError::ParsingErrorV2(format!(
+                    "Invalid dice reward type: {}",
+                    data.str_or(0, "")
+                ))
+            })?;
+        let amount = data.u32(1)?;
+        self.reward = Some(DiceReward { win_typ, amount });
+        Ok(())
+    }
 }
 
 /// The tasks you will presented with, when clicking the person in the tavern.
@@ -144,6 +210,28 @@ impl Tavern {
     #[must_use]
     pub fn can_change_questing_preference(&self) -> bool {
         self.thirst_for_adventure_sec == 6000 && self.beer_drunk == 0
+    }
+
+    /// Updates the available quests from a 23-value `adventure` response.
+    pub(crate) fn update_quests(&mut self, data: &Vals<'_>) -> Result<()> {
+        data.ignore(0..2, "flavor / quest giver");
+        for (chunk, quest) in data.window(2..23).chunks(7).zip(&mut self.quests)
+        {
+            quest.update(&chunk)?;
+        }
+        Ok(())
+    }
+
+    /// Updates quest offer items from a `questofferitems` response.
+    pub(crate) fn update_quest_items(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        for (chunk, quest) in data.chunks(ITEM_PARSE_LEN).zip(&mut self.quests)
+        {
+            quest.item = Item::parse(&chunk, server_time).ok().flatten();
+        }
     }
 }
 
@@ -309,6 +397,12 @@ impl Toilet {
         self.mana_total = data.u32(3)?;
         Ok(())
     }
+
+    /// Updates the sacrifices left from a 3-value `toiletstate` response.
+    pub(crate) fn update_sacrifices(&mut self, data: &Vals<'_>) {
+        data.ignore(0..2, "unknown toilet state fields");
+        self.sacrifices_left = data.u32_or(2, 0);
+    }
 }
 
 /// The state of an ongoing expedition
@@ -359,6 +453,57 @@ impl Expedition {
                 ExpeditionEncounter { typ, heroism }
             })
             .collect();
+    }
+
+    /// Updates the halftime boss ID and reward choices from an
+    /// `expeditionhalftime` response.
+    pub(crate) fn update_halftime(&mut self, data: &Vals<'_>) {
+        let raw_id = data.i64_or(0, 0);
+        self.halftime_for_boss_id = -raw_id;
+        self.rewards = data
+            .window(1..data.len())
+            .chunks(2)
+            .map(|chunk| Reward {
+                typ: RewardType::parse(chunk.i64_or(0, 0)),
+                amount: chunk.u64_or(1, 0),
+            })
+            .collect();
+    }
+
+    /// Updates the current expedition state from an `expeditionstate`
+    /// response.
+    pub(crate) fn update_state(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) -> Result<()> {
+        self.current_floor = data.u8_or(0, 0);
+        data.ignore(1, "unknown expedition field");
+        self.floor_stage = data.i64(2)?;
+        self.target_thing = data.enum_or(3, ExpeditionThing::Unknown);
+        data.ignore(4..7, "unknown expedition fields");
+        self.target_current = data.u8_or(7, 100);
+        self.target_amount = data.u8_or(8, 100);
+
+        for (chunk, item) in data.window(9..13).chunks(1).zip(&mut self.items) {
+            let x = chunk.i64_or(0, 0);
+            *item = match x {
+                0 => None,
+                _ => num_traits::FromPrimitive::from_i64(x).or_else(|| {
+                    warn!("Unknown item: {x}");
+                    Some(ExpeditionThing::Unknown)
+                }),
+            };
+        }
+
+        self.heroism = data.i32_or(13, 0);
+        data.ignore(14, "unknown expedition field");
+        self.busy_since = data.server_time_opt(15, server_time);
+        self.busy_until = data.server_time_opt(16, server_time);
+        if data.len() > 17 {
+            data.ignore(17..data.len(), "trailing expedition fields");
+        }
+        Ok(())
     }
 
     /// Returns the current stage the player is doing. This is dependent on
@@ -433,6 +578,17 @@ pub struct ExpeditionBoss {
     pub id: i64,
     /// The amount of items this boss is supposed to drop
     pub items: u8,
+}
+
+impl ExpeditionBoss {
+    /// Parses an expedition boss from a 2-value chunk: `[monster_id, items]`.
+    pub(crate) fn parse(data: &Vals<'_>) -> Self {
+        let raw_id = data.i64_or(0, 0);
+        Self {
+            id: -raw_id,
+            items: data.u8_or(1, 3),
+        }
+    }
 }
 
 /// One of up to three encounters you can find. In comparison to
@@ -644,6 +800,25 @@ pub struct AvailableExpedition {
     pub special: Option<ExpeditionSpecial>,
 }
 
+impl AvailableExpedition {
+    /// Parses an available expedition from an 8-value chunk.
+    pub(crate) fn parse(data: &Vals<'_>) -> Self {
+        let target = data.enum_or(0, ExpeditionThing::Unknown);
+        data.ignore(1..4, "unknown expedition parameters");
+        let location_1 = data.enum_or(4, Location::default());
+        let location_2 = data.enum_or(5, Location::default());
+        let thirst_for_adventure_sec = data.u32_or(6, 600);
+        let special = data.enum_opt(7);
+        Self {
+            target,
+            thirst_for_adventure_sec,
+            location_1,
+            location_2,
+            special,
+        }
+    }
+}
+
 /// A special reward, that will be encountered, or earned by going on this
 /// expedition
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive)]
@@ -668,6 +843,7 @@ pub enum GambleResult {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
     use super::*;
 
     #[test]
@@ -748,6 +924,179 @@ mod tests {
         assert_eq!(
             ExpeditionThing::SnowShakes3.required_bounty(),
             Some(ExpeditionThing::SnowShakesBounty)
+        );
+    }
+
+    #[test]
+    fn test_tavern_update_quests() {
+        let mut tavern = Tavern::default();
+        let raw = "198/198/366/3/-65/1/600/2239844/98169000/367/4/-66/2/700/\
+                   2239845/98169001/368/5/-67/3/800/2239846/98169002";
+        let data = Vals::from(raw);
+        tavern.update_quests(&data).unwrap();
+        assert_eq!(tavern.quests[0].monster_id, 65);
+        assert_eq!(tavern.quests[0].location_id, Location::SprawlingJungle);
+        assert_eq!(tavern.quests[0].base_length, 600);
+        assert_eq!(tavern.quests[1].monster_id, 66);
+        assert_eq!(tavern.quests[1].location_id, Location::SkullIsland);
+        assert_eq!(tavern.quests[2].monster_id, 67);
+        assert_eq!(tavern.quests[2].location_id, Location::EvernightForest);
+        assert!(
+            data.unaccessed_indices().is_empty(),
+            "unread values in {data}"
+        );
+    }
+
+    #[test]
+    fn test_tavern_update_quest_items() {
+        let mut tavern = Tavern::default();
+        let item_raw = "1/0/0/1010/0/149/265/5/4/0/108/72/0/83940/10/0/0/45/0";
+        let empty_item = "0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0";
+        let raw = format!("{item_raw}/{empty_item}/{empty_item}");
+        let data = Vals::from(raw.as_str());
+        tavern.update_quest_items(&data, ServerTime::default());
+        assert!(tavern.quests[0].item.is_some());
+        assert_eq!(tavern.quests[0].item.as_ref().unwrap().price, 83940);
+        assert!(tavern.quests[1].item.is_none());
+        assert!(tavern.quests[2].item.is_none());
+    }
+
+    #[test]
+    fn test_toilet_update_sacrifices() {
+        let mut toilet = Toilet::default();
+        let raw = "0/0/3";
+        let data = Vals::from(raw);
+        toilet.update_sacrifices(&data);
+        assert_eq!(toilet.sacrifices_left, 3);
+        assert!(
+            data.unaccessed_indices().is_empty(),
+            "unread values in {data}"
+        );
+    }
+
+    #[test]
+    fn test_dice_game_updates() {
+        let mut game = DiceGame::default();
+
+        let dice_raw = "1600000000/5";
+        let dice_data = Vals::from(dice_raw);
+        game.update(&dice_data, ServerTime::default());
+        assert!(game.next_free.is_some());
+        assert_eq!(game.remaining, 5);
+        assert!(
+            dice_data.unaccessed_indices().is_empty(),
+            "unread values in {dice_data}"
+        );
+
+        let status_raw = "1/2/3/4/5";
+        let status_data = Vals::from(status_raw);
+        game.update_status(&status_data);
+        assert_eq!(
+            game.current_dice.as_slice(),
+            [
+                DiceType::Silver,
+                DiceType::Stone,
+                DiceType::Wood,
+                DiceType::Souls,
+                DiceType::Arcane,
+            ]
+        );
+        assert!(
+            status_data.unaccessed_indices().is_empty(),
+            "unread values in {status_data}"
+        );
+
+        let reward_raw = "2/50000";
+        let reward_data = Vals::from(reward_raw);
+        game.update_reward(&reward_data).unwrap();
+        assert_eq!(
+            game.reward,
+            Some(DiceReward {
+                win_typ: DiceType::Silver,
+                amount: 50000,
+            })
+        );
+        assert!(
+            reward_data.unaccessed_indices().is_empty(),
+            "unread values in {reward_data}"
+        );
+    }
+
+    #[test]
+    fn test_expeditions_event_updates() {
+        let mut event = ExpeditionsEvent::default();
+
+        let event_raw = "1600000000/1700000000";
+        let event_data = Vals::from(event_raw);
+        event.update_event(&event_data, ServerTime::default());
+        assert!(event.start.is_some());
+        assert!(event.end.is_some());
+        assert!(
+            event_data.unaccessed_indices().is_empty(),
+            "unread values in {event_data}"
+        );
+
+        let avail_raw = "22/0/0/0/1/2/600/1";
+        let avail_data = Vals::from(avail_raw);
+        event.update_available(&avail_data);
+        assert_eq!(event.available.len(), 1);
+        assert_eq!(event.available[0].target, ExpeditionThing::Dragon);
+        assert_eq!(event.available[0].location_1, Location::SprawlingJungle);
+        assert_eq!(event.available[0].location_2, Location::SkullIsland);
+        assert_eq!(event.available[0].thirst_for_adventure_sec, 600);
+        assert_eq!(event.available[0].special, Some(ExpeditionSpecial::Egg));
+        assert!(
+            avail_data.unaccessed_indices().is_empty(),
+            "unread values in {avail_data}"
+        );
+    }
+
+    #[test]
+    fn test_expedition_updates() {
+        let mut exp = Expedition::default();
+
+        let boss_raw = "45/3";
+        let boss_data = Vals::from(boss_raw);
+        exp.boss = ExpeditionBoss::parse(&boss_data);
+        assert_eq!(exp.boss.id, -45);
+        assert_eq!(exp.boss.items, 3);
+        assert!(
+            boss_data.unaccessed_indices().is_empty(),
+            "unread values in {boss_data}"
+        );
+
+        let half_raw = "45/3/100/4/50000";
+        let half_data = Vals::from(half_raw);
+        exp.update_halftime(&half_data);
+        assert_eq!(exp.halftime_for_boss_id, -45);
+        assert_eq!(exp.rewards.len(), 2);
+        assert_eq!(exp.rewards[0].typ, RewardType::Mushrooms);
+        assert_eq!(exp.rewards[0].amount, 100);
+        assert_eq!(exp.rewards[1].typ, RewardType::Silver);
+        assert_eq!(exp.rewards[1].amount, 50000);
+        assert!(
+            half_data.unaccessed_indices().is_empty(),
+            "unread values in {half_data}"
+        );
+
+        let state_raw =
+            "5/0/2/22/0/0/0/10/20/22/0/0/0/150/0/1600000000/1600000600";
+        let state_data = Vals::from(state_raw);
+        exp.update_state(&state_data, ServerTime::default())
+            .unwrap();
+        assert_eq!(exp.current_floor, 5);
+        assert_eq!(exp.floor_stage, 2);
+        assert_eq!(exp.target_thing, ExpeditionThing::Dragon);
+        assert_eq!(exp.target_current, 10);
+        assert_eq!(exp.target_amount, 20);
+        assert_eq!(exp.items[0], Some(ExpeditionThing::Dragon));
+        assert_eq!(exp.items[1], None);
+        assert_eq!(exp.heroism, 150);
+        assert!(exp.busy_since.is_some());
+        assert!(exp.busy_until.is_some());
+        assert!(
+            state_data.unaccessed_indices().is_empty(),
+            "unread values in {state_data}"
         );
     }
 }
