@@ -2,7 +2,7 @@ use std::{collections::HashSet, fmt::Display, num::NonZeroU8};
 
 use chrono::{DateTime, Local};
 use enum_map::EnumMap;
-use log::{error, warn};
+use log::warn;
 use strum::IntoEnumIterator;
 
 use super::{Class, EquipmentSlot, Result};
@@ -426,8 +426,7 @@ mod tests {
             "2SoEAAAAAAAAAAgAAAAAAADFXAqAAAAAAAAAAAgAAAAAAA==",
         );
         let data = Vals::from(raw);
-        let scrapbook =
-            ScrapBook::parse(&data).expect("scrapbook should parse");
+        let scrapbook = ScrapBook::parse(&data).unwrap();
         assert_eq!(scrapbook.monster.len(), 95);
         assert_eq!(scrapbook.items.len(), 460);
         assert_all_read(&data);
