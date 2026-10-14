@@ -43,7 +43,7 @@ use unlockables::{HabitatType, HellevatorDailyReward};
 pub use crate::error::{Result, SFError};
 use crate::{
     command::{AttributeType, ExpeditionSetting, Language, ShopType},
-    misc::{EnumMapGet, from_sf_string},
+    misc::from_sf_string,
     response::{Response, ResponseVal, Vals},
 };
 
@@ -225,7 +225,7 @@ impl GameState {
         if let Some(fortress) = &mut self.fortress {
             for (typ, unit) in &mut fortress.units {
                 let building_lvl =
-                    fortress.buildings.get(typ.training_building()).level;
+                    fortress.buildings[typ.training_building()].level;
                 let limit_modifier = match typ {
                     FortressUnitType::Magician => 1,
                     FortressUnitType::Archer => 2,
@@ -265,15 +265,11 @@ impl GameState {
         self.tavern.quicksand_glasses = data.u32_or(4, 0);
 
         let fortress = self.fortress.get_or_insert_default();
-        fortress
-            .resources
-            .get_mut(FortressResourceType::Wood)
-            .current = data.u64_or(5, 0);
+        fortress.resources[FortressResourceType::Wood].current =
+            data.u64_or(5, 0);
         data.ignore(6, "fortress max secret wood");
-        fortress
-            .resources
-            .get_mut(FortressResourceType::Stone)
-            .current = data.u64_or(7, 0);
+        fortress.resources[FortressResourceType::Stone].current =
+            data.u64_or(7, 0);
         data.ignore(8, "fortress max secret stone");
 
         let bs = self.blacksmith.get_or_insert_default();
@@ -285,7 +281,7 @@ impl GameState {
 
         let pets = self.pets.get_or_insert_default();
         for (e_pos, element) in HabitatType::iter().enumerate() {
-            pets.habitats.get_mut(element).fruits = data.u16_or(12 + e_pos, 0);
+            pets.habitats[element].fruits = data.u16_or(12 + e_pos, 0);
         }
 
         if data.len() > 17 {
@@ -488,7 +484,7 @@ impl GameState {
                 self.shop_item_lvl = val.into("shop lvl")?;
             }
             "storeitemsshakes" => {
-                let shop = self.shops.get_mut(ShopType::Weapon);
+                let shop = &mut self.shops[ShopType::Weapon];
                 shop.typ = ShopType::Weapon;
                 shop.update(&val.values::<114>()?, server_time)?;
             }
@@ -506,7 +502,7 @@ impl GameState {
                     .update_companion_equipment(&val.list(), server_time)?;
             }
             "storeitemsfidget" => {
-                let shop = self.shops.get_mut(ShopType::Magic);
+                let shop = &mut self.shops[ShopType::Magic];
                 shop.typ = ShopType::Magic;
                 shop.update(&val.values::<114>()?, server_time)?;
             }
@@ -634,16 +630,14 @@ impl GameState {
             "stoneperhournextlevel" => {
                 self.fortress
                     .get_or_insert_default()
-                    .resources
-                    .get_mut(FortressResourceType::Stone)
+                    .resources[FortressResourceType::Stone]
                     .production
                     .per_hour_next_lvl = val.into("stone next lvl")?;
             }
             "woodperhournextlevel" => {
                 self.fortress
                     .get_or_insert_default()
-                    .resources
-                    .get_mut(FortressResourceType::Wood)
+                    .resources[FortressResourceType::Wood]
                     .production
                     .per_hour_next_lvl = val.into("wood next lvl")?;
             }

@@ -5,9 +5,12 @@ use crate::{
     simulate::{Weapon, fighter::Fighter},
 };
 
+/// A range representing minimum and maximum damage values.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DamageRange {
+    /// The minimum damage value.
     pub min: f64,
+    /// The maximum damage value.
     pub max: f64,
 }
 
@@ -34,9 +37,10 @@ pub(crate) fn calculate_damage(
     target: &Fighter,
     is_secondary: bool,
 ) -> DamageRange {
-    let weapon = match is_secondary {
-        true => &attacker.second_weapon,
-        false => &attacker.first_weapon,
+    let weapon = if is_secondary {
+        &attacker.second_weapon
+    } else {
+        &attacker.first_weapon
     }
     .as_ref();
     let mut damage = get_base_damge(weapon, attacker, is_secondary);
