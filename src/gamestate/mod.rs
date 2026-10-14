@@ -686,9 +686,7 @@ impl GameState {
                 // old witch data without price
             }
             "witchshop" => {
-                self.witch
-                    .get_or_insert_default()
-                    .update(&val.into_list("witch")?)?;
+                self.witch.get_or_insert_default().update(&val.list());
             }
             "underworldupgradeprice" => {
                 self.underworld
@@ -696,8 +694,7 @@ impl GameState {
                     .update_underworld_unit_prices(&val.values::<9>()?)?;
             }
             "unlockfeature" => {
-                self.pending_unlocks =
-                    Unlockable::parse(&val.into_list("unlock")?)?;
+                self.pending_unlocks = Unlockable::parse(&val.list())?;
             }
             "dungeonprogresslight" => self.dungeons.update_progress(
                 &val.into_list("dungeon progress light")?,
@@ -745,7 +742,7 @@ impl GameState {
                 self.hellevator
                     .active
                     .get_or_insert_default()
-                    .update(&val.into_list("gtsave")?, server_time)?;
+                    .update(&val.values::<32>()?, server_time)?;
             }
             "eventstatus" => {
                 let data: Vec<i64> = val.into_list("event status")?;
@@ -832,7 +829,7 @@ impl GameState {
                 self.hall_of_fames.players_total = val.into("player count")?;
             }
             "achievement" => {
-                self.achievements.update(&val.into_list("achievements")?)?;
+                self.achievements.update(&val.list());
             }
             "groupskillprice" => {
                 self.guild
@@ -1239,7 +1236,7 @@ impl GameState {
                     data.cstget(1, "event t end", server_time)?;
             }
             "scrapbook" => {
-                self.character.scrapbook = ScrapBook::parse(val.as_str());
+                self.character.scrapbook = ScrapBook::parse(&val.list());
             }
             "dungeonfaces" | "shadowfaces" => {
                 // Gets returned after winning a dungeon fight. This looks a
@@ -1290,13 +1287,12 @@ impl GameState {
             "ownpetsstats" => {
                 self.pets
                     .get_or_insert_default()
-                    .update_pet_stat(&val.into_list("pet stats")?);
+                    .update_pet_stat(&val.values::<17>()?);
             }
             "ownpets" => {
-                let data = val.into_list("own pets")?;
                 self.pets
                     .get_or_insert_default()
-                    .update(&data, server_time)?;
+                    .update(&val.list(), server_time)?;
             }
             "petsdefensetype" => {
                 let pet_id = val.into("pet def typ")?;
@@ -1624,23 +1620,18 @@ impl GameState {
             }
             "gtdailyreward" => {
                 self.hellevator.active.get_or_insert_default().rewards_today =
-                    HellevatorDailyReward::parse(
-                        &val.into_list("hdrtd").unwrap_or_default(),
-                    );
+                    HellevatorDailyReward::parse(&val.list());
             }
             "gtdailyrewardnext" => {
                 self.hellevator.active.get_or_insert_default().rewards_next =
-                    HellevatorDailyReward::parse(
-                        &val.into_list("hdrnd").unwrap_or_default(),
-                    );
+                    HellevatorDailyReward::parse(&val.list());
             }
             "gtdailyrewardyesterday" => {
                 self.hellevator
                     .active
                     .get_or_insert_default()
-                    .rewards_yesterday = HellevatorDailyReward::parse(
-                    &val.into_list("hdryd").unwrap_or_default(),
-                );
+                    .rewards_yesterday =
+                    HellevatorDailyReward::parse(&val.list());
             }
             "gtdailyrewardclaimed" => {
                 if let Some(hellevator) = self.hellevator.active.as_mut() {
@@ -1696,19 +1687,15 @@ impl GameState {
                 self.hellevator
                     .active
                     .get_or_insert_default()
-                    .current_monster = HellevatorMonster::parse(
-                    &val.into_list("h monster").unwrap_or_default(),
-                )
-                .ok();
+                    .current_monster =
+                    HellevatorMonster::parse(&val.list()).ok();
             }
             "gtbonus" => {
                 self.hellevator
                     .active
                     .get_or_insert_default()
-                    .daily_treat_bonus = val
-                    .into_list("gt bonus")
-                    .and_then(|a| HellevatorTreatBonus::parse(&a))
-                    .ok();
+                    .daily_treat_bonus =
+                    HellevatorTreatBonus::parse(&val.list()).ok();
             }
             "pendingrewards" => {
                 let vals: Vec<_> = val.as_str().split('/').collect();

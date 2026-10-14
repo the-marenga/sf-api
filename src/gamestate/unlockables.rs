@@ -1,17 +1,22 @@
-use std::num::NonZeroU8;
+use std::{collections::HashSet, fmt::Display, num::NonZeroU8};
 
 use chrono::{DateTime, Local};
-use enum_map::Enum;
-use log::error;
+use enum_map::{Enum, EnumMap};
+use log::{error, warn};
 use num_derive::FromPrimitive;
-use strum::EnumIter;
+use strum::{EnumCount, EnumIter, IntoEnumIterator};
 
-use super::*;
-use crate::{PlayerId, gamestate::items::*, misc::*};
+use super::{AttributeType, Class, EquipmentSlot, Result, ServerTime};
+use crate::{
+    PlayerId,
+    error::SFError,
+    gamestate::items::{Enchantment, Equipment},
+    response::Vals,
+};
 
 /// Information about the Hellevator event on the server. If it is active, you
 /// can get more detailed info via `active()`
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorEvent {
     /// The time the hellevator event was enabled at
@@ -26,7 +31,8 @@ pub struct HellevatorEvent {
     pub(crate) active: Option<Hellevator>,
 }
 
-#[derive(Debug)]
+/// The status of the Hellevator event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HellevatorStatus<'a> {
     /// The event is ongoing, but you have to send a `HellevatorEnter` command
     /// to start using it
@@ -35,7 +41,7 @@ pub enum HellevatorStatus<'a> {
     NotAvailable,
     /// The event has ended, but you can still claim the final reward
     RewardClaimable,
-    /// A reference to the
+    /// A reference to the active Hellevator state.
     Active(&'a Hellevator),
 }
 
@@ -70,126 +76,185 @@ impl HellevatorEvent {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+/// Information about the player's current Hellevator run and guild raid state.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Hellevator {
+    /// The number of key cards currently available.
     pub key_cards: u32,
+    /// The current floor the player is on.
     pub current_floor: u32,
+    /// The total points earned in the current Hellevator run.
     pub points: u32,
+    /// Whether the final reward chest has been claimed.
     pub has_final_reward: bool,
 
+    /// Guild points earned today.
     pub guild_points_today: u32,
+    /// The current rank of the player's guild.
     pub guild_rank: u32,
+    /// Information about each floor in the guild raid.
     pub guild_raid_floors: Vec<HellevatorRaidFloor>,
 
+    /// The time at which signups for the guild raid begin.
     pub guild_raid_signup_start: DateTime<Local>,
+    /// The time at which the guild raid battle begins.
     pub guild_raid_start: DateTime<Local>,
+    /// Rewards obtained from defeating monsters in the Hellevator.
     pub monster_rewards: Vec<HellevatorMonsterReward>,
 
+    /// The highest floor the player has reached.
     pub own_best_floor: u32,
+    /// The three treats currently available in the Hellevator shop.
     pub shop_items: [HellevatorShopTreat; 3],
 
+    /// The treat currently active and granting a buff, if any.
     pub current_treat: Option<HellevatorShopTreat>,
 
+    /// The time when the next free key card will be generated.
     pub next_card_generated: Option<DateTime<Local>>,
+    /// The time of the next daily reset for the Hellevator.
     pub next_reset: Option<DateTime<Local>>,
+    /// The date when the player started contributing to the guild in this
+    /// event.
     pub start_contrib_date: Option<DateTime<Local>>,
 
+    /// Daily rewards earned yesterday.
     pub rewards_yesterday: Option<HellevatorDailyReward>,
+    /// Daily rewards available today.
     pub rewards_today: Option<HellevatorDailyReward>,
+    /// Daily rewards projected for the next day.
     pub rewards_next: Option<HellevatorDailyReward>,
 
+    /// The active daily treat bonus buff, if any.
     pub daily_treat_bonus: Option<HellevatorTreatBonus>,
 
+    /// The monster currently encountered on this floor, if any.
     pub current_monster: Option<HellevatorMonster>,
 
+    /// Hellevator points earned today.
     pub earned_today: u32,
+    /// Hellevator points earned yesterday.
     pub earned_yesterday: u32,
 
     pub(crate) brackets: Vec<u32>,
 }
 
-#[derive(Debug, Default, Clone)]
+/// A daily treat bonus active during the Hellevator event.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorTreatBonus {
+    /// The type of treat bonus granted.
     pub typ: HellevatorTreatBonusType,
+    /// The strength or amount of the bonus.
     pub amount: u32,
 }
 
-#[derive(Debug, Default, Clone)]
+/// A monster encountered on a Hellevator floor.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorMonster {
+    /// The unique monster identifier.
     pub id: i64,
+    /// The level of the monster.
     pub level: u32,
+    /// The elemental type of the monster.
     pub typ: HellevatorMonsterElement,
 }
 
-#[derive(Debug, Clone, Default, Copy, PartialEq, Eq, Hash, FromPrimitive)]
+/// Elemental damage type of a Hellevator monster.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash, FromPrimitive)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HellevatorMonsterElement {
+    /// Fire element.
     Fire = 1,
+    /// Cold element.
     Cold = 2,
+    /// Lightning element.
     Lightning = 3,
+    /// Unknown or unclassified element.
     #[default]
     Unknown = 240,
 }
 
 impl HellevatorMonster {
-    pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
+    /// Parses a monster from a 3-value Hellevator monster response `[id, level,
+    /// typ]`.
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Self> {
         Ok(HellevatorMonster {
-            id: data.cget(0, "h monster id")?,
-            level: data.csiget(1, "h monster level", 0)?,
-            typ: data.cfpget(2, "h monster typ", |a| a)?.unwrap_or_default(),
+            id: data.i64(0)?,
+            level: data.u32_or(1, 0),
+            typ: data.enum_or(2, HellevatorMonsterElement::Unknown),
         })
     }
 }
 
 impl HellevatorTreatBonus {
-    pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
+    /// Parses a treat bonus from a 2-value response `[typ, amount]`.
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Self> {
         Ok(HellevatorTreatBonus {
-            typ: data
-                .cfpget(0, "hellevator treat bonus", |a| a)?
-                .unwrap_or_default(),
-            amount: data.csiget(1, "hellevator treat bonus a", 0)?,
+            typ: data.enum_or(0, HellevatorTreatBonusType::Unknown),
+            amount: data.u32(1)?,
         })
     }
 }
 
-#[derive(Debug, Clone, Default, Copy, PartialEq, Eq, Hash, FromPrimitive)]
+/// The type of Hellevator daily treat bonus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash, FromPrimitive)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HellevatorTreatBonusType {
+    /// Bonus percentage damage against monsters.
     ExtraDamage = 14,
+    /// An unknown bonus type.
     #[default]
     Unknown = 240,
 }
 
-#[derive(Debug, Default, Clone)]
+/// A reward granted for defeating a Hellevator monster.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorMonsterReward {
+    /// The kind of reward granted.
     pub typ: HellevatorMonsterRewardTyp,
+    /// The amount of the reward.
     pub amount: u64,
 }
 
-#[derive(Debug, Clone, Default, Copy, PartialEq, Eq, Hash)]
+/// The category of reward dropped by a Hellevator monster.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HellevatorMonsterRewardTyp {
+    /// Hellevator event points.
     Points,
+    /// Beer / thirst tickets.
     Tickets,
+    /// Premium currency (mushrooms).
     Mushrooms,
+    /// Gold/silver currency.
     Silver,
+    /// Lucky coins for the wheel of fortune.
     LuckyCoin,
+    /// Fortress wood resource.
     Wood,
+    /// Fortress stone resource.
     Stone,
+    /// Blacksmith arcane splinters resource.
     Arcane,
+    /// Blacksmith metal resource.
     Metal,
+    /// Underworld souls resource.
     Souls,
+    /// Pet food fruit of a specific habitat.
     Fruit(HabitatType),
 
+    /// An unknown reward type.
     #[default]
     Unknown,
 }
 
 impl HellevatorMonsterRewardTyp {
+    /// Parses the monster reward type from a raw numeric identifier.
+    #[must_use]
     pub(crate) fn parse(data: i64) -> HellevatorMonsterRewardTyp {
         match data {
             1 => HellevatorMonsterRewardTyp::Points,
@@ -213,71 +278,106 @@ impl HellevatorMonsterRewardTyp {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+/// State of a floor in the Hellevator guild raid.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorRaidFloor {
     pub(crate) today: i64,
     pub(crate) yesterday: i64,
 
+    /// The Hellevator points rewarded for clearing this raid floor.
     pub point_reward: u32,
+    /// The silver rewarded for clearing this raid floor.
     pub silver_reward: u64,
 
+    /// Names of guild members assigned to this floor today.
     pub today_assigned: Vec<String>,
+    /// Names of guild members assigned to this floor yesterday.
     pub yesterday_assigned: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default, Copy, PartialEq, Eq, Hash, FromPrimitive)]
+/// The kinds of treats available in the Hellevator shop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash, FromPrimitive)]
 #[non_exhaustive]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HellevatorTreatType {
+    /// Chocolate chilli pepper treat.
     ChocolateChilliPepper = 1,
+    /// Peppermint chocolate treat.
     PeppermintChocolate = 2,
+    /// Electroshock treat.
     Electroshock = 3,
+    /// Chill ice cream treat.
     ChillIceCream = 4,
+    /// Crackling chewing gum treat.
     CracklingChewingGum = 5,
+    /// Peppermint chewing gum treat.
     PeppermintChewingGum = 6,
+    /// Beer biscuit treat.
     BeerBiscuit = 7,
+    /// Ginger bread heart treat.
     GingerBreadHeart = 8,
+    /// Fortune cookie treat.
     FortuneCookie = 9,
+    /// Canned spinach treat.
     CannedSpinach = 10,
+    /// Stone biscuit treat.
     StoneBiscuit = 11,
+    /// Organic granola bar treat.
     OrganicGranolaBar = 12,
+    /// Chocolate gold coin treat.
     ChocolateGoldCoin = 13,
+    /// An unknown treat type.
     #[default]
     Unknown = 230,
 }
 
-#[derive(Debug, Default, Clone)]
+/// A treat available for purchase in the Hellevator shop or currently active.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorShopTreat {
+    /// Whether this treat is a special / premium offer.
     pub is_special: bool,
+    /// The type of treat.
     pub typ: HellevatorTreatType,
+    /// Price in key cards or mushrooms.
     pub price: u32,
+    /// Duration of the effect in floors or time.
     pub duration: u32,
+    /// The strength or magnitude of the treat's effect.
     pub effect_strength: u32,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// Daily rewards available from the Hellevator based on guild performance.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorDailyReward {
     // TODO: What is the purpose of these fields?
     pub(crate) start_level: u16,
     pub(crate) end_level: u16,
 
+    /// Number of gold chests rewarded.
     pub gold_chests: u16,
+    /// Amount of silver rewarded.
     pub silver: u64,
 
+    /// Number of fortress chests rewarded.
     pub fortress_chests: u16,
+    /// Amount of wood rewarded.
     pub wood: u64,
+    /// Amount of stone rewarded.
     pub stone: u64,
 
+    /// Number of blacksmith chests rewarded.
     pub blacksmith_chests: u16,
+    /// Amount of arcane splinters rewarded.
     pub arcane: u64,
+    /// Amount of metal rewarded.
     pub metal: u64,
 }
 
 impl HellevatorDailyReward {
-    /// Returns `true` if the daily reward can be claimed
+    /// Returns `true` if the daily reward can be claimed.
     #[must_use]
     pub fn claimable(&self) -> bool {
         self.gold_chests > 0
@@ -285,22 +385,24 @@ impl HellevatorDailyReward {
             || self.blacksmith_chests > 0
     }
 
-    pub(crate) fn parse(data: &[i64]) -> Option<HellevatorDailyReward> {
+    /// Parses daily rewards from a 10-value response.
+    pub(crate) fn parse(data: &Vals<'_>) -> Option<HellevatorDailyReward> {
         if data.len() < 10 {
+            data.ignore_all("short daily reward response");
             return None;
         }
 
         Some(HellevatorDailyReward {
-            start_level: data.csiget(0, "start level", 0).unwrap_or(0),
-            end_level: data.csiget(1, "end level", 0).unwrap_or(0),
-            gold_chests: data.csiget(2, "gold chests", 0).unwrap_or(0),
-            silver: data.csiget(5, "silver reward", 0).unwrap_or(0),
-            fortress_chests: data.csiget(3, "ft chests", 0).unwrap_or(0),
-            wood: data.csiget(6, "wood reward", 0).unwrap_or(0),
-            stone: data.csiget(7, "stone reward", 0).unwrap_or(0),
-            blacksmith_chests: data.csiget(4, "bs chests", 0).unwrap_or(0),
-            arcane: data.csiget(8, "arcane reward", 0).unwrap_or(0),
-            metal: data.csiget(9, "metal reward", 0).unwrap_or(0),
+            start_level: data.u16_or(0, 0),
+            end_level: data.u16_or(1, 0),
+            gold_chests: data.u16_or(2, 0),
+            fortress_chests: data.u16_or(3, 0),
+            blacksmith_chests: data.u16_or(4, 0),
+            silver: data.u64_or(5, 0),
+            wood: data.u64_or(6, 0),
+            stone: data.u64_or(7, 0),
+            arcane: data.u64_or(8, 0),
+            metal: data.u64_or(9, 0),
         })
     }
 }
@@ -308,7 +410,7 @@ impl HellevatorDailyReward {
 impl Hellevator {
     /// Converts the rank of a guild in the Hellevator into the reward bracket,
     /// that they would be in (1 to 25). If the rank would gain no rewards, none
-    /// is returned here
+    /// is returned here.
     #[must_use]
     pub fn rank_to_rewards_rank(&self, rank: u32) -> Option<u32> {
         let mut rank_limit = 0;
@@ -323,60 +425,60 @@ impl Hellevator {
         None
     }
 
+    /// Updates the Hellevator state from a 32-value `gtsave` response.
     pub(crate) fn update(
         &mut self,
-        data: &[i64],
+        data: &Vals<'_>,
         server_time: ServerTime,
-    ) -> Result<(), SFError> {
-        self.key_cards = data.csiget(0, "h key cards", 0)?;
-        self.next_card_generated = data.cstget(1, "next card", server_time)?;
-        self.next_reset = data.cstget(2, "h next reset", server_time)?;
-        self.current_floor = data.csiget(3, "h current floor", 0)?;
-        self.points = data.csiget(4, "h points", 0)?;
-        self.start_contrib_date =
-            data.cstget(5, "start contrib", server_time)?;
-        self.has_final_reward = data.cget(6, "hellevator final")? == 1;
-        self.own_best_floor = data.csiget(7, "hellevator best rank", 0)?;
+    ) -> Result<()> {
+        self.key_cards = data.u32_or(0, 0);
+        self.next_card_generated = data.server_time(1, server_time)?;
+        self.next_reset = data.server_time(2, server_time)?;
+        self.current_floor = data.u32_or(3, 0);
+        self.points = data.u32_or(4, 0);
+        self.start_contrib_date = data.server_time(5, server_time)?;
+        self.has_final_reward = data.u32_or(6, 0) == 1;
+        self.own_best_floor = data.u32_or(7, 0);
 
         for (pos, shop_item) in self.shop_items.iter_mut().enumerate() {
-            let start = data.skip(8 + pos, "shop item start")?;
-            shop_item.typ = start
-                .cfpget(0, "hellevator shop treat", |a| a)?
-                .unwrap_or_default();
+            shop_item.typ = data.enum_or(8 + pos, HellevatorTreatType::Unknown);
             // FIXME: This is wrong
-            shop_item.is_special =
-                start.cget(3, "hellevator shop special")? > 0;
-            shop_item.price =
-                start.csiget(6, "hellevator shop price", u32::MAX)?;
-            shop_item.duration =
-                start.csiget(9, "hellevator shop duration", 0)?;
-            shop_item.effect_strength =
-                start.csiget(12, "hellevator effect str", 0)?;
+            shop_item.is_special = data.u32_or(11 + pos, 0) > 0;
+            shop_item.price = data.u32_or(14 + pos, u32::MAX);
+            shop_item.duration = data.u32_or(17 + pos, 0);
+            shop_item.effect_strength = data.u32_or(20 + pos, 0);
         }
 
-        let c_typ = data.cget(23, "current ctyp")?;
+        let c_typ = data.i64_or(23, 0);
+        let is_special = data.u32_or(24, 0) > 0;
+        let duration = data.u32_or(25, 0);
+        let effect_strength = data.u32_or(26, 0);
         self.current_treat = if c_typ > 0 {
             Some(HellevatorShopTreat {
-                typ: FromPrimitive::from_i64(c_typ).unwrap_or_default(),
-                is_special: data.cget(24, "current item special")? > 0,
+                typ: data.enum_or(23, HellevatorTreatType::Unknown),
+                is_special,
                 price: 0,
-                duration: data.csiget(25, "current item remaining", 0)?,
-                effect_strength: data.csiget(26, "current item effect", 0)?,
+                duration,
+                effect_strength,
             })
         } else {
             None
         };
 
-        self.earned_today = data.csiget(27, "points earned today", 0)?;
-        // 28 => probably a "has acknowledged rank fall" msg
-        self.earned_yesterday = data.csiget(29, "points earned yd", 0)?;
-        // 30 => fallen to rank
-        // 31 => ???
+        self.earned_today = data.u32_or(27, 0);
+        data.ignore(28, "probably a 'has acknowledged rank fall' msg");
+        self.earned_yesterday = data.u32_or(29, 0);
+        data.ignore(30, "fallen to rank");
+        data.ignore(31, "unknown hellevator field");
+        if data.len() > 32 {
+            data.ignore(32..data.len(), "trailing hellevator fields");
+        }
         Ok(())
     }
 }
 
-#[derive(Debug, Default, Clone)]
+/// Information about the witch cauldron and unlocked enchantments.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Witch {
     /// The item type the witch wants today
@@ -399,11 +501,13 @@ pub struct Witch {
 pub struct EnchantmentIdent(pub(crate) NonZeroU8);
 
 impl Witch {
-    pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
-        self.enchantment_price = data.csiget(35, "witch price", u64::MAX)?;
+    /// Updates the witch state from a `witchshop` response.
+    pub(crate) fn update(&mut self, data: &Vals<'_>) {
+        data.ignore(0..2, "unknown witch timestamps");
+        self.enchantment_price = data.u64_or(35, u64::MAX);
         self.required_item = None;
-        if data.cget(33, "w needs more")? == 0 {
-            let raw_required = data.cget(34, "w required")?;
+        if data.i64_or(33, 1) == 0 {
+            let raw_required = data.i64_or(34, 0);
             for slot in EquipmentSlot::iter() {
                 let id = i64::from(slot.raw_id());
                 if id == raw_required {
@@ -411,14 +515,17 @@ impl Witch {
                     break;
                 }
             }
+        } else {
+            data.ignore(34, "required item slot when cauldron is full");
         }
+
+        let current = data.i32_or(2, 0);
+        let target = data.i32_or(3, 0);
         if self.required_item.is_none() {
             self.cauldron_bubbling = true;
         } else {
             // I would like to offer the raw values here, but the -1 just
             // makes this annoying. A Option<(u32, u32)> is also weird
-            let current: i32 = data.ciget(2, "witch current")?;
-            let target: i32 = data.ciget(3, "witch target")?;
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
             if current < 0 || target <= 0 {
                 self.progress = 100;
@@ -429,9 +536,12 @@ impl Witch {
             }
         }
 
-        let e_count: u8 = data.ciget(4, "enchant count")?;
+        let e_count = data.u8_or(4, 0);
         for i in 0..e_count {
-            let iid = data.cget(6 + 3 * i as usize, "iid")? - 1;
+            let base = 5 + 3 * usize::from(i);
+            data.ignore(base, "enchantment slot / index");
+            let iid = data.i64_or(base + 1, 0) - 1;
+            data.ignore(base + 2, "enchantment unlock timestamp");
             let key = match iid {
                 0 => continue,
                 10 => Enchantment::SwordOfVengeance,
@@ -449,26 +559,36 @@ impl Witch {
                 }
             };
             if let Some(val) = NonZeroU8::new(i + 1) {
-                *self.enchantments.get_mut(key) = Some(EnchantmentIdent(val));
+                self.enchantments[key] = Some(EnchantmentIdent(val));
             }
         }
-        Ok(())
+        let enchants_end = 5 + 3 * usize::from(e_count);
+        if enchants_end < 32 {
+            data.ignore(enchants_end..32, "unlocked enchantment slots");
+        }
+        data.ignore(32, "unknown witch field");
+        if data.len() > 36 {
+            data.ignore(36..data.len(), "trailing witch fields");
+        }
     }
 }
 
-#[derive(Debug, Clone, Default)]
+/// Information about the blacksmith resources and daily dismantling limit.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Blacksmith {
+    /// The amount of metal resource currently stored.
     pub metal: u64,
+    /// The amount of arcane splinters resource currently stored.
     pub arcane: u64,
+    /// The number of item dismantles remaining today.
     pub dismantle_left: u8,
     /// This seems to keep track of when you last dismantled. No idea why
     pub last_dismantled: Option<DateTime<Local>>,
 }
 
-const PETS_PER_HABITAT: usize = 20;
-
-#[derive(Debug, Default, Clone)]
+/// Information about the player's pet collection and habitats.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pets {
     /// The total amount of pets collected in all habitats
@@ -477,6 +597,7 @@ pub struct Pets {
     pub rank: u32,
     /// The honor this pet collection has gained
     pub honor: u32,
+    /// The maximum level any pet can currently reach.
     pub max_pet_level: u16,
     /// Information about the pvp opponent you can attack with your pets
     pub opponent: PetOpponent,
@@ -641,9 +762,93 @@ impl Pets {
         };
         (&pet_fighter).into()
     }
+
+    /// Updates pets information from an `ownpets` response.
+    pub(crate) fn update(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) -> Result<()> {
+        data.ignore(0..2, "pet header fields");
+        let mut pet_id = 0;
+        for (element_idx, element) in [
+            HabitatType::Shadow,
+            HabitatType::Light,
+            HabitatType::Earth,
+            HabitatType::Fire,
+            HabitatType::Water,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let info = &mut self.habitats[element];
+            let explored = data.u32_or(210 + element_idx, 20);
+            let next_lvl = data.u16_or(238 + element_idx, 1_000);
+            info.exploration = if explored == 20 {
+                HabitatExploration::Finished
+            } else {
+                HabitatExploration::Exploring {
+                    fights_won: explored,
+                    next_fight_lvl: next_lvl,
+                }
+            };
+            for (pet_pos, pet) in info.pets.iter_mut().enumerate() {
+                pet_id += 1;
+                pet.id = pet_id;
+                pet.level = data.u16_or(pet_id as usize + 1, 0);
+                pet.fruits_today = data.u16_or(pet_id as usize + 109, 0);
+                pet.element = element;
+                pet.can_be_found =
+                    pet.level == 0 && explored as usize >= pet_pos;
+            }
+            info.battled_opponent = data.u32_or(223 + element_idx, 0) == 1;
+        }
+
+        data.ignore(102, "pet 101 level slot");
+        self.total_collected = data.u16_or(103, 0);
+        data.ignore(104..110, "habitat pet counts or fruits");
+        data.ignore(215..223, "unmodelled habitat exploration spacer");
+        data.ignore(228..231, "unmodelled opponent spacer");
+
+        self.opponent.id = data.u32_or(231, 0);
+        self.opponent.next_free_battle = data.server_time(232, server_time)?;
+        self.rank = data.u32_or(233, 0);
+        self.honor = data.u32_or(234, 0);
+
+        self.opponent.pet_count = data.u32_or(235, 0);
+        self.opponent.level_total = data.u32_or(236, 0);
+        self.opponent.reroll_date = data.server_time(237, server_time)?;
+
+        data.ignore(243..250, "unmodelled exploration spacer");
+        for (idx, atr) in self.atr_bonus.values_mut().enumerate() {
+            *atr = data.u32_or(250 + idx, 0);
+        }
+        if data.len() > 255 {
+            data.ignore(255..data.len(), "pet trailer");
+        }
+        Ok(())
+    }
+
+    /// Updates the stats of a single pet from an `ownpetsstats` response.
+    pub(crate) fn update_pet_stat(&mut self, data: &Vals<'_>) {
+        match PetStats::parse(data) {
+            Ok(ps) => {
+                let idx = ps.id;
+                if let Some(pet) =
+                    self.habitats[ps.element].pets.get_mut(idx % 20)
+                {
+                    pet.stats = Some(ps);
+                }
+            }
+            Err(e) => {
+                error!("Could not parse pet stats: {e}");
+            }
+        }
+    }
 }
 
-#[derive(Debug, Default, Clone)]
+/// A single pet habitat (e.g. Shadow, Light, Earth, Fire, Water).
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Habitat {
     /// The state of the exploration of this habitat
@@ -654,11 +859,11 @@ pub struct Habitat {
     /// do this until the next day
     pub battled_opponent: bool,
     /// All the different pets you can collect in this habitat
-    pub pets: [Pet; PETS_PER_HABITAT],
+    pub pets: [Pet; 20],
 }
 
 /// Represents the current state of the habitat exploration
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HabitatExploration {
     #[default]
@@ -675,105 +880,35 @@ pub enum HabitatExploration {
     },
 }
 
-#[derive(Debug, Default, Clone)]
+/// An opponent player for pet `PvP` battles.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PetOpponent {
+    /// The player identifier of the opponent.
     pub id: PlayerId,
+    /// The number of pets the opponent has in total.
     pub pet_count: u32,
+    /// The total sum of pet levels of the opponent.
     pub level_total: u32,
     /// The next time a battle against this opponent will cost no mushroom
     pub next_free_battle: Option<DateTime<Local>>,
     /// The time the opponent was chosen
     pub reroll_date: Option<DateTime<Local>>,
+    /// The element / habitat type defending in this battle, if known.
     pub habitat: Option<HabitatType>,
 }
 
-impl Pets {
-    pub(crate) fn update(
-        &mut self,
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<(), SFError> {
-        let mut pet_id = 0;
-        for (element_idx, element) in [
-            HabitatType::Shadow,
-            HabitatType::Light,
-            HabitatType::Earth,
-            HabitatType::Fire,
-            HabitatType::Water,
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            let info = self.habitats.get_mut(element);
-            let explored = data.csiget(210 + element_idx, "pet exp", 20)?;
-            info.exploration = if explored == 20 {
-                HabitatExploration::Finished
-            } else {
-                let next_lvl =
-                    data.csiget(238 + element_idx, "next exp pet lvl", 1_000)?;
-                HabitatExploration::Exploring {
-                    fights_won: explored,
-                    next_fight_lvl: next_lvl,
-                }
-            };
-            for (pet_pos, pet) in info.pets.iter_mut().enumerate() {
-                pet_id += 1;
-                pet.id = pet_id;
-                pet.level =
-                    data.csiget((pet_id + 1) as usize, "pet level", 0)?;
-                pet.fruits_today =
-                    data.csiget((pet_id + 109) as usize, "pet fruits td", 0)?;
-                pet.element = element;
-                pet.can_be_found =
-                    pet.level == 0 && explored as usize >= pet_pos;
-            }
-            info.battled_opponent =
-                1 == data.cget(223 + element_idx, "element ff")?;
-        }
-
-        self.total_collected = data.csiget(103, "total pets", 0)?;
-        self.opponent.id = data.csiget(231, "pet opponent id", 0)?;
-        self.opponent.next_free_battle =
-            data.cstget(232, "next free pet fight", server_time)?;
-        self.rank = data.csiget(233, "pet rank", 0)?;
-        self.honor = data.csiget(234, "pet honor", 0)?;
-
-        self.opponent.pet_count = data.csiget(235, "pet enemy count", 0)?;
-        self.opponent.level_total =
-            data.csiget(236, "pet enemy lvl total", 0)?;
-        self.opponent.reroll_date =
-            data.cstget(237, "pet enemy reroll date", server_time)?;
-
-        update_enum_map(&mut self.atr_bonus, data.skip(250, "pet atr boni")?);
-        Ok(())
-    }
-
-    pub(crate) fn update_pet_stat(&mut self, data: &[i64]) {
-        match PetStats::parse(data) {
-            Ok(ps) => {
-                let idx = ps.id;
-                if let Some(pet) =
-                    self.habitats.get_mut(ps.element).pets.get_mut(idx % 20)
-                {
-                    pet.stats = Some(ps);
-                }
-            }
-            Err(e) => {
-                error!("Could not parse pet stats: {e}");
-            }
-        }
-    }
-}
-
-#[derive(Debug, Default, Clone)]
+/// A single pet within a habitat.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pet {
     /// The unique id of this pet accross all habitats (1..=101)
     pub id: u32,
+    /// The level of this pet, or 0 if not yet unlocked.
     pub level: u16,
     /// The amount of fruits this pet got today
     pub fruits_today: u16,
+    /// The habitat / element this pet belongs to.
     pub element: HabitatType,
     /// This is None until you look at your pets again
     pub stats: Option<PetStats>,
@@ -781,28 +916,56 @@ pub struct Pet {
     pub can_be_found: bool,
 }
 
-#[derive(Debug, Default, Clone)]
+/// Detailed attributes and combat statistics for a specific pet.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PetStats {
+    /// The global index / identifier of the pet.
     pub id: usize,
+    /// The level of the pet.
     pub level: u16,
+    /// Total armor value.
     pub armor: u16,
+    /// Combat class of the pet (Warrior, Mage, or Scout).
     pub class: Class,
+    /// Primary attributes of the pet.
     pub attributes: EnumMap<AttributeType, u32>,
+    /// Bonus attributes granted by the pet pack.
     pub bonus_attributes: EnumMap<AttributeType, u32>,
+    /// Minimum attack damage.
     pub min_damage: u16,
+    /// Maximum attack damage.
     pub max_damage: u16,
+    /// Elemental habitat of the pet.
     pub element: HabitatType,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Enum, EnumIter, Hash)]
+/// The five elemental habitats for pets.
+#[derive(
+    Debug,
+    Default,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Enum,
+    EnumCount,
+    EnumIter,
+    Hash,
+    FromPrimitive,
+)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HabitatType {
+    /// Shadow element (Constitution).
     #[default]
     Shadow = 0,
+    /// Light element (Dexterity).
     Light = 1,
+    /// Earth element (Intelligence).
     Earth = 2,
+    /// Fire element (Luck).
     Fire = 3,
+    /// Water element (Strength).
     Water = 4,
 }
 
@@ -843,32 +1006,48 @@ impl HabitatType {
 }
 
 impl PetStats {
-    pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
-        let pet_id: u32 = data.csiget(0, "pet index", 0)?;
-        let mut s = Self {
-            id: pet_id as usize,
-            level: data.csiget(1, "pet lvl", 0)?,
-            armor: data.csiget(2, "pet armor", 0)?,
-            class: data.cfpuget(3, "pet class", |a| a)?,
-            min_damage: data.csiget(14, "min damage", 0)?,
-            max_damage: data.csiget(15, "max damage", 0)?,
-
-            element: match data.cget(16, "pet element")? {
-                0 => HabitatType::from_pet_id(i64::from(pet_id)).ok_or_else(
-                    || SFError::ParsingError("det pet typ", pet_id.to_string()),
-                )?,
-                x => HabitatType::from_typ_id(x).ok_or_else(|| {
-                    SFError::ParsingError("det pet typ", x.to_string())
-                })?,
-            },
-            ..Default::default()
+    /// Parses pet statistics from a 17-value `ownpetsstats` response.
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Self> {
+        let pet_id = data.u32_or(0, 0);
+        let element_raw = data.i64(16)?;
+        let element = match element_raw {
+            0 => HabitatType::from_pet_id(i64::from(pet_id)).ok_or_else(|| {
+                SFError::ParsingErrorV2(format!(
+                    "Could not determine pet habitat type from pet id {pet_id}"
+                ))
+            })?,
+            x => HabitatType::from_typ_id(x).ok_or_else(|| {
+                SFError::ParsingErrorV2(format!(
+                    "Unknown pet element habitat type: {x}"
+                ))
+            })?,
         };
-        update_enum_map(&mut s.attributes, data.skip(4, "pet attrs")?);
-        update_enum_map(&mut s.bonus_attributes, data.skip(9, "pet bonus")?);
-        Ok(s)
+
+        let mut attributes = EnumMap::default();
+        for (idx, val) in attributes.values_mut().enumerate() {
+            *val = data.u32_or(4 + idx, 0);
+        }
+
+        let mut bonus_attributes = EnumMap::default();
+        for (idx, val) in bonus_attributes.values_mut().enumerate() {
+            *val = data.u32_or(9 + idx, 0);
+        }
+
+        Ok(Self {
+            id: pet_id as usize,
+            level: data.u16_or(1, 0),
+            armor: data.u16_or(2, 0),
+            class: data.parse_enum::<Class>(3)?,
+            attributes,
+            bonus_attributes,
+            min_damage: data.u16_or(14, 0),
+            max_damage: data.u16_or(15, 0),
+            element,
+        })
     }
 }
 
+/// A pending feature unlock received from the server.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Unlockable {
@@ -879,40 +1058,45 @@ pub struct Unlockable {
 }
 
 impl Unlockable {
-    pub(crate) fn parse(data: &[i64]) -> Result<Vec<Unlockable>, SFError> {
-        data.chunks_exact(2)
-            .filter(|chunk| chunk.first().copied().unwrap_or_default() != 0)
-            .map(|chunk| {
-                Ok(Unlockable {
-                    main_ident: chunk.cget(0, "unlockable ident")?,
-                    sub_ident: chunk.cget(1, "unlockable sub ident")?,
-                })
-            })
-            .collect()
+    /// Parses a list of unlockable feature pairs `[main_ident, sub_ident]`.
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Vec<Unlockable>> {
+        let mut unlocks = Vec::new();
+        for chunk in data.chunks(2) {
+            let main_ident = chunk.i64(0)?;
+            let sub_ident = chunk.i64(1)?;
+            if main_ident != 0 {
+                unlocks.push(Unlockable {
+                    main_ident,
+                    sub_ident,
+                });
+            }
+        }
+        Ok(unlocks)
     }
 }
 
 /// The current progress towards all achievements
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Achievements(pub Vec<Achievement>);
 
 impl Achievements {
-    pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
+    /// Updates the achievements from an `achievement` response.
+    pub(crate) fn update(&mut self, data: &Vals<'_>) {
         self.0.clear();
         let total_count = data.len() / 2;
         if !data.len().is_multiple_of(2) {
             warn!("achievement data has the wrong length: {}", data.len());
-            return Ok(());
+            data.ignore_all("wrong length achievement data");
+            return;
         }
 
         for i in 0..total_count {
             self.0.push(Achievement {
-                achieved: data.cget(i, "achievement achieved")? == 1,
-                progress: data.cget(i + total_count, "achievement achieved")?,
+                achieved: data.u32_or(i, 0) == 1,
+                progress: data.i64_or(i + total_count, 0),
             });
         }
-        Ok(())
     }
 
     /// The amount of achievements, that have been earned
@@ -933,7 +1117,7 @@ pub struct Achievement {
 }
 
 /// Contains all the items & monsters you have found in the scrapbook
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ScrapBook {
     /// All the items, that this player has already collected. To check if an
@@ -947,15 +1131,21 @@ pub struct ScrapBook {
 }
 
 impl ScrapBook {
+    /// Parses scrapbook collected item and monster IDs from a base64 encoded
+    /// response.
     // 99% based on Hubert Lipińskis Code
     // https://github.com/HubertLipinski/sfgame-scrapbook-helper
-    pub(crate) fn parse(val: &str) -> Option<ScrapBook> {
+    pub(crate) fn parse(data: &Vals<'_>) -> Option<ScrapBook> {
+        let val = data.str(0).ok()?;
         let text = base64::Engine::decode(
             &base64::engine::general_purpose::URL_SAFE,
             val,
         )
         .ok()?;
         if text.iter().all(|a| *a == 0) {
+            if data.len() > 1 {
+                data.ignore(1..data.len(), "trailing scrapbook fields");
+            }
             return None;
         }
 
@@ -986,6 +1176,9 @@ impl ScrapBook {
                 }
             }
         }
+        if data.len() > 1 {
+            data.ignore(1..data.len(), "trailing scrapbook fields");
+        }
         Some(ScrapBook { items, monster })
     }
 }
@@ -1004,18 +1197,17 @@ pub struct EquipmentIdent {
     pub color: u8,
 }
 
-#[allow(clippy::to_string_trait_impl)]
-impl ToString for EquipmentIdent {
-    fn to_string(&self) -> String {
+impl Display for EquipmentIdent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let item_typ = self.typ.raw_id();
         let model_id = self.model_id;
         let color = self.color;
 
         if let Some(class) = self.class {
             let ci = class as u8 + 1;
-            format!("itm{item_typ}_{model_id}_{color}_{ci}")
+            write!(f, "itm{item_typ}_{model_id}_{color}_{ci}")
         } else {
-            format!("itm{item_typ}_{model_id}_{color}")
+            write!(f, "itm{item_typ}_{model_id}_{color}")
         }
     }
 }
@@ -1105,4 +1297,148 @@ fn parse_scrapbook_item(item_idx: i64) -> Option<EquipmentIdent> {
         });
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
+    use super::*;
+
+    fn assert_all_read(data: &Vals<'_>) {
+        let unread = data.unaccessed_indices();
+        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
+    }
+
+    #[test]
+    fn test_hellevator_treat_bonus_parse() {
+        crate::parse_test!(HellevatorTreatBonus("14/30"), {
+            typ: HellevatorTreatBonusType::ExtraDamage,
+            amount: 30,
+        });
+    }
+
+    #[test]
+    fn test_hellevator_monster_parse() {
+        crate::parse_test!(HellevatorMonster("123/50/2"), {
+            id: 123,
+            level: 50,
+            typ: HellevatorMonsterElement::Cold,
+        });
+    }
+
+    #[test]
+    fn test_unlockable_parse() {
+        let data = Vals::from("1/2/3/4");
+        let parsed = Unlockable::parse(&data).unwrap();
+        assert_eq!(
+            parsed,
+            vec![
+                Unlockable {
+                    main_ident: 1,
+                    sub_ident: 2,
+                },
+                Unlockable {
+                    main_ident: 3,
+                    sub_ident: 4,
+                },
+            ]
+        );
+        assert_all_read(&data);
+    }
+
+    #[test]
+    fn test_hellevator_daily_reward_parse() {
+        let raw = "1/10/2/3/4/1000/500/300/100/50";
+        let data = Vals::from(raw);
+        let reward = HellevatorDailyReward::parse(&data).unwrap();
+        assert_eq!(reward.gold_chests, 2);
+        assert_eq!(reward.fortress_chests, 3);
+        assert_eq!(reward.blacksmith_chests, 4);
+        assert_eq!(reward.silver, 1000);
+        assert_eq!(reward.wood, 500);
+        assert_eq!(reward.stone, 300);
+        assert_eq!(reward.arcane, 100);
+        assert_eq!(reward.metal, 50);
+        assert!(reward.claimable());
+        assert_all_read(&data);
+
+        let short_data = Vals::from("0/2/0/0");
+        assert!(HellevatorDailyReward::parse(&short_data).is_none());
+        assert_all_read(&short_data);
+    }
+
+    #[test]
+    fn test_hellevator_update() {
+        let raw =
+            "0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0";
+        let mut hellevator = Hellevator::default();
+        let server_time = ServerTime::default();
+        let data = Vals::from(raw);
+        hellevator.update(&data, server_time).unwrap();
+        assert_all_read(&data);
+    }
+
+    #[test]
+    fn test_witch_update() {
+        let raw = "1788480000/1391734661/-1/-1/9/6/51/1386180831/7/11/\
+                   1387304577/0/61/1387815766/2/41/1388352596/8/101/\
+                   1389068503/1/71/1389696713/3/91/1390336047/4/81/1391019206/\
+                   5/31/1391734731/9/0/9/238037800";
+        let mut witch = Witch::default();
+        let data = Vals::from(raw);
+        witch.update(&data);
+        assert_eq!(witch.enchantment_price, 238_037_800);
+        assert_eq!(witch.required_item, Some(EquipmentSlot::Ring));
+        assert!(!witch.cauldron_bubbling);
+        assert!(witch.enchantments[Enchantment::SwordOfVengeance].is_some());
+        assert!(witch.enchantments[Enchantment::ShadowOfTheCowboy].is_some());
+        assert_all_read(&data);
+    }
+
+    #[test]
+    fn test_pets_update() {
+        let raw = "446275/0/8/60/18/19/58/23/1/1/52/1/26/66/100/1/1/62/100/7/\
+                   0/100/7/70/100/35/71/1/1/1/14/1/1/100/1/1/41/100/21/100/8/\
+                   100/15/78/100/30/69/1/1/1/0/99/4/100/1/100/6/0/78/35/0/0/\
+                   49/100/14/15/62/1/1/5/1/87/100/1/1/57/91/100/0/0/0/100/11/\
+                   77/100/16/44/6/9/1/76/1/100/10/1/85/1/100/1/22/0/100/0/91/\
+                   20/22/17/19/21/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+                   0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+                   0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+                   0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/20/20/19/20/20/0/\
+                   0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/105012/1760337462/7836/3220/\
+                   19/586/1788552826/78/78/75/78/78/0/0/0/0/0/0/0/1424/1482/\
+                   10365/6699/4671/0/0/0/0/0/0/0/0/0/3742";
+        let mut pets = Pets::default();
+        let server_time = ServerTime::default();
+        let data = Vals::from(raw);
+        pets.update(&data, server_time).unwrap();
+        assert_eq!(pets.total_collected, 91);
+        assert_eq!(pets.rank, 7836);
+        assert_eq!(pets.honor, 3220);
+        assert_eq!(pets.opponent.id, 105_012);
+        assert_eq!(pets.atr_bonus[AttributeType::Strength], 1424);
+        assert_eq!(pets.atr_bonus[AttributeType::Dexterity], 1482);
+        assert_eq!(pets.atr_bonus[AttributeType::Intelligence], 10365);
+        assert_eq!(pets.atr_bonus[AttributeType::Constitution], 6699);
+        assert_eq!(pets.atr_bonus[AttributeType::Luck], 4671);
+        assert_all_read(&data);
+    }
+
+    #[test]
+    fn test_pet_stats_parse() {
+        let raw = "1/50/200/1/10/20/30/40/50/5/10/15/20/25/100/150/1";
+        let data = Vals::from(raw);
+        let stats = PetStats::parse(&data).unwrap();
+        assert_eq!(stats.id, 1);
+        assert_eq!(stats.level, 50);
+        assert_eq!(stats.armor, 200);
+        assert_eq!(stats.class, Class::Mage);
+        assert_eq!(stats.attributes[AttributeType::Strength], 10);
+        assert_eq!(stats.bonus_attributes[AttributeType::Strength], 5);
+        assert_eq!(stats.min_damage, 100);
+        assert_eq!(stats.max_damage, 150);
+        assert_eq!(stats.element, HabitatType::Shadow);
+        assert_all_read(&data);
+    }
 }

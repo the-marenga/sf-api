@@ -335,6 +335,7 @@ if building_type.required_min_fortress_level() > fortress_level {
 | --- | --- |
 | `arena.rs` | arena, fights, rounds; variable-length responses |
 | `fortress.rs` | the reference implementation |
+| `unlockables.rs` | scrapbook, pets, hellevator, blacksmith, witch, achievements |
 
 **Partly ported**: in `items.rs`, `Item::parse` and `ItemType::parse` work on
 `Vals`, but the deprecated `parse_slice` twins and their call sites in
@@ -347,7 +348,6 @@ descending order):
 | --- | --- |
 | `mod.rs` | the `apply_update_key` match itself: character save and attributes, and every key without a home yet |
 | `social.rs` | lookups, other players/guilds, fortress and pet bonus views |
-| `unlockables.rs` | scrapbook, pets, hellevator, blacksmith, witch, achievements |
 | `event.rs` | world boss event and battle, upgrade and projectile offers |
 | `legendary_dungeon.rs` | legendary dungeon event, merchant, gems of fate |
 | `guild.rs` | members, portal, raid, group prices and saves, chat messages |
