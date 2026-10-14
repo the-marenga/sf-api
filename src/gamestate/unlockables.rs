@@ -5,7 +5,7 @@ use enum_map::EnumMap;
 use log::warn;
 use strum::IntoEnumIterator;
 
-use super::{Class, EquipmentSlot, Result};
+use super::{Class, EquipmentSlot, Result, ServerTime};
 pub use super::{hellevator::*, pets::*};
 use crate::{gamestate::items::Enchantment, response::Vals};
 
@@ -96,6 +96,18 @@ pub struct Blacksmith {
     pub dismantle_left: u8,
     /// This seems to keep track of when you last dismantled. No idea why
     pub last_dismantled: Option<DateTime<Local>>,
+}
+
+impl Blacksmith {
+    /// Updates the blacksmith from a `smith` response:
+    /// `[dismantles_left, last_dismantled, ...]`.
+    pub(crate) fn update(&mut self, data: &Vals<'_>, server_time: ServerTime) {
+        self.dismantle_left = data.u8_or(0, 0);
+        self.last_dismantled = data.server_time_opt(1, server_time);
+        if data.len() > 2 {
+            data.ignore(2..data.len(), "unknown smith fields");
+        }
+    }
 }
 
 /// A pending feature unlock received from the server.
@@ -490,5 +502,16 @@ mod tests {
         assert!(parse_scrapbook_item(1954).is_none());
         assert!(parse_scrapbook_item(1955).is_none());
         assert!(parse_scrapbook_item(1956).is_some());
+    }
+
+    #[test]
+    fn test_blacksmith_update() {
+        let raw = "5/1600000000/0";
+        let data = Vals::from(raw);
+        let mut bs = Blacksmith::default();
+        bs.update(&data, ServerTime::default());
+        assert_eq!(bs.dismantle_left, 5);
+        assert!(bs.last_dismantled.is_some());
+        assert_all_read(&data);
     }
 }
