@@ -168,20 +168,23 @@ mod tests {
 
     #[test]
     fn test_wheel_reward_parse() {
-        crate::parse_test!(WheelReward("0/5", false), {
-            typ: WheelRewardType::Mushrooms,
-            amount: 5,
-        });
+        let data = Vals::from("0/5");
+        let reward = WheelReward::parse(&data, false).unwrap();
+        assert_eq!(reward.typ, WheelRewardType::Mushrooms);
+        assert_eq!(reward.amount, 5);
+        assert_all_read(&data);
 
-        crate::parse_test!(WheelReward("1/10", true), {
-            typ: WheelRewardType::Arcane,
-            amount: 10,
-        });
+        let data = Vals::from("1/10");
+        let reward = WheelReward::parse(&data, true).unwrap();
+        assert_eq!(reward.typ, WheelRewardType::Arcane);
+        assert_eq!(reward.amount, 10);
+        assert_all_read(&data);
 
-        crate::parse_test!(WheelReward("1/10", false), {
-            typ: WheelRewardType::Wood,
-            amount: 10,
-        });
+        let data = Vals::from("1/10");
+        let reward = WheelReward::parse(&data, false).unwrap();
+        assert_eq!(reward.typ, WheelRewardType::Wood);
+        assert_eq!(reward.amount, 10);
+        assert_all_read(&data);
 
         let data = Vals::from("3/1");
         let reward = WheelReward::parse(&data, true).unwrap();

@@ -2,7 +2,10 @@ use std::{borrow::Borrow, fmt::Debug, str::FromStr, time::Duration};
 
 use base64::Engine;
 use log::{error, trace, warn};
-use reqwest::{Client, Proxy, header::*};
+use reqwest::{
+    Client, Proxy,
+    header::{ACCEPT_LANGUAGE, HeaderMap, HeaderName, HeaderValue, REFERER},
+};
 use url::Url;
 
 pub use crate::response::*;
@@ -552,10 +555,14 @@ pub struct ConnectionOptions {
     pub error_on_unsupported_version: bool,
 }
 
+/// Configuration settings for connecting through an HTTP/HTTPS proxy.
 #[derive(Debug, Clone)]
 pub struct ProxySettings {
+    /// The URL of the proxy server (e.g. `http://proxy.example.com:8080`).
     pub url: String,
+    /// Optional username for proxy authentication.
     pub username: Option<String>,
+    /// Optional password for proxy authentication.
     pub password: Option<String>,
 }
 
@@ -574,6 +581,7 @@ impl Default for ConnectionOptions {
     }
 }
 
+/// A high-level session wrapper that maintains and updates the local [`GameState`].
 #[derive(Debug)]
 pub struct SimpleSession {
     session: Session,

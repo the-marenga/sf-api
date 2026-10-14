@@ -200,7 +200,8 @@ fixtures come from `cache/`: `cache/*.login` holds the response of a whole
 login, `cache/*.response` holds one response per command (the `body` field is
 the `key:value&key:value` payload).
 
-`crate::parse_test!` covers the common shapes:
+Test cases construct `Vals::from(raw)` directly, parse or update, verify all
+fields were consumed via `vals.assert_all_read()`, and check fields:
 
 ```rust
 #[cfg(test)]
@@ -209,28 +210,25 @@ mod tests {
 
     #[test]
     fn test_fortress_cost_parse() {
-        crate::parse_test!(FortressCost("7200/4000/1100/333"), {
-            time: Duration::from_secs(7200),
-            silver: 4000,
-            wood: 1100,
-            stone: 333,
-        });
+        let vals = Vals::from("7200/4000/1100/333");
+        let cost = FortressCost::parse(&vals).unwrap();
+        vals.assert_all_read();
+        assert_eq!(cost.time, Duration::from_secs(7200));
+        assert_eq!(cost.silver, 4000);
+        assert_eq!(cost.wood, 1100);
+        assert_eq!(cost.stone, 333);
     }
 
-    // `update:` runs a method on a target and then checks fields:
     #[test]
     fn test_fortress_update_prices() {
         let mut fortress = Fortress::default();
-        crate::parse_test!(update: fortress.update_prices("7200/4000/1100/333"), {});
+        let vals = Vals::from("7200/4000/1100/333");
+        fortress.update_prices(&vals).unwrap();
+        vals.assert_all_read();
         assert_eq!(fortress.gem_search.cost.wood, 29);
     }
 }
 ```
-
-The arms are `Ty(raw, { fields })`, `opt: Ty(raw, { fields })` for a parser
-returning `Option`, `Ty(raw) => expected` for a whole-value comparison, and
-`update: target.method(raw, { fields })` (or `update: target(raw, ..)` for
-`update` itself).
 
 Two habits worth keeping. Assert that the parser consumed everything, using
 the same tracker the `Drop` warning reports from:

@@ -115,8 +115,11 @@ impl Pets {
         gladiator: u32,
     ) -> crate::simulate::Fighter {
         let habitat_pets = &self.habitats[pet.element].pets;
-        let pack_bonus =
-            habitat_pets.iter().filter(|a| a.level > 0).count() as f64 * 0.05;
+        let unlocked_count = u32::try_from(
+            habitat_pets.iter().filter(|a| a.level > 0).count(),
+        )
+        .unwrap_or(0);
+        let pack_bonus = f64::from(unlocked_count) * 0.05;
 
         let level_bonus = habitat_pets
             .iter()
