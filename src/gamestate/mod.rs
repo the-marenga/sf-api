@@ -697,62 +697,44 @@ impl GameState {
                     .update(&val.values::<32>()?, server_time)?;
             }
             "eventstatus" => {
-                let data: Vec<i64> = val.into_list("event status")?;
-                self.special_event = EventStatus::parse(&data, server_time)
+                self.special_event = val
+                    .values::<5>()
+                    .and_then(|data| EventStatus::parse(&data, server_time))
                     .inspect_err(|a| {
                         log::warn!("Could not parse event status: {a}");
                     })
                     .ok();
             }
             "wbcharacter" => {
-                let data: Vec<i64> = val.into_list("wb char")?;
-
                 self.world_boss
                     .get_or_insert_default()
-                    .update(&data, server_time)?;
+                    .update(&val.values::<15>()?, server_time)?;
             }
             "wbtower" => {
-                let data: Vec<String> = val.into_list("wb ug store")?;
-                let data: Vec<_> = data.iter().map(|a| a.as_str()).collect();
                 self.world_boss.get_or_insert_default().battle =
-                    Some(WorldBossBattle::parse(&data)?);
+                    Some(WorldBossBattle::parse(&val.values::<106>()?));
             }
             "wbupgradestore" => {
-                let data: Vec<i64> = val.into_list("wb ug store")?;
-                let boss = self.world_boss.get_or_insert_default();
-                if data.iter().all(|a| *a == 0) {
-                    boss.upgrade_offers.clear();
-                    return Ok(());
-                }
-                let offers = data
-                    .chunks_exact(7)
-                    .map(UpgradeOffer::parse)
-                    .collect::<Result<_, SFError>>()?;
-                boss.upgrade_offers = offers;
+                self.world_boss
+                    .get_or_insert_default()
+                    .update_upgrade_store(&val.list());
             }
             "wbammostore" => {
-                let data: Vec<i64> = val.into_list("wb ammo store")?;
-                let boss = self.world_boss.get_or_insert_default();
-                if data.iter().all(|a| *a == 0) {
-                    boss.projectile_offers.clear();
-                    return Ok(());
-                }
-                let offers = data
-                    .chunks_exact(6)
-                    .map(ProjectileOffer::parse)
-                    .collect::<Result<_, SFError>>()?;
-                boss.projectile_offers = offers;
+                self.world_boss
+                    .get_or_insert_default()
+                    .update_ammo_store(&val.list());
             }
             "wbammo" => {
                 // Special ammo
-                let data: Vec<i64> = val.into_list("wb ammo")?;
-                let ammo = WorldBossProjectile::parse(&data)?;
+                let ammo = WorldBossProjectile::parse(&val.values::<3>()?);
                 self.world_boss.get_or_insert_default().projectile = ammo;
             }
             "wbupgrade" => {
-                let data: Vec<i64> = val.into_list("wb upgrade")?;
                 self.world_boss.get_or_insert_default().catapult =
-                    WorldBossCatapult::parse(&data, server_time)?;
+                    WorldBossCatapult::parse(
+                        &val.values::<17>()?,
+                        server_time,
+                    )?;
             }
             "wbrankinginternationalmax" => {
                 self.world_boss
@@ -768,14 +750,9 @@ impl GameState {
                     val.into("wb int rank fighter max").ok();
             }
             "wbdailychests" => {
-                let data: Vec<u32> = val.into_list("wb upgrade")?;
-                let chests = &mut self
-                    .world_boss
+                self.world_boss
                     .get_or_insert_default()
-                    .available_daily_chests;
-                for (old, new) in chests.values_mut().zip(data) {
-                    *old = new;
-                }
+                    .update_daily_chests(&val.values::<5>()?);
             }
             "maxrank" => {
                 self.hall_of_fames.players_total = val.into("player count")?;
