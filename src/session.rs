@@ -560,7 +560,6 @@ impl Default for ConnectionOptions {
 }
 
 #[derive(Debug)]
-#[allow(clippy::module_name_repetitions)]
 pub struct SimpleSession {
     session: Session,
     gamestate: Option<GameState>,

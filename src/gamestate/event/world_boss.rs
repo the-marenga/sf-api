@@ -1,5 +1,3 @@
-#![allow(clippy::module_name_repetitions)]
-
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
 use num_derive::FromPrimitive;
