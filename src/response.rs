@@ -679,6 +679,17 @@ impl<'a> Vals<'a> {
         }
     }
 
+    /// Asserts that all values in this response were read.
+    #[cfg(test)]
+    #[track_caller]
+    pub fn assert_all_read(&self) {
+        assert!(
+            self.unaccessed_indices().is_empty(),
+            "unread values in {self}: {:?}",
+            self.unaccessed_indices()
+        );
+    }
+
     /// The value at `pos`, marking it as read.
     #[must_use]
     pub fn get_str(&self, pos: usize) -> Option<&'a str> {
