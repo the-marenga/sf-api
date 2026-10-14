@@ -2,7 +2,7 @@ use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
 use log::error;
 use num_derive::FromPrimitive;
-use strum::{EnumCount, EnumIter};
+use strum::{EnumCount, EnumIter, IntoEnumIterator};
 
 use super::{AttributeType, Class, Result, ServerTime};
 #[cfg(feature = "simulation")]
@@ -39,7 +39,7 @@ static PET_BASE_STAT_ARRAY: [u32; 20] = [
     160, 160,
 ];
 
-/// Maps the habitat relativ eindex of the pet to their class
+/// Maps the habitat relative index of the pet to their class
 #[cfg(feature = "simulation")]
 #[rustfmt::skip]
 static PET_CLASS_LOOKUP: EnumMap<HabitatType, [Class; 20]> =
@@ -86,7 +86,8 @@ static PET_CLASS_LOOKUP: EnumMap<HabitatType, [Class; 20]> =
     ]);
 
 impl Pets {
-    /// Get the current monster we would be fighting, when
+    /// Returns the enemy monster currently fought in habitat exploration, if
+    /// any.
     #[cfg(feature = "simulation")]
     pub fn get_exploration_enemy(
         &self,
@@ -114,20 +115,15 @@ impl Pets {
         gladiator: u32,
     ) -> crate::simulate::Fighter {
         let habitat_pets = &self.habitats[pet.element].pets;
-        let pack_bonus = habitat_pets
-            .iter()
-            .map(|a| match a.level {
-                0 => 0.0,
-                _ => 0.05,
-            })
-            .sum::<f64>();
+        let pack_bonus =
+            habitat_pets.iter().filter(|a| a.level > 0).count() as f64 * 0.05;
 
         let level_bonus = habitat_pets
             .iter()
             .map(|p| match p.level {
                 ..100 => 0.0,
                 100..150 => 0.05,
-                150..200 => 0.75,
+                150..200 => 0.075,
                 200.. => 0.1,
             })
             .sum::<f64>();
@@ -193,16 +189,7 @@ impl Pets {
     ) -> Result<()> {
         data.ignore(0..2, "pet header fields");
         let mut pet_id = 0;
-        for (element_idx, element) in [
-            HabitatType::Shadow,
-            HabitatType::Light,
-            HabitatType::Earth,
-            HabitatType::Fire,
-            HabitatType::Water,
-        ]
-        .into_iter()
-        .enumerate()
-        {
+        for (element_idx, element) in HabitatType::iter().enumerate() {
             let info = &mut self.habitats[element];
             let explored = data.u32_or(210 + element_idx, 20);
             let next_lvl = data.u16_or(238 + element_idx, 1_000);
@@ -254,6 +241,13 @@ impl Pets {
         match PetStats::parse(data) {
             Ok(ps) => {
                 let idx = ps.id;
+                // TODO: Potential off-by-one indexing bug: `ps.id` is 1-based
+                // (1..=100). With `idx % 20`, Pet #1 maps to
+                // index 1 (Pet #2), and Pet #20 maps to index 0
+                // (Pet #1), placing every pet's stats into the wrong slot.
+                // Consider matching by ID instead:
+                // `self.habitats[ps.element].pets.iter_mut().find(|p| p.id as
+                // usize == ps.id)`
                 if let Some(pet) =
                     self.habitats[ps.element].pets.get_mut(idx % 20)
                 {
@@ -322,7 +316,7 @@ pub struct PetOpponent {
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pet {
-    /// The unique id of this pet accross all habitats (1..=101)
+    /// The unique id of this pet across all habitats (1..=101)
     pub id: u32,
     /// The level of this pet, or 0 if not yet unlocked.
     pub level: u16,
@@ -403,25 +397,25 @@ impl From<HabitatType> for AttributeType {
 
 impl HabitatType {
     pub(crate) fn from_pet_id(id: i64) -> Option<Self> {
-        Some(match id {
-            1..=20 => HabitatType::Shadow,
-            21..=40 => HabitatType::Light,
-            41..=60 => HabitatType::Earth,
-            61..=80 => HabitatType::Fire,
-            81..=100 => HabitatType::Water,
-            _ => return None,
-        })
+        match id {
+            1..=20 => Some(HabitatType::Shadow),
+            21..=40 => Some(HabitatType::Light),
+            41..=60 => Some(HabitatType::Earth),
+            61..=80 => Some(HabitatType::Fire),
+            81..=100 => Some(HabitatType::Water),
+            _ => None,
+        }
     }
 
     pub(crate) fn from_typ_id(id: i64) -> Option<Self> {
-        Some(match id {
-            1 => HabitatType::Shadow,
-            2 => HabitatType::Light,
-            3 => HabitatType::Earth,
-            4 => HabitatType::Fire,
-            5 => HabitatType::Water,
-            _ => return None,
-        })
+        match id {
+            1 => Some(HabitatType::Shadow),
+            2 => Some(HabitatType::Light),
+            3 => Some(HabitatType::Earth),
+            4 => Some(HabitatType::Fire),
+            5 => Some(HabitatType::Water),
+            _ => None,
+        }
     }
 }
 
