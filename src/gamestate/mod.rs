@@ -322,45 +322,6 @@ impl GameState {
         }
     }
 
-    pub(crate) fn updatete_relation_list(&mut self, val: &str) {
-        self.character.relations.clear();
-        for entry in val
-            .trim_end_matches(';')
-            .split(';')
-            .filter(|a| !a.is_empty())
-        {
-            let mut parts = entry.split(',');
-            let (
-                Some(id),
-                Some(name),
-                Some(guild),
-                Some(level),
-                Some(relation),
-            ) = (
-                parts.next().and_then(|a| a.parse().ok()),
-                parts.next().map(std::string::ToString::to_string),
-                parts.next().map(std::string::ToString::to_string),
-                parts.next().and_then(|a| a.parse().ok()),
-                parts.next().and_then(|a| match a {
-                    "-1" => Some(Relationship::Ignored),
-                    "1" => Some(Relationship::Friend),
-                    _ => None,
-                }),
-            )
-            else {
-                warn!("bad friendslist entry: {entry}");
-                continue;
-            };
-            self.character.relations.push(RelationEntry {
-                id,
-                name,
-                guild,
-                level,
-                relation,
-            });
-        }
-    }
-
     pub(crate) fn update_resources(
         &mut self,
         res: &[i64],
@@ -956,7 +917,9 @@ impl GameState {
                 .guild
                 .get_or_insert_default()
                 .update_group_knights(&val.list_by(',')),
-            "friendlist" => self.updatete_relation_list(val.as_str()),
+            "friendlist" => {
+                self.character.update_relations(&val.list_by(';'));
+            }
             "legendaries" => {
                 if val.as_str().chars().any(|a| a != 'A') {
                     warn!("Found a legendaries value, that is not just AAA..");
@@ -1515,87 +1478,12 @@ impl GameState {
                 // 0
             }
             "ownplayersavecharacter" => {
-                let data: Vec<i64> = val.into_list("char save")?;
-
-                // 1482984989 // creation time? secret id?
-                self.character.player_id = data.csiget(1, "player id", 0)?;
-                // 0
-                self.character.level =
-                    data.csimget(3, "level", 0, |a| a & 0xFFFF)?;
-                self.character.experience = data.csiget(4, "experience", 0)?;
-                self.character.next_level_xp =
-                    data.csiget(5, "xp to next lvl", 0)?;
-                self.character.honor = data.csiget(6, "honor", 0)?;
-                self.character.rank = data.csiget(7, "rank", 0)?;
-                self.character.portrait =
-                    Portrait::parse_slice(data.skip(8, "portrait")?)
-                        .unwrap_or_default();
-                ///// Portrait
-                // 4
-                // 206
-                // 203
-                // 2
-                // 0
-                // 2
-                // 7
-                // 2
-                // 0
-                // 0
-                self.character.race = data.cfpuget(18, "char race", |a| a)?;
-                // 2
-                // ////
-                self.character.class =
-                    data.cfpuget(20, "character class", |a| a - 1)?;
-                self.character.mount =
-                    data.cfpget(21, "character mount", |a| a & 0xFF)?;
-                // 0
-                self.character.armor = data.csiget(23, "total armor", 0)?;
-                self.character.min_damage = data.csiget(24, "min damage", 0)?;
-                self.character.max_damage = data.csiget(25, "max damage", 0)?;
+                let data = val.values::<70>()?;
+                self.character.update(&data, server_time)?;
                 self.guild.get_or_insert_default().portal.damage_bonus =
-                    data.cimget(26, "portal dmg bonus", |a| a)?;
-                // 4280492 ??
+                    data.u8_or(26, 0);
                 self.dungeons.portal.get_or_insert_default().player_hp_bonus =
-                    data.csimget(28, "portal hp bonus", 0, |a| a)?;
-                self.character.mount_end =
-                    data.cstget(29, "mount end", server_time)?;
-                update_enum_map(
-                    &mut self.character.attribute_basis,
-                    data.skip(30, "char attr basis")?,
-                );
-                update_enum_map(
-                    &mut self.character.attribute_additions,
-                    data.skip(35, "char attr adds")?,
-                );
-                update_enum_map(
-                    &mut self.character.attribute_times_bought,
-                    data.skip(40, "char attr tb")?,
-                );
-                // 0
-                // 0
-                // 0
-                // 0
-                // 1
-                // 17
-                // 0
-                // 0
-                // 0
-                // 66
-                // 0
-                // 7
-                // 18
-                // 0
-                // 0
-                // 0
-                // 0
-                // 0
-                // 0
-                // 0
-                // guild_id ?
-                // 12122    // sb count
-                // 0
-                // 31
-                // 15       // gladiators
+                    data.u16_or(28, 0);
             }
             "adventure" => {
                 self.tavern.update_quests(&val.values::<23>()?)?;
