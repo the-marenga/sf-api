@@ -1,8 +1,12 @@
 //! Tavern activities, quests, dice game, toilet, and expeditions.
 
+/// The dice game played with the gambler in the tavern.
 pub mod dice;
+/// Expedition events, crossroads choices, and active expeditions.
 pub mod expeditions;
+/// Tavern quests, adventure lengths, and quest rewards.
 pub mod quest;
+/// The arcane toilet of the gods in the tavern.
 pub mod toilet;
 
 pub use dice::*;
@@ -131,10 +135,7 @@ mod tests {
         assert_eq!(tavern.quests[1].location_id, Location::SkullIsland);
         assert_eq!(tavern.quests[2].monster_id, 67);
         assert_eq!(tavern.quests[2].location_id, Location::EvernightForest);
-        assert!(
-            data.unaccessed_indices().is_empty(),
-            "unread values in {data}"
-        );
+        data.assert_all_read();
     }
 
     #[test]
@@ -149,5 +150,6 @@ mod tests {
         assert_eq!(tavern.quests[0].item.as_ref().unwrap().price, 83940);
         assert!(tavern.quests[1].item.is_none());
         assert!(tavern.quests[2].item.is_none());
+        data.assert_all_read();
     }
 }

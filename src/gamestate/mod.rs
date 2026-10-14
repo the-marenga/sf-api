@@ -50,6 +50,7 @@ pub struct GameState {
     /// Both shops. You can access a specific one either with `get()`,
     /// `get_mut()`, or `[]` and the `ShopType` as the key.
     pub shops: EnumMap<ShopType, Shop>,
+    /// The average item level offered in the shops
     pub shop_item_lvl: u32,
     /// If the player is in a guild, this will contain information about it
     pub guild: Option<Guild>,
@@ -101,101 +102,7 @@ pub struct GameState {
     server_time_diff: i64,
 }
 
-const SHOP_N: usize = 6;
-
-/// A shop, that you can buy items from
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct Shop {
-    pub typ: ShopType,
-    /// The items this shop has for sale
-    pub items: [Item; SHOP_N],
-}
-
-impl Default for Shop {
-    fn default() -> Self {
-        let items = core::array::from_fn(|_| Item {
-            typ: ItemType::Unknown(0),
-            price: u32::MAX,
-            mushroom_price: u32::MAX,
-            model_id: 0,
-            class: None,
-            type_specific_val: 0,
-            attributes: EnumMap::default(),
-            gem_slot: None,
-            rune: None,
-            enchantment: None,
-            color: 0,
-            upgrade_count: 0,
-            item_quality: 0,
-            is_washed: false,
-            full_model_id: 0,
-        });
-
-        Self {
-            items,
-            typ: ShopType::Magic,
-        }
-    }
-}
-
-#[derive(Debug, Default, Clone, PartialEq, Eq, Copy)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct ShopPosition {
-    pub typ: ShopType,
-    pub pos: usize,
-}
-
-impl std::fmt::Display for ShopPosition {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}/{}", self.typ as usize, self.pos + 1)
-    }
-}
-
-impl ShopPosition {
-    /// The 0 based index into the backpack vec, where the item is parsed into
-    #[must_use]
-    pub fn shop(&self) -> ShopType {
-        self.typ
-    }
-    /// The inventory type and position within it, where the item is stored
-    /// according to previous inventory management logic. This is what you use
-    /// for commands
-    #[must_use]
-    pub fn position(&self) -> usize {
-        self.pos
-    }
-}
-
-impl Shop {
-    /// Creates an iterator over the inventory slots.
-    pub fn iter(&self) -> impl Iterator<Item = (ShopPosition, &Item)> {
-        self.items
-            .iter()
-            .enumerate()
-            .map(|(pos, item)| (ShopPosition { typ: self.typ, pos }, item))
-    }
-
-    pub(crate) fn parse(
-        data: &[i64],
-        server_time: ServerTime,
-        typ: ShopType,
-    ) -> Result<Shop, SFError> {
-        let mut shop = Shop::default();
-        shop.typ = typ;
-        for (idx, item) in shop.items.iter_mut().enumerate() {
-            let d = data.skip(idx * ITEM_PARSE_LEN, "shop item")?;
-            let Some(p_item) = Item::parse_slice(d, server_time)? else {
-                return Err(SFError::ParsingError(
-                    "shop item",
-                    format!("{d:?}"),
-                ));
-            };
-            *item = p_item;
-        }
-        Ok(shop)
-    }
-}
+pub use items::{Shop, ShopPosition};
 
 impl GameState {
     /// Constructs a new `GameState` from the provided response. The response
@@ -508,19 +415,15 @@ impl GameState {
             }
             "sfhomeid" => {}
             "backpack" => {
-                self.character.inventory.backpack = val
-                    .list()
-                    .chunks(ITEM_PARSE_LEN)
-                    .map(|chunk| Item::parse(&chunk, server_time))
-                    .collect::<Result<Vec<_>, _>>()?;
+                self.character.inventory.update(&val.list(), server_time)?;
             }
             "itemlevelshop" => {
                 self.shop_item_lvl = val.into("shop lvl")?;
             }
             "storeitemsshakes" => {
-                let data: Vec<i64> = val.into_list("weapon store")?;
-                *self.shops.get_mut(ShopType::Weapon) =
-                    Shop::parse(&data, server_time, ShopType::Weapon)?;
+                let shop = self.shops.get_mut(ShopType::Weapon);
+                shop.typ = ShopType::Weapon;
+                shop.update(&val.values::<114>()?, server_time)?;
             }
             "questofferitems" => {
                 self.tavern.update_quest_items(&val.list(), server_time);
@@ -536,14 +439,15 @@ impl GameState {
                     .update_companion_equipment(&val.list(), server_time)?;
             }
             "storeitemsfidget" => {
-                let data: Vec<i64> = val.into_list("magic store")?;
-                *self.shops.get_mut(ShopType::Magic) =
-                    Shop::parse(&data, server_time, ShopType::Magic)?;
+                let shop = self.shops.get_mut(ShopType::Magic);
+                shop.typ = ShopType::Magic;
+                shop.update(&val.values::<114>()?, server_time)?;
             }
             "ownplayersaveequipment" => {
-                let data = val.values::<EQUIPMENT_PARSE_LEN>()?;
-                self.character.equipment =
-                    Equipment::parse(&data, server_time)?;
+                self.character.equipment.update(
+                    &val.values::<EQUIPMENT_PARSE_LEN>()?,
+                    server_time,
+                )?;
             }
             "systemmessagelist" => {}
             "newslist" => {
@@ -799,9 +703,10 @@ impl GameState {
                 other_player.get_or_insert_default().name.set(val.as_str());
             }
             "otherplayersaveequipment" => {
-                let data = val.values::<EQUIPMENT_PARSE_LEN>()?;
-                other_player.get_or_insert_default().equipment =
-                    Equipment::parse(&data, server_time)?;
+                other_player.get_or_insert_default().equipment.update(
+                    &val.values::<EQUIPMENT_PARSE_LEN>()?,
+                    server_time,
+                )?;
             }
             "fortresspricereroll" => {
                 self.fortress.get_or_insert_default().opponent_reroll_price =
@@ -1059,9 +964,9 @@ impl GameState {
             "otherplayersavepotions" => {
                 other_player.get_or_insert_default().active_potions =
                     items::parse_active_potions(
-                        &val.into_list("other potions")?,
+                        &val.values::<10>()?,
                         server_time,
-                    );
+                    )?;
             }
             "otherplayer" => {
                 let data = val.list();
@@ -1406,9 +1311,10 @@ impl GameState {
             }
             "arena" => self.arena.update(&val.values::<7>()?, server_time)?,
             "ownplayersavepotions" => {
-                let data: Vec<i64> = val.into_list("potions")?;
-                self.character.active_potions =
-                    items::parse_active_potions(&data, server_time);
+                self.character.active_potions = items::parse_active_potions(
+                    &val.values::<10>()?,
+                    server_time,
+                )?;
             }
             "arcanetoilet" => {
                 let data = val.values::<4>()?;
