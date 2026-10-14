@@ -784,7 +784,7 @@ pub struct CombatLogEntry {
 
 impl CombatLogEntry {
     /// Parses a combat log entry from a comma-separated record:
-    /// `msg_id, player_name, won, battle_type, time`.
+    /// `msg_id, player_name, won, battle_type, time, ...`.
     pub(crate) fn parse(
         data: &Vals<'_>,
         server_time: ServerTime,
@@ -793,6 +793,10 @@ impl CombatLogEntry {
         let time = data.server_time(4, server_time)?.ok_or_else(|| {
             SFError::ParsingErrorV2("missing combat time".to_string())
         })?;
+
+        if data.len() > 5 {
+            data.ignore(5..data.len(), "unknown combat log fields");
+        }
 
         Ok(CombatLogEntry {
             msg_id: data.i64(0)?,
@@ -1339,6 +1343,18 @@ mod tests {
         assert!(
             data.unaccessed_indices().is_empty(),
             "unread values in {data}"
+        );
+
+        let raw_6 = "76078261,Geli123,0,9,1791901430,0";
+        let data_6 = Vals::by(raw_6, ',');
+        let entry_6 =
+            CombatLogEntry::parse(&data_6, ServerTime::default()).unwrap();
+        assert_eq!(entry_6.msg_id, 76078261);
+        assert_eq!(entry_6.player_name, "Geli123");
+        assert!(!entry_6.won);
+        assert!(
+            data_6.unaccessed_indices().is_empty(),
+            "unread values in {data_6}"
         );
     }
 
