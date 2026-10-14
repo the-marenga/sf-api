@@ -1612,71 +1612,41 @@ impl GameState {
                 // IDK
             }
             "iadungeontime" => {
-                let dungeons = &mut self.legendary_dungeon;
-
-                let vals: Vec<i64> = val.into_list("iadungeontime")?;
-                dungeons.theme = vals.cfpget(0, "ld theme", |x| x)?;
-                dungeons.start = vals.cstget(1, "ld start", server_time)?;
-                dungeons.end = vals.cstget(2, "ld end", server_time)?;
-                dungeons.close = vals.cstget(3, "ld closes", server_time)?;
+                self.legendary_dungeon
+                    .update_time(&val.values::<4>()?, server_time)?;
             }
             "iadungeonstatstotal" => {
                 let dungeons =
                     self.legendary_dungeon.active.get_or_insert_default();
-
-                let data: Vec<i64> = val.into_list("iadungeonstatstotal")?;
-                dungeons.total_stats = TotalStats::parse(&data)?;
+                dungeons.total_stats = TotalStats::parse(&val.list())?;
             }
             "iadungeonstats" => {
                 let dungeons =
                     self.legendary_dungeon.active.get_or_insert_default();
-
-                let data = val.into_list("iadungeonstats")?;
-                dungeons.stats = Stats::parse(&data).unwrap_or_default();
+                dungeons.stats = Stats::parse(&val.values::<5>()?)?;
             }
             "iadungeon" => {
-                let data: Vec<i64> = val.into_list("iadungeon")?;
                 let dungeons =
                     self.legendary_dungeon.active.get_or_insert_default();
-                dungeons.update(&data)?;
+                dungeons.update(&val.list())?;
                 if !all_values.contains_key("iapendingitems") {
                     dungeons.pending_items.clear();
                 }
             }
             "iapendingitems" => {
-                let dungeons =
-                    self.legendary_dungeon.active.get_or_insert_default();
-                dungeons.pending_items.clear();
-                let data: Vec<i64> = val.into_list("iapendingitems")?;
-                let amount: i64 = data.cget(0, "pending amount")?;
-                if amount < 1 {
-                    return Ok(());
-                }
-                for slice in
-                    data.skip(1, "ld items")?.chunks_exact(ITEM_PARSE_LEN)
-                {
-                    let Some(item) = Item::parse_slice(slice, server_time)?
-                    else {
-                        warn!("Could not parse pending ld item");
-                        continue;
-                    };
-                    dungeons.pending_items.push(item);
-                }
+                self.legendary_dungeon
+                    .active
+                    .get_or_insert_default()
+                    .update_pending_items(&val.list(), server_time)?;
             }
             "ialootitem" => {
                 // The stuff, that was looted after a fight
             }
             "iamerchant" => {
-                let data: Vec<i64> = val.into_list("iamerchant")?;
-
                 self.legendary_dungeon
                     .active
                     .get_or_insert_default()
-                    .merchant_offers = data
-                    .chunks_exact(3)
-                    .flat_map(MerchantOffer::parse)
-                    .flatten()
-                    .collect();
+                    .update_merchant(&val.list())?;
             }
             "iadungeon20cost" => {
                 self.legendary_dungeon
@@ -1685,20 +1655,10 @@ impl GameState {
                     .heal_quarter_cost = val.into("iadungeon20cost")?;
             }
             "iadungeonsoulstones" => {
-                let dungeons =
-                    self.legendary_dungeon.active.get_or_insert_default();
-
-                let data: Vec<i64> = val.into_list("iamerchant")?;
-                let mut chunks = data.chunks_exact(6);
-                dungeons.active_gems = chunks
-                    .by_ref()
-                    .take(3)
-                    .flat_map(GemOfFate::parse)
-                    .flatten()
-                    .collect();
-
-                dungeons.available_gems =
-                    chunks.flat_map(GemOfFate::parse).flatten().collect();
+                self.legendary_dungeon
+                    .active
+                    .get_or_insert_default()
+                    .update_soul_stones(&val.list())?;
             }
             "iamap" => {
                 // 25/-5159/1/-315/
