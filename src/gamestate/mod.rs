@@ -580,14 +580,7 @@ impl GameState {
             }
             "systemmessagelist" => {}
             "newslist" => {
-                self.mail.news_inbox.clear();
-                let data = val.as_str();
-                for msg in data.split(';').filter(|a| !a.trim().is_empty()) {
-                    match NewsEntry::parse(&Vals::by(msg, ','), server_time) {
-                        Ok(msg) => self.mail.news_inbox.push(msg),
-                        Err(e) => warn!("Invalid msg: {msg} {e}"),
-                    }
-                }
+                self.mail.update_news_inbox(&val.list_by(';'), server_time);
             }
             "dummieequipment" => {
                 let data = val.values::<EQUIPMENT_PARSE_LEN>()?;
@@ -958,31 +951,10 @@ impl GameState {
                 // mail. Just a name and clicked play
             }
             "Ranklistplayer" => {
-                self.hall_of_fames.players.clear();
-                for player in val.as_str().trim_matches(';').split(';') {
-                    // Stop parsing once we receive an empty player
-                    if player.ends_with(",,,0,0,0,") {
-                        break;
-                    }
-
-                    match HallOfFamePlayer::parse(&Vals::by(player, ',')) {
-                        Ok(x) => {
-                            self.hall_of_fames.players.push(x);
-                        }
-                        Err(err) => warn!("{err}"),
-                    }
-                }
+                self.hall_of_fames.update_players(&val.list_by(';'));
             }
             "ranklistgroup" => {
-                self.hall_of_fames.guilds.clear();
-                for guild in val.as_str().trim_matches(';').split(';') {
-                    match HallOfFameGuild::parse(&Vals::by(guild, ',')) {
-                        Ok(x) => {
-                            self.hall_of_fames.guilds.push(x);
-                        }
-                        Err(err) => warn!("{err}"),
-                    }
-                }
+                self.hall_of_fames.update_guilds(&val.list_by(';'));
             }
             "maxrankgroup" => {
                 self.hall_of_fames.guilds_total = Some(val.into("guild max")?);
@@ -991,37 +963,13 @@ impl GameState {
                 self.hall_of_fames.pets_total = Some(val.into("pet rank max")?);
             }
             "RanklistPets" => {
-                self.hall_of_fames.pets.clear();
-                for entry in val.as_str().trim_matches(';').split(';') {
-                    match HallOfFamePets::parse(&Vals::by(entry, ',')) {
-                        Ok(x) => {
-                            self.hall_of_fames.pets.push(x);
-                        }
-                        Err(err) => warn!("{err}"),
-                    }
-                }
+                self.hall_of_fames.update_pets(&val.list_by(';'));
             }
             "ranklistfortress" | "Ranklistfortress" => {
-                self.hall_of_fames.fortresses.clear();
-                for guild in val.as_str().trim_matches(';').split(';') {
-                    match HallOfFameFortress::parse(&Vals::by(guild, ',')) {
-                        Ok(x) => {
-                            self.hall_of_fames.fortresses.push(x);
-                        }
-                        Err(err) => warn!("{err}"),
-                    }
-                }
+                self.hall_of_fames.update_fortresses(&val.list_by(';'));
             }
             "ranklistunderworld" => {
-                self.hall_of_fames.underworlds.clear();
-                for entry in val.as_str().trim_matches(';').split(';') {
-                    match HallOfFameUnderworld::parse(&Vals::by(entry, ',')) {
-                        Ok(x) => {
-                            self.hall_of_fames.underworlds.push(x);
-                        }
-                        Err(err) => warn!("{err}"),
-                    }
-                }
+                self.hall_of_fames.update_underworlds(&val.list_by(';'));
             }
             "gamblegoldvalue" => {
                 self.tavern.gamble_result =
@@ -1234,39 +1182,13 @@ impl GameState {
                 // parsing already?
             }
             "messagelist" => {
-                let data = val.as_str();
-                self.mail.inbox.clear();
-                for msg in data.split(';').filter(|a| !a.trim().is_empty()) {
-                    match InboxEntry::parse(&Vals::by(msg, ','), server_time) {
-                        Ok(msg) => self.mail.inbox.push(msg),
-                        Err(e) => warn!("Invalid msg: {msg} {e}"),
-                    }
-                }
+                self.mail.update_inbox(&val.list_by(';'), server_time);
             }
             "messagetext" => {
                 self.mail.open_msg = Some(from_sf_string(val.as_str()));
             }
             "combatloglist" => {
-                self.mail.combat_log.clear();
-                for entry in val.as_str().split(';') {
-                    if entry.is_empty()
-                        || entry.split(',').all(|a| a.is_empty())
-                    {
-                        continue;
-                    }
-                    let data = Vals::by(entry, ',');
-                    match CombatLogEntry::parse(&data, server_time) {
-                        Ok(cle) => {
-                            self.mail.combat_log.push(cle);
-                        }
-                        Err(e) => {
-                            warn!(
-                                "Unable to parse combat log entry: {entry} - \
-                                 {e}"
-                            );
-                        }
-                    }
-                }
+                self.mail.update_combat_log(&val.list_by(';'), server_time);
             }
             "maxupgradelevel" => {
                 self.fortress.get_or_insert_default().building_max_lvl =
@@ -1331,12 +1253,9 @@ impl GameState {
                     .update_pet_bonus(&val.values::<6>()?)?;
             }
             "otherplayerunitlevel" => {
-                let data: Vec<i64> =
-                    val.into_list("other player unit level")?;
-                // This includes other levels, but they are handled
-                // elsewhere I think
-                other_player.get_or_insert_default().wall_combat_lvl =
-                    data.csiget(0, "wall_lvl", 0)?;
+                other_player
+                    .get_or_insert_default()
+                    .update_unit_levels(&val.list());
             }
             "petsrank" => {
                 self.pets.get_or_insert_default().rank =
@@ -1348,17 +1267,10 @@ impl GameState {
                     Some(val.into("mrank under")?);
             }
             "otherplayerfortressrank" => {
-                match val.into::<i64>("other player fortress rank")? {
-                    ..=-1 => {}
-                    x => {
-                        let rank = x.try_into().unwrap_or(1);
-                        other_player
-                            .get_or_insert_default()
-                            .fortress
-                            .get_or_insert_default()
-                            .rank = rank;
-                    }
-                }
+                let rank = val.into::<i64>("other player fortress rank")?;
+                other_player
+                    .get_or_insert_default()
+                    .update_fortress_rank(rank);
             }
             "workreward" => {
                 // Should be irrelevant
@@ -1431,20 +1343,14 @@ impl GameState {
                     val.into("other group fighting cost")?;
             }
             "othergroupmember" => {
-                let names: Vec<_> = val.as_str().split(',').collect();
-                let og = other_guild.get_or_insert_default();
-                og.members.resize_with(names.len(), Default::default);
-                for (m, n) in og.members.iter_mut().zip(names) {
-                    m.name.set(n);
-                }
+                other_guild
+                    .get_or_insert_default()
+                    .update_member_names(&val.list_by(','));
             }
             "othergroupdescription" => {
-                let guild = other_guild.get_or_insert_default();
-                let (emblem, desc) =
-                    val.as_str().split_once('§').unwrap_or(("", val.as_str()));
-
-                guild.emblem.update(emblem);
-                guild.description = from_sf_string(desc);
+                other_guild
+                    .get_or_insert_default()
+                    .update_description_embed(&val.list_by('§'));
             }
             "othergroup" => {
                 other_guild
@@ -1640,14 +1546,7 @@ impl GameState {
                 }
             }
             "gtranking" => {
-                self.hall_of_fames.hellevator = val
-                    .as_str()
-                    .split(';')
-                    .filter(|a| !a.is_empty())
-                    .filter_map(|chunk| {
-                        HallOfFameHellevator::parse(&Vals::by(chunk, ',')).ok()
-                    })
-                    .collect();
+                self.hall_of_fames.update_hellevator(&val.list_by(';'));
             }
             "gtpreviewreward" => {
                 // TODO: these are the previews of the rewards per rank
@@ -1685,62 +1584,19 @@ impl GameState {
                     HellevatorTreatBonus::parse(&val.list()).ok();
             }
             "pendingrewards" => {
-                let vals: Vec<_> = val.as_str().split('/').collect();
-                self.mail.claimables = vals
-                    .chunks_exact(6)
-                    .flat_map(|chunk| -> Result<ClaimableMail, SFError> {
-                        let start = chunk.cfsuget(4, "p reward start")?;
-                        let end = chunk.cfsuget(5, "p reward end")?;
-
-                        let status = match chunk.cget(1, "p read")? {
-                            "0" => ClaimableStatus::Unread,
-                            "1" => ClaimableStatus::Read,
-                            "2" => ClaimableStatus::Claimed,
-                            x => {
-                                warn!("Unknown claimable status: {x}");
-                                ClaimableStatus::Claimed
-                            }
-                        };
-
-                        Ok(ClaimableMail {
-                            typ: FromPrimitive::from_i64(
-                                chunk.cfsuget(2, "claimable typ")?,
-                            )
-                            .unwrap_or_default(),
-                            msg_id: chunk.cfsuget(0, "msg_id")?,
-                            status,
-                            name: chunk.cget(3, "reward code")?.to_string(),
-                            received: server_time
-                                .convert_to_local(start, "p start"),
-                            claimable_until: server_time
-                                .convert_to_local(end, "p end"),
-                        })
-                    })
-                    .collect();
+                self.mail.update_claimables(&val.list(), server_time);
             }
             "pendingrewardressources" => {
-                let vals: Vec<i64> =
-                    val.into_list("pendingrewardressources")?;
-
-                self.mail.open_claimable.get_or_insert_default().resources =
-                    vals.chunks_exact(2)
-                        .flat_map(|chunk| -> Result<Reward, SFError> {
-                            Ok(Reward {
-                                typ: RewardType::parse(chunk.cget(0, "c typ")?),
-                                amount: chunk.csiget(1, "c amount", 1)?,
-                            })
-                        })
-                        .collect();
+                self.mail
+                    .open_claimable
+                    .get_or_insert_default()
+                    .update_resources(&val.list());
             }
             "pendingreward" => {
-                let vals: Vec<i64> = val.into_list("pending item")?;
-                self.mail.open_claimable.get_or_insert_default().items = vals
-                    .chunks_exact(ITEM_PARSE_LEN)
-                    .flat_map(|a|
-                            // Might be broken
-                            Item::parse_slice(a, server_time))
-                    .flatten()
-                    .collect();
+                self.mail
+                    .open_claimable
+                    .get_or_insert_default()
+                    .update_items(&val.list(), server_time);
             }
             "fightablegroups" => {
                 self.guild
