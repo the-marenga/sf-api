@@ -551,19 +551,11 @@ impl GameState {
                     quest.item = Item::parse_slice(chunk, server_time)?;
                 }
             }
-            #[allow(
-                clippy::indexing_slicing,
-                clippy::cast_sign_loss,
-                clippy::cast_possible_truncation
-            )]
-            #[allow(deprecated)]
             "toiletstate" => {
-                let vals: Vec<i64> = val.into_list("toilet state")?;
-                if vals.len() < 3 {
-                    return Ok(());
-                }
+                let vals = val.values::<3>()?;
+                vals.ignore(0..2, "unknown toilet state fields");
                 let toilet = self.tavern.toilet.get_or_insert_default();
-                toilet.sacrifices_left = vals[2] as u32;
+                toilet.sacrifices_left = vals.u32_or(2, 0);
             }
             "companionequipment" => {
                 if val.as_str().trim().is_empty() {
@@ -1198,10 +1190,9 @@ impl GameState {
             }
             "expeditioncrossroad" => {
                 // 3/3/132/0/2/2
-                let data: Vec<i64> = val.into_list("cross")?;
                 let exp =
                     self.tavern.expeditions.active.get_or_insert_default();
-                exp.update_encounters(&data);
+                exp.update_encounters(&val.list());
             }
             "eventtasklist" => {
                 let data: Vec<i64> = val.into_list("etl")?;
@@ -1853,15 +1844,14 @@ impl GameState {
                     items::parse_active_potions(&data, server_time);
             }
             "arcanetoilet" => {
-                let data: Vec<i64> = val.into_list("toilet")?;
+                let data = val.values::<4>()?;
 
                 // Toilet remains none as long as its level is 0
-                let toilet_lvl = data.cget(0, "toilet lvl")?;
+                let toilet_lvl = data.u32_or(0, 0);
                 if toilet_lvl > 0 {
-                    self.tavern
-                        .toilet
-                        .get_or_insert_default()
-                        .update(&data, server_time)?;
+                    self.tavern.toilet.get_or_insert_default().update(&data)?;
+                } else {
+                    data.ignore_all("toilet not yet unlocked");
                 }
             }
             "vipstatus" => {
@@ -2004,15 +1994,14 @@ impl GameState {
                 // 15       // gladiators
             }
             "adventure" => {
-                let data: Vec<i64> = val.into_list("char save")?;
+                let data = val.values::<23>()?;
                 // 198 - Might be the person to give you the quest?
                 // 198 - ??
-                for (slice, quest) in data
-                    .skip(2, "quests")?
-                    .chunks_exact(7)
-                    .zip(&mut self.tavern.quests)
+                data.ignore(0..2, "flavor / quest giver");
+                for (chunk, quest) in
+                    data.window(2..23).chunks(7).zip(&mut self.tavern.quests)
                 {
-                    quest.update(slice)?;
+                    quest.update(&chunk)?;
                 }
             }
             "events" => {
