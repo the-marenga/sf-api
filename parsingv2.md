@@ -337,6 +337,7 @@ if building_type.required_min_fortress_level() > fortress_level {
 | `fortress.rs` | the reference implementation |
 | `hellevator.rs` | hellevator event, treats, shop, monsters, floors, daily rewards |
 | `pets.rs` | pets, habitats, exploration, stats, opponents |
+| `social.rs` | lookups, other players/guilds, fortress and pet bonus views |
 | `tavern.rs` | quests, toilet state, gambler, encounters |
 | `unlockables.rs` | scrapbook, blacksmith, witch, achievements, pending unlocks |
 
@@ -350,7 +351,6 @@ descending order):
 | Module | Handles |
 | --- | --- |
 | `mod.rs` | the `apply_update_key` match itself: character save and attributes, and every key without a home yet |
-| `social.rs` | lookups, other players/guilds, fortress and pet bonus views |
 | `event.rs` | world boss event and battle, upgrade and projectile offers |
 | `legendary_dungeon.rs` | legendary dungeon event, merchant, gems of fate |
 | `guild.rs` | members, portal, raid, group prices and saves, chat messages |

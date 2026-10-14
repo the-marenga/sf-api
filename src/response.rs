@@ -457,6 +457,14 @@ impl<'a> From<&'a str> for Vals<'a> {
     }
 }
 
+impl<'a> Vals<'a> {
+    /// Creates a new [`Vals`] by splitting `raw` by `delim`.
+    #[must_use]
+    pub fn by(raw: &'a str, delim: char) -> Self {
+        Vals::owned(split_values(raw, delim))
+    }
+}
+
 // Only the root owns its values, so only it warns about unread ones.
 #[cfg(debug_assertions)]
 impl Drop for Vals<'_> {
