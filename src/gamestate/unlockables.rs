@@ -283,76 +283,75 @@ impl Display for EquipmentIdent {
     }
 }
 
-#[allow(clippy::enum_glob_use)]
-const SCRAPBOOK_SLOTS: [(
-    std::ops::Range<i64>,
-    EquipmentSlot,
-    Option<Class>,
-    &'static [i64],
-); 44] = {
-    use Class::*;
-    use EquipmentSlot::*;
+const SCRAPBOOK_SLOTS: [(i64, EquipmentSlot, Option<Class>, bool); 44] = {
+    use EquipmentSlot as ES;
     [
-        (801..1011, Amulet, None, &[]),
-        (1011..1051, Amulet, None, &[]),
-        (1051..1211, Ring, None, &[]),
-        (1211..1251, Ring, None, &[]),
-        (1251..1325, Talisman, None, &[]),
-        (1325..1365, Talisman, None, &[]),
-        (1365..1665, Weapon, Some(Warrior), &[]),
-        (1665..1705, Weapon, Some(Warrior), &[]),
-        (1705..1805, Shield, Some(Warrior), &[]),
-        (1805..1845, Shield, Some(Warrior), &[]),
-        (1845..1945, BreastPlate, Some(Warrior), &[]),
-        (1945..1985, BreastPlate, Some(Warrior), &[1954, 1955]),
-        (1985..2085, FootWear, Some(Warrior), &[]),
-        (2085..2125, FootWear, Some(Warrior), &[2094, 2095]),
-        (2125..2225, Gloves, Some(Warrior), &[]),
-        (2225..2265, Gloves, Some(Warrior), &[2234, 2235]),
-        (2265..2365, Hat, Some(Warrior), &[]),
-        (2365..2405, Hat, Some(Warrior), &[2374, 2375]),
-        (2405..2505, Belt, Some(Warrior), &[]),
-        (2505..2545, Belt, Some(Warrior), &[2514, 2515]),
-        (2545..2645, Weapon, Some(Mage), &[]),
-        (2645..2685, Weapon, Some(Mage), &[]),
-        (2685..2785, BreastPlate, Some(Mage), &[]),
-        (2785..2825, BreastPlate, Some(Mage), &[2794, 2795]),
-        (2825..2925, FootWear, Some(Mage), &[]),
-        (2925..2965, FootWear, Some(Mage), &[2934, 2935]),
-        (2965..3065, Gloves, Some(Mage), &[]),
-        (3065..3105, Gloves, Some(Mage), &[3074, 3075]),
-        (3105..3205, Hat, Some(Mage), &[]),
-        (3205..3245, Hat, Some(Mage), &[3214, 3215]),
-        (3245..3345, Belt, Some(Mage), &[]),
-        (3345..3385, Belt, Some(Mage), &[3354, 3355]),
-        (3385..3485, Weapon, Some(Scout), &[]),
-        (3485..3525, Weapon, Some(Scout), &[]),
-        (3525..3625, BreastPlate, Some(Scout), &[]),
-        (3625..3665, BreastPlate, Some(Scout), &[3634, 3635]),
-        (3665..3765, FootWear, Some(Scout), &[]),
-        (3765..3805, FootWear, Some(Scout), &[3774, 3775]),
-        (3805..3905, Gloves, Some(Scout), &[]),
-        (3905..3945, Gloves, Some(Scout), &[3914, 3915]),
-        (3945..4045, Hat, Some(Scout), &[]),
-        (4045..4085, Hat, Some(Scout), &[4054, 4055]),
-        (4085..4185, Belt, Some(Scout), &[]),
-        (4185..4225, Belt, Some(Scout), &[4194, 4195]),
+        (1011, ES::Amulet, None, false),
+        (1051, ES::Amulet, None, false),
+        (1211, ES::Ring, None, false),
+        (1251, ES::Ring, None, false),
+        (1325, ES::Talisman, None, false),
+        (1365, ES::Talisman, None, false),
+        (1665, ES::Weapon, Some(Class::Warrior), false),
+        (1705, ES::Weapon, Some(Class::Warrior), false),
+        (1805, ES::Shield, Some(Class::Warrior), false),
+        (1845, ES::Shield, Some(Class::Warrior), false),
+        (1945, ES::BreastPlate, Some(Class::Warrior), false),
+        (1985, ES::BreastPlate, Some(Class::Warrior), true),
+        (2085, ES::FootWear, Some(Class::Warrior), false),
+        (2125, ES::FootWear, Some(Class::Warrior), true),
+        (2225, ES::Gloves, Some(Class::Warrior), false),
+        (2265, ES::Gloves, Some(Class::Warrior), true),
+        (2365, ES::Hat, Some(Class::Warrior), false),
+        (2405, ES::Hat, Some(Class::Warrior), true),
+        (2505, ES::Belt, Some(Class::Warrior), false),
+        (2545, ES::Belt, Some(Class::Warrior), true),
+        (2645, ES::Weapon, Some(Class::Mage), false),
+        (2685, ES::Weapon, Some(Class::Mage), false),
+        (2785, ES::BreastPlate, Some(Class::Mage), false),
+        (2825, ES::BreastPlate, Some(Class::Mage), true),
+        (2925, ES::FootWear, Some(Class::Mage), false),
+        (2965, ES::FootWear, Some(Class::Mage), true),
+        (3065, ES::Gloves, Some(Class::Mage), false),
+        (3105, ES::Gloves, Some(Class::Mage), true),
+        (3205, ES::Hat, Some(Class::Mage), false),
+        (3245, ES::Hat, Some(Class::Mage), true),
+        (3345, ES::Belt, Some(Class::Mage), false),
+        (3385, ES::Belt, Some(Class::Mage), true),
+        (3485, ES::Weapon, Some(Class::Scout), false),
+        (3525, ES::Weapon, Some(Class::Scout), false),
+        (3625, ES::BreastPlate, Some(Class::Scout), false),
+        (3665, ES::BreastPlate, Some(Class::Scout), true),
+        (3765, ES::FootWear, Some(Class::Scout), false),
+        (3805, ES::FootWear, Some(Class::Scout), true),
+        (3905, ES::Gloves, Some(Class::Scout), false),
+        (3945, ES::Gloves, Some(Class::Scout), true),
+        (4045, ES::Hat, Some(Class::Scout), false),
+        (4085, ES::Hat, Some(Class::Scout), true),
+        (4185, ES::Belt, Some(Class::Scout), false),
+        (4225, ES::Belt, Some(Class::Scout), true),
     ]
 };
 
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn parse_scrapbook_item(item_idx: i64) -> Option<EquipmentIdent> {
-    for (pos, (range, typ, class, ignore)) in SCRAPBOOK_SLOTS.iter().enumerate()
+    let mut start = 801;
+    for (pos, (end, typ, class, has_ignore)) in
+        SCRAPBOOK_SLOTS.iter().enumerate()
     {
-        if !range.contains(&item_idx) {
+        if item_idx >= *end {
+            start = *end;
             continue;
         }
-        if ignore.contains(&item_idx) {
+        if item_idx < start {
+            return None;
+        }
+        let relative_pos = item_idx - start + 1;
+        if *has_ignore && matches!(relative_pos, 10 | 11) {
             return None;
         }
 
         let is_epic = pos % 2 == 1;
-        let relative_pos = item_idx - range.start + 1;
 
         let color = if *typ == EquipmentSlot::Talisman || is_epic {
             1
@@ -474,5 +473,22 @@ mod tests {
         assert_eq!(achievements.owned(), 1);
         let count = (&achievements).into_iter().count();
         assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_parse_scrapbook_item() {
+        assert!(parse_scrapbook_item(800).is_none());
+        assert!(parse_scrapbook_item(4225).is_none());
+
+        let first = parse_scrapbook_item(801).unwrap();
+        assert_eq!(first.typ, EquipmentSlot::Amulet);
+        assert_eq!(first.class, None);
+        assert_eq!(first.model_id, 1);
+
+        // Ignored epic items in warrior breastplate range (1945..1985)
+        assert!(parse_scrapbook_item(1953).is_some());
+        assert!(parse_scrapbook_item(1954).is_none());
+        assert!(parse_scrapbook_item(1955).is_none());
+        assert!(parse_scrapbook_item(1956).is_some());
     }
 }
