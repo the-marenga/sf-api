@@ -592,6 +592,53 @@ mod tests {
     }
 
     #[test]
+    fn test_update_fightable_targets() {
+        // A `fightablegroups` response: two guilds of 9 values each.
+        let resp = crate::response::Response::parse(
+            "fightablegroups:5060/Alpha/emblemA/20/10/30/25/5/1000/\
+             5061/Beta/emblemB/15/8/22/19/7/900"
+                .to_string(),
+            Local::now().naive_local(),
+        )
+        .unwrap();
+        let data = resp.values()["fightablegroups"].list();
+
+        let mut guild = Guild::default();
+        guild.update_fightable_targets(&data).unwrap();
+
+        assert!(
+            data.unaccessed_indices().is_empty(),
+            "unread values in {data}"
+        );
+
+        assert_eq!(guild.fightable_guilds.len(), 2);
+        let first = &guild.fightable_guilds[0];
+        assert_eq!(first.id, 5060);
+        assert_eq!(first.name, "Alpha");
+        assert_eq!(first.emblem.server_encode(), "emblemA");
+        assert_eq!(first.number_of_members, 20);
+        assert_eq!(first.members_min_level, 10);
+        assert_eq!(first.members_max_level, 30);
+        assert_eq!(first.members_average_level, 25);
+        assert_eq!(first.rank, 5);
+        assert_eq!(first.honor, 1000);
+
+        let second = &guild.fightable_guilds[1];
+        assert_eq!(second.id, 5061);
+        assert_eq!(second.name, "Beta");
+        assert_eq!(second.honor, 900);
+    }
+
+    #[test]
+    fn test_update_fightable_targets_invalid_len() {
+        // A value count that is not a multiple of 9 is rejected.
+        let data = Vals::from("5060/Alpha/emblemA");
+        let mut guild = Guild::default();
+        assert!(guild.update_fightable_targets(&data).is_err());
+        data.ignore_all("rejected before parsing");
+    }
+
+    #[test]
     fn test_planned_battle_parse() {
         // The `owngroupsave` attacking pair: a raid against the raid id
         // 1_000_000

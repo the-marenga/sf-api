@@ -668,7 +668,7 @@ impl<'a> Vals<'a> {
     /// [`SFError::ParsingErrorV2`] if `pos` is out of bounds or the value does
     /// not parse.
     #[track_caller]
-    pub fn parse<T: FromStr>(
+    fn parse<T: FromStr>(
         &self,
         pos: usize,
         ty: &str,
@@ -689,7 +689,7 @@ impl<'a> Vals<'a> {
     /// that is not possible.
     #[track_caller]
     #[must_use]
-    pub fn parse_or<T: FromStr>(&self, pos: usize, default: T, ty: &str) -> T {
+    fn parse_or<T: FromStr>(&self, pos: usize, default: T, ty: &str) -> T {
         self.parse(pos, ty).unwrap_or_else(|err| {
             warn!("{err}");
             default
