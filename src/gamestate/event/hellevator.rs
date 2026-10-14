@@ -3,8 +3,10 @@ use log::warn;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use super::{Result, ServerTime, pets::HabitatType};
-use crate::response::Vals;
+use crate::{
+    gamestate::{Result, ServerTime, pets::HabitatType},
+    response::Vals,
+};
 
 /// Information about the Hellevator event on the server. If it is active, you
 /// can get more detailed info via `active()`
@@ -272,9 +274,10 @@ impl HellevatorMonsterRewardTyp {
             8 => HellevatorMonsterRewardTyp::Arcane,
             9 => HellevatorMonsterRewardTyp::Metal,
             10 => HellevatorMonsterRewardTyp::Souls,
-            11..=15 => HabitatType::from_typ_id(data - 10)
-                .map(HellevatorMonsterRewardTyp::Fruit)
-                .unwrap_or(HellevatorMonsterRewardTyp::Unknown),
+            11..=15 => HabitatType::from_typ_id(data - 10).map_or(
+                HellevatorMonsterRewardTyp::Unknown,
+                HellevatorMonsterRewardTyp::Fruit,
+            ),
 
             _ => HellevatorMonsterRewardTyp::Unknown,
         }
@@ -625,8 +628,11 @@ mod tests {
 
     #[test]
     fn test_rank_to_rewards_rank() {
-        let mut hellevator = Hellevator::default();
-        hellevator.brackets = vec![1, 4, 10]; // Bracket 1: 1, Bracket 2: 2..=5, Bracket 3: 6..=15
+        let hellevator = Hellevator {
+            brackets: vec![1, 4, 10], /* Bracket 1: 1, Bracket 2: 2..=5,
+                                       * Bracket 3: 6..=15 */
+            ..Default::default()
+        };
         assert_eq!(hellevator.rank_to_rewards_rank(0), None);
         assert_eq!(hellevator.rank_to_rewards_rank(1), Some(1));
         assert_eq!(hellevator.rank_to_rewards_rank(2), Some(2));

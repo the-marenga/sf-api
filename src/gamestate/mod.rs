@@ -4,10 +4,8 @@ pub mod dungeons;
 pub mod event;
 pub mod fortress;
 pub mod guild;
-pub mod hellevator;
 pub mod idle;
 pub mod items;
-pub mod legendary_dungeon;
 pub mod pets;
 pub mod rewards;
 pub mod social;
@@ -19,6 +17,7 @@ use std::{borrow::Borrow, collections::HashMap};
 
 use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use enum_map::EnumMap;
+pub use event::{hellevator, legendary_dungeon, world_boss};
 use log::{error, warn};
 use num_traits::FromPrimitive;
 use strum::{EnumCount, IntoEnumIterator};
@@ -28,8 +27,8 @@ use crate::{
     command::*,
     gamestate::{
         arena::*, character::*, dungeons::*, event::*, fortress::*, guild::*,
-        idle::*, items::*, legendary_dungeon::*, rewards::*, social::*,
-        tavern::*, underworld::*, unlockables::*,
+        hellevator::*, idle::*, items::*, legendary_dungeon::*, rewards::*,
+        social::*, tavern::*, underworld::*, unlockables::*,
     },
     misc::*,
     response::{Response, ResponseVal, Vals},
