@@ -690,8 +690,6 @@ impl OtherPlayer {
         data.ignore(67..69, "unknown");
         self.gladiator_lvl = data.u32_or(69, 0);
 
-        data.ignore(70..data.len(), "unmodelled character save tail");
-
         Ok(())
     }
 
@@ -795,7 +793,7 @@ impl CombatLogEntry {
         })?;
 
         if data.len() > 5 {
-            data.ignore(5..data.len(), "unknown combat log fields");
+            data.ignore(5, "unknown combat log field");
         }
 
         Ok(CombatLogEntry {
@@ -896,7 +894,9 @@ impl NewsEntry {
             SFError::ParsingErrorV2(format!("missing news date: {ts}"))
         })?;
 
-        data.ignore(3..data.len(), "unused news icon");
+        if data.len() > 3 {
+            data.ignore(3, "unused news icon");
+        }
 
         Ok(NewsEntry {
             news_id: ts,

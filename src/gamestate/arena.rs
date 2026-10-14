@@ -132,7 +132,7 @@ impl Fight {
                 souls: data.i64_or(3, 0),
             };
             data.ignore_unmodelled(
-                &[1..2, 4..data.len()],
+                &[1..2, 4..12],
                 "underworld lure field that is not modelled",
             );
             return;
@@ -156,7 +156,7 @@ impl Fight {
             };
             // 1 & 6 as above, 9-20 & 23 are not modelled yet
             data.ignore_unmodelled(
-                &[1..2, 6..7, 9..21, 23..24, 27..data.len()],
+                &[1..2, 6..7, 9..21, 23..24],
                 "fortress fight result field that is not modelled",
             );
         } else {
@@ -164,7 +164,7 @@ impl Fight {
             // 9-20 are always 0. The won item used to be parsed from index 9,
             // it now comes from the `battlerewarditem` response
             data.ignore_unmodelled(
-                &[1..2, 6..7, 9..data.len()],
+                &[1..2, 6..7, 9..21],
                 "fight result field that is not modelled",
             );
         }
@@ -213,7 +213,7 @@ impl SingleFight {
 
         // The 5 values after the two records are always 0 in every captured
         // response
-        let trailing = FIGHTER_RECORD_LEN * 2..data.len();
+        let trailing = FIGHTER_RECORD_LEN * 2..FIGHTER_RECORD_LEN * 2 + 5;
         data.ignore_unmodelled(
             &[trailing],
             "fight header field that is not modelled",

@@ -97,8 +97,12 @@ data.ignore(1..3, "an unmodelled region");
 data.ignore_all("nothing in this response is modelled yet");
 ```
 
-`ignore` takes a single position or a half-open range, like `slice::get`, so a
-trailing "and everything after this" range is spelled `x..data.len()`.
+`ignore` takes a single position or a half-open range, like `slice::get`.
+Always use explicit integer values or constant bounds (e.g. `data.ignore(5..9, ...)`)
+instead of open-ended `x..data.len()` ranges. We want to be informed via unread
+warnings if responses grow in size. Never add ignore calls as precautions if they
+would currently ignore no fields.
+
 `ignore_unmodelled` is the shorthand for a list of such ranges sharing one
 reason. When you ignore something, write down what you know about it —
 "always 0 in every captured response", the value range you have seen, or what

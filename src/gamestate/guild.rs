@@ -270,7 +270,7 @@ impl Guild {
         data.ignore(379..381, "always 0 in every captured response");
         data.ignore(390 + members..445, "unused tail of the pet level column");
         data.ignore(
-            445 + members..data.len(),
+            445 + members..518,
             "unused tail of the battles column & the trailer",
         );
 
@@ -345,7 +345,7 @@ impl Guild {
         self.own_pet_lvl = data.u16_or(4, 0);
         self.joined = data.server_time_opt(5, server_time);
         if data.len() > 6 {
-            data.ignore(6..data.len(), "unknown charactergroup tail");
+            data.ignore(6, "unknown charactergroup tail");
         }
     }
 

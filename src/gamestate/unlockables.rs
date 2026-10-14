@@ -105,7 +105,7 @@ impl Blacksmith {
         self.dismantle_left = data.u8_or(0, 0);
         self.last_dismantled = data.server_time_opt(1, server_time);
         if data.len() > 2 {
-            data.ignore(2..data.len(), "unknown smith fields");
+            data.ignore(2, "unknown smith field");
         }
     }
 }
