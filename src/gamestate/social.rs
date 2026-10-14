@@ -1024,6 +1024,19 @@ pub struct RelationEntry {
     pub relation: Relationship,
 }
 
+impl RelationEntry {
+    /// Parses a single relation entry `[id, name, guild, level, relation]`.
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Self> {
+        Ok(RelationEntry {
+            id: data.u32(0)?,
+            name: data.str(1)?.to_string(),
+            guild: data.str(2)?.to_string(),
+            level: data.u16(3)?,
+            relation: data.parse_enum(4)?,
+        })
+    }
+}
+
 /// A claimable mail delivery (e.g., promo codes, Twitch drops)
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

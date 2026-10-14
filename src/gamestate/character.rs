@@ -2,13 +2,14 @@ use std::fmt::Debug;
 
 use chrono::{DateTime, Local};
 use enum_map::EnumMap;
+use log::warn;
 use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
 
-use super::{NormalCost, RelationEntry, Result, SFError, ScrapBook};
-use crate::{
-    PlayerId, command::*, gamestate::items::*, misc::*, response::Vals,
+use super::{
+    AttributeType, Equipment, Inventory, NormalCost, Potion, RelationEntry,
+    Result, SFError, ScrapBook, ServerTime,
 };
+use crate::{PlayerId, response::Vals};
 
 /// Everything, that can be considered part of the character and not the rest
 /// of the world
@@ -93,24 +94,99 @@ pub struct Character {
     pub relations: Vec<RelationEntry>,
 }
 
+impl Character {
+    /// Updates character details from an `ownplayersavecharacter` response.
+    pub(crate) fn update(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) -> Result<()> {
+        data.ignore(0, "creation time? secret id?");
+        self.player_id = data.u32_or(1, 0);
+        data.ignore(2, "always 0");
+        self.level = (data.u32_or(3, 0) & 0xFFFF) as u16;
+        self.experience = data.u64_or(4, 0);
+        self.next_level_xp = data.u64_or(5, 0);
+        self.honor = data.u32_or(6, 0);
+        self.rank = data.u32_or(7, 0);
+
+        self.portrait = Portrait::parse(&data.window(8..20));
+
+        self.race = data.parse_enum(18)?;
+        self.class =
+            data.enum_map(20, |a| a.wrapping_sub(1)).ok_or_else(|| {
+                SFError::ParsingErrorV2(format!(
+                    "Unknown character class: {}",
+                    data.u32_or(20, 0)
+                ))
+            })?;
+        self.mount = data.enum_map(21, |a| a & 0xFF);
+        data.ignore(22, "always 0/1 in captured responses");
+        self.armor = data.u64_or(23, 0);
+        self.min_damage = data.u32_or(24, 0);
+        self.max_damage = data.u32_or(25, 0);
+        data.ignore(26, "portal dmg bonus, handled in guild");
+        data.ignore(27, "unknown, large integer seen in the millions");
+        data.ignore(28, "portal hp bonus, handled in dungeons");
+        self.mount_end = data.server_time(29, server_time)?;
+
+        for (idx, val) in self.attribute_basis.values_mut().enumerate() {
+            *val = data.u32_or(30 + idx, 0);
+        }
+        for (idx, val) in self.attribute_additions.values_mut().enumerate() {
+            *val = data.u32_or(35 + idx, 0);
+        }
+        for (idx, val) in self.attribute_times_bought.values_mut().enumerate() {
+            *val = data.u32_or(40 + idx, 0);
+        }
+
+        data.ignore(45..70, "unknown/unmodelled character save values");
+
+        Ok(())
+    }
+
+    /// Updates the character's relation entries from a `friendlist` response.
+    pub(crate) fn update_relations(&mut self, data: &Vals<'_>) {
+        self.relations.clear();
+        for entry in data.iter() {
+            if entry.is_empty() {
+                continue;
+            }
+            match RelationEntry::parse(&Vals::by(entry, ',')) {
+                Ok(x) => self.relations.push(x),
+                Err(e) => warn!("bad friendslist entry: {entry} {e}"),
+            }
+        }
+    }
+}
+
 /// All the exclusively cosmetic info necessary to build a player image, that is
-/// otherwise useless. As these values might change their based on each other,
+/// otherwise useless. As these values might change based on each other,
 /// some of them are not fully parsed (to a more descriptive enum)
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub struct Portrait {
-    /// The gender (m/w)
+    /// The gender (Female or Male)
     pub gender: Gender,
+    /// The hair color index
     pub hair_color: u8,
+    /// The hair style index
     pub hair: u8,
+    /// The mouth style index
     pub mouth: u8,
+    /// The eyebrow style index
     pub brows: u8,
+    /// The eye style index
     pub eyes: u8,
+    /// The beard style index
     pub beards: u8,
+    /// The nose style index
     pub nose: u8,
+    /// The ear style index
     pub ears: u8,
+    /// The extra facial feature / accessory index
     pub extra: u8,
+    /// The horns feature index (e.g. for Demons)
     pub horns: u8,
     /// Influencers get a special portrait. Otherwise this should be 0
     pub special_portrait: i64,
@@ -137,97 +213,102 @@ impl Portrait {
             gender: data.enum_map(11, |a| a % 2).unwrap_or_default(),
         }
     }
-
-    /// Legacy slice-based portrait parser.
-    #[deprecated(note = "use Portrait::parse with Vals instead")]
-    pub(crate) fn parse_slice(data: &[i64]) -> Result<Portrait, SFError> {
-        Ok(Self {
-            mouth: data.csiget(0, "mouth", 1)?,
-            hair_color: data.csimget(1, "hair color", 100, |a| a / 100)?,
-            hair: data.csimget(1, "hair", 1, |a| a % 100)?,
-            brows: data.csimget(2, "brows", 1, |a| a % 100)?,
-            eyes: data.csiget(3, "eyes", 1)?,
-            beards: data.csimget(4, "beards", 1, |a| a % 100)?,
-            nose: data.csiget(5, "nose", 1)?,
-            ears: data.csiget(6, "ears", 1)?,
-            extra: data.csiget(7, "extra", 1)?,
-            horns: data.csimget(8, "horns", 1, |a| a % 100)?,
-            special_portrait: data.cget(9, "special portrait")?,
-            gender: Gender::from_i64(data.csimget(11, "gender", 1, |a| a % 2)?)
-                .unwrap_or_default(),
-        })
-    }
 }
 
+/// The gender of a character
 #[derive(Debug, Clone, Default, Copy, PartialEq, Eq, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum Gender {
+    /// Female character
     #[default]
     Female = 0,
+    /// Male character
     Male,
 }
 
+/// The character class
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum Class {
+    /// Warrior class, uses Strength and can wear shields
     #[default]
     Warrior = 0,
+    /// Mage class, uses Intelligence
     Mage,
+    /// Scout class, uses Dexterity
     Scout,
+    /// Assassin class, uses Dexterity and wields two weapons
     Assassin,
+    /// Battle Mage class, uses Strength and casts arcane fireballs
     BattleMage,
+    /// Berserker class, uses Strength and may attack multiple times
     Berserker,
+    /// Demon Hunter class, uses Dexterity and can revive
     DemonHunter,
+    /// Druid class, uses Intelligence and shapeshifts
     Druid,
+    /// Bard class, uses Intelligence and plays music
     Bard,
+    /// Necromancer class, uses Intelligence and summons minions
     Necromancer,
+    /// Paladin class, uses Strength and can wear shields
     Paladin,
+    /// Plague Doctor class, uses Dexterity
     PlagueDoctor,
+    /// Blood Weaver class, uses Strength
     BloodWeaver,
 }
 
-#[allow(clippy::enum_glob_use)]
 impl Class {
+    /// Returns the primary attribute type for this class.
     #[must_use]
-    #[allow(clippy::enum_glob_use)]
-    pub fn main_attribute(&self) -> AttributeType {
-        use Class::*;
+    pub fn main_attribute(self) -> AttributeType {
         match self {
-            BloodWeaver | Paladin | BattleMage | Berserker | Warrior => {
-                AttributeType::Strength
+            Self::BloodWeaver
+            | Self::Paladin
+            | Self::BattleMage
+            | Self::Berserker
+            | Self::Warrior => AttributeType::Strength,
+            Self::Assassin
+            | Self::DemonHunter
+            | Self::Scout
+            | Self::PlagueDoctor => AttributeType::Dexterity,
+            Self::Druid | Self::Bard | Self::Necromancer | Self::Mage => {
+                AttributeType::Intelligence
             }
-            Assassin | DemonHunter | Scout | PlagueDoctor => {
-                AttributeType::Dexterity
-            }
-            Druid | Bard | Necromancer | Mage => AttributeType::Intelligence,
         }
     }
 
     // NOTE: Values for Blood Weaver may be guesses, or changes before release
 
+    /// Returns the weapon damage multiplier for this class.
     #[must_use]
     pub fn weapon_multiplier(self) -> f64 {
-        use Class::*;
         match self {
-            PlagueDoctor | Paladin | Warrior | Assassin | BattleMage
-            | Berserker | BloodWeaver => 2.0,
-            Scout | DemonHunter => 2.5,
-            Mage | Druid | Bard | Necromancer => 4.5,
+            Self::PlagueDoctor
+            | Self::Paladin
+            | Self::Warrior
+            | Self::Assassin
+            | Self::BattleMage
+            | Self::Berserker
+            | Self::BloodWeaver => 2.0,
+            Self::Scout | Self::DemonHunter => 2.5,
+            Self::Mage | Self::Druid | Self::Bard | Self::Necromancer => 4.5,
         }
     }
 
+    /// Returns the weapon gem multiplier for this class.
     #[must_use]
-    pub fn weapon_gem_multiplier(&self) -> i32 {
+    pub fn weapon_gem_multiplier(self) -> i32 {
         match self {
             Class::Warrior | Class::Assassin | Class::Berserker => 1,
             _ => 2,
         }
     }
 
+    /// Returns the weapon attribute multiplier for this class.
     #[must_use]
-    pub fn weapon_attribute_multiplier(&self) -> i32 {
+    pub fn weapon_attribute_multiplier(self) -> i32 {
         match self {
             Class::Warrior
             | Class::BattleMage
@@ -243,20 +324,26 @@ impl Class {
     #[cfg(feature = "simulation")]
     #[must_use]
     pub(crate) fn health_multiplier(self, is_companion: bool) -> f64 {
-        use Class::*;
-
         match self {
-            Warrior if is_companion => 6.1,
-            Warrior | BattleMage | Druid | BloodWeaver => 5.0,
-            Paladin => 6.0,
-            PlagueDoctor | Scout | Assassin | Berserker | DemonHunter
-            | Necromancer => 4.0,
-            Mage | Bard => 2.0,
+            Self::Warrior if is_companion => 6.1,
+            Self::Warrior
+            | Self::BattleMage
+            | Self::Druid
+            | Self::BloodWeaver => 5.0,
+            Self::Paladin => 6.0,
+            Self::PlagueDoctor
+            | Self::Scout
+            | Self::Assassin
+            | Self::Berserker
+            | Self::DemonHunter
+            | Self::Necromancer => 4.0,
+            Self::Mage | Self::Bard => 2.0,
         }
     }
 
+    /// Returns the armor multiplier for this class.
     #[must_use]
-    pub fn armor_multiplier(&self) -> f64 {
+    pub fn armor_multiplier(self) -> f64 {
         match self {
             Class::BattleMage => 5.0,
             Class::Bard | Class::Necromancer | Class::PlagueDoctor => 2.0,
@@ -265,8 +352,9 @@ impl Class {
         }
     }
 
+    /// Returns the maximum armor damage reduction percentage for this class.
     #[must_use]
-    pub fn max_armor_reduction(&self) -> u32 {
+    pub fn max_armor_reduction(self) -> u32 {
         match self {
             Class::Mage => 10,
             Class::Warrior
@@ -283,8 +371,9 @@ impl Class {
         }
     }
 
+    /// Returns the damage multiplier for this class.
     #[must_use]
-    pub fn damage_multiplier(&self) -> f64 {
+    pub fn damage_multiplier(self) -> f64 {
         match self {
             Class::Assassin => 0.625,
             Class::Berserker | Class::PlagueDoctor => 1.25,
@@ -296,24 +385,33 @@ impl Class {
         }
     }
 
+    /// Returns whether this class can equip a shield.
     #[must_use]
     pub fn can_wear_shield(self) -> bool {
         matches!(self, Self::Paladin | Self::Warrior)
     }
 }
 
+/// The character race
 #[derive(Debug, PartialEq, Eq, Default, Clone, Copy, FromPrimitive, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum Race {
+    /// Human race
     #[default]
     Human = 1,
+    /// Elf race
     Elf,
+    /// Dwarf race
     Dwarf,
+    /// Gnome race
     Gnome,
+    /// Orc race
     Orc,
+    /// Dark Elf race
     DarkElf,
+    /// Goblin race
     Goblin,
+    /// Demon race
     Demon,
 }
 
@@ -338,20 +436,24 @@ impl Race {
     }
 }
 
+/// The rented mount
 #[derive(Debug, Copy, Clone, FromPrimitive, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum Mount {
+    /// Cow (or pig), provides a 10% quest duration reduction
     Cow = 1,
+    /// Horse, provides a 20% quest duration reduction
     Horse = 2,
+    /// Tiger (or raptor), provides a 30% quest duration reduction
     Tiger = 3,
+    /// Dragon (or griffin), provides a 50% quest duration reduction
     Dragon = 4,
 }
 
 impl Mount {
     /// Returns the cost of this mount
     #[must_use]
-    pub fn cost(&self) -> NormalCost {
+    pub fn cost(self) -> NormalCost {
         match self {
             Mount::Cow => NormalCost {
                 silver: 100,
@@ -375,7 +477,16 @@ impl Mount {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
+    use super::{super::social::Relationship, *};
+
+    fn assert_all_read(data: &Vals<'_>) {
+        assert_eq!(
+            data.unaccessed_indices(),
+            Vec::<usize>::new(),
+            "unaccessed indices in test data"
+        );
+    }
 
     #[test]
     fn test_portrait_parse() {
@@ -395,12 +506,78 @@ mod tests {
         assert_eq!(portrait.horns, 0);
         assert_eq!(portrait.special_portrait, 0);
         assert_eq!(portrait.gender, Gender::Male);
-        assert!(vals.unaccessed_indices().is_empty());
+        assert_all_read(&vals);
+    }
 
-        #[allow(deprecated)]
-        let slice_portrait =
-            Portrait::parse_slice(&[4, 206, 203, 2, 0, 2, 7, 2, 0, 0, 2, 1])
-                .unwrap();
-        assert_eq!(portrait, slice_portrait);
+    #[test]
+    fn test_character_update() {
+        let raw = "910323886/1039746/0/52/224712/341170/3789/200668/5/303/301/\
+                   3/303/1/5/16/0/0/1/1/10/0/0/457/194/246/0/91796/0/0/75/78/\
+                   443/433/176/28/0/551/361/268/0/0/366/365/108/0/0/0/0/0/0/0/\
+                   0/0/0/0/0/0/0/0/0/0/0/1/0/0/11044/0/500/0";
+        let data = Vals::from(raw);
+        let mut char = Character::default();
+        char.update(&data, ServerTime::default()).unwrap();
+
+        assert_eq!(char.player_id, 1_039_746);
+        assert_eq!(char.level, 52);
+        assert_eq!(char.experience, 224_712);
+        assert_eq!(char.next_level_xp, 341_170);
+        assert_eq!(char.honor, 3789);
+        assert_eq!(char.rank, 200_668);
+        assert_eq!(char.race, Race::Human);
+        assert_eq!(char.class, Class::Necromancer);
+        assert_eq!(char.mount, None);
+        assert_eq!(char.armor, 457);
+        assert_eq!(char.min_damage, 194);
+        assert_eq!(char.max_damage, 246);
+        assert_eq!(char.attribute_basis[AttributeType::Strength], 75);
+        assert_eq!(char.attribute_basis[AttributeType::Constitution], 433);
+        assert_eq!(char.attribute_additions[AttributeType::Intelligence], 551);
+        assert_eq!(
+            char.attribute_times_bought[AttributeType::Intelligence],
+            366
+        );
+        assert_eq!(char.portrait.mouth, 5);
+        assert_eq!(char.portrait.hair_color, 3);
+        assert_eq!(char.portrait.hair, 3);
+        assert_eq!(char.portrait.gender, Gender::Male);
+        assert_all_read(&data);
+    }
+
+    #[test]
+    fn test_character_update_relations() {
+        let raw = "101,BestFriend,AwesomeGuild,150,1;202,IgnoredPlayer,\
+                   EnemyGuild,250,-1";
+        let data = Vals::by(raw, ';');
+        let mut char = Character::default();
+        char.update_relations(&data);
+
+        assert_eq!(char.relations.len(), 2);
+        assert_eq!(char.relations[0].id, 101);
+        assert_eq!(char.relations[0].name, "BestFriend");
+        assert_eq!(char.relations[0].guild, "AwesomeGuild");
+        assert_eq!(char.relations[0].level, 150);
+        assert_eq!(char.relations[0].relation, Relationship::Friend);
+
+        assert_eq!(char.relations[1].id, 202);
+        assert_eq!(char.relations[1].name, "IgnoredPlayer");
+        assert_eq!(char.relations[1].guild, "EnemyGuild");
+        assert_eq!(char.relations[1].level, 250);
+        assert_eq!(char.relations[1].relation, Relationship::Ignored);
+        assert_all_read(&data);
+    }
+
+    #[test]
+    fn test_relation_entry_parse() {
+        let raw = "123,TestPlayer,TestGuild,42,1";
+        let data = Vals::by(raw, ',');
+        let entry = RelationEntry::parse(&data).unwrap();
+        assert_eq!(entry.id, 123);
+        assert_eq!(entry.name, "TestPlayer");
+        assert_eq!(entry.guild, "TestGuild");
+        assert_eq!(entry.level, 42);
+        assert_eq!(entry.relation, Relationship::Friend);
+        assert_all_read(&data);
     }
 }
