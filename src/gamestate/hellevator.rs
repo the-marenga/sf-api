@@ -78,9 +78,6 @@ impl HellevatorEvent {
         self.end = data.server_time_opt(1, server_time);
         data.ignore(2, "unknown gttime field");
         self.collect_time_end = data.server_time_opt(3, server_time);
-        if data.len() > 4 {
-            data.ignore(4..data.len(), "unknown gttime tail");
-        }
     }
 }
 

@@ -389,11 +389,9 @@ impl Companion {
         // The equipment the old code read here; 0 in every capture since it
         // moved to the `companionequipment` response. The last 5 values are
         // the underworld unit and the trailing value after it
-        for idx in 22..data.len() - 5 {
-            data.ignore(idx, "old companion equipment, now 0");
-        }
+        data.ignore(22..143, "old companion equipment, now 0");
         // The value at the end of the block, after the underworld unit
-        data.ignore(data.len() - 1, "trailing value (10/13, 2, 0)");
+        data.ignore(147, "trailing value (10/13, 2, 0)");
         Ok(())
     }
 }

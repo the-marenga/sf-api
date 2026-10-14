@@ -97,7 +97,7 @@ impl ExpeditionsEvent {
         self.start = data.server_time_opt(0, server_time);
         self.end = data.server_time_opt(1, server_time);
         if data.len() > 2 {
-            data.ignore(2..data.len(), "unknown expedition event fields");
+            data.ignore(2..4, "unknown expedition event fields");
         }
     }
 
@@ -503,9 +503,6 @@ impl Expedition {
         data.ignore(14, "unknown expedition field");
         self.busy_since = data.server_time_opt(15, server_time);
         self.busy_until = data.server_time_opt(16, server_time);
-        if data.len() > 17 {
-            data.ignore(17..data.len(), "trailing expedition fields");
-        }
         Ok(())
     }
 
