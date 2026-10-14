@@ -342,16 +342,18 @@ pub enum CurrentAction {
 }
 
 impl CurrentAction {
+    /// Parses a current action record `[action_id, action_sec, busy_until]`.
     pub(crate) fn parse(
-        id: i64,
-        sec: i64,
-        busy_until: Option<DateTime<Local>>,
-    ) -> Self {
-        // XXX: Sometimes the game "forgets" when an action was supposed to end.
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) -> Result<Self> {
+        let id = data.i64_or(0, 0);
+        let sec = data.i64_or(1, 0);
+        // Sometimes the game "forgets" when an action was supposed to end.
         // This only happens when the action is very old, so falling back to a
         // busy_until that is super old is fine here
-        let busy_until = busy_until.unwrap_or_default();
-        match id {
+        let busy_until = data.server_time(2, server_time)?.unwrap_or_default();
+        let action = match id {
             0 => CurrentAction::Idle,
             1 => CurrentAction::CityGuard {
                 hours: u8::try_from(sec).unwrap_or_else(|_| {
@@ -372,7 +374,8 @@ impl CurrentAction {
                 error!("Unknown action id combination: {id}, {busy_until:?}");
                 CurrentAction::Unknown(Some(busy_until))
             }
-        }
+        };
+        Ok(action)
     }
 }
 
@@ -1106,5 +1109,46 @@ mod tests {
             state_data.unaccessed_indices().is_empty(),
             "unread values in {state_data}"
         );
+    }
+
+    #[test]
+    fn test_current_action_parse() {
+        let raw = "1/2/1700000000";
+        let data = Vals::from(raw);
+        let action =
+            CurrentAction::parse(&data, ServerTime::default()).unwrap();
+        match action {
+            CurrentAction::CityGuard { hours, .. } => {
+                assert_eq!(hours, 2);
+            }
+            _ => panic!("expected CityGuard action"),
+        }
+        assert_eq!(data.unaccessed_indices(), Vec::<usize>::new());
+
+        let raw_quest = "2/1/1700000000";
+        let data_quest = Vals::from(raw_quest);
+        let action_quest =
+            CurrentAction::parse(&data_quest, ServerTime::default()).unwrap();
+        match action_quest {
+            CurrentAction::Quest { quest_idx, .. } => {
+                assert_eq!(quest_idx, 1);
+            }
+            _ => panic!("expected Quest action"),
+        }
+        assert_eq!(data_quest.unaccessed_indices(), Vec::<usize>::new());
+
+        let raw_idle = "0/0/0";
+        let data_idle = Vals::from(raw_idle);
+        let action_idle =
+            CurrentAction::parse(&data_idle, ServerTime::default()).unwrap();
+        assert_eq!(action_idle, CurrentAction::Idle);
+        assert_eq!(data_idle.unaccessed_indices(), Vec::<usize>::new());
+
+        let raw_exp = "4/0/0";
+        let data_exp = Vals::from(raw_exp);
+        let action_exp =
+            CurrentAction::parse(&data_exp, ServerTime::default()).unwrap();
+        assert_eq!(action_exp, CurrentAction::Expedition);
+        assert_eq!(data_exp.unaccessed_indices(), Vec::<usize>::new());
     }
 }
