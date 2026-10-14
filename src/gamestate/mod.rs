@@ -395,6 +395,43 @@ impl GameState {
         Ok(())
     }
 
+    /// Updates the character status, current action, tavern and timer details
+    /// from a `characterstatus` response of 33 values.
+    pub(crate) fn update_character_status(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) -> Result<()> {
+        data.ignore(0, "status version? seen 1 or 2");
+
+        self.tavern.current_action =
+            CurrentAction::parse(&data.window(1..4), server_time)?;
+
+        data.ignore(4, "action start timestamp");
+        self.tavern.beer_max = data.u8_or(5, 0);
+        self.tavern.thirst_for_adventure_sec = data.u32_or(6, 0);
+        self.tavern.beer_drunk = data.u8_or(7, 0);
+
+        self.specials.calendar.collected = data.usize_or(8, 245);
+        self.specials.calendar.next_possible =
+            data.server_time(9, server_time)?;
+
+        data.ignore(10..20, "unmodelled characterstatus fields");
+
+        self.pets.get_or_insert_default().next_free_exploration =
+            data.server_time(20, server_time)?;
+        self.dungeons.next_free_fight = data.server_time(21, server_time)?;
+        if let Some(start) = data.server_time(22, server_time)? {
+            self.legendary_dungeon
+                .active
+                .get_or_insert_default()
+                .healing_start = Some(start);
+        }
+
+        data.ignore(23..33, "unmodelled characterstatus trailing fields");
+        Ok(())
+    }
+
     /// Returns the time of the server. This is just an 8 byte copy behind the
     /// scenes, so feel free to NOT cache/optimize calling this in any way
     #[must_use]
@@ -1426,56 +1463,10 @@ impl GameState {
                     val.as_str() != "0";
             }
             "characterstatus" => {
-                let data: Vec<i64> = val.into_list("char status")?;
-
-                self.tavern.current_action = CurrentAction::parse(
-                    data.cget(1, "action id")?,
-                    data.cget(2, "action sec")?,
-                    data.cstget(3, "current action time", server_time)?,
-                );
-
-                // NOTE: [4] contains the start
-                self.tavern.beer_max = data.csiget(5, "beer total", 0)?;
-
-                self.tavern.thirst_for_adventure_sec =
-                    data.csiget(6, "remaining ALU", 0)?;
-                self.tavern.beer_drunk =
-                    data.csiget(7, "beer drunk count", 0)?;
-                self.specials.calendar.collected =
-                    data.csiget(8, "calendar collected", 245)?;
-                self.specials.calendar.next_possible =
-                    data.cstget(9, "calendar next", server_time)?;
-                // 0
-                // 0
-                // 0
-                // 0
-                // 0
-                // 1513       // was [15]
-                // 1541087831 // acc creation time?
-                // 0
-                // 0
-                // 0
-                self.pets.get_or_insert_default().next_free_exploration =
-                    data.cstget(20, "pet next free exp", server_time)?;
-                self.dungeons.next_free_fight =
-                    data.cstget(21, "dungeon timer", server_time)?;
-                if let Some(start) =
-                    data.cstget(22, "dungeon timer", server_time)?
-                {
-                    self.legendary_dungeon
-                        .active
-                        .get_or_insert_default()
-                        .healing_start = Some(start);
-                }
-                // 0
-                // 1
-                // 0
-                // 0
-                // 0
-                // 0
-                // 0
-                // 0
-                // 0
+                self.update_character_status(
+                    &val.values::<33>()?,
+                    server_time,
+                )?;
             }
             "ownplayersavecharacter" => {
                 let data = val.values::<70>()?;
@@ -1793,5 +1784,43 @@ mod tests {
         assert_eq!(uw.upgrade_building, None);
         assert_eq!(uw.upgrade_finish, None);
         assert!(uw.last_collectable_update.is_some());
+    }
+
+    #[test]
+    fn test_update_character_status() {
+        let raw = "1/1/1/1791552521/1791548921/11/6000/0/0/1791849601/0/0/0/1/\
+                   0/2527/1386953147/0/0/0/1597743456/1790330859/1785000000/1/\
+                   0/0/0/0/0/0/0/0/0";
+        let data = Vals::from(raw);
+        assert_eq!(data.len(), 33);
+
+        let mut state = GameState::default();
+        state
+            .update_character_status(&data, ServerTime::default())
+            .unwrap();
+        assert_all_read(&data);
+
+        match state.tavern.current_action {
+            CurrentAction::CityGuard { hours, .. } => {
+                assert_eq!(hours, 1);
+            }
+            _ => panic!("expected CityGuard action"),
+        }
+        assert_eq!(state.tavern.beer_max, 11);
+        assert_eq!(state.tavern.thirst_for_adventure_sec, 6000);
+        assert_eq!(state.tavern.beer_drunk, 0);
+        assert_eq!(state.specials.calendar.collected, 0);
+        assert!(state.specials.calendar.next_possible.is_some());
+        assert!(state.pets.as_ref().unwrap().next_free_exploration.is_some());
+        assert!(state.dungeons.next_free_fight.is_some());
+        assert!(
+            state
+                .legendary_dungeon
+                .active
+                .as_ref()
+                .unwrap()
+                .healing_start
+                .is_some()
+        );
     }
 }
