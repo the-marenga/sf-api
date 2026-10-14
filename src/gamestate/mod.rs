@@ -540,19 +540,13 @@ impl GameState {
                     Shop::parse(&data, server_time, ShopType::Weapon)?;
             }
             "questofferitems" => {
-                for (chunk, quest) in val
-                    .into_list("quest items")?
-                    .chunks_exact(19)
-                    .zip(&mut self.tavern.quests)
-                {
-                    quest.item = Item::parse_slice(chunk, server_time)?;
-                }
+                self.tavern.update_quest_items(&val.list(), server_time);
             }
             "toiletstate" => {
-                let vals = val.values::<3>()?;
-                vals.ignore(0..2, "unknown toilet state fields");
-                let toilet = self.tavern.toilet.get_or_insert_default();
-                toilet.sacrifices_left = vals.u32_or(2, 0);
+                self.tavern
+                    .toilet
+                    .get_or_insert_default()
+                    .update_sacrifices(&val.values::<3>()?);
             }
             "companionequipment" => {
                 if val.as_str().trim().is_empty() {
@@ -621,21 +615,10 @@ impl GameState {
                     .update_unit_prices(&val.values::<12>()?)?;
             }
             "dicestatus" => {
-                let dices: Option<Vec<DiceType>> = val
-                    .into_list("dice status")?
-                    .into_iter()
-                    .map(FromPrimitive::from_u8)
-                    .collect();
-                self.tavern.dice_game.current_dice = dices.unwrap_or_default();
+                self.tavern.dice_game.update_status(&val.list());
             }
             "dicereward" => {
-                let data: Vec<u32> = val.into_list("dice reward")?;
-                let win_typ: DiceType =
-                    data.cfpuget(0, "dice reward", |a| a - 1)?;
-                self.tavern.dice_game.reward = Some(DiceReward {
-                    win_typ,
-                    amount: data.cget(1, "dice reward amount")?,
-                });
+                self.tavern.dice_game.update_reward(&val.values::<2>()?)?;
             }
             "chathistory" => {
                 self.guild.get_or_insert_default().chat =
@@ -1023,40 +1006,12 @@ impl GameState {
                 self.specials.tasks.daily.rewards = parse_rewards(&vals);
             }
             "expeditionevent" => {
-                let data: Vec<i64> = val.into_list("exp event")?;
-                self.tavern.expeditions.start =
-                    data.cstget(0, "expedition start", server_time)?;
-                let end = data.cstget(1, "expedition end", server_time)?;
-                self.tavern.expeditions.end = end;
+                self.tavern
+                    .expeditions
+                    .update_event(&val.values::<2>()?, server_time);
             }
             "expeditions" => {
-                let data: Vec<i64> = val.into_list("exp event")?;
-
-                if !data.len().is_multiple_of(8) {
-                    warn!(
-                        "Available expeditions have weird size: {data:?} {}",
-                        data.len()
-                    );
-                }
-                self.tavern.expeditions.available = data
-                    .chunks_exact(8)
-                    .map(|data| {
-                        Ok(AvailableExpedition {
-                            target: data
-                                .cfpget(0, "expedition typ", |a| a)?
-                                .unwrap_or_default(),
-                            location_1: data
-                                .cfpget(4, "exp loc 1", |a| a)?
-                                .unwrap_or_default(),
-                            location_2: data
-                                .cfpget(5, "exp loc 2", |a| a)?
-                                .unwrap_or_default(),
-                            thirst_for_adventure_sec: data
-                                .csiget(6, "exp alu", 600)?,
-                            special: data.cfpget(7, "exp special", |a| a)?,
-                        })
-                    })
-                    .collect::<Result<_, _>>()?;
+                self.tavern.expeditions.update_available(&val.list());
             }
             "expeditionrewardresources" => {
                 // I would assume, that everything we get is just update
@@ -1072,72 +1027,29 @@ impl GameState {
                 // }
             }
             "expeditionmonster" => {
-                let data: Vec<i64> = val.into_list("expedition monster")?;
-                let exp =
-                    self.tavern.expeditions.active.get_or_insert_default();
-
-                exp.boss = ExpeditionBoss {
-                    id: data
-                        .cfpget(0, "expedition monster", |a| -a)?
-                        .unwrap_or_default(),
-                    items: soft_into(
-                        data.get(1).copied().unwrap_or_default(),
-                        "exp monster items",
-                        3,
-                    ),
-                };
+                self.tavern.expeditions.active.get_or_insert_default().boss =
+                    ExpeditionBoss::parse(&val.values::<2>()?);
             }
             "expeditionhalftime" => {
-                let data: Vec<i64> = val.into_list("halftime exp")?;
-                let exp =
-                    self.tavern.expeditions.active.get_or_insert_default();
-
-                exp.halftime_for_boss_id =
-                    -data.cget(0, "halftime for boss id")?;
-                exp.rewards = data
-                    .skip(1, "halftime choice")?
-                    .chunks_exact(2)
-                    .map(Reward::parse)
-                    .collect::<Result<_, _>>()?;
+                self.tavern
+                    .expeditions
+                    .active
+                    .get_or_insert_default()
+                    .update_halftime(&val.list());
             }
             "expeditionstate" => {
-                let data: Vec<i64> = val.into_list("exp state")?;
-                let exp =
-                    self.tavern.expeditions.active.get_or_insert_default();
-                exp.floor_stage = data.cget(2, "floor stage")?;
-
-                exp.target_thing = data
-                    .cfpget(3, "expedition target", |a| a)?
-                    .unwrap_or_default();
-                exp.target_current = data.csiget(7, "exp current", 100)?;
-                exp.target_amount = data.csiget(8, "exp target", 100)?;
-
-                exp.current_floor = data.csiget(0, "clearing", 0)?;
-                exp.heroism = data.csiget(13, "heroism", 0)?;
-
-                exp.busy_since = data.cstget(15, "exp start", server_time)?;
-                exp.busy_until = data.cstget(16, "exp busy", server_time)?;
-
-                for (x, item) in data
-                    .skip(9, "exp items")?
-                    .iter()
-                    .copied()
-                    .zip(&mut exp.items)
-                {
-                    *item = match FromPrimitive::from_i64(x) {
-                        None if x != 0 => {
-                            warn!("Unknown item: {x}");
-                            Some(ExpeditionThing::Unknown)
-                        }
-                        x => x,
-                    };
-                }
+                self.tavern
+                    .expeditions
+                    .active
+                    .get_or_insert_default()
+                    .update_state(&val.list(), server_time)?;
             }
             "expeditioncrossroad" => {
-                // 3/3/132/0/2/2
-                let exp =
-                    self.tavern.expeditions.active.get_or_insert_default();
-                exp.update_encounters(&val.list());
+                self.tavern
+                    .expeditions
+                    .active
+                    .get_or_insert_default()
+                    .update_encounters(&val.list());
             }
             "eventtasklist" => {
                 let data: Vec<i64> = val.into_list("etl")?;
@@ -1666,11 +1578,9 @@ impl GameState {
                     data.cstget(2, "next lucky turn", server_time)?;
             }
             "dice" => {
-                let data: Vec<i64> = val.into_list("dice")?;
-                self.tavern.dice_game.next_free =
-                    data.cstget(0, "dice next", server_time)?;
-                self.tavern.dice_game.remaining =
-                    data.csiget(1, "rem dice games", 0)?;
+                self.tavern
+                    .dice_game
+                    .update(&val.values::<2>()?, server_time);
             }
             "charactergroup" => {
                 let data: Vec<i64> = val.into_list("c group")?;
@@ -1844,15 +1754,7 @@ impl GameState {
                 // 15       // gladiators
             }
             "adventure" => {
-                let data = val.values::<23>()?;
-                // 198 - Might be the person to give you the quest?
-                // 198 - ??
-                data.ignore(0..2, "flavor / quest giver");
-                for (chunk, quest) in
-                    data.window(2..23).chunks(7).zip(&mut self.tavern.quests)
-                {
-                    quest.update(&chunk)?;
-                }
+                self.tavern.update_quests(&val.values::<23>()?)?;
             }
             "events" => {
                 let data: Vec<i64> = val.into_list("events")?;
