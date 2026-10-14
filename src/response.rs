@@ -238,8 +238,14 @@ impl Response {
                         continue;
                     }
 
-                    let old_val =
-                        res.insert(key, ResponseVal { value, sub_key });
+                    let old_val = res.insert(
+                        key,
+                        ResponseVal {
+                            key,
+                            value,
+                            sub_key,
+                        },
+                    );
                     if let Some(old_val) = old_val {
                         let old = old_val.as_str();
                         debug!("Overwrote [{key}]: {old} => {value}");
@@ -261,8 +267,21 @@ impl Response {
 #[derive(Debug, Clone, Copy)]
 #[allow(clippy::module_name_repetitions)]
 pub struct ResponseVal<'a> {
+    key: &'a str,
     value: &'a str,
     sub_key: &'a str,
+}
+
+/// Helper to lazily format the key context for warnings and errors without
+/// allocating when not triggered.
+fn key_desc(key: &str) -> impl Display + '_ {
+    std::fmt::from_fn(move |f| {
+        if key.is_empty() {
+            Ok(())
+        } else {
+            write!(f, " for key {key:?}")
+        }
+    })
 }
 
 impl<'a> ResponseVal<'a> {
@@ -309,6 +328,12 @@ impl<'a> ResponseVal<'a> {
             .collect()
     }
 
+    /// Returns the key name this response value is associated with.
+    #[must_use]
+    pub fn key(&self) -> &str {
+        self.key
+    }
+
     /// The way keys are parsed will trim some info from the string. The key for
     /// the player save `ownplayersave` is actually `ownplayersave.playerSave`.
     /// As this `.playerSave` is not relevant here and not in most cases, I
@@ -339,7 +364,7 @@ impl<'a> ResponseVal<'a> {
     /// separated by something other than `/`, like `owngroupknights` (`,`).
     #[must_use]
     pub(crate) fn list_by(&self, delim: char) -> Vals<'a> {
-        Vals::owned(split_values(self.value, delim))
+        Vals::owned(split_values(self.value, delim), self.key)
     }
 
     /// Splits this response value by `/` into a [`Vals`] of exactly `N` values.
@@ -367,9 +392,10 @@ impl<'a> ResponseVal<'a> {
         const { assert!(N > 0, "value bound N must be greater than 0") };
         let mut vals = split_values(self.value, delim);
         let caller = std::panic::Location::caller();
+        let k = key_desc(self.key);
         if vals.is_empty() {
             return Err(SFError::ParsingErrorV2(format!(
-                "Server response value is empty at {}:{}:{}",
+                "Server response value{k} is empty at {}:{}:{}",
                 caller.file(),
                 caller.line(),
                 caller.column()
@@ -377,8 +403,8 @@ impl<'a> ResponseVal<'a> {
         }
         if vals.len() > N {
             warn!(
-                "Server response contains {} unexpected values at {}:{}:{}: \
-                 {:?}",
+                "Server response{k} contains {} unexpected values at \
+                 {}:{}:{}: {:?}",
                 vals.len() - N,
                 caller.file(),
                 caller.line(),
@@ -388,14 +414,14 @@ impl<'a> ResponseVal<'a> {
             vals.truncate(N);
         } else if vals.len() < N {
             return Err(SFError::ParsingErrorV2(format!(
-                "Server response is missing {} values at {}:{}:{}",
+                "Server response{k} is missing {} values at {}:{}:{}",
                 N - vals.len(),
                 caller.file(),
                 caller.line(),
                 caller.column()
             )));
         }
-        Ok(Vals::owned(vals))
+        Ok(Vals::owned(vals, self.key))
     }
 }
 
@@ -415,6 +441,7 @@ impl std::fmt::Display for ResponseVal<'_> {
 /// values that are never read are reported when the root is dropped.
 #[derive(Clone)]
 pub struct Vals<'a> {
+    key: &'a str,
     values: Cow<'a, [&'a str]>,
     /// Read tracking for the whole response, indexed by `base + pos`. Only
     /// present in debug builds.
@@ -438,10 +465,11 @@ fn split_values(raw: &str, delim: char) -> Vec<&str> {
 
 impl<'a> Vals<'a> {
     /// A new [`Vals`] that owns `values`.
-    fn owned(values: Vec<&'a str>) -> Self {
+    fn owned(values: Vec<&'a str>, key: &'a str) -> Self {
         #[cfg(debug_assertions)]
         let accessed = Cow::Owned(vec![Cell::new(false); values.len()]);
         Self {
+            key,
             values: Cow::Owned(values),
             #[cfg(debug_assertions)]
             accessed,
@@ -449,11 +477,17 @@ impl<'a> Vals<'a> {
             base: 0,
         }
     }
+
+    /// Returns the response key name this [`Vals`] was created from, if known.
+    #[must_use]
+    pub fn key(&self) -> &str {
+        self.key
+    }
 }
 
 impl<'a> From<&'a str> for Vals<'a> {
     fn from(raw: &'a str) -> Self {
-        Vals::owned(split_values(raw, '/'))
+        Vals::owned(split_values(raw, '/'), "")
     }
 }
 
@@ -461,7 +495,7 @@ impl<'a> Vals<'a> {
     /// Creates a new [`Vals`] by splitting `raw` by `delim`.
     #[must_use]
     pub fn by(raw: &'a str, delim: char) -> Self {
-        Vals::owned(split_values(raw, delim))
+        Vals::owned(split_values(raw, delim), "")
     }
 }
 
@@ -473,8 +507,9 @@ impl Drop for Vals<'_> {
             let unread = &self.unaccessed_indices();
             if !unread.is_empty() {
                 warn!(
-                    "Unaccessed response values in Vals: indices {unread:?} \
+                    "Unaccessed response values in Vals{}: indices {unread:?} \
                      (values: {:?})",
+                    key_desc(self.key),
                     self.values
                 );
             }
@@ -660,7 +695,8 @@ impl<'a> Vals<'a> {
         let Some(val) = self.value(pos) else {
             let caller = std::panic::Location::caller();
             return Err(SFError::ParsingErrorV2(format!(
-                "Index out of bounds (pos:{pos},len:{}) at {}:{}:{}",
+                "Index out of bounds{} (pos:{pos},len:{}) at {}:{}:{}",
+                key_desc(self.key),
                 self.len(),
                 caller.file(),
                 caller.line(),
@@ -681,7 +717,8 @@ impl<'a> Vals<'a> {
         val.trim().parse().map_err(|_| {
             let caller = std::panic::Location::caller();
             SFError::ParsingErrorV2(format!(
-                "Invalid {ty} (pos:{pos},val:{val}) at {}:{}:{}",
+                "Invalid {ty}{} (pos:{pos},val:{val}) at {}:{}:{}",
+                key_desc(self.key),
                 caller.file(),
                 caller.line(),
                 caller.column()
@@ -776,6 +813,7 @@ impl<'a> Vals<'a> {
         let end = range.end.min(self.len());
         let start = range.start.min(end);
         Vals {
+            key: self.key,
             values: Cow::Borrowed(
                 self.values.get(start..end).unwrap_or_default(),
             ),
@@ -796,8 +834,9 @@ impl<'a> Vals<'a> {
         self.mark_all();
         if !self.len().is_multiple_of(n) {
             warn!(
-                "Server response contains {} leftover values when chunked by \
-                 {n}",
+                "Server response{} contains {} leftover values when chunked \
+                 by {n}",
+                key_desc(self.key),
                 self.len() % n
             );
         }
@@ -1021,28 +1060,35 @@ mod tests {
     #[test]
     fn test_values_tracking_and_truncate() {
         let rval = ResponseVal {
+            key: "test_key",
             value: "1/2/3/4/5",
             sub_key: "k",
         };
+        assert_eq!(rval.key(), "test_key");
         // Expected 3, but got 5: should warn and truncate to 3
         let vals = rval.values::<3>().unwrap();
+        assert_eq!(vals.key(), "test_key");
         assert_eq!(vals.len(), 3);
         assert_eq!(vals.u32(0).unwrap(), 1);
         assert_eq!(vals.u32(2).unwrap(), 3);
+        assert_eq!(vals.window(0..1).key(), "test_key");
 
         // Missing values error
         let err = rval.values::<10>().unwrap_err();
         assert!(matches!(err, SFError::ParsingErrorV2(_)));
         assert!(err.to_string().contains("missing 5 values"));
+        assert!(err.to_string().contains("test_key"));
 
         // Empty response error
         let empty_val = ResponseVal {
+            key: "empty_key",
             value: "",
             sub_key: "",
         };
         let err = empty_val.values::<3>().unwrap_err();
         assert!(matches!(err, SFError::ParsingErrorV2(_)));
         assert!(err.to_string().contains("is empty"));
+        assert!(err.to_string().contains("empty_key"));
     }
 
     #[derive(Debug, PartialEq, Eq, num_derive::FromPrimitive)]
@@ -1054,12 +1100,15 @@ mod tests {
     #[test]
     fn test_chunks_and_delimiters() {
         let rval = ResponseVal {
+            key: "chunk_test",
             value: "1/2/3/4/5/6",
             sub_key: "",
         };
         let list = rval.list();
+        assert_eq!(list.key(), "chunk_test");
         let chunks: Vec<_> = list.chunks(2).collect();
         assert_eq!(chunks.len(), 3);
+        assert_eq!(chunks[0].key(), "chunk_test");
         assert_eq!(
             (chunks[0].u32(0).unwrap(), chunks[0].u32(1).unwrap()),
             (1, 2)
@@ -1075,16 +1124,19 @@ mod tests {
 
         // Test a custom delimiter
         let comma_val = ResponseVal {
+            key: "custom_delim",
             value: "10,20;30,40",
             sub_key: "",
         };
         let semi = comma_val.values_by::<2>(';').unwrap();
+        assert_eq!(semi.key(), "custom_delim");
         assert_eq!(semi.str(0).unwrap(), "10,20");
         assert_eq!(semi.str(1).unwrap(), "30,40");
 
         // More values than expected are truncated instead of erroring
         let truncated = rval.values::<4>().unwrap();
         assert_eq!(truncated.len(), 4);
+        assert_eq!(truncated.key(), "chunk_test");
     }
 
     #[test]
@@ -1239,5 +1291,29 @@ mod tests {
         vals.ignore(99, "out of bounds index");
         #[cfg(debug_assertions)]
         assert_eq!(vals.unaccessed_indices(), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn test_response_and_vals_key() {
+        let resp = Response::parse(
+            "charactergroup:28/31/0/1/180/1518563942/2599294/0".to_string(),
+            chrono::Local::now().naive_local(),
+        )
+        .unwrap();
+
+        let rval = resp.values()["charactergroup"];
+        assert_eq!(rval.key(), "charactergroup");
+
+        let vals = rval.list();
+        assert_eq!(vals.key(), "charactergroup");
+        assert_eq!(vals.window(0..3).key(), "charactergroup");
+
+        // Error message includes the key name
+        let err = vals.u32(99).unwrap_err();
+        assert!(err.to_string().contains("charactergroup"));
+
+        // Standalone Vals defaults to empty key
+        let standalone = Vals::from("1/2/3");
+        assert_eq!(standalone.key(), "");
     }
 }
