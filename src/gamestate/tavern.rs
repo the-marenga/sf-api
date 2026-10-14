@@ -1,15 +1,12 @@
 use chrono::{DateTime, Local};
 use log::{error, warn};
 use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
 
-use super::{
-    CCGet, CFPGet, CSTGet, ExpeditionSetting, SFError, ServerTime, items::Item,
-};
+use super::{ExpeditionSetting, Result, items::Item};
 use crate::{
     command::{DiceReward, DiceType},
     gamestate::rewards::Reward,
-    misc::soft_into,
+    response::Vals,
 };
 
 /// Anything related to things you can do in the tavern
@@ -205,15 +202,19 @@ impl Quest {
         matches!(self.monster_id, 139 | 145 | 148 | 152 | 155 | 157)
     }
 
-    pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
-        // NOTE: I think [0], [1] was just flavor text
-        self.monster_id = data.csimget(2, "quest monster id", 0, |a| -a)?;
-        self.location_id = data
-            .cfpget(3, "quest location id", |a| a)?
-            .unwrap_or_default();
-        self.base_length = data.csiget(4, "quest length", 100_000)?;
-        self.base_experience = data.csiget(5, "quest xp", 0)?;
-        self.base_silver = data.csiget(6, "quest silver", 0)?;
+    /// Updates this quest from a 7-value chunk: `[flavor1, flavor2,
+    /// monster_id, location_id, length, xp, silver]`.
+    pub(crate) fn update(&mut self, data: &Vals<'_>) -> Result<()> {
+        data.ignore(0..2, "flavor / quest text");
+        let raw_monster = data.i64(2)?;
+        self.monster_id = u16::try_from(-raw_monster).unwrap_or_else(|_| {
+            warn!("Invalid quest monster id: {raw_monster}");
+            0
+        });
+        self.location_id = data.enum_or(3, Location::default());
+        self.base_length = data.u32(4)?;
+        self.base_experience = data.u32(5)?;
+        self.base_silver = data.u32(6)?;
         Ok(())
     }
 }
@@ -262,11 +263,17 @@ impl CurrentAction {
         match id {
             0 => CurrentAction::Idle,
             1 => CurrentAction::CityGuard {
-                hours: soft_into(sec, "city guard time", 10),
+                hours: u8::try_from(sec).unwrap_or_else(|_| {
+                    warn!("Invalid city guard hours: {sec}");
+                    10
+                }),
                 busy_until,
             },
             2 => CurrentAction::Quest {
-                quest_idx: soft_into(sec, "quest index", 0),
+                quest_idx: u8::try_from(sec).unwrap_or_else(|_| {
+                    warn!("Invalid quest index: {sec}");
+                    0
+                }),
                 busy_until,
             },
             4 => CurrentAction::Expedition,
@@ -288,21 +295,18 @@ pub struct Toilet {
     pub mana_currently: u32,
     /// The total amount of mana you have to collect to flush the toilet
     pub mana_total: u32,
-    // The amount of sacrifices you have left today
+    /// The amount of sacrifices you have left today
     pub sacrifices_left: u32,
 }
 
 impl Toilet {
-    pub(crate) fn update(
-        &mut self,
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<(), SFError> {
-        self.aura = data.csiget(0, "aura level", 0)?;
-        self.mana_currently = data.csiget(1, "mana now", 0)?;
-        // TODO: What is this? Last time we flushed/got an item?
-        let _unknown_time = data.cstget(2, "mana time", server_time)?;
-        self.mana_total = data.csiget(3, "mana missing", 1000)?;
+    /// Updates the toilet state from a 4-value response: `[aura,
+    /// mana_current, timestamp, mana_total]`.
+    pub(crate) fn update(&mut self, data: &Vals<'_>) -> Result<()> {
+        self.aura = data.u32(0)?;
+        self.mana_currently = data.u32(1)?;
+        data.ignore(2, "unknown server timestamp (last flush / item time)");
+        self.mana_total = data.u32(3)?;
         Ok(())
     }
 }
@@ -340,22 +344,19 @@ pub struct Expedition {
 }
 
 impl Expedition {
-    pub(crate) fn update_encounters(&mut self, data: &[i64]) {
-        if !data.len().is_multiple_of(2) {
-            warn!("weird encounters: {data:?}");
-        }
-        let default_ecp = |ci| {
-            warn!("Unknown encounter: {ci}");
-            ExpeditionThing::Unknown
-        };
+    /// Updates the available encounters at a crossroad from repeating
+    /// `[thing, heroism]` pairs.
+    pub(crate) fn update_encounters(&mut self, data: &Vals<'_>) {
         self.encounters = data
-            .chunks_exact(2)
-            .filter_map(|ci| {
-                let raw = *ci.first()?;
-                let typ = FromPrimitive::from_i64(raw)
-                    .unwrap_or_else(|| default_ecp(raw));
-                let heroism = soft_into(*ci.get(1)?, "e heroism", 0);
-                Some(ExpeditionEncounter { typ, heroism })
+            .chunks(2)
+            .map(|chunk| {
+                let typ = chunk.enum_opt(0).unwrap_or_else(|| {
+                    let raw = chunk.i64_or(0, 0);
+                    warn!("Unknown encounter: {raw}");
+                    ExpeditionThing::Unknown
+                });
+                let heroism = chunk.i32_or(1, 0);
+                ExpeditionEncounter { typ, heroism }
             })
             .collect();
     }
@@ -529,6 +530,18 @@ pub enum ExpeditionThing {
     LovestruckShakes = 172,
     LoveBirds = 173,
 
+    BeachTourist1 = 181,
+    BeachTourist2 = 182,
+    BeachTourist3 = 183,
+
+    Leafbold1 = 191,
+    Leafbold2 = 192,
+    Leafbold3 = 193,
+
+    SnowShakes1 = 201,
+    SnowShakes2 = 202,
+    SnowShakes3 = 203,
+
     // Dont know if they all exist tbh
     DummyBounty = 1000,
     ToiletPaperBounty = 1001,
@@ -546,6 +559,9 @@ pub enum ExpeditionThing {
     BarkeeperBounty = 1015,
     StanBounty = 1016,
     LoveBirdBounty = 1017,
+    BeachTouristBounty = 1018,
+    LeafboldBounty = 1019,
+    SnowShakesBounty = 1020,
 }
 
 impl ExpeditionThing {
@@ -571,6 +587,9 @@ impl ExpeditionThing {
             RidingStan => StanBounty,
             Barkeeper => BarkeeperBounty,
             LoveBirds => LoveBirdBounty,
+            BeachTourist3 => BeachTouristBounty,
+            Leafbold3 => LeafboldBounty,
+            SnowShakes3 => SnowShakesBounty,
             _ => return None,
         })
     }
@@ -597,6 +616,9 @@ impl ExpeditionThing {
             StanBounty => &[RidingStan],
             BarkeeperBounty => &[Barkeeper],
             LoveBirdBounty => &[LoveBirds],
+            BeachTouristBounty => &[BeachTourist3],
+            LeafboldBounty => &[Leafbold3],
+            SnowShakesBounty => &[SnowShakes3],
             _ => return None,
         })
     }
@@ -642,4 +664,90 @@ pub enum ExpeditionSpecial {
 pub enum GambleResult {
     SilverChange(i64),
     MushroomChange(i32),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_quest_update() {
+        let mut quest = Quest::default();
+        let raw = "366/3/-65/1/600/2239844/98169000";
+        crate::parse_test!(update: quest(raw), {
+            monster_id: 65,
+            location_id: Location::SprawlingJungle,
+            base_length: 600,
+            base_experience: 2_239_844,
+            base_silver: 98_169_000,
+        });
+        assert!(!quest.is_red());
+    }
+
+    #[test]
+    fn test_red_quest() {
+        let mut quest = Quest::default();
+        let raw = "366/3/-139/1/600/2239844/98169000";
+        crate::parse_test!(update: quest(raw), {
+            monster_id: 139,
+        });
+        assert!(quest.is_red());
+    }
+
+    #[test]
+    fn test_toilet_update() {
+        let mut toilet = Toilet::default();
+        let raw = "96/335/1780095716/280";
+        crate::parse_test!(update: toilet(raw), {
+            aura: 96,
+            mana_currently: 335,
+            mana_total: 280,
+        });
+    }
+
+    #[test]
+    fn test_expedition_encounters() {
+        let mut exp = Expedition::default();
+        let raw = "43/5/22/10/43/5";
+        let vals = Vals::from(raw);
+        exp.update_encounters(&vals);
+        assert_eq!(vals.unaccessed_indices(), Vec::<usize>::new());
+        assert_eq!(
+            exp.encounters.as_slice(),
+            [
+                ExpeditionEncounter {
+                    typ: ExpeditionThing::Rainbow,
+                    heroism: 5,
+                },
+                ExpeditionEncounter {
+                    typ: ExpeditionThing::Dragon,
+                    heroism: 10,
+                },
+                ExpeditionEncounter {
+                    typ: ExpeditionThing::Rainbow,
+                    heroism: 5,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_seasonal_bounties() {
+        assert_eq!(
+            ExpeditionThing::BeachTourist3.required_bounty(),
+            Some(ExpeditionThing::BeachTouristBounty)
+        );
+        assert_eq!(
+            ExpeditionThing::BeachTouristBounty.is_bounty_for(),
+            Some(&[ExpeditionThing::BeachTourist3][..])
+        );
+        assert_eq!(
+            ExpeditionThing::Leafbold3.required_bounty(),
+            Some(ExpeditionThing::LeafboldBounty)
+        );
+        assert_eq!(
+            ExpeditionThing::SnowShakes3.required_bounty(),
+            Some(ExpeditionThing::SnowShakesBounty)
+        );
+    }
 }

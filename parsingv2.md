@@ -337,6 +337,7 @@ if building_type.required_min_fortress_level() > fortress_level {
 | `fortress.rs` | the reference implementation |
 | `hellevator.rs` | hellevator event, treats, shop, monsters, floors, daily rewards |
 | `pets.rs` | pets, habitats, exploration, stats, opponents |
+| `tavern.rs` | quests, toilet state, gambler, encounters |
 | `unlockables.rs` | scrapbook, blacksmith, witch, achievements, pending unlocks |
 
 **Partly ported**: in `items.rs`, `Item::parse` and `ItemType::parse` work on
@@ -356,7 +357,6 @@ descending order):
 | `underworld.rs` | `underworld`, building prices, unit prices and levels, soul extraction |
 | `items.rs` | inventory and equipment, plus the `parse_slice` twins |
 | `rewards.rs` | reward parser, timed specials, wheel, calendar, tasks |
-| `tavern.rs` | quests, toilet state, gambler, encounters |
 | `character.rs` | the class/race tables, mount and portrait parsing |
 | `dungeons.rs` | light dungeon progress, companion equipment |
 
