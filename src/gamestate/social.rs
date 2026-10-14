@@ -565,7 +565,7 @@ impl OtherPlayer {
         // 0
         // 0
 
-        // 80315 // guild id
+        // guild id
         let sb_count = data.cget(66, "scrapbook count")?;
         if sb_count >= 10000 {
             self.scrapbook_count =

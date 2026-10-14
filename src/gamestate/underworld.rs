@@ -283,7 +283,7 @@ mod tests {
 
     #[test]
     fn test_update_building_prices() {
-        // From `cache/marenga.login`, `underworldprice.underworldPrice(10)`.
+        // A `underworldprice.underworldPrice(10)` response.
         // Only the gold pit has a price so far, the rest is still 0.
         let raw = "0/0/0/0/0/0/1296000/1000000000/162518400/0/0/0/0/0/0/0/0/0/\
                    0/0/0/0/0/0/0/0/0/0/0/0";
@@ -306,7 +306,7 @@ mod tests {
 
     #[test]
     fn test_update_underworld_unit_prices() {
-        // From `cache/marenga.login`, `underworldupgradeprice`.
+        // A `underworldupgradeprice` response.
         let raw = "417/500000/425800/359/500000/340150/369/500000/354450";
         let mut uw = Underworld::default();
         crate::parse_test!(

@@ -7,7 +7,10 @@ use std::{
     cell::Cell,
     collections::HashMap,
     fmt::{Debug, Display},
-    ops::Range,
+    ops::{
+        Bound, Range, RangeBounds, RangeFrom, RangeFull, RangeInclusive,
+        RangeTo, RangeToInclusive,
+    },
     str::FromStr,
 };
 
@@ -328,7 +331,15 @@ impl<'a> ResponseVal<'a> {
     /// like `fight.r`.
     #[must_use]
     pub(crate) fn list(&self) -> Vals<'a> {
-        Vals::owned(split_values(self.value, '/'))
+        self.list_by('/')
+    }
+
+    /// Splits this response value by `delim` into a [`Vals`] of any length.
+    /// Like [`list`](Self::list), but for the runtime-length responses that are
+    /// separated by something other than `/`, like `owngroupknights` (`,`).
+    #[must_use]
+    pub(crate) fn list_by(&self, delim: char) -> Vals<'a> {
+        Vals::owned(split_values(self.value, delim))
     }
 
     /// Splits this response value by `/` into a [`Vals`] of exactly `N` values.
@@ -510,6 +521,59 @@ macro_rules! accessors {
         )+
     };
 }
+
+/// An index into a [`Vals`]: a single position or a range of them, as accepted
+/// by [`Vals::ignore`].
+pub trait IgnoreIndex {
+    /// The half-open, `len`-clamped range of positions this index selects.
+    fn positions(self, len: usize) -> Range<usize>;
+}
+
+impl IgnoreIndex for usize {
+    fn positions(self, len: usize) -> Range<usize> {
+        self.min(len)..self.saturating_add(1).min(len)
+    }
+}
+
+/// Converts a range index into a concrete, `len`-clamped [`Range`].
+fn bounds_to_range<R: RangeBounds<usize>>(
+    range: &R,
+    len: usize,
+) -> Range<usize> {
+    let start = match range.start_bound() {
+        Bound::Included(&x) => x,
+        Bound::Excluded(&x) => x.saturating_add(1),
+        Bound::Unbounded => 0,
+    };
+    let end = match range.end_bound() {
+        Bound::Included(&x) => x.saturating_add(1),
+        Bound::Excluded(&x) => x,
+        Bound::Unbounded => len,
+    };
+    let start = start.min(len);
+    start..end.clamp(start, len)
+}
+
+macro_rules! impl_ignore_index {
+    ($($ty:ty),+ $(,)?) => {
+        $(
+            impl IgnoreIndex for $ty {
+                fn positions(self, len: usize) -> Range<usize> {
+                    bounds_to_range(&self, len)
+                }
+            }
+        )+
+    };
+}
+
+impl_ignore_index!(
+    Range<usize>,
+    RangeInclusive<usize>,
+    RangeTo<usize>,
+    RangeToInclusive<usize>,
+    RangeFrom<usize>,
+    RangeFull,
+);
 
 impl<'a> Vals<'a> {
     /// The number of values.
@@ -750,9 +814,12 @@ impl<'a> Vals<'a> {
         self.values()
     }
 
-    /// Marks the value at `pos` as read, so it is not reported as unaccessed.
-    pub fn ignore(&self, pos: usize, _reason: &str) {
-        let _ = self.value(pos);
+    /// Marks the value(s) at `index` as read, so they are not reported as
+    /// unaccessed. `index` is a position or a range, like `slice::get`.
+    pub fn ignore(&self, index: impl IgnoreIndex, _reason: &str) {
+        for pos in index.positions(self.len()) {
+            let _ = self.value(pos);
+        }
     }
 
     /// Marks every value as read, so none is reported as unaccessed.
@@ -765,9 +832,7 @@ impl<'a> Vals<'a> {
     /// skipped.
     pub fn ignore_unmodelled(&self, ranges: &[Range<usize>], reason: &str) {
         for range in ranges {
-            for pos in range.clone() {
-                self.ignore(pos, reason);
-            }
+            self.ignore(range.clone(), reason);
         }
     }
 
@@ -1149,5 +1214,26 @@ mod tests {
         assert!(vals.window(9..12).is_empty());
         assert_eq!(vals.window(7..99).len(), 2);
         assert_eq!(vals.window(7..99).values(), ["7", "8"]);
+    }
+
+    /// `ignore` takes a single position or any slice-index range, and marks
+    /// exactly what it selects (clamped to the response).
+    #[test]
+    fn test_ignore_index_and_ranges() {
+        let vals = Vals::from("0/1/2/3/4/5/6/7/8");
+        vals.ignore(0, "single index");
+        vals.ignore(2..5, "half-open range");
+        vals.ignore(7.., "range to the end");
+
+        #[cfg(debug_assertions)]
+        assert_eq!(vals.unaccessed_indices(), vec![1, 5, 6]);
+
+        // Inclusive, full and over-long ranges are all clamped
+        let vals = Vals::from("0/1/2/3");
+        vals.ignore(.., "full range");
+        vals.ignore(2..=99, "over-long inclusive range");
+        vals.ignore(99, "out of bounds index");
+        #[cfg(debug_assertions)]
+        assert_eq!(vals.unaccessed_indices(), Vec::<usize>::new());
     }
 }
