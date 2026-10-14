@@ -110,9 +110,10 @@ pub enum DungeonProgress {
 /// real point for you to use this
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum DungeonType {
+    /// A light dungeon.
     Light,
+    /// A shadow dungeon.
     Shadow,
 }
 
@@ -120,9 +121,10 @@ pub enum DungeonType {
 /// real point for you to use this
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum Dungeon {
+    /// A light dungeon.
     Light(LightDungeon),
+    /// A shadow dungeon.
     Shadow(ShadowDungeon),
 }
 
@@ -157,43 +159,78 @@ impl Dungeon {
     Hash,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum LightDungeon {
+    /// Desecrated Catacombs
     DesecratedCatacombs = 0,
+    /// The Mines of Gloria
     MinesOfGloria = 1,
+    /// The Ruins of Gnark
     RuinsOfGnark = 2,
+    /// The Cutthroat Grotto
     CutthroatGrotto = 3,
+    /// The Emerald Scale Altar
     EmeraldScaleAltar = 4,
+    /// The Toxic Tree
     ToxicTree = 5,
+    /// The Magma Stream
     MagmaStream = 6,
+    /// The Frost Blood Temple
     FrostBloodTemple = 7,
+    /// The Pyramids of Madness
     PyramidsofMadness = 8,
+    /// Black Skull Fortress
     BlackSkullFortress = 9,
+    /// Circus of Horror
     CircusOfHorror = 10,
+    /// Hell
     Hell = 11,
+    /// The 13th Floor
     The13thFloor = 12,
+    /// Easteros
     Easteros = 13,
+    /// The Tower
     Tower = 14,
+    /// Time-honored School of Magic
     TimeHonoredSchoolofMagic = 15,
+    /// Hemorridor
     Hemorridor = 16,
+    /// Nordic Gods
     NordicGods = 18,
+    /// Mount Olympus
     MountOlympus = 19,
+    /// Tavern of the Dark Doppelgangers
     TavernoftheDarkDoppelgangers = 20,
+    /// Dragon's Hoard
     DragonsHoard = 21,
+    /// House of Horrors
     HouseOfHorrors = 22,
+    /// Third League of Superheroes
     ThirdLeagueOfSuperheroes = 23,
+    /// Dojo of Childhood Heroes
     DojoOfChildhoodHeroes = 24,
+    /// Monster Grotto
     MonsterGrotto = 25,
+    /// City of Intrigues
     CityOfIntrigues = 26,
+    /// School of Magic Express
     SchoolOfMagicExpress = 27,
+    /// Ash Mountain
     AshMountain = 28,
+    /// Playa Games HQ
     PlayaGamesHQ = 29,
+    /// Training Camp
     TrainingCamp = 30,
+    /// Sandstorm
     Sandstorm = 31,
+    /// Arcade of the Old Pixel Icons
     ArcadeOfTheOldPixelIcons = 32,
+    /// The Server Room
     TheServerRoom = 33,
+    /// Workshop of the Hunters of the Undead
     WorkshopOfTheHunters = 34,
+    /// Retro TV Legends
     RetroTVLegends = 35,
+    /// The Meeting Room
     MeetingRoom = 36,
 }
 
@@ -218,43 +255,77 @@ impl From<LightDungeon> for Dungeon {
     Hash,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum ShadowDungeon {
+    /// Desecrated Catacombs
     DesecratedCatacombs = 0,
+    /// The Mines of Gloria
     MinesOfGloria = 1,
+    /// The Ruins of Gnark
     RuinsOfGnark = 2,
+    /// The Cutthroat Grotto
     CutthroatGrotto = 3,
+    /// The Emerald Scale Altar
     EmeraldScaleAltar = 4,
+    /// The Toxic Tree
     ToxicTree = 5,
+    /// The Magma Stream
     MagmaStream = 6,
+    /// The Frost Blood Temple
     FrostBloodTemple = 7,
+    /// The Pyramids of Madness
     PyramidsOfMadness = 8,
+    /// Black Skull Fortress
     BlackSkullFortress = 9,
+    /// Circus of Horror
     CircusOfHorror = 10,
+    /// Hell
     Hell = 11,
+    /// The 13th Floor
     The13thFloor = 12,
+    /// Easteros
     Easteros = 13,
+    /// The Twister
     Twister = 14,
+    /// Time-honored School of Magic
     TimeHonoredSchoolOfMagic = 15,
+    /// Hemorridor
     Hemorridor = 16,
+    /// Continuous Loop of Idols
     ContinuousLoopofIdols = 17,
+    /// Nordic Gods
     NordicGods = 18,
+    /// Mount Olympus
     MountOlympus = 19,
+    /// Tavern of the Dark Doppelgangers
     TavernOfTheDarkDoppelgangers = 20,
+    /// Dragon's Hoard
     DragonsHoard = 21,
+    /// House of Horrors
     HouseOfHorrors = 22,
+    /// Third League of Superheroes
     ThirdLeagueofSuperheroes = 23,
+    /// Dojo of Childhood Heroes
     DojoOfChildhoodHeroes = 24,
+    /// Monster Grotto
     MonsterGrotto = 25,
+    /// City of Intrigues
     CityOfIntrigues = 26,
+    /// School of Magic Express
     SchoolOfMagicExpress = 27,
+    /// Ash Mountain
     AshMountain = 28,
+    /// Playa Games HQ
     PlayaGamesHQ = 29,
     // TrainingDungeon & Sandstorm do not have a shadow version
+    /// Arcade of the Old Pixel Icons
     ArcadeOfTheOldPixelIcons = 32,
+    /// The Server Room
     TheServerRoom = 33,
+    /// Workshop of the Hunters of the Undead
     WorkshopOfTheHunters = 34,
+    /// Retro TV Legends
     RetroTVLegends = 35,
+    /// The Meeting Room
     MeetingRoom = 36,
 }
 
