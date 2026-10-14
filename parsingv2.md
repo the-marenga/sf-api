@@ -238,7 +238,7 @@ the same tracker the `Drop` warning reports from:
 ```rust
 let data = Vals::from(raw);
 fight.update_result(&data);
-assert!(data.unaccessed_indices().is_empty(), "unread values in {data}");
+data.assert_all_read();
 ```
 
 That is what catches an `ignore` range with an off-by-one, or a field the
@@ -338,6 +338,7 @@ if building_type.required_min_fortress_level() > fortress_level {
 | Module | Notes |
 | --- | --- |
 | `arena.rs` | arena, fights, rounds; variable-length responses |
+| `dungeons.rs` | light and shadow dungeon progress, portal, companion equipment |
 | `fortress.rs` | the reference implementation |
 | `hellevator.rs` | hellevator event, treats, shop, monsters, floors, daily rewards |
 | `pets.rs` | pets, habitats, exploration, stats, opponents |
@@ -362,7 +363,6 @@ descending order):
 | `items.rs` | inventory and equipment, plus the `parse_slice` twins |
 | `rewards.rs` | reward parser, timed specials, wheel, calendar, tasks |
 | `character.rs` | the class/race tables, mount and portrait parsing |
-| `dungeons.rs` | light dungeon progress, companion equipment |
 
 ---
 

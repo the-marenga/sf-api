@@ -375,8 +375,7 @@ impl GameState {
             // A block is TOWER_BLOCK_LEN values: the companion, its underworld
             // unit and the trailing value after it
             let start = BLOCK_OFFSET + i * TOWER_BLOCK_LEN;
-            companions
-                .get_mut(class)
+            companions[class]
                 .update(&data.window(start..start + TOWER_BLOCK_LEN))?;
         }
 
@@ -533,18 +532,8 @@ impl GameState {
                     .update_sacrifices(&val.values::<3>()?);
             }
             "companionequipment" => {
-                if val.as_str().trim().is_empty() {
-                    return Ok(());
-                }
-                let companions =
-                    self.dungeons.companions.get_or_insert_default();
-                let chunks = val.list();
-                for (chunk, cmp) in chunks
-                    .chunks(EQUIPMENT_PARSE_LEN)
-                    .zip(companions.values_mut())
-                {
-                    cmp.equipment = Equipment::parse(&chunk, server_time)?;
-                }
+                self.dungeons
+                    .update_companion_equipment(&val.list(), server_time)?;
             }
             "storeitemsfidget" => {
                 let data: Vec<i64> = val.into_list("magic store")?;
@@ -647,19 +636,17 @@ impl GameState {
             "unlockfeature" => {
                 self.pending_unlocks = Unlockable::parse(&val.list())?;
             }
-            "dungeonprogresslight" => self.dungeons.update_progress(
-                &val.into_list("dungeon progress light")?,
-                DungeonType::Light,
-            ),
-            "dungeonprogressshadow" => self.dungeons.update_progress(
-                &val.into_list("dungeon progress shadow")?,
-                DungeonType::Shadow,
-            ),
+            "dungeonprogresslight" => self
+                .dungeons
+                .update_progress(&val.values::<37>()?, DungeonType::Light)?,
+            "dungeonprogressshadow" => self
+                .dungeons
+                .update_progress(&val.values::<37>()?, DungeonType::Shadow)?,
             "portalprogress" => {
                 self.dungeons
                     .portal
                     .get_or_insert_default()
-                    .update(&val.into_list("portal progress")?, server_time)?;
+                    .update(&val.values::<3>()?, server_time)?;
             }
             "owntowerlevel" => {
                 // Already in dungeons
@@ -1688,12 +1675,6 @@ pub struct NormalCost {
 mod tests {
     use super::*;
 
-    /// Asserts that every value of `data` was read or explicitly ignored.
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     /// The whole `owntower` response: companions, underworld and ignored.
     #[test]
     fn test_update_tower() {
@@ -1722,7 +1703,7 @@ mod tests {
 
         let mut state = GameState::default();
         state.update_tower(&data, ServerTime::default()).unwrap();
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let companions = state.dungeons.companions.as_ref().unwrap();
         let warrior = &companions[CompanionClass::Warrior];
@@ -1773,7 +1754,7 @@ mod tests {
         state
             .update_character_status(&data, ServerTime::default())
             .unwrap();
-        assert_all_read(&data);
+        data.assert_all_read();
 
         match state.tavern.current_action {
             CurrentAction::CityGuard { hours, .. } => {

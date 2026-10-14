@@ -5,13 +5,13 @@ use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
 use super::{
-    AttributeType, CCGet, Class, EnumMapGet, Item, Result, SFError, ServerTime,
-    items::Equipment,
+    AttributeType, Class, Item, Result, ServerTime,
+    items::{EQUIPMENT_PARSE_LEN, Equipment},
 };
-use crate::{misc::soft_into, response::Vals};
+use crate::response::Vals;
 
 /// The personal demon portal
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Portal {
     /// The amount of enemies you have fought in the portal already
@@ -30,16 +30,18 @@ pub struct Portal {
 }
 
 impl Portal {
+    /// Updates the portal from a `portalprogress` response of 3 values:
+    /// `fights / enemy_hp_percentage / last_portal_day`.
     pub(crate) fn update(
         &mut self,
-        data: &[i64],
+        data: &Vals<'_>,
         server_time: ServerTime,
-    ) -> Result<(), SFError> {
-        self.finished = data.csiget(0, "portal fights", 10_000)?;
-        self.enemy_hp_percentage = data.csiget(1, "portal hp", 0)?;
+    ) -> Result<()> {
+        self.finished = data.u16(0)?;
+        self.enemy_hp_percentage = data.u8(1)?;
 
         let current_day = chrono::Datelike::ordinal(&server_time.current());
-        let last_portal_day: u32 = data.csiget(2, "portal day", 0)?;
+        let last_portal_day: u32 = data.u32(2)?;
         self.can_fight = last_portal_day != current_day;
 
         Ok(())
@@ -58,6 +60,7 @@ pub struct Dungeons {
     /// All the shadow dungeons. Notably twister & cont. loop of idols is also
     /// in here
     pub shadow: EnumMap<ShadowDungeon, DungeonProgress>,
+    /// The personal demon portal
     pub portal: Option<Portal>,
     /// The companions unlocked from unlocking the tower. Note that the tower
     /// info itself is just handled as a normal light dungeon
@@ -69,8 +72,8 @@ impl Dungeons {
     pub fn progress(&self, dungeon: impl Into<Dungeon>) -> DungeonProgress {
         let dungeon: Dungeon = dungeon.into();
         match dungeon {
-            Dungeon::Light(dungeon) => *self.light.get(dungeon),
-            Dungeon::Shadow(dungeon) => *self.shadow.get(dungeon),
+            Dungeon::Light(dungeon) => self.light[dungeon],
+            Dungeon::Shadow(dungeon) => self.shadow[dungeon],
         }
     }
 
@@ -124,6 +127,8 @@ pub enum Dungeon {
 }
 
 impl Dungeon {
+    /// Returns whether this dungeon is fought with companions (Tower and
+    /// non-Twister shadow dungeons).
     #[must_use]
     #[allow(clippy::match_same_arms)]
     pub fn is_with_companions(self) -> bool {
@@ -260,19 +265,19 @@ impl From<ShadowDungeon> for Dungeon {
 }
 
 fn update_progress<T: FromPrimitive + enum_map::Enum>(
-    data: &[i64],
+    data: &Vals<'_>,
     dungeons: &mut EnumMap<T, DungeonProgress>,
-) {
-    for (dungeon_id, progress) in data.iter().copied().enumerate() {
+) -> Result<()> {
+    for dungeon_id in 0..data.len() {
+        let progress = data.i64(dungeon_id)?;
         let Some(dungeon_typ) = FromPrimitive::from_usize(dungeon_id) else {
             continue;
         };
-        let dungeon = dungeons.get_mut(dungeon_typ);
-        *dungeon = match progress {
+        dungeons[dungeon_typ] = match progress {
             -1 => DungeonProgress::Locked,
             x => {
-                let stage = soft_into(x, "dungeon progress", 0);
-                if stage == 10 || stage == 100 && dungeon_id == 14 {
+                let stage = u16::try_from(x).unwrap_or(0);
+                if stage == 10 || (stage == 100 && dungeon_id == 14) {
                     DungeonProgress::Finished
                 } else {
                     DungeonProgress::Open { finished: stage }
@@ -280,6 +285,7 @@ fn update_progress<T: FromPrimitive + enum_map::Enum>(
             }
         };
     }
+    Ok(())
 }
 
 impl Dungeons {
@@ -297,20 +303,22 @@ impl Dungeons {
         item.can_be_equipped_by_companion(companion)
     }
 
+    /// Updates dungeon progress from a `dungeonprogresslight` or
+    /// `dungeonprogressshadow` response.
     pub(crate) fn update_progress(
         &mut self,
-        data: &[i64],
+        data: &Vals<'_>,
         dungeon_type: DungeonType,
-    ) {
+    ) -> Result<()> {
         match dungeon_type {
-            DungeonType::Light => update_progress(data, &mut self.light),
+            DungeonType::Light => update_progress(data, &mut self.light)?,
             DungeonType::Shadow => {
-                update_progress(data, &mut self.shadow);
+                update_progress(data, &mut self.shadow)?;
                 for (dungeon, limit) in [
                     (ShadowDungeon::ContinuousLoopofIdols, 21),
                     (ShadowDungeon::Twister, 1000),
                 ] {
-                    let d = self.shadow.get_mut(dungeon);
+                    let d = &mut self.shadow[dungeon];
                     if let DungeonProgress::Open { finished, .. } = d
                         && *finished >= limit
                     {
@@ -319,6 +327,26 @@ impl Dungeons {
                 }
             }
         }
+        Ok(())
+    }
+
+    /// Updates companion equipment from a `companionequipment` response.
+    pub(crate) fn update_companion_equipment(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) -> Result<()> {
+        if data.is_empty() {
+            return Ok(());
+        }
+        let companions = self.companions.get_or_insert_default();
+        for (chunk, cmp) in data
+            .chunks(EQUIPMENT_PARSE_LEN)
+            .zip(companions.values_mut())
+        {
+            cmp.equipment = Equipment::parse(&chunk, server_time)?;
+        }
+        Ok(())
     }
 }
 
@@ -376,16 +404,10 @@ impl Companion {
         data.ignore(3, "always 0");
         // A second attribute map; its largest value sits in this companion's
         // class main attribute slot, so it may include equipment attributes
-        for idx in 9..14 {
-            data.ignore(idx, "2nd attribute map (basis or additions?)");
-        }
-        for idx in 14..19 {
-            data.ignore(idx, "always 0");
-        }
+        data.ignore(9..14, "2nd attribute map (basis or additions?)");
+        data.ignore(14..19, "always 0");
         // The first value is an order of magnitude larger than the other two
-        for idx in 19..22 {
-            data.ignore(idx, "unknown, maybe hp and damage");
-        }
+        data.ignore(19..22, "unknown, maybe hp and damage");
         // The equipment the old code read here; 0 in every capture since it
         // moved to the `companionequipment` response. The last 5 values are
         // the underworld unit and the trailing value after it
@@ -396,6 +418,8 @@ impl Companion {
     }
 }
 
+/// Returns the static monster information for the current enemy in the given
+/// dungeon at the specified progress.
 #[cfg(feature = "simulation")]
 pub fn get_dungeon_monster(
     dungeon: impl Into<Dungeon>,
@@ -407,4 +431,148 @@ pub fn get_dungeon_monster(
     };
     crate::simulate::constants::get_dungeon_enemies(dungeon.into())
         .get(stage as usize)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_portal_update() {
+        let raw = "33/100/54";
+        let data = Vals::from(raw);
+        let mut portal = Portal::default();
+        let server_time = ServerTime::default();
+        let current_day = chrono::Datelike::ordinal(&server_time.current());
+
+        portal.update(&data, server_time).unwrap();
+        data.assert_all_read();
+
+        assert_eq!(portal.finished, 33);
+        assert_eq!(portal.enemy_hp_percentage, 100);
+        assert_eq!(portal.can_fight, current_day != 54);
+    }
+
+    #[test]
+    fn test_light_dungeon_progress() {
+        let raw = "10/10/10/10/10/10/10/10/10/10/10/10/10/8/100/8/6/33/2/1/1/\
+                   10/6/0/0/-1/-1/-1/-1/0/10/-1/-1/-1/-1/-1/-1";
+        let data = Vals::from(raw);
+        let mut dungeons = Dungeons::default();
+
+        dungeons.update_progress(&data, DungeonType::Light).unwrap();
+        data.assert_all_read();
+
+        assert_eq!(
+            dungeons.progress(LightDungeon::DesecratedCatacombs),
+            DungeonProgress::Finished
+        );
+        assert_eq!(
+            dungeons.progress(LightDungeon::Easteros),
+            DungeonProgress::Open { finished: 8 }
+        );
+        assert_eq!(
+            dungeons.progress(LightDungeon::Tower),
+            DungeonProgress::Finished
+        );
+        assert_eq!(
+            dungeons.progress(LightDungeon::TimeHonoredSchoolofMagic),
+            DungeonProgress::Open { finished: 8 }
+        );
+        assert_eq!(
+            dungeons.progress(LightDungeon::Hemorridor),
+            DungeonProgress::Open { finished: 6 }
+        );
+        assert_eq!(
+            dungeons.progress(LightDungeon::MonsterGrotto),
+            DungeonProgress::Locked
+        );
+        assert_eq!(
+            dungeons.progress(LightDungeon::MeetingRoom),
+            DungeonProgress::Locked
+        );
+    }
+
+    #[test]
+    fn test_shadow_dungeon_progress() {
+        let raw = "10/10/10/10/10/10/10/10/10/10/10/10/2/-1/391/0/0/0/0/0/0/\
+                   -1/-1/-1/-1/-1/-1/-1/-1/-1/0/0/-1/-1/-1/-1/-1";
+        let data = Vals::from(raw);
+        let mut dungeons = Dungeons::default();
+
+        dungeons
+            .update_progress(&data, DungeonType::Shadow)
+            .unwrap();
+        data.assert_all_read();
+
+        assert_eq!(
+            dungeons.progress(ShadowDungeon::DesecratedCatacombs),
+            DungeonProgress::Finished
+        );
+        assert_eq!(
+            dungeons.progress(ShadowDungeon::The13thFloor),
+            DungeonProgress::Open { finished: 2 }
+        );
+        assert_eq!(
+            dungeons.progress(ShadowDungeon::Easteros),
+            DungeonProgress::Locked
+        );
+        assert_eq!(
+            dungeons.progress(ShadowDungeon::Twister),
+            DungeonProgress::Open { finished: 391 }
+        );
+
+        // Test Twister cleared limit
+        let mut twister_done = Dungeons::default();
+        let mut twister_vals = vec!["-1"; 37];
+        twister_vals[14] = "1000";
+        let raw_twister = twister_vals.join("/");
+        let data_twister = Vals::from(raw_twister.as_str());
+        twister_done
+            .update_progress(&data_twister, DungeonType::Shadow)
+            .unwrap();
+        assert_eq!(
+            twister_done.progress(ShadowDungeon::Twister),
+            DungeonProgress::Finished
+        );
+
+        // Test Continuous Loop of Idols cleared limit
+        let mut idols_done = Dungeons::default();
+        let mut idols_vals = vec!["-1"; 37];
+        idols_vals[17] = "21";
+        let raw_idols = idols_vals.join("/");
+        let data_idols = Vals::from(raw_idols.as_str());
+        idols_done
+            .update_progress(&data_idols, DungeonType::Shadow)
+            .unwrap();
+        assert_eq!(
+            idols_done.progress(ShadowDungeon::ContinuousLoopofIdols),
+            DungeonProgress::Finished
+        );
+    }
+
+    #[test]
+    fn test_companion_equipment_update() {
+        let mut dungeons = Dungeons::default();
+
+        // Empty data does nothing
+        let empty_data = Vals::from("");
+        dungeons
+            .update_companion_equipment(&empty_data, ServerTime::default())
+            .unwrap();
+        assert!(dungeons.companions.is_none());
+
+        // 3 companion equipment blocks of zeros
+        let raw = ["0"; EQUIPMENT_PARSE_LEN * 3].join("/");
+        let data = Vals::from(raw.as_str());
+        dungeons
+            .update_companion_equipment(&data, ServerTime::default())
+            .unwrap();
+        data.assert_all_read();
+
+        let companions = dungeons.companions.as_ref().unwrap();
+        for cmp in companions.values() {
+            assert!(cmp.equipment.0.values().all(Option::is_none));
+        }
+    }
 }
