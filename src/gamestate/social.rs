@@ -10,7 +10,8 @@ use super::{
     ServerTime,
     character::{Mount, Portrait},
     guild::GuildRank,
-    items::Equipment,
+    items::{Equipment, ITEM_PARSE_LEN},
+    rewards::RewardType,
 };
 use crate::{PlayerId, error::SFError, misc::from_sf_string, response::Vals};
 
@@ -35,6 +36,71 @@ pub struct Mail {
     /// A preview of a claimable. You can get this via
     /// `Command::ClaimablePreview`
     pub open_claimable: Option<ClaimablePreview>,
+}
+
+impl Mail {
+    /// Updates news entries from a `newslist` response.
+    pub(crate) fn update_news_inbox(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        self.news_inbox.clear();
+        for msg in data.iter().filter(|a| !a.trim().is_empty()) {
+            match NewsEntry::parse(&Vals::by(msg, ','), server_time) {
+                Ok(entry) => self.news_inbox.push(entry),
+                Err(e) => warn!("Invalid news msg: {msg} {e}"),
+            }
+        }
+    }
+
+    /// Updates inbox messages from an `inbox` response.
+    pub(crate) fn update_inbox(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        self.inbox.clear();
+        for msg in data.iter().filter(|a| !a.trim().is_empty()) {
+            match InboxEntry::parse(&Vals::by(msg, ','), server_time) {
+                Ok(entry) => self.inbox.push(entry),
+                Err(e) => warn!("Invalid inbox msg: {msg} {e}"),
+            }
+        }
+    }
+
+    /// Updates combat log entries from a `combatloglist` response.
+    pub(crate) fn update_combat_log(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        self.combat_log.clear();
+        for entry in data.iter() {
+            if entry.is_empty() || entry.split(',').all(str::is_empty) {
+                continue;
+            }
+            let entry_data = Vals::by(entry, ',');
+            match CombatLogEntry::parse(&entry_data, server_time) {
+                Ok(cle) => self.combat_log.push(cle),
+                Err(e) => {
+                    warn!("Unable to parse combat log entry: {entry} - {e}");
+                }
+            }
+        }
+    }
+
+    /// Updates claimable deliveries from a `pendingrewards` response.
+    pub(crate) fn update_claimables(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        self.claimables = data
+            .chunks(6)
+            .filter_map(|chunk| ClaimableMail::parse(&chunk, server_time).ok())
+            .collect();
+    }
 }
 
 /// Contains information about everything involving other players on the server.
@@ -77,6 +143,89 @@ pub struct HallOfFames {
     /// A list of hall of fame underworld players fetched during the last
     /// command
     pub underworlds: Vec<HallOfFameUnderworld>,
+}
+
+impl HallOfFames {
+    /// Updates player ranking from a `ranklistplayer` response.
+    pub(crate) fn update_players(&mut self, data: &Vals<'_>) {
+        self.players.clear();
+        for player in data.iter() {
+            if player.is_empty() || player.ends_with(",,,0,0,0,") {
+                break;
+            }
+            match HallOfFamePlayer::parse(&Vals::by(player, ',')) {
+                Ok(x) => self.players.push(x),
+                Err(e) => warn!("Invalid hall of fame entry: {player} {e}"),
+            }
+        }
+    }
+
+    /// Updates guild ranking from a `ranklistgroup` response.
+    pub(crate) fn update_guilds(&mut self, data: &Vals<'_>) {
+        self.guilds.clear();
+        for guild in data.iter() {
+            if guild.is_empty() {
+                continue;
+            }
+            match HallOfFameGuild::parse(&Vals::by(guild, ',')) {
+                Ok(x) => self.guilds.push(x),
+                Err(e) => warn!("Invalid hall of fame entry: {guild} {e}"),
+            }
+        }
+    }
+
+    /// Updates pet ranking from a `RanklistPets` response.
+    pub(crate) fn update_pets(&mut self, data: &Vals<'_>) {
+        self.pets.clear();
+        for entry in data.iter() {
+            if entry.is_empty() {
+                continue;
+            }
+            match HallOfFamePets::parse(&Vals::by(entry, ',')) {
+                Ok(x) => self.pets.push(x),
+                Err(e) => warn!("Invalid hall of fame entry: {entry} {e}"),
+            }
+        }
+    }
+
+    /// Updates fortress ranking from a `ranklistfortress` response.
+    pub(crate) fn update_fortresses(&mut self, data: &Vals<'_>) {
+        self.fortresses.clear();
+        for fortress in data.iter() {
+            if fortress.is_empty() {
+                continue;
+            }
+            match HallOfFameFortress::parse(&Vals::by(fortress, ',')) {
+                Ok(x) => self.fortresses.push(x),
+                Err(e) => warn!("Invalid hall of fame entry: {fortress} {e}"),
+            }
+        }
+    }
+
+    /// Updates underworld ranking from a `ranklistunderworld` response.
+    pub(crate) fn update_underworlds(&mut self, data: &Vals<'_>) {
+        self.underworlds.clear();
+        for entry in data.iter() {
+            if entry.is_empty() {
+                continue;
+            }
+            match HallOfFameUnderworld::parse(&Vals::by(entry, ',')) {
+                Ok(x) => self.underworlds.push(x),
+                Err(e) => warn!("Invalid hall of fame entry: {entry} {e}"),
+            }
+        }
+    }
+
+    /// Updates hellevator ranking from a `ranklisthellevator` response.
+    pub(crate) fn update_hellevator(&mut self, data: &Vals<'_>) {
+        self.hellevator = data
+            .iter()
+            .filter(|a| !a.is_empty())
+            .filter_map(|chunk| {
+                HallOfFameHellevator::parse(&Vals::by(chunk, ',')).ok()
+            })
+            .collect();
+    }
 }
 
 /// A Hellevator Hall of Fame ranking entry
@@ -545,6 +694,21 @@ impl OtherPlayer {
 
         Ok(())
     }
+
+    /// Updates combat unit levels from an `otherplayerunitlevel` response.
+    pub(crate) fn update_unit_levels(&mut self, data: &Vals<'_>) {
+        self.wall_combat_lvl = data.u16_or(0, 0);
+        data.ignore_all("other unit levels handled elsewhere");
+    }
+
+    /// Updates the player's fortress rank from an `otherplayerfortressrank`
+    /// response.
+    pub(crate) fn update_fortress_rank(&mut self, rank: i64) {
+        if rank >= 0 {
+            self.fortress.get_or_insert_default().rank =
+                rank.try_into().unwrap_or(1);
+        }
+    }
 }
 
 /// The type of combat represented in a combat log entry
@@ -815,6 +979,29 @@ impl OtherGuild {
         data.ignore_all("guild member arrays and unmodelled save offsets");
         Ok(())
     }
+
+    /// Updates member names from an `othergroupmember` response.
+    pub(crate) fn update_member_names(&mut self, data: &Vals<'_>) {
+        if self.members.len() < data.len() {
+            self.members.resize_with(data.len(), Default::default);
+        }
+        for (m, name) in self.members.iter_mut().zip(data.iter()) {
+            m.name = name.to_string();
+        }
+    }
+
+    /// Updates guild description and emblem from an `othergroupdescription`
+    /// response.
+    pub(crate) fn update_description_embed(&mut self, data: &Vals<'_>) {
+        let (emblem, desc) = match data.len() {
+            0 => ("", ""),
+            1 => ("", data.str_or(0, "")),
+            _ => (data.str_or(0, ""), data.str_or(1, "")),
+        };
+        self.emblem.update(emblem);
+        self.description = from_sf_string(desc);
+        data.ignore_all("all description parts consumed");
+    }
 }
 
 /// An entry representing a relation with another player
@@ -889,9 +1076,76 @@ pub struct ClaimablePreview {
     pub resources: Vec<Reward>,
 }
 
+impl ClaimableMail {
+    /// Parses a claimable mail delivery from a 6-element response slice:
+    /// `[msg_id, status, type, code_name, start_time, end_time]`.
+    ///
+    /// # Errors
+    /// Returns an error if required fields are missing or invalid.
+    pub(crate) fn parse(
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) -> Result<Self> {
+        let status = match data.get_str(1) {
+            Some("0") => ClaimableStatus::Unread,
+            Some("1") => ClaimableStatus::Read,
+            Some("2") => ClaimableStatus::Claimed,
+            Some(x) => {
+                warn!("Unknown claimable status: {x}");
+                ClaimableStatus::Claimed
+            }
+            None => {
+                return Err(SFError::ParsingErrorV2(
+                    "Missing claimable status".to_string(),
+                ));
+            }
+        };
+
+        Ok(Self {
+            msg_id: data.i64(0)?,
+            status,
+            typ: data.enum_or(2, ClaimableMailType::GenericDelivery),
+            name: data.get(3)?.to_string(),
+            received: data.server_time(4, server_time)?,
+            claimable_until: data.server_time(5, server_time)?,
+        })
+    }
+}
+
+impl ClaimablePreview {
+    /// Updates the resources in this preview from a `pendingrewardressources`
+    /// response.
+    pub(crate) fn update_resources(&mut self, data: &Vals<'_>) {
+        self.resources = data
+            .chunks(2)
+            .map(|chunk| Reward {
+                typ: RewardType::parse(chunk.i64_or(0, 0)),
+                amount: chunk.u64_or(1, 1),
+            })
+            .collect();
+    }
+
+    /// Updates the items in this preview from a `pendingreward` response.
+    pub(crate) fn update_items(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        self.items = data
+            .chunks(ITEM_PARSE_LEN)
+            .filter_map(|chunk| Item::parse(&chunk, server_time).ok().flatten())
+            .collect();
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used, clippy::unreadable_literal, clippy::len_zero)]
+    #![allow(
+        clippy::unwrap_used,
+        clippy::unreadable_literal,
+        clippy::len_zero,
+        clippy::indexing_slicing
+    )]
     use super::*;
 
     #[test]
@@ -1131,6 +1385,194 @@ mod tests {
         assert!(
             data.unaccessed_indices().is_empty(),
             "unread values in {data}"
+        );
+    }
+
+    #[test]
+    fn test_claimable_mail_parse() {
+        let raw = "101/0/10/TESTCODE/1600000000/1700000000";
+        let data = Vals::from(raw);
+        let claimable =
+            ClaimableMail::parse(&data, ServerTime::default()).unwrap();
+        assert_eq!(claimable.msg_id, 101);
+        assert_eq!(claimable.status, ClaimableStatus::Unread);
+        assert_eq!(claimable.typ, ClaimableMailType::Coupon);
+        assert_eq!(claimable.name, "TESTCODE");
+        assert!(claimable.received.is_some());
+        assert!(claimable.claimable_until.is_some());
+        assert!(
+            data.unaccessed_indices().is_empty(),
+            "unread values in {data}"
+        );
+
+        let mut mail = Mail::default();
+        let list_raw = "101/0/10/TESTCODE/1600000000/1700000000/102/1/11/HERO/\
+                        1600000000/1700000000";
+        let list_data = Vals::from(list_raw);
+        mail.update_claimables(&list_data, ServerTime::default());
+        assert_eq!(mail.claimables.len(), 2);
+        assert_eq!(mail.claimables[1].msg_id, 102);
+        assert_eq!(mail.claimables[1].status, ClaimableStatus::Read);
+        assert_eq!(mail.claimables[1].typ, ClaimableMailType::SupermanDelivery);
+    }
+
+    #[test]
+    fn test_claimable_preview_update() {
+        let mut preview = ClaimablePreview::default();
+        let res_raw = "3/50/4/1000";
+        let res_data = Vals::from(res_raw);
+        preview.update_resources(&res_data);
+        assert_eq!(preview.resources.len(), 2);
+        assert_eq!(preview.resources[0].typ, RewardType::Mushrooms);
+        assert_eq!(preview.resources[0].amount, 50);
+        assert_eq!(preview.resources[1].typ, RewardType::Silver);
+        assert_eq!(preview.resources[1].amount, 1000);
+        assert!(
+            res_data.unaccessed_indices().is_empty(),
+            "unread values in {res_data}"
+        );
+    }
+
+    #[test]
+    fn test_mail_updates() {
+        let mut mail = Mail::default();
+        let news_raw = "1,News One,1600000000,0;2,News Two,1600000010,1";
+        let news_data = Vals::by(news_raw, ';');
+        mail.update_news_inbox(&news_data, ServerTime::default());
+        assert_eq!(mail.news_inbox.len(), 2);
+        assert!(
+            news_data.unaccessed_indices().is_empty(),
+            "unread values in {news_data}"
+        );
+
+        let inbox_raw = "10,Sender,0,Title,1600000000";
+        let inbox_data = Vals::by(inbox_raw, ';');
+        mail.update_inbox(&inbox_data, ServerTime::default());
+        assert_eq!(mail.inbox.len(), 1);
+        assert_eq!(mail.inbox[0].from, "Sender");
+        assert!(
+            inbox_data.unaccessed_indices().is_empty(),
+            "unread values in {inbox_data}"
+        );
+
+        let combat_raw = "1001,OpponentPlayer,1,0,1600000000";
+        let combat_data = Vals::by(combat_raw, ';');
+        mail.update_combat_log(&combat_data, ServerTime::default());
+        assert_eq!(mail.combat_log.len(), 1);
+        assert_eq!(mail.combat_log[0].player_name, "OpponentPlayer");
+        assert!(
+            combat_data.unaccessed_indices().is_empty(),
+            "unread values in {combat_data}"
+        );
+    }
+
+    #[test]
+    fn test_other_guild_updates() {
+        let mut guild = OtherGuild::default();
+        let names_raw = "Leader,Officer,Member";
+        let names_data = Vals::by(names_raw, ',');
+        guild.update_member_names(&names_data);
+        assert_eq!(guild.members.len(), 3);
+        assert_eq!(guild.members[0].name, "Leader");
+        assert_eq!(guild.members[1].name, "Officer");
+        assert_eq!(guild.members[2].name, "Member");
+        assert!(
+            names_data.unaccessed_indices().is_empty(),
+            "unread values in {names_data}"
+        );
+
+        let desc_data = Vals::by("010203§Welcome to our guild!", '§');
+        guild.update_description_embed(&desc_data);
+        assert_eq!(guild.description, "Welcome to our guild!");
+        assert!(
+            desc_data.unaccessed_indices().is_empty(),
+            "unread values in {desc_data}"
+        );
+    }
+
+    #[test]
+    fn test_other_player_unit_levels_and_fortress_rank() {
+        let mut player = OtherPlayer::default();
+        let unit_raw = "15/10/12/8";
+        let unit_data = Vals::from(unit_raw);
+        player.update_unit_levels(&unit_data);
+        assert_eq!(player.wall_combat_lvl, 15);
+        assert!(
+            unit_data.unaccessed_indices().is_empty(),
+            "unread values in {unit_data}"
+        );
+
+        player.update_fortress_rank(42);
+        assert_eq!(player.fortress.unwrap().rank, 42);
+
+        player.update_fortress_rank(-1);
+        assert_eq!(player.fortress.unwrap().rank, 42);
+    }
+
+    #[test]
+    fn test_hall_of_fames_updates() {
+        let mut hof = HallOfFames::default();
+        let players_raw = "1,Kiirschsaft,Die \
+                           Hejels,397,157866,2,de;2,PlayerTwo,Guild,350,\
+                           140000,1,en";
+        let players_data = Vals::by(players_raw, ';');
+        hof.update_players(&players_data);
+        assert_eq!(hof.players.len(), 2);
+        assert_eq!(hof.players[0].name, "Kiirschsaft");
+        assert!(
+            players_data.unaccessed_indices().is_empty(),
+            "unread values in {players_data}"
+        );
+
+        let guilds_raw = "1,Die Hejels,50,157866,10,de";
+        let guilds_data = Vals::by(guilds_raw, ';');
+        hof.update_guilds(&guilds_data);
+        assert_eq!(hof.guilds.len(), 1);
+        assert_eq!(hof.guilds[0].name, "Die Hejels");
+        assert!(
+            guilds_data.unaccessed_indices().is_empty(),
+            "unread values in {guilds_data}"
+        );
+
+        let pets_raw = "1,PetMaster,PetGuild,100,157866,0";
+        let pets_data = Vals::by(pets_raw, ';');
+        hof.update_pets(&pets_data);
+        assert_eq!(hof.pets.len(), 1);
+        assert_eq!(hof.pets[0].name, "PetMaster");
+        assert!(
+            pets_data.unaccessed_indices().is_empty(),
+            "unread values in {pets_data}"
+        );
+
+        let ft_raw = "1,FortressMaster,Die Hejels,500,157866,100,de";
+        let ft_data = Vals::by(ft_raw, ';');
+        hof.update_fortresses(&ft_data);
+        assert_eq!(hof.fortresses.len(), 1);
+        assert_eq!(hof.fortresses[0].name, "FortressMaster");
+        assert!(
+            ft_data.unaccessed_indices().is_empty(),
+            "unread values in {ft_data}"
+        );
+
+        let uw_raw = "1,UnderworldMaster,Die Hejels,500,157866,15,de";
+        let uw_data = Vals::by(uw_raw, ';');
+        hof.update_underworlds(&uw_data);
+        assert_eq!(hof.underworlds.len(), 1);
+        assert_eq!(hof.underworlds[0].name, "UnderworldMaster");
+        assert!(
+            uw_data.unaccessed_indices().is_empty(),
+            "unread values in {uw_data}"
+        );
+
+        let hlv_raw = "1,HellevatorHero,1000";
+        let hlv_data = Vals::by(hlv_raw, ';');
+        hof.update_hellevator(&hlv_data);
+        assert_eq!(hof.hellevator.len(), 1);
+        assert_eq!(hof.hellevator[0].name, "HellevatorHero");
+        assert_eq!(hof.hellevator[0].tokens, 1000);
+        assert!(
+            hlv_data.unaccessed_indices().is_empty(),
+            "unread values in {hlv_data}"
         );
     }
 }
