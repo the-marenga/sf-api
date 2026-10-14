@@ -4,7 +4,10 @@ use std::{
 };
 
 use chrono::{Local, NaiveDateTime};
-use reqwest::{Client, header::*};
+use reqwest::{
+    Client,
+    header::{HeaderMap, HeaderValue, ACCEPT, REFERER},
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::Mutex;
@@ -24,6 +27,7 @@ enum SSOAuthData {
     Steam,
 }
 
+/// A logged-in Shakes & Fidget SSO (Single Sign-On) account.
 #[derive(Debug)]
 pub struct SFAccount {
     pub(super) username: String,
@@ -33,6 +37,7 @@ pub struct SFAccount {
     pub(super) options: ConnectionOptions,
 }
 
+/// Holds the active session credentials (UUID and bearer token) for an SSO account.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AccountSession {
     pub(super) uuid: String,
@@ -50,6 +55,7 @@ enum APIRequest {
     },
 }
 
+/// Information about a character associated with an SSO account.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct SSOCharacter {
     pub(super) id: String,
@@ -324,6 +330,7 @@ async fn send_api_request(
     Ok(data)
 }
 
+/// A lookup table mapping numeric server IDs to their respective URLs.
 #[derive(Debug, Clone)]
 pub struct ServerLookup(HashMap<i32, Url>);
 
@@ -421,9 +428,12 @@ impl ServerLookup {
     }
 }
 
+/// The outcome of an SSO login check attempt.
 #[derive(Debug)]
 pub enum AuthResponse {
+    /// Authentication succeeded, returning the authenticated account.
     Success(SFAccount),
+    /// Authentication is still pending or not yet complete.
     NoAuth(SSOAuth),
 }
 
@@ -431,6 +441,7 @@ fn val_to_string(val: &Value) -> Option<String> {
     val.as_str().map(std::string::ToString::to_string)
 }
 
+/// An in-progress SSO authentication session with a third-party provider.
 #[derive(Debug)]
 pub struct SSOAuth {
     client: Client,
@@ -440,9 +451,12 @@ pub struct SSOAuth {
     provider: SSOProvider,
 }
 
+/// Supported third-party SSO authentication providers.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum SSOProvider {
+    /// Google account authentication.
     Google,
+    /// Steam account authentication.
     Steam,
 }
 
