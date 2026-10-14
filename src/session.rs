@@ -562,7 +562,7 @@ impl Default for ConnectionOptions {
 #[derive(Debug)]
 pub struct SimpleSession {
     session: Session,
-    gamestate: Option<GameState>,
+    gamestate: Option<Box<GameState>>,
 }
 
 impl SimpleSession {
@@ -584,7 +584,7 @@ impl SimpleSession {
             .ok_or(SFError::ConnectionError)?;
         let mut session = Session::new(username, password, connection);
         let resp = session.login().await?;
-        let gs = GameState::new(resp)?;
+        let gs = GameState::new_boxed(resp)?;
         Self::short_sleep().await;
         Ok(Self {
             session,
@@ -646,14 +646,14 @@ impl SimpleSession {
     /// currently logged in
     #[must_use]
     pub fn game_state(&self) -> Option<&GameState> {
-        self.gamestate.as_ref()
+        self.gamestate.as_deref()
     }
 
     /// Returns a mutable reference to the game state, if this `SimpleSession`
     /// is currently logged in
     #[must_use]
     pub fn game_state_mut(&mut self) -> Option<&mut GameState> {
-        self.gamestate.as_mut()
+        self.gamestate.as_deref_mut()
     }
 
     /// Sends the command and updates the gamestate with the response from the
@@ -681,7 +681,7 @@ impl SimpleSession {
     ) -> Result<&mut GameState, SFError> {
         if self.gamestate.is_none() {
             let resp = self.session.login().await?;
-            let gs = GameState::new(resp)?;
+            let gs = GameState::new_boxed(resp)?;
             self.gamestate = Some(gs);
             Self::short_sleep().await;
         }
@@ -701,6 +701,6 @@ impl SimpleSession {
             return Err(e);
         }
 
-        Ok(self.gamestate.as_mut().unwrap())
+        Ok(self.gamestate.as_deref_mut().unwrap())
     }
 }

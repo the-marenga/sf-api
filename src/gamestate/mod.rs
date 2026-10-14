@@ -118,6 +118,26 @@ pub struct GameState {
 pub use items::{Shop, ShopPosition};
 
 impl GameState {
+    /// Constructs a new `GameState` directly in a `Box` from the provided
+    /// response. The response has to be the login response from a `Session`.
+    ///
+    /// # Errors
+    /// If the response contains any errors, or does not contain enough
+    /// information about the player to build a full `GameState`, this will
+    /// return a `ParsingError`, or `TooShortResponse` depending on the
+    /// exact error
+    pub fn new_boxed(response: Response) -> Result<Box<Self>, SFError> {
+        let mut res = Box::<Self>::default();
+        res.update(response)?;
+        if res.character.level == 0 || res.character.name.is_empty() {
+            return Err(SFError::ParsingError(
+                "response did not contain full player state",
+                String::new(),
+            ));
+        }
+        Ok(res)
+    }
+
     /// Constructs a new `GameState` from the provided response. The response
     /// has to be the login response from a `Session`.
     ///
@@ -127,15 +147,7 @@ impl GameState {
     /// return a `ParsingError`, or `TooShortResponse` depending on the
     /// exact error
     pub fn new(response: Response) -> Result<Self, SFError> {
-        let mut res = Self::default();
-        res.update(response)?;
-        if res.character.level == 0 || res.character.name.is_empty() {
-            return Err(SFError::ParsingError(
-                "response did not contain full player state",
-                String::new(),
-            ));
-        }
-        Ok(res)
+        Self::new_boxed(response).map(|a| *a)
     }
 
     /// Updates the players information with the new data received from the
