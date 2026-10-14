@@ -15,8 +15,12 @@
 pub mod command;
 pub mod error;
 pub mod gamestate;
-pub mod misc;
 pub mod response;
+
+/// Miscellaneous helper functions kept for backwards compatibility.
+pub mod misc {
+    pub use crate::response::{from_sf_string, to_sf_string};
+}
 
 pub use error::{Result, SFError};
 #[cfg(feature = "session")]
