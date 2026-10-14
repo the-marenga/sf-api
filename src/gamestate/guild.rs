@@ -5,8 +5,8 @@ use num_derive::FromPrimitive;
 use strum::{EnumIter, IntoEnumIterator};
 
 use super::{
-    AttributeType, NormalCost, Potion, Result, SFError, ServerTime,
-    items::{ItemType, PotionSize, PotionType},
+    AttributeType, NormalCost, Result, SFError, ServerTime,
+    items::{ItemType, Potion, PotionSize, PotionType},
 };
 use crate::{misc::from_sf_string, response::Vals};
 

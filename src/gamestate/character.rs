@@ -6,8 +6,10 @@ use log::warn;
 use num_derive::FromPrimitive;
 
 use super::{
-    AttributeType, Equipment, Inventory, NormalCost, Potion, RelationEntry,
-    Result, SFError, ScrapBook, ServerTime,
+    AttributeType, NormalCost, Result, SFError, ServerTime,
+    items::{Equipment, Inventory, Potion},
+    social::RelationEntry,
+    unlockables::ScrapBook,
 };
 use crate::{PlayerId, response::Vals};
 

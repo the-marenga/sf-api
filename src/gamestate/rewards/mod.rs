@@ -17,7 +17,7 @@ pub use wheel::*;
 
 use crate::{
     error::Result,
-    gamestate::{Mount, unlockables::HabitatType},
+    gamestate::{character::Mount, unlockables::HabitatType},
     response::Vals,
 };
 

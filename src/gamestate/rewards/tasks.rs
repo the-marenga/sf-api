@@ -5,11 +5,12 @@ use num_traits::FromPrimitive;
 
 use super::{RewardChest, parse_chests};
 use crate::{
-    command::AttributeType,
+    command::{AttributeType, ShopType},
     error::Result,
     gamestate::{
-        IdleBuildingType, LightDungeon, ServerTime, ShopType, character::Class,
-        items::PotionType, tavern::Location, unlockables::HabitatType,
+        ServerTime, character::Class, dungeons::LightDungeon,
+        idle::IdleBuildingType, items::PotionType, tavern::Location,
+        unlockables::HabitatType,
     },
     response::Vals,
 };

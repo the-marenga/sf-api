@@ -4,7 +4,7 @@ use log::error;
 use num_derive::FromPrimitive;
 use strum::{EnumCount, EnumIter, IntoEnumIterator};
 
-use super::{AttributeType, Class, Result, ServerTime};
+use super::{AttributeType, Result, ServerTime, character::Class};
 #[cfg(feature = "simulation")]
 use crate::gamestate::items::Equipment;
 use crate::{PlayerId, error::SFError, response::Vals};

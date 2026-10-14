@@ -3,7 +3,7 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
 use crate::{
-    gamestate::{Item, Result, ServerTime},
+    gamestate::{Result, ServerTime, items::Item},
     response::Vals,
 };
 

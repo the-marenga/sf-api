@@ -5,7 +5,7 @@ use enum_map::EnumMap;
 use log::warn;
 use strum::IntoEnumIterator;
 
-use super::{Class, EquipmentSlot, Result, ServerTime};
+use super::{Result, ServerTime, character::Class, items::EquipmentSlot};
 pub use super::{hellevator::*, pets::*};
 use crate::{gamestate::items::Enchantment, response::Vals};
 

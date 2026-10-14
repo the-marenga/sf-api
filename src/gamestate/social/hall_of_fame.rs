@@ -1,8 +1,9 @@
 use log::warn;
 
 use crate::{
+    command::Flag,
     error::{Result, SFError},
-    gamestate::{Flag, character::Class},
+    gamestate::character::Class,
     response::Vals,
 };
 
