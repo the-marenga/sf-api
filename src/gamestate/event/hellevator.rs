@@ -9,7 +9,7 @@ use crate::{
 };
 
 /// Information about the Hellevator event on the server. If it is active, you
-/// can get more detailed info via `active()`
+/// can get more detailed info via [`status()`](Self::status)
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorEvent {
@@ -20,16 +20,17 @@ pub struct HellevatorEvent {
     /// The time at which you will no longer be able to collect things for the
     /// hellevator
     pub collect_time_end: Option<DateTime<Local>>,
-    /// Contains the hellevator. This can be some(x), even if the event is not
-    /// going, so you should use the `active()` functions to get this
+    /// Contains the hellevator. This can be `Some(_)`, even if the event is not
+    /// ongoing, so you should use the [`status`](Self::status) function to get this
     pub(crate) active: Option<Hellevator>,
 }
 
 /// The status of the Hellevator event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HellevatorStatus<'a> {
-    /// The event is ongoing, but you have to send a `HellevatorEnter` command
-    /// to start using it
+    /// The event is ongoing, but you have to send a
+    /// [`Command::HellevatorEnter`](crate::command::Command::HellevatorEnter)
+    /// command to start using it
     NotEntered,
     /// The event is currently not available
     NotAvailable,
@@ -49,7 +50,7 @@ impl HellevatorEvent {
     }
 
     /// If the Hellevator event is active, this returns a reference to the
-    /// Information about it. Note that you still need to check the level >= 10
+    /// information about it. Note that you still need to check the level >= 10
     /// requirement yourself
     #[must_use]
     pub fn status(&self) -> HellevatorStatus<'_> {
@@ -414,7 +415,7 @@ impl HellevatorDailyReward {
 }
 
 impl Hellevator {
-    /// Converts the rank of a guild in the Hellevator into the reward bracket,
+    /// Converts the rank of a guild in the Hellevator into the reward bracket
     /// that they would be in (1 to 25). If the rank would gain no rewards, none
     /// is returned here.
     #[must_use]

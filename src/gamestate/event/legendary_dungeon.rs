@@ -42,7 +42,7 @@ impl LegendaryDungeonEvent {
 
     #[must_use]
     /// Returns the status of the legendary dungeon event. This is basically the
-    /// screen, that you would be looking at in-game
+    /// screen that you would be looking at in-game
     pub fn status(&self) -> LegendaryDungeonStatus<'_> {
         use LegendaryDungeonStage as Stage;
         use LegendaryDungeonStatus as Status;
@@ -163,10 +163,10 @@ pub struct LegendaryDungeon {
 
     /// The hp you currently have
     pub current_hp: i64,
-    /// Any action, that reduces hp will immediately update `current_hp`. In
+    /// Any action that reduces hp will immediately update `current_hp`. In
     /// order for the game to properly transition from your old hp to the
     /// current hp (visually), this here will contain your previous hp from
-    /// befor you took the action
+    /// before you took the action
     pub pre_battle_hp: i64,
     /// The hp you started the dungeon with
     pub max_hp: i64,
@@ -193,12 +193,13 @@ pub struct LegendaryDungeon {
     /// The gems available to choose from after defeating the boss
     pub active_gems: Vec<GemOfFate>,
 
-    /// The doors that you can pick between when in the `DoorSelect` stage
+    /// The doors that you can pick between when in the
+    /// [`LegendaryDungeonStage::DoorSelect`] stage
     pub(crate) doors: [Door; 2],
     pub(crate) room_type: RoomType,
     /// The thing you currently have in the room with you
     pub(crate) encounter: RoomEncounter,
-    /// Items, that must be collected/chosen between before you can continue
+    /// Items that must be collected/chosen between before you can continue
     pub(crate) pending_items: Vec<Item>,
     /// The gems available to choose from after defeating the boss
     pub(crate) available_gems: Vec<GemOfFate>,
@@ -340,14 +341,16 @@ pub enum LegendaryDungeonStatus<'a> {
     /// any way, shape or form
     Unavailable,
     /// You have not yet entered the dungeon. Start the dungeon by sending a
-    /// `LegendaryDungeonStart` command
+    /// [`Command::LegendaryDungeonEnter`](crate::command::Command::LegendaryDungeonEnter)
+    /// command
     NotEntered(LegendaryDungeonEventTheme),
     /// The event has ended, so you are not allowed to start another attempt,
     /// but you may look at your stats
     Ended(&'a TotalStats),
-    /// You are in the door select screen and must either pick the left, or
-    /// right door. You do so with the `LegendaryDungeonPickDoor` command with
-    /// the index of the door
+    /// You are in the door select screen and must either pick the left or
+    /// right door. You do so with the
+    /// [`Command::LegendaryDungeonPickDoor`](crate::command::Command::LegendaryDungeonPickDoor)
+    /// command with the index of the door
     DoorSelect {
         /// The legendary dungeon state
         dungeon: &'a LegendaryDungeon,
@@ -355,8 +358,9 @@ pub enum LegendaryDungeonStatus<'a> {
         doors: &'a [Door; 2],
     },
     /// You have defeated the dungeon boss and must pick one of the offered
-    /// gems. You do so with the `IADungeonSelectSoulStone` command and the
-    /// type of the gem you want
+    /// gems. You do so with the
+    /// [`Command::LegendaryDungeonPickGem`](crate::command::Command::LegendaryDungeonPickGem)
+    /// command and the type of the gem you want
     PickGem {
         /// The legendary dungeon state
         dungeon: &'a LegendaryDungeon,
@@ -369,8 +373,8 @@ pub enum LegendaryDungeonStatus<'a> {
         dungeon: &'a LegendaryDungeon,
         /// The time at which we started to heal (last time we died)
         started: DateTime<Local>,
-        /// [0-100]. Will be updated based on the current `DateTime`, so this
-        /// will change inbetween invocations
+        /// `[0-100]`. Will be updated based on the current [`DateTime`], so this
+        /// will change in between invocations
         current_health_percent: u8,
     },
     /// You are currently in a room
@@ -391,9 +395,11 @@ pub enum LegendaryDungeonStatus<'a> {
         /// The items available to take
         items: &'a [Item],
     },
-    /// The dungeon is in a state, that has not been anticipated. Your best bet
-    /// is to send a `LegendaryDungeonInteract` with a value of:
-    /// [0,20,40,50,51,60,70] If you get this status, please report it
+    /// The dungeon is in a state that has not been anticipated. Your best bet
+    /// is to send a
+    /// [`Command::LegendaryDungeonInteract`](crate::command::Command::LegendaryDungeonInteract)
+    /// with a value of: `[0, 20, 40, 50, 51, 60, 70]` If you get this status,
+    /// please report it
     Unknown,
 }
 
@@ -707,7 +713,7 @@ pub enum DoorType {
     /// arcane splinters, or hourglasses of impatience), but not the resource
     /// previously fed.
     Stone = 1013,
-    /// A hungry door that requires a certain amount of sould to open
+    /// A hungry door that requires a certain amount of souls to open
     /// When you open the hungry door, you enter a room where a sated chest can
     /// be found. In the chest, you find resources (wood, stone, souls, metal,
     /// arcane splinters, or hourglasses of impatience), but not the resource
@@ -726,7 +732,7 @@ pub enum DoorType {
     /// previously fed.
     Arcane = 1016,
     /// A hungry door that requires a certain amount of quicksand Hourglasses to
-    /// open When you open the hungry door, you enter a room where a sated
+    /// open. When you open the hungry door, you enter a room where a sated
     /// chest can be found. In the chest, you find resources (wood, stone,
     /// souls, metal, arcane splinters, or hourglasses of impatience), but
     /// not the resource previously fed.
@@ -818,7 +824,7 @@ impl DungeonEffect {
 
 #[derive(Debug, Clone, Copy, FromPrimitive, PartialEq, Eq, Hash, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// An effect, that you can get in the legendary dungeon
+/// An effect that you can get in the legendary dungeon
 pub enum DungeonEffectType {
     /// More gold from chests
     Raider = 1,
@@ -848,7 +854,7 @@ pub enum DungeonEffectType {
     /// Double key price
     HardLock = 105,
 
-    /// A curse/blessing, that has not yet been implemented
+    /// A curse/blessing that has not yet been implemented
     #[default]
     Unknown = -1,
 }
