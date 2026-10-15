@@ -11,77 +11,70 @@ use crate::{
     response::Vals,
 };
 
-/// The information about a characters fortress
+/// Information about a character's fortress.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Fortress {
-    /// All the buildings, that a fortress can have. If they are not yet built,
-    /// they are level 0
+    /// All buildings in the fortress (level 0 if unbuilt).
     pub buildings: EnumMap<FortressBuildingType, FortressBuilding>,
-    /// Information about all the buildable units in the fortress
+    /// Trainable combat units in the fortress.
     pub units: EnumMap<FortressUnitType, FortressUnit>,
-    /// All information about resources in the fortress
+    /// Production and storage information for all fortress resources.
     pub resources: EnumMap<FortressResourceType, FortressResource>,
-    /// The `last_collectable` variable in `FortressProduction` is NOT
-    /// calculated whenever you did the last request, instead the server
-    /// calculates it at regular points in time and whenever you collect
-    /// resources. That point in time is this variable here. That means if
-    /// you want to know the exact current value, that you can collect, you
-    /// need to calculate that yourself based on the current time, this
-    /// time, the last collectable value and the per hour production of
-    /// whatever you are looking at
-    // TODO: Make such a function as a convenient helper
+    /// When resource production was last calculated by the server.
     pub last_collectable_updated: Option<DateTime<Local>>,
 
-    /// The highest level buildings can be upgraded to
+    /// The maximum level to which buildings can currently be upgraded.
     pub building_max_lvl: u8,
-    /// The level the fortress wall will have when defending against another
-    /// player
+    /// The effective level of the fortress wall in defensive battles.
     pub wall_combat_lvl: u16,
 
-    /// Information about the building, that is currently being upgraded
+    /// The building currently under construction or upgrade, if any.
     pub building_upgrade: FortressAction<FortressBuildingType>,
 
-    /// The upgrades count visible on the HOF screen for fortress. Should be
-    /// all building levels summed up
+    /// The sum of all building levels, as displayed in the Hall of Fame.
     pub upgrades: u16,
-    /// The honor you have in the fortress Hall of Fame
+    /// The player's honor in the fortress Hall of Fame.
     pub honor: u32,
-    /// The rank you have in the fortress Hall of Fame if you have any
+    /// The player's rank in the fortress Hall of Fame, if ranked.
     pub rank: Option<u32>,
 
-    /// Information about searching for gems
+    /// The current gem search, if any. Start with
+    /// [`Command::FortressGemStoneSearch`](crate::command::Command::FortressGemStoneSearch).
     pub gem_search: FortressAction<GemType>,
 
-    /// The level of the hall of knights
+    /// The level of the Hall of Knights. Upgrade with
+    /// [`Command::FortressUpgradeHallOfKnights`](crate::command::Command::FortressUpgradeHallOfKnights).
+    #[doc(alias = "hok")]
     pub hall_of_knights_level: u16,
-    /// The price to upgrade the hall of knights. Note, that the duration here
-    /// will be 0, as the game does not tell you how long it will take
+    /// The cost to upgrade the Hall of Knights (instant, duration is 0).
     pub hall_of_knights_upgrade_price: FortressCost,
 
-    /// The next enemy you can choose to battle. This should always be Some,
-    /// but there is the edge case of being the first player on a server to get
-    /// a fortress, which I can not even test for, so I just assume this could
-    /// be none then.
+    /// The player ID of the current enemy. Attack with
+    /// [`Command::FortressAttack`](crate::command::Command::FortressAttack).
+    #[doc(alias = "opponent")]
+    #[doc(alias = "enemy")]
     pub attack_target: Option<u32>,
-    /// The time at which switching is free again
+    /// When rerolling the opponent becomes free. Reroll with
+    /// [`Command::FortressNewEnemy`](crate::command::Command::FortressNewEnemy).
+    #[doc(alias = "opponent_free_reroll")]
     pub attack_free_reroll: Option<DateTime<Local>>,
-    /// The price in silver re-rolling costs
+    /// The silver cost to reroll before
+    /// [`attack_free_reroll`](Self::attack_free_reroll).
     pub opponent_reroll_price: u64,
 }
 
-/// The price an upgrade, or building something in the fortress costs. These
-/// are always for one upgrade/build, which is important for unit builds
+/// The resource and time cost for a fortress build or upgrade.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressCost {
-    /// The time it takes to complete one build/upgrade
+    /// The time it takes to complete.
     pub time: Duration,
-    /// The price in wood this costs
+    /// The wood cost.
     pub wood: u64,
-    /// The price in stone this costs
+    /// The stone cost.
     pub stone: u64,
-    /// The price in silver this costs
+    /// The silver cost.
     pub silver: u64,
 }
 
@@ -97,112 +90,95 @@ impl FortressCost {
     }
 }
 
-/// Information about one of the three resources, that the fortress can produce.
+/// Information about a fortress resource (wood, stone, or experience).
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressResource {
-    /// The amount of this resource you have available to spend on upgrades and
-    /// recruitment
+    /// Amount available to spend.
     pub current: u64,
-    /// The maximum amount of this resource, that you can store. If `current ==
-    /// limit`, you will not be able to collect resources from buildings
+    /// Maximum storage limit in the fortress.
     pub limit: u64,
-    /// The maximum amount of this resource that can be stored in the fortress
-    /// after upgrading the Fortress main building to the next level
+    /// Storage limit after upgrading the Fortress building to the next level.
     pub limit_next_level: u64,
-    /// Information about the production building, that produces this resource.
+    /// Production information for this resource.
     pub production: FortressProduction,
-    /// The secret storage, available in the treasury
+    /// Secret storage in the Treasury (wood and stone only). Collect with
+    /// [`Command::FortressGatherSecretStorage`](crate::command::Command::FortressGatherSecretStorage).
     pub secret_storage: FortressSecretStorage,
 }
 
-/// The secret storage in the treasury where wood and stone are protected.
-///
-/// Resources obtained outside of regular building production (such as from
-/// quests, the Wheel of Fortune, or events) are stored and secured here.
-///
-/// All resources stored here are safe from enemy attacks during fortress
-/// battles and cannot be looted. The capacity is 30% of the main fortress
-/// resource storage limit.
+/// Secret storage in the Treasury, safe from enemy attacks (30% of main
+/// storage).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressSecretStorage {
-    /// The current amount of resources stored in secret storage
+    /// Resources currently stored.
     pub amount: u64,
-    /// The maximum amount of resources that can be protected in secret storage
-    /// (30% of the main fortress storage limit)
+    /// Maximum capacity of the secret storage.
     pub limit: u64,
 }
 
-/// Information about the production of a resource in the fortress.  Note that
-/// experience will not have some of these fields
+/// Information about the production of a resource in the fortress.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressProduction {
-    /// The amount the production building has already produced, that you can
-    /// collect. Note that this value will be out of date by some amount of
-    /// time. If you need the exact current amount collectable, look at
-    /// `last_collectable_updated`
+    /// Produced resources ready to collect. Collect with
+    /// [`Command::FortressGather`](crate::command::Command::FortressGather).
     pub last_collectable: u64,
-    /// The maximum amount of this resource, that this building can store. If
-    /// `building_collectable == building_limit` the production stops
+    /// Maximum storage before production halts.
     pub limit: u64,
-    /// The amount of this resource the corresponding production building
-    /// produces per hour
+    /// Production per hour.
     pub per_hour: u64,
-    /// The amount of this resource the building produces on the next level per
-    /// hour. If the resource is Experience, this will be 0
+    /// Production per hour at the next building level (0 for experience).
     pub per_hour_next_lvl: u64,
 }
 
-/// The type of resource available in the fortress
+/// The type of resource available in the fortress.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Enum, EnumCount, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FortressResourceType {
-    /// Wood produced by the Woodcutter's Hut; used for buildings and units
+    /// Wood produced by the Woodcutter's Hut; used for buildings and units.
     Wood = 0,
-    /// Stone produced by the Quarry; used for buildings and units
+    /// Stone produced by the Quarry; used for buildings and units.
     Stone = 1,
-    /// Experience produced by the Academy; awarded to the player character
+    /// Experience produced by the Academy; awarded to the player character.
     Experience = 2,
 }
 
-/// The type of building that can be built in the fortress
+/// The type of building that can be built in the fortress.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Enum, EnumCount, EnumIter, FromPrimitive,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FortressBuildingType {
-    /// The main fortress building; determines the maximum level of all other
-    /// buildings and increases resource storage capacity
+    /// Determines maximum building levels and resource storage.
     Fortress = 0,
-    /// Laborer's Quarters; reduces the construction and upgrade duration of all
-    /// fortress buildings
+    /// Reduces construction and upgrade durations.
     LaborersQuarters = 1,
-    /// Woodcutter's Hut; produces wood over time
+    /// Produces wood over time.
     WoodcuttersHut = 2,
-    /// Quarry; produces stone over time
+    /// Produces stone over time.
     Quarry = 3,
-    /// Gem Mine; allows searching for attribute and black gems
+    /// Searches for attribute and black gems.
     GemMine = 4,
-    /// Academy; produces experience for the character over time
+    /// Produces experience over time.
     Academy = 5,
-    /// Archery Guild; trains archers for fortress defense
+    /// Trains archers for fortress defense.
     ArcheryGuild = 6,
-    /// Barracks; trains soldiers for fortress attacks and defense
+    /// Trains soldiers for attacks and defense.
     Barracks = 7,
-    /// Mage's Tower; trains battle mages for fortress defense
+    /// Trains battle mages for fortress defense.
     MagesTower = 8,
-    /// Treasury; expands backpack/chest capacity and provides secret storage
+    /// Expands backpack capacity and provides secret storage.
     Treasury = 9,
-    /// Smithy; upgrades the weapon and armor quality of combat units
+    /// Upgrades unit level and combat attributes.
     Smithy = 10,
-    /// Fortress Wall; provides a defensive bonus during enemy attacks
+    /// Provides a defensive bonus during attacks.
     Wall = 11,
 }
 
 impl FortressBuildingType {
-    /// Minimum fortress level required to build this building
+    /// Returns the minimum Fortress level required to construct this building.
     #[must_use]
     pub fn required_min_fortress_level(self) -> u16 {
         match self {
@@ -220,7 +196,8 @@ impl FortressBuildingType {
         }
     }
 
-    /// Get the unit type associated with this building type
+    /// Returns the unit type trained by this building, or `None` if the
+    /// building does not train units.
     #[must_use]
     pub fn unit_produced(self) -> Option<FortressUnitType> {
         match self {
@@ -236,45 +213,43 @@ impl FortressBuildingType {
     }
 }
 
-/// Information about a single type of unit
+/// Information about a fortress combat unit.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressUnit {
-    /// The level this unit has
+    /// Current unit level. Upgrade with
+    /// [`Command::FortressUpgradeUnit`](crate::command::Command::FortressUpgradeUnit).
     pub level: u16,
 
-    /// The amount of this unit available for combat
+    /// Units available for combat.
     pub count: u16,
-    /// The amount of this unit currently being trained
+    /// Units currently in training.
     pub in_training: u16,
-    /// The maximum `count + in_training` capacity for this unit
+    /// Maximum unit capacity (`count + in_training`).
+    #[doc(alias = "capacity")]
     pub limit: u16,
-    /// All information about training up new units of this type
+    /// Recruitment progress. Recruit with
+    /// [`Command::FortressBuildUnit`](crate::command::Command::FortressBuildUnit).
+    #[doc(alias = "recruitment")]
     pub training: FortressAction<()>,
 
-    /// The resource cost for the next unit level upgrade
+    /// Resource cost for the next unit level upgrade.
     pub upgrade_cost: FortressCost,
-    /// The level this unit will be at when upgraded
+    /// The level this unit will reach when upgraded.
     pub upgrade_next_lvl: u64,
 }
 
-/// An action that costs resources and finishes after a specific duration.
-///
-/// The generic parameter `T` specifies the action target:
-/// - [`FortressBuildingType`] for building upgrades
-///   ([`Fortress::building_upgrade`])
-/// - [`GemType`] for gem searches ([`Fortress::gem_search`])
-/// - `()` for unit recruitment ([`FortressUnit::training`])
+/// A timed fortress action (building upgrade, gem search, or unit recruitment).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressAction<T> {
-    /// When this action was started
+    /// When this action was started, or `None` if idle.
     pub start: Option<DateTime<Local>>,
-    /// When this action will finish
+    /// When this action will finish, or `None` if idle.
     pub finish: Option<DateTime<Local>>,
-    /// The amount of resources required for this action
+    /// The cost of this action.
     pub cost: FortressCost,
-    /// The specific target of this action, if applicable
+    /// The target of this action, if applicable.
     pub target: Option<T>,
 }
 
@@ -289,20 +264,21 @@ impl<T> Default for FortressAction<T> {
     }
 }
 
-/// The type of a unit usable in the fortress
+/// The type of a unit usable in the fortress.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Enum, EnumCount, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FortressUnitType {
-    /// Soldiers; used for fortress attacks and defense
+    /// Soldiers; used for fortress attacks and defense.
     Soldier = 0,
-    /// Battle mages; used for fortress defense
+    /// Battle mages; used for fortress defense.
+    #[doc(alias = "battle_mage")]
     Magician = 1,
-    /// Archers; used for fortress defense
+    /// Archers; used for fortress defense.
     Archer = 2,
 }
 
 impl FortressUnitType {
-    /// The building, that trains this unit type
+    /// Returns the building that trains this unit type.
     #[must_use]
     pub fn training_building(self) -> FortressBuildingType {
         match self {
@@ -313,22 +289,19 @@ impl FortressUnitType {
     }
 }
 
-/// Generic information about a building in the fortress. If you want
-/// information about a production building, you should look at the resources
+/// Information about a building in the fortress.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FortressBuilding {
-    /// The current level of this building. If this is 0, it has not yet been
-    /// built
+    /// Current building level (0 if unbuilt). Upgrade with
+    /// [`Command::FortressBuild`](crate::command::Command::FortressBuild).
     pub level: u16,
-    /// The amount of resources it costs to upgrade to the next level
+    /// Cost to upgrade to the next level.
     pub upgrade_cost: FortressCost,
 }
 
 impl Fortress {
-    /// Check if units are being trained in the building (soldiers in barracks,
-    /// magicians in mages' tower, archers in archery guild), or gem mining is
-    /// in progress
+    /// Checks if the building is currently training units or mining gems.
     #[must_use]
     pub fn in_use(&self, building_type: FortressBuildingType) -> bool {
         // Check if associated units are training
@@ -343,7 +316,7 @@ impl Fortress {
             && self.gem_search.finish.is_some()
     }
 
-    /// Checks whether or not it is possible to build/upgrade a building
+    /// Checks whether a building can currently be built or upgraded.
     #[must_use]
     pub fn can_build(
         &self,
