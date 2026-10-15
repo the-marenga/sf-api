@@ -4,7 +4,6 @@
 
 use std::{
     borrow::Cow,
-    cell::Cell,
     collections::HashMap,
     fmt::{Debug, Display},
     ops::{
@@ -445,7 +444,7 @@ pub struct Vals<'a> {
     /// Read tracking for the whole response, indexed by `base + pos`. Only
     /// present in debug builds.
     #[cfg(debug_assertions)]
-    accessed: Cow<'a, [Cell<bool>]>,
+    accessed: Cow<'a, [std::cell::Cell<bool>]>,
     /// The absolute position of `values[0]` within `accessed`.
     #[cfg(debug_assertions)]
     base: usize,
@@ -466,7 +465,8 @@ impl<'a> Vals<'a> {
     /// A new [`Vals`] that owns `values`.
     fn owned(values: Vec<&'a str>, key: &'a str) -> Self {
         #[cfg(debug_assertions)]
-        let accessed = Cow::Owned(vec![Cell::new(false); values.len()]);
+        let accessed =
+            Cow::Owned(vec![std::cell::Cell::new(false); values.len()]);
         Self {
             key,
             values: Cow::Owned(values),
