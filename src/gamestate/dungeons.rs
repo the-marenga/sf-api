@@ -140,6 +140,15 @@ impl Dungeon {
             Dungeon::Shadow(_) => true,
         }
     }
+
+    /// Returns the total number of floors in this dungeon.
+    #[must_use]
+    pub fn total_floors(self) -> u16 {
+        match self {
+            Dungeon::Light(d) => d.total_floors(),
+            Dungeon::Shadow(d) => d.total_floors(),
+        }
+    }
 }
 
 /// All light dungeons. Iterate using `LightDungeon::iter()`.
@@ -229,6 +238,18 @@ pub enum LightDungeon {
     RetroTVLegends = 35,
     /// The Meeting Room
     MeetingRoom = 36,
+}
+
+impl LightDungeon {
+    /// Returns the total number of floors in this dungeon.
+    #[must_use]
+    pub fn total_floors(self) -> u16 {
+        match self {
+            LightDungeon::Tower => 100,
+            LightDungeon::Sandstorm => 1000,
+            _ => 10,
+        }
+    }
 }
 
 impl From<LightDungeon> for Dungeon {
@@ -325,15 +346,28 @@ pub enum ShadowDungeon {
     MeetingRoom = 36,
 }
 
+impl ShadowDungeon {
+    /// Returns the total number of floors in this dungeon.
+    #[must_use]
+    pub fn total_floors(self) -> u16 {
+        match self {
+            ShadowDungeon::Twister => 1000,
+            ShadowDungeon::ContinuousLoopofIdols => 30,
+            _ => 10,
+        }
+    }
+}
+
 impl From<ShadowDungeon> for Dungeon {
     fn from(val: ShadowDungeon) -> Self {
         Dungeon::Shadow(val)
     }
 }
 
-fn update_progress<T: FromPrimitive + enum_map::Enum>(
+fn update_progress<T: FromPrimitive + enum_map::Enum + Copy>(
     data: &Vals<'_>,
     dungeons: &mut EnumMap<T, DungeonProgress>,
+    total_floors: impl Fn(T) -> u16,
 ) -> Result<()> {
     for dungeon_id in 0..data.len() {
         let progress = data.i64(dungeon_id)?;
@@ -344,7 +378,7 @@ fn update_progress<T: FromPrimitive + enum_map::Enum>(
             -1 => DungeonProgress::Locked,
             x => {
                 let stage = u16::try_from(x).unwrap_or(0);
-                if stage == 10 || (stage == 100 && dungeon_id == 14) {
+                if stage >= total_floors(dungeon_typ) {
                     DungeonProgress::Finished
                 } else {
                     DungeonProgress::Open { finished: stage }
@@ -378,23 +412,17 @@ impl Dungeons {
         dungeon_type: DungeonType,
     ) -> Result<()> {
         match dungeon_type {
-            DungeonType::Light => update_progress(data, &mut self.light)?,
-            DungeonType::Shadow => {
-                update_progress(data, &mut self.shadow)?;
-                for (dungeon, limit) in [
-                    (ShadowDungeon::ContinuousLoopofIdols, 21),
-                    (ShadowDungeon::Twister, 1000),
-                ] {
-                    let d = &mut self.shadow[dungeon];
-                    if let DungeonProgress::Open { finished, .. } = d
-                        && *finished >= limit
-                    {
-                        *d = DungeonProgress::Finished;
-                    }
-                }
-            }
+            DungeonType::Light => update_progress(
+                data,
+                &mut self.light,
+                LightDungeon::total_floors,
+            ),
+            DungeonType::Shadow => update_progress(
+                data,
+                &mut self.shadow,
+                ShadowDungeon::total_floors,
+            ),
         }
-        Ok(())
     }
 
     /// Updates companion equipment from a `companionequipment` response.
@@ -551,9 +579,34 @@ mod tests {
             dungeons.progress(LightDungeon::MonsterGrotto),
             DungeonProgress::Locked
         );
+        // Test Tower and Sandstorm floor limits
+        let mut special_light = Dungeons::default();
+        let mut light_vals = vec!["-1"; 37];
+        light_vals[14] = "10";
+        light_vals[31] = "10";
+        let raw_special = light_vals.join("/");
+        let data_special = Vals::from(raw_special.as_str());
+        special_light
+            .update_progress(&data_special, DungeonType::Light)
+            .unwrap();
         assert_eq!(
-            dungeons.progress(LightDungeon::MeetingRoom),
-            DungeonProgress::Locked
+            special_light.progress(LightDungeon::Tower),
+            DungeonProgress::Open { finished: 10 }
+        );
+        assert_eq!(
+            special_light.progress(LightDungeon::Sandstorm),
+            DungeonProgress::Open { finished: 10 }
+        );
+
+        light_vals[31] = "1000";
+        let raw_sandstorm_done = light_vals.join("/");
+        let data_sandstorm_done = Vals::from(raw_sandstorm_done.as_str());
+        special_light
+            .update_progress(&data_sandstorm_done, DungeonType::Light)
+            .unwrap();
+        assert_eq!(
+            special_light.progress(LightDungeon::Sandstorm),
+            DungeonProgress::Finished
         );
     }
 
@@ -586,12 +639,36 @@ mod tests {
             DungeonProgress::Open { finished: 391 }
         );
 
-        // Test Twister cleared limit
-        let mut twister_done = Dungeons::default();
+        // Test Twister at floor 10 and 100
+        let mut twister_open = Dungeons::default();
         let mut twister_vals = vec!["-1"; 37];
+        twister_vals[14] = "10";
+        let raw_twister_10 = twister_vals.join("/");
+        let data_twister_10 = Vals::from(raw_twister_10.as_str());
+        twister_open
+            .update_progress(&data_twister_10, DungeonType::Shadow)
+            .unwrap();
+        assert_eq!(
+            twister_open.progress(ShadowDungeon::Twister),
+            DungeonProgress::Open { finished: 10 }
+        );
+
+        twister_vals[14] = "100";
+        let raw_twister_100 = twister_vals.join("/");
+        let data_twister_100 = Vals::from(raw_twister_100.as_str());
+        twister_open
+            .update_progress(&data_twister_100, DungeonType::Shadow)
+            .unwrap();
+        assert_eq!(
+            twister_open.progress(ShadowDungeon::Twister),
+            DungeonProgress::Open { finished: 100 }
+        );
+
+        // Test Twister cleared limit
         twister_vals[14] = "1000";
         let raw_twister = twister_vals.join("/");
         let data_twister = Vals::from(raw_twister.as_str());
+        let mut twister_done = Dungeons::default();
         twister_done
             .update_progress(&data_twister, DungeonType::Shadow)
             .unwrap();
@@ -600,17 +677,39 @@ mod tests {
             DungeonProgress::Finished
         );
 
-        // Test Continuous Loop of Idols cleared limit
-        let mut idols_done = Dungeons::default();
+        // Test Continuous Loop of Idols at floor 10 and cleared limit
+        let mut idols = Dungeons::default();
         let mut idols_vals = vec!["-1"; 37];
+        idols_vals[17] = "10";
+        let raw_idols_10 = idols_vals.join("/");
+        let data_idols_10 = Vals::from(raw_idols_10.as_str());
+        idols
+            .update_progress(&data_idols_10, DungeonType::Shadow)
+            .unwrap();
+        assert_eq!(
+            idols.progress(ShadowDungeon::ContinuousLoopofIdols),
+            DungeonProgress::Open { finished: 10 }
+        );
+
         idols_vals[17] = "21";
+        let raw_idols_21 = idols_vals.join("/");
+        let data_idols_21 = Vals::from(raw_idols_21.as_str());
+        idols
+            .update_progress(&data_idols_21, DungeonType::Shadow)
+            .unwrap();
+        assert_eq!(
+            idols.progress(ShadowDungeon::ContinuousLoopofIdols),
+            DungeonProgress::Open { finished: 21 }
+        );
+
+        idols_vals[17] = "30";
         let raw_idols = idols_vals.join("/");
         let data_idols = Vals::from(raw_idols.as_str());
-        idols_done
+        idols
             .update_progress(&data_idols, DungeonType::Shadow)
             .unwrap();
         assert_eq!(
-            idols_done.progress(ShadowDungeon::ContinuousLoopofIdols),
+            idols.progress(ShadowDungeon::ContinuousLoopofIdols),
             DungeonProgress::Finished
         );
     }
