@@ -593,19 +593,19 @@ impl_ignore_index!(
 impl<'a> Vals<'a> {
     /// The number of values.
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.values.len()
     }
 
     /// Whether there are no values.
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
 
     /// The value at `pos`, marking it as read.
     #[must_use]
-    pub fn value(&self, pos: usize) -> Option<&'a str> {
+    pub(crate) fn value(&self, pos: usize) -> Option<&'a str> {
         let val = self.values.get(pos).copied()?;
         #[cfg(debug_assertions)]
         if let Some(cell) = self.accessed.get(self.base + pos) {
@@ -616,12 +616,12 @@ impl<'a> Vals<'a> {
 
     /// All values, without marking them as read.
     #[must_use]
-    pub fn values(&self) -> &[&'a str] {
+    pub(crate) fn values(&self) -> &[&'a str] {
         &self.values[..]
     }
 
     /// Marks every value as read.
-    pub fn mark_all(&self) {
+    pub(crate) fn mark_all(&self) {
         #[cfg(debug_assertions)]
         if let Some(cells) =
             self.accessed.get(self.base..self.base + self.len())
@@ -635,21 +635,15 @@ impl<'a> Vals<'a> {
     /// The indices of the values that were never read (always empty in
     /// release builds).
     #[must_use]
-    pub fn unaccessed_indices(&self) -> Vec<usize> {
-        #[cfg(debug_assertions)]
-        {
-            (0..self.len())
-                .filter(|pos| {
-                    self.accessed
-                        .get(self.base + pos)
-                        .is_none_or(|cell| !cell.get())
-                })
-                .collect()
-        }
-        #[cfg(not(debug_assertions))]
-        {
-            Vec::new()
-        }
+    #[cfg(debug_assertions)]
+    pub(crate) fn unaccessed_indices(&self) -> Vec<usize> {
+        (0..self.len())
+            .filter(|pos| {
+                self.accessed
+                    .get(self.base + pos)
+                    .is_none_or(|cell| !cell.get())
+            })
+            .collect()
     }
 
     /// Asserts that all values in this response were read.
