@@ -288,42 +288,14 @@ impl<'a> ResponseVal<'a> {
     /// # Errors
     /// If the response value can not be parsed into the output
     /// value, a `ParsingError` will be returned
-    pub fn into<T: FromStr>(self, name: &'static str) -> Result<T, SFError> {
+    pub(crate) fn into<T: FromStr>(
+        self,
+        name: &'static str,
+    ) -> Result<T, SFError> {
         self.value.trim().parse().map_err(|_| {
             error!("Could not convert {name} into target type: {self}");
             SFError::ParsingError(name, self.value.to_string())
         })
-    }
-
-    /// Converts the repsponse into a list, by splitting the raw value by '/'
-    /// and converting each value into the required type. If any conversion
-    /// fails, an error is returned
-    ///
-    /// # Errors
-    /// If any of the values in the string can not be parsed into the output
-    /// value, the `ParsingError` for that value will be returned
-    #[deprecated]
-    pub fn into_list<T: FromStr>(
-        self,
-        name: &'static str,
-    ) -> Result<Vec<T>, SFError> {
-        let x = &self.value;
-        if x.is_empty() {
-            return Ok(Vec::new());
-        }
-        // Trimming ` ` & `\n` is not required. Might remove this later
-        x.trim_matches(|a| ['/', ' ', '\n'].contains(&a))
-            .split('/')
-            .map(|c| {
-                c.trim().parse::<T>().map_err(|_| {
-                    error!(
-                        "Could not convert {name} into list because of {c}: \
-                         {self}"
-                    );
-                    SFError::ParsingError(name, format!("{c:?}"))
-                })
-            })
-            .collect()
     }
 
     /// Returns the key name this response value is associated with.
@@ -371,7 +343,7 @@ impl<'a> ResponseVal<'a> {
     /// [`SFError::ParsingErrorV2`] if the response is empty or has fewer than
     /// `N` values.
     #[track_caller]
-    pub fn values<const N: usize>(self) -> Result<Vals<'a>, SFError> {
+    pub(crate) fn values<const N: usize>(self) -> Result<Vals<'a>, SFError> {
         self.values_by::<N>('/')
     }
 
@@ -383,7 +355,7 @@ impl<'a> ResponseVal<'a> {
     /// [`SFError::ParsingErrorV2`] if the response is empty or has fewer than
     /// `N` values.
     #[track_caller]
-    pub fn values_by<const N: usize>(
+    pub(crate) fn values_by<const N: usize>(
         self,
         delim: char,
     ) -> Result<Vals<'a>, SFError> {
@@ -438,7 +410,7 @@ impl std::fmt::Display for ResponseVal<'_> {
 /// the requested type on demand; in debug builds every read is tracked, so
 /// values that are never read are reported when the root is dropped.
 #[derive(Clone)]
-pub struct Vals<'a> {
+pub(crate) struct Vals<'a> {
     key: &'a str,
     values: Cow<'a, [&'a str]>,
     /// Read tracking for the whole response, indexed by `base + pos`. Only
@@ -479,7 +451,8 @@ impl<'a> Vals<'a> {
 
     /// Returns the response key name this [`Vals`] was created from, if known.
     #[must_use]
-    pub fn key(&self) -> &str {
+    #[cfg(test)]
+    pub(crate) fn key(&self) -> &str {
         self.key
     }
 }
@@ -773,40 +746,6 @@ impl<'a> Vals<'a> {
         })
     }
 
-    /// Parses the value at `pos` into `Some(T)`, warning and returning `None`
-    /// if that is not possible.
-    #[must_use]
-    pub fn parse_opt_at<T: FromStr>(
-        &self,
-        pos: usize,
-        name: &'static str,
-    ) -> Option<T> {
-        let val = self.value(pos)?;
-        val.trim().parse::<T>().ok().or_else(|| {
-            warn!("Could not parse optional {name} from {val}");
-            None
-        })
-    }
-
-    /// Parses the value at `pos` into `T`, warning and returning `default` if
-    /// that is not possible.
-    #[must_use]
-    pub fn parse_soft_at<T: FromStr + Display + Copy>(
-        &self,
-        pos: usize,
-        name: &'static str,
-        default: T,
-    ) -> T {
-        let Some(val) = self.value(pos) else {
-            warn!("Missing value for {name} at index {pos}");
-            return default;
-        };
-        val.trim().parse::<T>().unwrap_or_else(|_| {
-            warn!("Invalid value for {name} at index {pos}: {val}");
-            default
-        })
-    }
-
     /// The `range` of values, marking them as read.
     #[must_use]
     pub fn slice(&self, range: Range<usize>) -> &[&'a str] {
@@ -863,13 +802,6 @@ impl<'a> Vals<'a> {
         self.values().iter().copied()
     }
 
-    /// All values, marking all of them as read.
-    #[must_use]
-    pub fn as_slice(&self) -> &[&'a str] {
-        self.mark_all();
-        self.values()
-    }
-
     /// Marks the value(s) at `index` as read, so they are not reported as
     /// unaccessed. `index` is a position or a range, like `slice::get`.
     pub fn ignore(&self, index: impl IgnoreIndex, _reason: &str) {
@@ -916,10 +848,7 @@ impl<'a> Vals<'a> {
         i32 => i32, i32_or,
         usize => usize, usize_or,
         u16 => u16, u16_or,
-        i16 => i16, i16_or,
         u8 => u8, u8_or,
-        i8 => i8, i8_or,
-        bool => bool, bool_or,
     }
 
     /// The value at `pos`.
@@ -1130,11 +1059,10 @@ mod tests {
 
     #[test]
     fn test_caller_tracking_get_and_typed_parsers() {
-        let raw = "42/-10/true/hello/255/1000/2000000000/9000000000000000000";
+        let raw = "42/-10/-/hello/255/1000/2000000000/9000000000000000000";
         let vals = Vals::from(raw);
         assert_eq!(vals.u32(0).unwrap(), 42);
         assert_eq!(vals.i32(1).unwrap(), -10);
-        assert!(vals.bool(2).unwrap());
         assert_eq!(vals.str(3).unwrap(), "hello");
         assert_eq!(vals.u8(4).unwrap(), 255);
         assert_eq!(vals.u16(5).unwrap(), 1000);
@@ -1146,7 +1074,6 @@ mod tests {
         assert_eq!(vals.u32_or(99, 999), 999);
         assert_eq!(vals.i64_or(99, -1), -1);
         assert_eq!(vals.str_or(99, "default"), "default");
-        assert!(!vals.bool_or(99, false));
 
         // Out of bounds error should be ParsingErrorV2 with file/line
         let err = vals.get(99).unwrap_err();
@@ -1279,7 +1206,6 @@ mod tests {
             assert_eq!(v.slice(0..2), ["1", "abc"]);
             assert_eq!(v.slice(9..12), Vec::<&str>::new());
             assert_eq!(v.iter().count(), 4);
-            assert_eq!(v.as_slice(), ["1", "abc", "3", "4"]);
             assert_eq!(v.to_string(), "1/abc/3/4");
             let err = v.get(9).unwrap_err();
             assert!(err.to_string().contains("Index out of bounds"));
