@@ -13,123 +13,162 @@ use crate::{
     response::{Vals, from_sf_string},
 };
 
-/// Information about the characters current guild
+/// Information about the character's current guild.
+///
+/// Found a new guild with
+/// [`Command::GuildFound`](crate::command::Command::GuildFound).
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Guild {
-    /// The internal server id of this guild
+    /// The internal server ID of this guild.
     pub id: u32,
-    /// The name of the guild
+    /// The name of the guild.
     pub name: String,
-    /// The description text of the guild
+    /// The description text of the guild. Update with
+    /// [`Command::GuildSetInfo`](crate::command::Command::GuildSetInfo).
     pub description: String,
-    /// This is guilds emblem. Currently this is unparsed, so you only have
-    /// access to the raw string
+    /// The guild's emblem. Access the raw encoded string via
+    /// [`Emblem::server_encode()`], or update it with
+    /// [`Command::GuildSetInfo`](crate::command::Command::GuildSetInfo).
     pub emblem: Emblem,
 
-    /// The honor this guild has earned
+    /// The total honor earned by this guild.
     pub honor: u32,
-    /// The rank in the Hall of Fame this guild has
+    /// The rank of this guild in the Hall of Fame.
     pub rank: u32,
-    /// The date at which the character joined this guild
+    /// The date and time at which the character joined this guild.
     pub joined: Option<DateTime<Local>>,
 
-    /// The skill you yourself contribute to the guild
+    /// The treasure skill level you personally contribute to the guild.
+    /// Upgrade with
+    /// [`Command::GuildIncreaseSkill`](crate::command::Command::GuildIncreaseSkill).
     pub own_treasure_skill: u16,
-    /// The total amount of treasure skill the guild has
+    /// The total treasure skill level of the guild (+2% gold from quests and
+    /// city guard per level).
     pub total_treasure_skill: u16,
-    /// The skill you yourself contribute to the guild
+    /// The instructor skill level you personally contribute to the guild.
+    /// Upgrade with
+    /// [`Command::GuildIncreaseSkill`](crate::command::Command::GuildIncreaseSkill).
     pub own_instructor_skill: u16,
-    /// The total amount of instructor skill the guild has
+    /// The total instructor skill level of the guild (+2% XP from quests per
+    /// level).
     pub total_instructor_skill: u16,
 
-    /// The price to pay to upgrade the given skill
+    /// The price to pay to upgrade each skill with
+    /// [`Command::GuildIncreaseSkill`](crate::command::Command::GuildIncreaseSkill).
     pub upgrade_price: EnumMap<GuildSkill, NormalCost>,
 
-    /// How many raids this guild has completed already
+    /// The number of guild raids completed so far. Declare the next raid with
+    /// [`Command::GuildRaid`](crate::command::Command::GuildRaid).
     pub finished_raids: u16,
 
-    /// If the guild is defending against another guild, this will contain
-    /// information about the upcoming battle
+    /// Information about an upcoming battle if the guild is defending against
+    /// another guild. Join defense with
+    /// [`Command::GuildJoinDefense`](crate::command::Command::GuildJoinDefense).
     pub defending: Option<PlannedBattle>,
-    /// If the guild is attacking another guild, this will contain
-    /// information about the upcoming battle
+    /// Information about an upcoming battle if the guild is attacking another
+    /// guild or on a raid. Join attack with
+    /// [`Command::GuildJoinAttack`](crate::command::Command::GuildJoinAttack).
+    ///
+    /// Check if the battle is a raid via
+    /// [`PlannedBattle::is_raid()`].
     pub attacking: Option<PlannedBattle>,
-    /// The next time the guild can attack another guild.
+    /// The next time the guild can attack another guild with
+    /// [`Command::GuildAttack`](crate::command::Command::GuildAttack).
     pub next_attack_possible: Option<DateTime<Local>>,
 
-    /// The id of the pet, that is currently selected as the guild pet
+    /// The ID of the pet currently selected as the guild pet.
     pub pet_id: u32,
-    /// The level you yourself contribute to the guild pet
+    /// The level you personally contribute to the guild pet. Upgrade with
+    /// [`Command::GuildIncreaseSkill`](crate::command::Command::GuildIncreaseSkill).
     pub own_pet_lvl: u16,
-    /// The maximum level that the pet can be at
+    /// The maximum level that the guild pet can reach.
     pub pet_max_lvl: u16,
-    /// All information about the hydra the guild pet can fight
+    /// Information about the guild hydra that the guild pet can fight.
     pub hydra: GuildHydra,
-    /// The thing each player can enter and fight once a day
+    /// Information about the guild portal that members can fight once per day
+    /// with [`Command::GuildPortalBattle`](crate::command::Command::GuildPortalBattle).
     pub portal: GuildPortal,
 
     // This should just be members.len(). I think this is only in the API
     // because they are bad at varsize arrays or smth.
     member_count: u8,
-    /// Information about the members of the guild. This includes the player
+    /// Information about the members of the guild, including the player.
+    /// Invite players with
+    /// [`Command::GuildInvitePlayer`](crate::command::Command::GuildInvitePlayer)
+    /// and kick members with
+    /// [`Command::GuildKickPlayer`](crate::command::Command::GuildKickPlayer).
     pub members: Vec<GuildMemberData>,
-    /// The chat messages, that get sent in the guild chat
+    /// Messages sent in the guild chat. Send a new message with
+    /// [`Command::GuildSendChat`](crate::command::Command::GuildSendChat).
     pub chat: Vec<ChatMessage>,
-    /// The whisper messages, that a player can receive
+    /// Private whisper messages received by the player.
     pub whispers: Vec<ChatMessage>,
-    /// A list of guilds which can be fought, must first be fetched by sending
-    /// `Command::GuildGetFightableTargets`
+    /// A list of guilds that can be attacked. Fetch or refresh with
+    /// [`Command::GuildGetFightableTargets`](crate::command::Command::GuildGetFightableTargets),
+    /// and attack with
+    /// [`Command::GuildAttack`](crate::command::Command::GuildAttack).
     pub fightable_guilds: Vec<FightableGuild>,
 }
 
-/// The hydra, that the guild pet can fight
+/// The hydra that the guild pet can fight.
+///
+/// Fight with
+/// [`Command::GuildPetBattle`](crate::command::Command::GuildPetBattle).
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GuildHydra {
-    /// The last time the hydra has been fought
+    /// The last time the hydra was fought.
     pub last_battle: Option<DateTime<Local>>,
-    /// The last time the hydra has been seen with full health
+    /// The last time the hydra was seen with full health.
     pub last_full: Option<DateTime<Local>>,
-    /// This seems to be `last_battle + 30 min`. I can only do 1 battle/day,
-    /// but I think this should be the next possible fight
+    /// The earliest time the hydra can next be fought.
     pub next_battle: Option<DateTime<Local>>,
-    /// The amount of times the player can still fight the hydra
+    /// The number of fights the player can still perform today against the
+    /// hydra.
     pub remaining_fights: u16,
-    /// The current life of the guilds hydra
+    /// The current health of the guild's hydra.
     pub current_life: u64,
-    /// The maximum life the hydra can have
+    /// The maximum health the hydra can have.
     pub max_life: u64,
-    /// The attributes the hydra has
+    /// The combat attributes of the hydra.
     pub attributes: EnumMap<AttributeType, u32>,
 }
 
-/// Contains information about another guild which can be fought.
-/// Must first be fetched by sending `Command::GuildGetFightableTargets`
+/// Contains information about another guild that can be attacked.
+///
+/// Fetch with
+/// [`Command::GuildGetFightableTargets`](crate::command::Command::GuildGetFightableTargets),
+/// and declare an attack with
+/// [`Command::GuildAttack`](crate::command::Command::GuildAttack).
 #[derive(Debug, Clone, PartialEq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct FightableGuild {
-    /// Id of the guild
+    /// The ID of the guild.
     pub id: u32,
-    /// Name of the guild
+    /// The name of the guild.
     pub name: String,
-    /// Emblem of the guild
+    /// The emblem of the guild.
     pub emblem: Emblem,
-    /// Number of members the guild currently has
+    /// The number of members the guild currently has.
+    #[doc(alias = "member_count")]
     pub number_of_members: u8,
-    /// The lowest level a member of the guild has
+    /// The lowest level a member of the guild has.
     pub members_min_level: u32,
-    /// The highest level a member of the guild has
+    /// The highest level a member of the guild has.
     pub members_max_level: u32,
-    /// The average level of the guild members
+    /// The average level of the guild members.
     pub members_average_level: u32,
-    /// The rank of the guild in the hall of fame
+    /// The rank of the guild in the Hall of Fame.
     pub rank: u32,
-    /// The amount of honor the guild currently has
+    /// The amount of honor the guild currently has.
     pub honor: u32,
 }
 
-/// The customizable emblem each guild has
+/// The customizable emblem each guild has.
+///
+/// Update with
+/// [`Command::GuildSetInfo`](crate::command::Command::GuildSetInfo).
 #[derive(Debug, Clone, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Emblem {
@@ -137,7 +176,7 @@ pub struct Emblem {
 }
 
 impl Emblem {
-    /// Returns the guild emblem in its server encoded form
+    /// Returns the guild emblem in its server-encoded form.
     #[must_use]
     pub fn server_encode(&self) -> &str {
         // TODO: Actually parse this
@@ -150,17 +189,18 @@ impl Emblem {
     }
 }
 
-/// A message, that the player has received, or has sent to others via the chat
+/// A message received or sent via the guild chat or whispers.
+///
+/// Send messages in the guild chat with
+/// [`Command::GuildSendChat`](crate::command::Command::GuildSendChat).
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ChatMessage {
-    /// The user this message originated from. Note that this might not be in
-    /// the guild member list in some cases
+    /// The user this message originated from.
     pub user: String,
-    /// The time at which this message has been sent. I have not checked the
-    /// timezone here. Might be UTC/Your TZ/Server TZ
+    /// The time at which this message was sent.
     pub time: NaiveTime,
-    /// The actual message, that got sent
+    /// The actual text content of the message.
     pub message: String,
 }
 
@@ -392,18 +432,22 @@ impl Guild {
     }
 }
 
-/// A guild battle, that is scheduled to take place at a certain place and time
+/// A guild battle scheduled to take place at a specific time.
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PlannedBattle {
-    /// The guild this battle will be against
+    /// The ID of the opposing guild, or `1_000_000` if the battle is a guild
+    /// raid (see [`is_raid()`](Self::is_raid)).
+    #[doc(alias = "target")]
+    #[doc(alias = "opponent")]
     pub other: u32,
-    /// The date & time this battle will be at
+    /// The date and time when the battle begins.
     pub date: DateTime<Local>,
 }
 
 impl PlannedBattle {
-    /// Checks if the battle is a raid
+    /// Returns `true` if this battle is a guild raid rather than a fight
+    /// against another guild.
     #[must_use]
     pub fn is_raid(&self) -> bool {
         self.other == 1_000_000
@@ -420,94 +464,102 @@ impl PlannedBattle {
     }
 }
 
-/// The portal a guild has
+/// The guild portal enemy that members can fight once per day.
+///
+/// Fight with
+/// [`Command::GuildPortalBattle`](crate::command::Command::GuildPortalBattle).
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GuildPortal {
-    /// The damage bonus in percent the guild portal gives to its members
+    /// The damage bonus in percent granted to all guild members (+1% per
+    /// defeated enemy).
     pub damage_bonus: u8,
-    /// The amount of times the portal enemy has already been defeated. You can
-    /// easily convert this int oct & stage if you want
+    /// The number of portal enemies defeated so far (0..=50).
+    #[doc(alias = "stage")]
+    #[doc(alias = "floor")]
     pub defeated_count: u8,
-    /// The percentage of life the portal enemy still has
+    /// The percentage of health the current portal enemy still has (0..=100).
     pub life_percentage: u8,
 }
 
-/// Which battles a member will participate in
+/// Which upcoming battles a member will participate in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BattlesJoined {
-    /// The player has only joined the defense of the guild
+    /// The player has joined only the defense of the guild. Join with
+    /// [`Command::GuildJoinDefense`](crate::command::Command::GuildJoinDefense).
     Defense = 1,
-    /// The player has only joined the offensive attack against another guild
+    /// The player has joined only the offensive attack against another guild
+    /// or raid. Join with
+    /// [`Command::GuildJoinAttack`](crate::command::Command::GuildJoinAttack).
     Attack = 10,
-    /// The player has only joined both the offense and defensive battles of
-    /// the guild
+    /// The player has joined both the attack and defense battles of the guild.
     Both = 11,
 }
 
-/// A member of a guild
+/// Information about a member of the guild.
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GuildMemberData {
-    /// The unique player ID of the guild member
+    /// The unique player ID of the guild member.
     pub id: PlayerId,
-    /// The name of the member
+    /// The name of the member.
     pub name: String,
-    /// Which battles this member will participate in
+    /// Which upcoming battles this member will participate in.
     pub battles_joined: Option<BattlesJoined>,
-    /// The level of this member
+    /// The character level of this member.
     pub level: u16,
-    /// The last time this player was online (last time they sent an update
-    /// command)
+    /// The last time this player was online.
     pub last_online: Option<DateTime<Local>>,
-    /// The level, that this member has upgraded their treasure to
+    /// The treasure skill level this member contributes to the guild.
     pub treasure_skill: u16,
-    /// The level, that this member has upgraded their instructor to
+    /// The instructor skill level this member contributes to the guild.
     pub instructor_skill: u16,
-    /// The level of this members guild pet
+    /// The pet level this member contributes to the guild pet.
     pub guild_pet_lvl: u16,
 
-    /// The rank this member has in the guild
+    /// The rank of this member within the guild.
     pub guild_rank: GuildRank,
-    /// The last time this member has fought the portal. This is basically a
-    /// dynamic check if they have fought it today, because today changes
+    /// The last time this member fought the guild portal.
     pub portal_fought: Option<DateTime<Local>>,
-    /// The potions this player has active. This will always be potion, no
-    /// other item type
-    // TODO: make this explicit
+    /// The potions this player currently has active.
     pub potions: [Option<ItemType>; 3],
-    /// The level of this members hall of knights
+    /// The level of this member's Hall of Knights (fortress building).
+    #[doc(alias = "hall_of_knights")]
     pub knights: u8,
 }
 
-/// The rank a member can have in a guild
+/// The rank a member can have in a guild.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum GuildRank {
-    /// The leader of the guild
+    /// The leader of the guild. Transfer leadership with
+    /// [`Command::GuildSetLeader`](crate::command::Command::GuildSetLeader).
     Leader = 1,
-    /// An officer of the guild
+    /// An officer of the guild. Toggle officer status with
+    /// [`Command::GuildToggleOfficer`](crate::command::Command::GuildToggleOfficer).
     Officer = 2,
-    /// A regular member of the guild
+    /// A regular member of the guild.
     #[default]
     Member = 3,
-    /// Invited to the guild, but not a member yet
+    /// Invited to the guild, but not a member yet. Invite players with
+    /// [`Command::GuildInvitePlayer`](crate::command::Command::GuildInvitePlayer).
     Invited = 4,
 }
 
-/// Something the player can upgrade in the guild
+/// A guild feature that can be upgraded with
+/// [`Command::GuildIncreaseSkill`](crate::command::Command::GuildIncreaseSkill).
 // NOTE: The explicit discriminants are wire values, not just declaration
 // order: `Command::GuildIncreaseSkill` serializes the skill with
 // `*skill as usize`, so they must not be reordered or renumbered.
 #[derive(Debug, Clone, Copy, PartialEq, Enum, Eq, EnumIter)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum GuildSkill {
-    /// Upgrades the treasure skill of the guild
+    /// Upgrades the treasure skill of the guild (+2% gold per level).
     Treasure = 0,
-    /// Upgrades the instructor skill of the guild
+    /// Upgrades the instructor skill of the guild (+2% XP per level).
     Instructor = 1,
-    /// Upgrades the guild pet
+    /// Upgrades the guild pet level.
     Pet = 2,
 }
 
