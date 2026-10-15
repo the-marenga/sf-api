@@ -20,8 +20,9 @@ pub struct HellevatorEvent {
     /// The deadline (up to 7 days after the event ends) after which the final
     /// ranking reward can no longer be collected
     pub collect_time_end: Option<DateTime<Local>>,
-    /// Contains the hellevator. This can be `Some(_)`, even if the event is not
-    /// ongoing, so you should use the [`status`](Self::status) function to get this
+    /// Contains the hellevator. This can be `Some(_)`, even if the event is
+    /// not ongoing, so you should use the [`status`](Self::status)
+    /// function to get this
     pub(crate) active: Option<Hellevator>,
 }
 
@@ -125,16 +126,18 @@ pub struct Hellevator {
 
     /// The highest floor the player has reached.
     pub own_best_floor: u32,
-    /// The three treats currently available in the Hellevator shop. Purchase with
-    /// [`Command::HellevatorBuy`](crate::command::Command::HellevatorBuy) or reroll
+    /// The three treats currently available in the Hellevator shop. Purchase
+    /// with
+    /// [`Command::HellevatorBuy`](crate::command::Command::HellevatorBuy) or
+    /// reroll
     /// with [`Command::HellevatorRefreshShop`](crate::command::Command::HellevatorRefreshShop).
     pub shop_items: [HellevatorShopTreat; 3],
 
     /// The treat currently active and granting a buff, if any.
     pub current_treat: Option<HellevatorShopTreat>,
 
-    /// The time when the next free key card will be generated (every 30 minutes
-    /// up to the 15-card cap).
+    /// The time when the next free key card will be generated (every 30
+    /// minutes up to the 15-card cap).
     pub next_card_generated: Option<DateTime<Local>>,
     /// The time of the next daily reset for the Hellevator (resets current
     /// floor downwards by 20 at midnight server time).
@@ -364,7 +367,8 @@ pub enum HellevatorTreatType {
 
 /// A treat available for purchase in the Hellevator shop or currently active.
 ///
-/// Can be purchased via [`Command::HellevatorBuy`](crate::command::Command::HellevatorBuy).
+/// Can be purchased via
+/// [`Command::HellevatorBuy`](crate::command::Command::HellevatorBuy).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorShopTreat {

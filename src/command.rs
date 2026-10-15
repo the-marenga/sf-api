@@ -378,38 +378,42 @@ pub enum Command {
         /// some reason
         use_mushroom: bool,
     },
-    /// Enters the world boss event screen
+    /// Enters the World Boss event screen
     WorldBossEnter,
-    /// Update minor things in the world boss event, such as the attack timers
+    /// Updates World Boss event state, such as attack timers
     WorldBossUpdate,
-    /// Changes the targeted world boss tower segment
+    /// Changes the targeted World Boss segment
     WorldBossChangeTarget {
-        /// The tower segment to target
+        /// The segment to target
         target: WorldBossTowerSegment,
     },
-    /// Buys a new catapult for the fight against the world boss
+    /// Rents a catapult for the fight against the World Boss
     WorldBossBuyCatapult {
-        /// You can buy a catapult with a duration between [1, 10] hours
+        /// Duration of the catapult in hours (up to 10 hours)
         length: u32,
     },
-    /// Buys an upgrade in the world boss event
+    /// Buys a catapult upgrade in the World Boss event
     WorldBossBuyUpgrade {
-        /// The index of the upgrade offer to purchase
+        /// The index of the offer in
+        /// [`WorldBossEvent::upgrade_offers`](crate::gamestate::event::WorldBossEvent::upgrade_offers)
         offer_idx: usize,
-        /// Whether to use mushrooms for the purchase
+        /// Whether to pay with mushrooms instead of catalysts and resources
         use_mushrooms: bool,
     },
     /// Destroys the catapult currently owned by the player
     WorldBossRemoveCatapult,
-    /// Collects all chests in `available_daily_chests`
+    /// Collects all daily chests in
+    /// [`WorldBossEvent::available_daily_chests`](crate::gamestate::event::WorldBossEvent::available_daily_chests)
     WorldBossCollectDailyChests,
-    /// Collects battle rewards from the world boss fight
+    /// Collects battle rewards from
+    /// [`WorldBossEvent::battle_reward_chests`](crate::gamestate::event::WorldBossEvent::battle_reward_chests)
     WorldBossCollectBattleRewards,
-    /// Buys ammunition / projectiles for the catapult in the world boss event
+    /// Buys ammunition / projectiles for the World Boss event
     WorldBossProjectileBuy {
-        /// The index of the projectile offer to purchase
+        /// The index of the offer in
+        /// [`WorldBossEvent::projectile_offers`](crate::gamestate::event::WorldBossEvent::projectile_offers)
         offer_idx: usize,
-        /// The quantity of projectiles to buy
+        /// The quantity package to buy
         amount: ProjectileOfferQuantity,
     },
     /// Attacks the requested level of the tower
