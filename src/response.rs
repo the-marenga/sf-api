@@ -635,15 +635,22 @@ impl<'a> Vals<'a> {
     /// The indices of the values that were never read (always empty in
     /// release builds).
     #[must_use]
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, test))]
     pub(crate) fn unaccessed_indices(&self) -> Vec<usize> {
-        (0..self.len())
-            .filter(|pos| {
-                self.accessed
-                    .get(self.base + pos)
-                    .is_none_or(|cell| !cell.get())
-            })
-            .collect()
+        #[cfg(debug_assertions)]
+        {
+            (0..self.len())
+                .filter(|pos| {
+                    self.accessed
+                        .get(self.base + pos)
+                        .is_none_or(|cell| !cell.get())
+                })
+                .collect()
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            Vec::new()
+        }
     }
 
     /// Asserts that all values in this response were read.
