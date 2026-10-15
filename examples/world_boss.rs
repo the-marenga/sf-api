@@ -7,6 +7,7 @@ use sf_api::{
     error::SFError,
     gamestate::{
         event::*, fortress::FortressResourceType, rewards::RewardType,
+        world_boss::*,
     },
     session::SimpleSession,
 };

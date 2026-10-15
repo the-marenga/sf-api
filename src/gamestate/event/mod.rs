@@ -1,6 +1,6 @@
 //! Special and recurring event tracking.
 //!
-//! Contains generic event scheduling status ([`EventStatus`]) and submodules
+//! Contains generic event scheduling status ([`EventStatus`](crate::gamestate::event::EventStatus)) and submodules
 //! for individual events:
 //! - [`hellevator`]
 //! - [`legendary_dungeon`]
@@ -16,28 +16,32 @@ pub mod world_boss;
 use chrono::{DateTime, Local};
 use num_derive::FromPrimitive;
 use strum::EnumIter;
-pub use world_boss::*;
 
 use crate::{
     gamestate::{Result, ServerTime},
     response::Vals,
 };
 
-/// Information about an upcoming, or currently running special event. This is
-/// basically all the information the button above the tavern has in the
-/// official GUI. There may be some overlap with information in f.e. Hellevator,
-/// but that is just how it is on the server
+/// Information about an upcoming or currently running special event.
+///
+/// Corresponds to the event banner/button above the Tavern in the official GUI.
+/// Contains overall scheduling times for events like
+/// [`Hellevator`](crate::gamestate::event::hellevator::HellevatorEvent),
+/// [`Legendary Dungeon`](crate::gamestate::event::legendary_dungeon::LegendaryDungeonEvent),
+/// and [`World Boss`](crate::gamestate::event::world_boss::WorldBossEvent).
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EventStatus {
     /// The type of the special event
+    #[doc(alias = "event_type")]
     pub typ: SpecialEventType,
-    /// The time at which this event is scheduled to start at
+    /// The time at which this event is scheduled to start
     pub start: Option<DateTime<Local>>,
     /// The time until which the event will be active
     pub end: Option<DateTime<Local>>,
-    /// If the event has some sort of phase after the main (action) part has
-    /// ended, this here will mark the end to that (end of claim period, etc.)
+    /// The deadline for post-event reward collection or claiming periods, if applicable
+    #[doc(alias = "claim_end")]
+    #[doc(alias = "collect_end")]
     pub extra_end: Option<DateTime<Local>>,
 }
 
@@ -97,6 +101,8 @@ pub enum WorldBossTheme {
     Normal = 1,
     /// Winter world boss theme
     Winter,
+    /// Summer world boss theme
+    Summer,
     /// An unknown world boss theme
     #[default]
     Unknown,
