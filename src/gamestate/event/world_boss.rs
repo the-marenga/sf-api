@@ -8,7 +8,7 @@ use crate::{
     response::Vals,
 };
 
-/// The segment / section of the world boss tower
+/// The segment / body part of the world boss
 #[derive(
     Debug,
     Clone,
@@ -23,83 +23,119 @@ use crate::{
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum WorldBossTowerSegment {
-    /// Top section of the tower
+    /// Top section / head
     #[default]
     Top = 1,
-    /// Middle section of the tower
+    /// Middle section / torso
     Middle,
-    /// Bottom section of the tower
+    /// Bottom section / legs
     Bottom,
 }
 
-/// Information about a world boss event
+/// Information about a World Boss event
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WorldBossEvent {
-    /// The number of catalysts available
+    /// The number of catalysts available to spend on catapults, upgrades, and
+    /// ammunition
     pub catalysts: u32,
     /// The number of medals earned
     pub medals: u32,
-    /// The player's rank in the event
+    /// The player's rank on their server
     pub rank: u32,
-    /// The current tower segment being attacked
+    /// The current tower segment / body part being attacked.
+    ///
+    /// Can be changed via
+    /// [`Command::WorldBossChangeTarget`](crate::command::Command::WorldBossChangeTarget).
+    #[doc(alias = "body_part")]
+    #[doc(alias = "target")]
     pub current_segment: Option<WorldBossTowerSegment>,
-    /// The amount of battle loot chests we have available to collect
+    /// The amount of battle loot chests available to collect.
+    ///
+    /// Can be claimed via
+    /// [`Command::WorldBossCollectBattleRewards`](crate::command::Command::WorldBossCollectBattleRewards).
+    #[doc(alias = "battle_loot")]
     pub battle_reward_chests: u32,
     /// The time until the next attack
     pub attack_timer: Option<DateTime<Local>>,
-    /// The next time the battle loot will be issued
+    /// The next time battle loot will be issued
     pub next_battle_loot_issued: Option<DateTime<Local>>,
-    /// The amount of damage we do per hour
+    /// The amount of damage dealt per hour
     pub damage_per_hour: u32,
-    /// The amount of damage a single attack does
+    /// The amount of damage dealt per attack
+    #[doc(alias = "attack_damage")]
     pub damage_per_attack: u32,
     /// The damage comparative players do
     pub damage_comparative: u32,
-    /// The amount of loot we get per hour
+    /// The amount of battle loot earned per hour
     pub loot_per_hour: u32,
     /// Information about the currently ongoing fight
     pub battle: Option<WorldBossBattle>,
 
     /// The projectiles available in the shop.
-    /// Must have called `Command::DungeonEnter` to have this available
+    ///
+    /// Must have sent
+    /// [`Command::WorldBossEnter`](crate::command::Command::WorldBossEnter) to
+    /// have this available. Ammunition can be purchased with
+    /// [`Command::WorldBossProjectileBuy`](crate::command::Command::WorldBossProjectileBuy).
     pub projectile_offers: Vec<ProjectileOffer>,
 
     /// The catapult upgrades available in the shop.
-    /// Must have called `Command::DungeonEnter` to have this available
+    ///
+    /// Must have sent
+    /// [`Command::WorldBossEnter`](crate::command::Command::WorldBossEnter) to
+    /// have this available. Upgrades can be purchased with
+    /// [`Command::WorldBossBuyUpgrade`](crate::command::Command::WorldBossBuyUpgrade).
     pub upgrade_offers: Vec<UpgradeOffer>,
 
-    /// Information about the catapult, if available
+    /// Information about the catapult, if active.
+    ///
+    /// A catapult can be rented via
+    /// [`Command::WorldBossBuyCatapult`](crate::command::Command::WorldBossBuyCatapult)
+    /// and destroyed via
+    /// [`Command::WorldBossRemoveCatapult`](crate::command::Command::WorldBossRemoveCatapult).
     pub catapult: Option<WorldBossCatapult>,
-    /// Information about the current projectile/ammo, if available
+    /// Information about currently loaded projectile ammunition, if any.
+    ///
+    /// Projectiles can be bought via
+    /// [`Command::WorldBossProjectileBuy`](crate::command::Command::WorldBossProjectileBuy).
+    #[doc(alias = "ammo")]
+    #[doc(alias = "ammunition")]
     pub projectile: Option<WorldBossProjectile>,
 
-    /// The amount of ranks available on the "international" tab (#servers)
+    /// The number of ranks available on the "international" tab (number of
+    /// servers)
     pub max_international_ranks: Option<u32>,
-    /// The amount of players available on the "damage" tab
+    /// The number of players available on the "damage" tab
     pub max_world_ranks: Option<u32>,
-    /// Honestly not sure what this is. This seems to be a max rank, such as
-    /// the others, but I can't figure out for what.
+    /// The number of fighters available on the server ranking tab
     pub max_fighter_ranks: Option<u32>,
 
-    /// The amount of chests, that are available for automatic, daily pickup.
-    /// You should pick these up before doing any interactions
+    /// The number of chests available for daily collection.
+    ///
+    /// Can be claimed via
+    /// [`Command::WorldBossCollectDailyChests`](crate::command::Command::WorldBossCollectDailyChests).
+    #[doc(alias = "daily_chests")]
     pub available_daily_chests: EnumMap<WorldBossChest, u32>,
 }
 
-/// The types of daily chests available for collection in the world boss event
+/// The types of daily chests available for collection in the World Boss event
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash, Enum)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum WorldBossChest {
-    /// Loot chest from battles
+    /// Hourly battle loot chest based on damage dealt
     BattleLoot,
-    /// Chest awarded for hitting weak points
+    /// Chest awarded for attacking the boss's designated weak point at least
+    /// once
     WeakPointChest,
-    /// Chest awarded for defeating/kill-stealing
+    /// Chest awarded to the heroes who land the killing blow on a segment (5
+    /// per segment)
     KillStealChest,
-    /// Chest awarded for highest damage dealt
+    /// Chest awarded to the heroes who dealt the most total damage to a segment
+    /// (3 per segment)
     DamageMasterChest,
-    /// Chest awarded for single hit achievements
+    /// Chest awarded to the heroes who dealt the highest damage in a single hit
+    /// to a segment (3 per segment)
     SingleHitChest,
 }
 
@@ -168,33 +204,38 @@ impl WorldBossEvent {
     }
 }
 
-/// The type of projectile / ammunition used in the world boss event
+/// The type of projectile / ammunition used in the World Boss event
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash, Default, FromPrimitive,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum WorldBossProjectileType {
-    /// Always active
+    /// Deals extra flat damage on every hit
     Impacting = 1,
-    /// Only active below 30% boss health
+    /// Deals extra bonus damage when the boss's HP is below 30%
     Biting = 2,
-    /// Only active above 70% boss health
+    /// Deals extra bonus damage when the boss's HP is above 70%
     Mangling = 3,
     /// Unknown projectile type
     #[default]
     Unknown,
 }
 
-/// Information about the player's world boss projectile ammunition
+/// Information about the player's active World Boss projectile ammunition.
+///
+/// Each attack consumes 1 projectile. Stacks up to 99 shots of the same type;
+/// purchasing a different projectile type replaces any existing ammunition.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WorldBossProjectile {
-    /// The type this ammunition is of
+    /// The type of this ammunition
     pub typ: WorldBossProjectileType,
-    /// The amount of this ammo, that we still have left
+    /// The amount of ammunition remaining (stacks up to 99)
+    #[doc(alias = "ammo")]
     pub amount: u32,
-    /// The extra amount of damage this ammo does. The value here is a
-    /// percentage, so 80 here would mean 80% more dmg
+    /// The extra bonus damage percentage this ammunition provides (e.g. 80
+    /// means +80% damage)
+    #[doc(alias = "bonus_damage")]
     pub extra_dmg: u32,
 }
 
@@ -213,22 +254,23 @@ impl WorldBossProjectile {
     }
 }
 
-/// Information about an ongoing world boss battle
+/// Information about an ongoing World Boss battle
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WorldBossBattle {
-    /// The level/stage/number of the boss in the ongoing boss battles.
-    /// Basically just the number next to "WORLD BOSS" in the official UI
+    /// The level/number of the boss in the ongoing boss battles
     pub boss_nr: u32,
-    /// Honestly, no idea what this is, it was just 40 for me. This is just
-    /// public in case, this turns out to be important, but is probably going
-    /// to be renamed/removed in a later version
-    pub unknown: i64,
-    /// The segment marked as the weak point of the world boss
+    /// Unknown field from the server response
+    pub(crate) unknown: i64,
+    /// The segment marked as the weak point of the World Boss for this player
+    #[doc(alias = "weak_spot")]
     pub weak_point: Option<WorldBossTowerSegment>,
-    /// Have we already hit the hitpoint for the chest?
+    /// Whether the weak point has already been attacked at least once to
+    /// qualify for the [`WorldBossChest::WeakPointChest`]
+    #[doc(alias = "weak_spot_hit")]
     pub weak_point_hit: bool,
-    /// The three levels of the boss, that you can fight
+    /// The three segments / body parts of the boss that can be fought
+    #[doc(alias = "body_parts")]
     pub segments: EnumMap<WorldBossTowerSegment, WorldBossTowerSegmentInfo>,
 }
 
@@ -257,24 +299,24 @@ impl WorldBossBattle {
     }
 }
 
-/// Information about one segment of the world boss tower
+/// Information about one segment / body part of the World Boss
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WorldBossTowerSegmentInfo {
-    /// The amount of heroes, that are currently fighting on this level of the
-    /// tower
+    /// The number of heroes currently targeting this segment
     pub signed_up_heroes: u32,
-    /// The amount of damage all heroes did combined
+    /// The total combined damage dealt to this segment by all heroes on the
+    /// server
     pub joint_damage: u64,
-    /// The maximum amount of health this segment of the boss has
+    /// The maximum health of this segment
     pub max_health: u64,
-    /// The amount of health the this segment of the boss still has
+    /// The remaining health of this segment
     pub remaining_health: u64,
-    /// The amount of special effects currently active
+    /// The number of active special attacks/effects on this segment
     pub active_special_attacks: u32,
-    /// The 10 heroes, that did the most damage
+    /// The top 10 heroes by damage dealt to this segment
     pub most_damage_heroes: Vec<WorldBossTowerHeroDamageSummary>,
-    /// The 3 heroes, that did the most special attacks
+    /// The top 3 heroes by special attacks performed on this segment
     pub most_special_atk_heroes: Vec<WorldBossTowerHeroSpecialSummary>,
 }
 
@@ -318,38 +360,40 @@ impl WorldBossTowerSegmentInfo {
     }
 }
 
-/// Summary of damage dealt by a top hero in a world boss tower segment
+/// Summary of damage dealt by a top hero on a World Boss segment
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WorldBossTowerHeroDamageSummary {
     /// The name of the hero
     pub name: Box<str>,
-    /// The level this hero has
+    /// The character level of this hero
     pub level: u16,
 }
 
-/// Summary of special attacks performed by a top hero in a world boss tower
-/// segment
+/// Summary of special attacks performed by a top hero on a World Boss segment
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WorldBossTowerHeroSpecialSummary {
     /// The name of the hero
     pub name: Box<str>,
-    /// The level this hero has
+    /// The character level of this hero
     pub level: u16,
-    /// Probably the amount of special attacks this hero has done. This is not
-    /// displayed in the official UI, so I am just guessing here
+    /// The number of special attacks performed by this hero
     pub count: i64,
 }
 
-/// Information about the player's world boss catapult
+/// Information about the player's World Boss catapult.
+///
+/// Can be rented via
+/// [`Command::WorldBossBuyCatapult`](crate::command::Command::WorldBossBuyCatapult)
+/// and destroyed via
+/// [`Command::WorldBossRemoveCatapult`](crate::command::Command::WorldBossRemoveCatapult).
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WorldBossCatapult {
-    /// The time at which this catapult is going to break
+    /// The time at which this catapult expires and breaks
     pub breaks: DateTime<Local>,
-    /// The upgrades that have been bought to upgrade the effectiveness of this
-    /// catapult
+    /// The upgrades purchased for this catapult (up to 4 slots)
     pub upgrades: [Option<WorldBossCatapultUpgrade>; 4],
 }
 
@@ -384,37 +428,38 @@ impl WorldBossCatapult {
     }
 }
 
-/// An upgrade applied to the world boss catapult
+/// An upgrade applied to the World Boss catapult
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct WorldBossCatapultUpgrade {
     /// The type of upgrade
     pub typ: WorldBossCatapultUpgradeType,
-    /// The amount of upgrades we have of this type (0..=10)
+    /// The upgrade level (0..=10)
     pub amount: u8,
-    /// Is only working on this specific level of the tower
+    /// The specific segment this upgrade applies to, if restricted
+    #[doc(alias = "body_part")]
+    #[doc(alias = "target_segment")]
     pub restriction: Option<WorldBossTowerSegment>,
-    /// The effect this upgrade has. Divide this here by 100.0 to get the
-    /// percentage. So 700 here would be a 7% improvement, for whatever the
-    /// upgrade type is
+    /// The effect of this upgrade as an integer percentage scaled by 100
+    /// (e.g. 700 represents a +7% bonus)
     pub effect_val: i64,
 }
 
-/// The type of upgrade for the world boss catapult
+/// The type of upgrade for the World Boss catapult
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash, Default, FromPrimitive,
 )]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum WorldBossCatapultUpgradeType {
-    /// Damage bonus. (Must have restriction)
+    /// Bonus damage (restricted to a specific segment)
     Motor = 1,
-    /// Shot Speed
+    /// Shot speed / attack rate bonus
     Thread = 2,
-    /// Extra crit hit chance
+    /// Bonus critical hit chance
     AimingDevice = 3,
-    /// Extra crit damage
+    /// Bonus critical hit damage
     Bowl = 4,
-    /// New/Unknown upgrade type
+    /// Unknown upgrade type
     #[default]
     Unknown,
 }
@@ -439,16 +484,19 @@ pub struct ProjectileOfferQuantified {
     pub price: u32,
 }
 
-/// An offer to buy projectiles in the world boss shop
+/// An offer to buy projectiles in the World Boss shop.
+///
+/// Can be purchased via
+/// [`Command::WorldBossProjectileBuy`](crate::command::Command::WorldBossProjectileBuy).
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ProjectileOffer {
-    /// The type of projectile you are buying
+    /// The type of projectile offered
     pub typ: WorldBossProjectileType,
     /// The available quantity purchase options
     pub buy_options:
         EnumMap<ProjectileOfferQuantity, ProjectileOfferQuantified>,
-    /// The raw effect of this projectile
+    /// The raw bonus effect of this projectile
     pub effect_val: i64,
 }
 
@@ -474,32 +522,29 @@ impl ProjectileOffer {
     }
 }
 
-/// An offer to upgrade the catapult in the world boss shop
+/// An offer to upgrade the catapult in the World Boss shop.
+///
+/// Can be purchased via
+/// [`Command::WorldBossBuyUpgrade`](crate::command::Command::WorldBossBuyUpgrade).
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UpgradeOffer {
-    /// The type of upgrade, that we are offered to buy
+    /// The type of upgrade offered
     pub typ: WorldBossCatapultUpgradeType,
-    /// The restiction in terms of which segment this upgrade works on, if any
+    /// The segment restriction for this upgrade, if any
     pub restriction: Option<WorldBossTowerSegment>,
-    /// The effect this item has
+    /// The effect value of this upgrade
     pub effect_value: i64,
-    /// The price of the upgrade, which is payed by `main_price_type` as a
-    /// currency. This price is scaled down based on how much of the catapult
-    /// you still have left, so if you only have 1 out of the 10 hours
-    /// left, you only pay 10% of this
+    /// The base price paid in [`main_price_type`](Self::main_price_type).
+    /// Scaled down proportionally based on remaining catapult duration
     pub raw_main_price: u64,
-    /// The resource you have to use to buy this upgrade
+    /// The resource required to purchase this upgrade
     pub main_price_type: RewardType,
-    /// The amount of catalysts you have to pay to buy this offer together with
-    /// the main payment type. This price is scaled down based on how much of
-    /// the catapult you still have left, so if you only have 1 out of the
-    /// 10 hours left, you only pay 10% of this
+    /// The base catalyst price required alongside the main payment.
+    /// Scaled down proportionally based on remaining catapult duration
     pub raw_catalyst_price: u64,
-    /// The amount of mushrooms this upgrade would cost, if you were to pay
-    /// with mushrooms. This price is scaled down based on how much of the
-    /// catapult you still have left, so if you only have 1 out of the 10 hours
-    /// left, you only pay 10% of this
+    /// The alternative mushroom price to purchase this upgrade directly.
+    /// Scaled down proportionally based on remaining catapult duration
     pub raw_mushroom_price: u64,
 }
 
