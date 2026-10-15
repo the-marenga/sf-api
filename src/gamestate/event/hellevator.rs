@@ -34,7 +34,8 @@ pub enum HellevatorStatus<'a> {
     NotEntered,
     /// The event is currently not available
     NotAvailable,
-    /// The event has ended, but you can still claim the final reward
+    /// The event has ended, but you can still claim the final reward with
+    /// [`Command::HellevatorClaimFinal`](crate::command::Command::HellevatorClaimFinal).
     RewardClaimable,
     /// A reference to the active Hellevator state.
     Active(&'a Hellevator),
@@ -94,14 +95,18 @@ pub struct Hellevator {
     pub current_floor: u32,
     /// The total points earned in the current Hellevator run.
     pub points: u32,
-    /// Whether the final reward chest has been claimed.
+    /// Whether the final reward chest has been claimed via
+    /// [`Command::HellevatorClaimFinal`](crate::command::Command::HellevatorClaimFinal).
     pub has_final_reward: bool,
 
     /// Guild points earned today.
     pub guild_points_today: u32,
-    /// The current rank of the player's guild.
+    /// The current rank of the player's guild. See
+    /// [`Command::HellevatorViewGuildRanking`](crate::command::Command::HellevatorViewGuildRanking)
+    /// to refresh or view it.
     pub guild_rank: u32,
-    /// Information about each floor in the guild raid.
+    /// Information about each floor in the guild raid. Attack a floor with
+    /// [`Command::HellevatorJoinHellAttack`](crate::command::Command::HellevatorJoinHellAttack).
     pub guild_raid_floors: Vec<HellevatorRaidFloor>,
 
     /// The time at which signups for the guild raid begin.
@@ -113,7 +118,9 @@ pub struct Hellevator {
 
     /// The highest floor the player has reached.
     pub own_best_floor: u32,
-    /// The three treats currently available in the Hellevator shop.
+    /// The three treats currently available in the Hellevator shop. Purchase with
+    /// [`Command::HellevatorBuy`](crate::command::Command::HellevatorBuy) or reroll
+    /// with [`Command::HellevatorRefreshShop`](crate::command::Command::HellevatorRefreshShop).
     pub shop_items: [HellevatorShopTreat; 3],
 
     /// The treat currently active and granting a buff, if any.
@@ -127,9 +134,11 @@ pub struct Hellevator {
     /// event.
     pub start_contrib_date: Option<DateTime<Local>>,
 
-    /// Daily rewards earned yesterday.
+    /// Daily rewards earned yesterday. Claim with
+    /// [`Command::HellevatorClaimDailyYesterday`](crate::command::Command::HellevatorClaimDailyYesterday).
     pub rewards_yesterday: Option<HellevatorDailyReward>,
-    /// Daily rewards available today.
+    /// Daily rewards available today. Claim with
+    /// [`Command::HellevatorClaimDaily`](crate::command::Command::HellevatorClaimDaily).
     pub rewards_today: Option<HellevatorDailyReward>,
     /// Daily rewards projected for the next day.
     pub rewards_next: Option<HellevatorDailyReward>,
@@ -137,7 +146,8 @@ pub struct Hellevator {
     /// The active daily treat bonus buff, if any.
     pub daily_treat_bonus: Option<HellevatorTreatBonus>,
 
-    /// The monster currently encountered on this floor, if any.
+    /// The monster currently encountered on this floor, if any. Fight with
+    /// [`Command::HellevatorFight`](crate::command::Command::HellevatorFight).
     pub current_monster: Option<HellevatorMonster>,
 
     /// Hellevator points earned today.
@@ -340,6 +350,8 @@ pub enum HellevatorTreatType {
 }
 
 /// A treat available for purchase in the Hellevator shop or currently active.
+///
+/// Can be purchased via [`Command::HellevatorBuy`](crate::command::Command::HellevatorBuy).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorShopTreat {
@@ -385,6 +397,11 @@ pub struct HellevatorDailyReward {
 
 impl HellevatorDailyReward {
     /// Returns `true` if the daily reward can be claimed.
+    ///
+    /// Claim today's rewards via
+    /// [`Command::HellevatorClaimDaily`](crate::command::Command::HellevatorClaimDaily)
+    /// or yesterday's rewards via
+    /// [`Command::HellevatorClaimDailyYesterday`](crate::command::Command::HellevatorClaimDailyYesterday).
     #[must_use]
     pub fn claimable(&self) -> bool {
         self.gold_chests > 0

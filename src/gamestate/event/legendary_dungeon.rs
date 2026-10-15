@@ -388,7 +388,8 @@ pub enum LegendaryDungeonStatus<'a> {
         /// The type of room
         typ: RoomType,
     },
-    /// You have items that need to be taken
+    /// You have items that need to be taken. Claim them with
+    /// [`Command::LegendaryDungeonTakeItem`](crate::command::Command::LegendaryDungeonTakeItem).
     TakeItem {
         /// The legendary dungeon state
         dungeon: &'a LegendaryDungeon,
