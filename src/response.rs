@@ -15,6 +15,7 @@ use std::{
 
 use chrono::{DateTime, Local, NaiveDateTime};
 use log::{debug, error, trace, warn};
+use num_bigint::BigInt;
 use num_traits::FromPrimitive;
 
 use crate::{error::SFError, gamestate::ServerTime};
@@ -843,6 +844,7 @@ impl<'a> Vals<'a> {
     }
 
     accessors! {
+        BigInt => bigint, bigint_or,
         i64 => i64, i64_or,
         u64 => u64, u64_or,
         u32 => u32, u32_or,
@@ -1198,6 +1200,7 @@ mod tests {
             assert_eq!(v.len(), 4);
             assert!(!v.is_empty());
             assert_eq!(v.u32(0).unwrap(), 1);
+            assert_eq!(v.bigint(0).unwrap(), BigInt::from(1));
             assert!(v.u32(1).is_err());
             assert_eq!(v.u32_or(1, 7), 7);
             assert_eq!(v.str(1).unwrap(), "abc");
