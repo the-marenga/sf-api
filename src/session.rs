@@ -8,7 +8,6 @@ use reqwest::{
 };
 use url::Url;
 
-pub use crate::response::*;
 use crate::{
     PlayerId,
     command::{Command, HASH_CONST, sha1_hash},
@@ -17,6 +16,7 @@ use crate::{
         GameState,
         character::{Class, Gender, Race},
     },
+    response::Response,
 };
 
 /// Default cryptographic session identifier.

@@ -7,9 +7,16 @@ use strum::EnumIter;
 use crate::{
     PlayerId,
     gamestate::{
-        ShopPosition,
         character::{Class, Gender, Mount, Race},
         dungeons::{CompanionClass, Dungeon},
+        event::{
+            hellevator::HellevatorTreatType,
+            legendary_dungeon::{
+                DoorType, DungeonEffectType, GemOfFateType,
+                LegendaryDungeonEventTheme, RPSChoice,
+            },
+            world_boss::{ProjectileOfferQuantity, WorldBossTowerSegment},
+        },
         fortress::{
             FortressBuildingType, FortressResourceType, FortressUnitType,
         },
@@ -17,21 +24,15 @@ use crate::{
         idle::IdleBuildingType,
         items::{
             EquipmentSlot, ItemCommandIdent, ItemPlace, ItemPosition,
-            PlayerItemPosition,
+            PlayerItemPosition, ShopPosition,
         },
-        legendary_dungeon::{
-            DoorType, DungeonEffectType, GemOfFateType,
-            LegendaryDungeonEventTheme, RPSChoice,
-        },
+        pets::HabitatType,
         social::Relationship,
         underworld::{
             LureSuggestion, UnderworldBuildingType, UnderworldResourceType,
             UnderworldUnitType,
         },
-        unlockables::{
-            EnchantmentIdent, HabitatType, HellevatorTreatType, Unlockable,
-        },
-        world_boss::{ProjectileOfferQuantity, WorldBossTowerSegment},
+        unlockables::{EnchantmentIdent, Unlockable},
     },
 };
 
@@ -395,7 +396,7 @@ pub enum Command {
     /// Buys a catapult upgrade in the World Boss event
     WorldBossBuyUpgrade {
         /// The index of the offer in
-        /// [`WorldBossEvent::upgrade_offers`](crate::gamestate::world_boss::WorldBossEvent::upgrade_offers)
+        /// [`WorldBossEvent::upgrade_offers`](crate::gamestate::event::world_boss::WorldBossEvent::upgrade_offers)
         offer_idx: usize,
         /// Whether to pay with mushrooms instead of catalysts and resources
         use_mushrooms: bool,
@@ -403,15 +404,15 @@ pub enum Command {
     /// Destroys the catapult currently owned by the player
     WorldBossRemoveCatapult,
     /// Collects all daily chests in
-    /// [`WorldBossEvent::available_daily_chests`](crate::gamestate::world_boss::WorldBossEvent::available_daily_chests)
+    /// [`WorldBossEvent::available_daily_chests`](crate::gamestate::event::world_boss::WorldBossEvent::available_daily_chests)
     WorldBossCollectDailyChests,
     /// Collects battle rewards from
-    /// [`WorldBossEvent::battle_reward_chests`](crate::gamestate::world_boss::WorldBossEvent::battle_reward_chests)
+    /// [`WorldBossEvent::battle_reward_chests`](crate::gamestate::event::world_boss::WorldBossEvent::battle_reward_chests)
     WorldBossCollectBattleRewards,
     /// Buys ammunition / projectiles for the World Boss event
     WorldBossProjectileBuy {
         /// The index of the offer in
-        /// [`WorldBossEvent::projectile_offers`](crate::gamestate::world_boss::WorldBossEvent::projectile_offers)
+        /// [`WorldBossEvent::projectile_offers`](crate::gamestate::event::world_boss::WorldBossEvent::projectile_offers)
         offer_idx: usize,
         /// The quantity package to buy
         amount: ProjectileOfferQuantity,

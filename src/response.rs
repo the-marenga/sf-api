@@ -515,6 +515,7 @@ impl Display for Vals<'_> {
 macro_rules! accessors {
     ($($ty:ty => $name:ident, $or:ident),+ $(,)?) => {
         $(
+            #[allow(unused)]
             #[doc = concat!("Parses the value at `pos` as `", stringify!($ty), "`.")]
             ///
             /// # Errors
@@ -525,6 +526,7 @@ macro_rules! accessors {
                 self.parse(pos, stringify!($ty))
             }
 
+            #[allow(unused)]
             #[doc = concat!(
                 "Parses the value at `pos` as `", stringify!($ty),
                 "`, returning `default` on failure."
@@ -631,6 +633,10 @@ impl<'a> Vals<'a> {
                 cell.set(true);
             }
         }
+        #[cfg(not(debug_assertions))]
+        {
+            _ = self;
+        }
     }
 
     /// The indices of the values that were never read (always empty in
@@ -723,28 +729,6 @@ impl<'a> Vals<'a> {
         self.parse(pos, ty).unwrap_or_else(|err| {
             warn!("{err}");
             default
-        })
-    }
-
-    /// Parses the value at `pos` into `T` with the given name for the error.
-    ///
-    /// # Errors
-    /// [`SFError::TooShortResponse`] if `pos` is out of bounds and
-    /// [`SFError::ParsingError`] if the value does not parse.
-    pub fn parse_at<T: FromStr>(
-        &self,
-        pos: usize,
-        name: &'static str,
-    ) -> Result<T, SFError> {
-        let val =
-            self.get_str(pos).ok_or_else(|| SFError::TooShortResponse {
-                name,
-                pos,
-                array: format!("{:?}", self.values()),
-            })?;
-        val.trim().parse::<T>().map_err(|_| {
-            error!("Could not parse {name} from {val:?}");
-            SFError::ParsingError(name, (*val).to_string())
         })
     }
 

@@ -5,9 +5,8 @@ use enum_map::EnumMap;
 use log::warn;
 use strum::IntoEnumIterator;
 
-use super::{Result, ServerTime, character::Class, items::EquipmentSlot};
-pub use super::{hellevator::*, pets::*};
-use crate::{gamestate::items::Enchantment, response::Vals};
+use super::{ServerTime, character::Class, items::EquipmentSlot};
+use crate::{error::Result, gamestate::items::Enchantment, response::Vals};
 
 /// Information about the witch cauldron and unlocked enchantments.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

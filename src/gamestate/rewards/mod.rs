@@ -1,13 +1,13 @@
 //! Rewards, tasks, daily bonuses, and server events.
 
 /// Daily login calendar and bonuses.
-pub mod calendar;
+mod calendar;
 /// Weekend server events and event buffs.
-pub mod events;
+mod events;
 /// Daily and event tasks from the goblin gleeman.
-pub mod tasks;
+mod tasks;
 /// Dr. Abawuwu's lucky wheel of fortune.
-pub mod wheel;
+mod wheel;
 
 pub use calendar::*;
 pub use events::*;
@@ -17,7 +17,7 @@ pub use wheel::*;
 
 use crate::{
     error::Result,
-    gamestate::{character::Mount, unlockables::HabitatType},
+    gamestate::{character::Mount, pets::HabitatType},
     response::Vals,
 };
 

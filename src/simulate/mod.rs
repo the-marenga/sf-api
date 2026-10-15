@@ -15,16 +15,14 @@
     clippy::cast_possible_truncation
 )]
 
+pub use damage::DamageRange;
 use enum_map::{Enum, EnumMap};
 use fastrand::Rng;
+pub use fighter::Fighter;
 use fighter::InBattleFighter;
 use strum::EnumIter;
+pub use upgradeable::{PlayerFighterSquad, UpgradeableFighter};
 
-pub use crate::simulate::{
-    damage::DamageRange,
-    fighter::Fighter,
-    upgradeable::{PlayerFighterSquad, UpgradeableFighter},
-};
 use crate::{
     command::AttributeType, gamestate::character::Class,
     simulate::fighter::FighterIdent,

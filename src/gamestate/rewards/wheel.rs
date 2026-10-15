@@ -159,7 +159,7 @@ impl Wheel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gamestate::unlockables::HabitatType;
+    use crate::gamestate::pets::HabitatType;
 
     fn assert_all_read(data: &Vals<'_>) {
         let unread = data.unaccessed_indices();

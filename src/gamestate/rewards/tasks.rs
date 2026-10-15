@@ -9,8 +9,8 @@ use crate::{
     error::Result,
     gamestate::{
         ServerTime, character::Class, dungeons::LightDungeon,
-        idle::IdleBuildingType, items::PotionType, tavern::Location,
-        unlockables::HabitatType,
+        idle::IdleBuildingType, items::PotionType, pets::HabitatType,
+        tavern::Location,
     },
     response::Vals,
 };

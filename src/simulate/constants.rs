@@ -8,7 +8,7 @@ use crate::{
     gamestate::{
         character::Class,
         dungeons::{Dungeon, LightDungeon, ShadowDungeon},
-        unlockables::HabitatType,
+        pets::HabitatType,
     },
     simulate::{Element, Monster, MonsterRunes},
 };

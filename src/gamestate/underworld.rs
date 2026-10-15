@@ -5,8 +5,8 @@ use enum_map::{Enum, EnumMap};
 use num_derive::FromPrimitive;
 use strum::EnumIter;
 
-use super::{Result, ServerTime};
-use crate::response::Vals;
+use super::ServerTime;
+use crate::{error::Result, response::Vals};
 
 /// The number of values in the `owntower` (`towerSave`) response.
 pub(crate) const TOWER_RESPONSE_LEN: usize = 476;
