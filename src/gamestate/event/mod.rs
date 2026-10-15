@@ -1,6 +1,7 @@
 //! Special and recurring event tracking.
 //!
-//! Contains generic event scheduling status ([`EventStatus`](crate::gamestate::event::EventStatus)) and submodules
+//! Contains generic event scheduling status
+//! ([`EventStatus`](crate::gamestate::event::EventStatus)) and submodules
 //! for individual events:
 //! - [`hellevator`]
 //! - [`legendary_dungeon`]
@@ -27,7 +28,8 @@ use crate::{
 /// Corresponds to the event banner/button above the Tavern in the official GUI.
 /// Contains overall scheduling times for events like
 /// [`Hellevator`](crate::gamestate::event::hellevator::HellevatorEvent),
-/// [`Legendary Dungeon`](crate::gamestate::event::legendary_dungeon::LegendaryDungeonEvent),
+/// [`Legendary
+/// Dungeon`](crate::gamestate::event::legendary_dungeon::LegendaryDungeonEvent),
 /// and [`World Boss`](crate::gamestate::event::world_boss::WorldBossEvent).
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -39,7 +41,8 @@ pub struct EventStatus {
     pub start: Option<DateTime<Local>>,
     /// The time until which the event will be active
     pub end: Option<DateTime<Local>>,
-    /// The deadline for post-event reward collection or claiming periods, if applicable
+    /// The deadline for post-event reward collection or claiming periods, if
+    /// applicable
     #[doc(alias = "claim_end")]
     #[doc(alias = "collect_end")]
     pub extra_end: Option<DateTime<Local>>,
