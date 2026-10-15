@@ -17,8 +17,8 @@ pub struct HellevatorEvent {
     pub start: Option<DateTime<Local>>,
     /// The time the hellevator event will be disabled at
     pub end: Option<DateTime<Local>>,
-    /// The time at which you will no longer be able to collect things for the
-    /// hellevator
+    /// The deadline (up to 7 days after the event ends) after which the final
+    /// ranking reward can no longer be collected
     pub collect_time_end: Option<DateTime<Local>>,
     /// Contains the hellevator. This can be `Some(_)`, even if the event is not
     /// ongoing, so you should use the [`status`](Self::status) function to get this
@@ -89,23 +89,25 @@ impl HellevatorEvent {
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Hellevator {
-    /// The number of key cards currently available.
+    /// The number of key cards currently available. One card generates every
+    /// 30 minutes up to a cap of 15.
     pub key_cards: u32,
     /// The current floor the player is on.
     pub current_floor: u32,
-    /// The total points earned in the current Hellevator run.
+    /// The total points (Hell Tokens) earned in the current Hellevator run.
     pub points: u32,
     /// Whether the final reward chest has been claimed via
     /// [`Command::HellevatorClaimFinal`](crate::command::Command::HellevatorClaimFinal).
     pub has_final_reward: bool,
 
-    /// Guild points earned today.
+    /// Guild points (Hell Tokens) earned today.
     pub guild_points_today: u32,
     /// The current rank of the player's guild. See
     /// [`Command::HellevatorViewGuildRanking`](crate::command::Command::HellevatorViewGuildRanking)
     /// to refresh or view it.
     pub guild_rank: u32,
-    /// Information about each floor in the guild raid. Attack a floor with
+    /// Information about each plain (group of 50 floors) in the guild raid.
+    /// Attack a plain with
     /// [`Command::HellevatorJoinHellAttack`](crate::command::Command::HellevatorJoinHellAttack).
     pub guild_raid_floors: Vec<HellevatorRaidFloor>,
 
@@ -126,9 +128,11 @@ pub struct Hellevator {
     /// The treat currently active and granting a buff, if any.
     pub current_treat: Option<HellevatorShopTreat>,
 
-    /// The time when the next free key card will be generated.
+    /// The time when the next free key card will be generated (every 30 minutes
+    /// up to the 15-card cap).
     pub next_card_generated: Option<DateTime<Local>>,
-    /// The time of the next daily reset for the Hellevator.
+    /// The time of the next daily reset for the Hellevator (resets current
+    /// floor downwards by 20 at midnight server time).
     pub next_reset: Option<DateTime<Local>>,
     /// The date when the player started contributing to the guild in this
     /// event.
@@ -143,16 +147,17 @@ pub struct Hellevator {
     /// Daily rewards projected for the next day.
     pub rewards_next: Option<HellevatorDailyReward>,
 
-    /// The active daily treat bonus buff, if any.
+    /// The active daily treat bonus buff (e.g. extra weapon damage added from
+    /// day 2 onwards), if any.
     pub daily_treat_bonus: Option<HellevatorTreatBonus>,
 
     /// The monster currently encountered on this floor, if any. Fight with
     /// [`Command::HellevatorFight`](crate::command::Command::HellevatorFight).
     pub current_monster: Option<HellevatorMonster>,
 
-    /// Hellevator points earned today.
+    /// Hellevator points (Hell Tokens) earned today.
     pub earned_today: u32,
-    /// Hellevator points earned yesterday.
+    /// Hellevator points (Hell Tokens) earned yesterday.
     pub earned_yesterday: u32,
 
     pub(crate) brackets: Vec<u32>,
@@ -242,7 +247,7 @@ pub struct HellevatorMonsterReward {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HellevatorMonsterRewardTyp {
-    /// Hellevator event points.
+    /// Hellevator event points (Hell Tokens).
     Points,
     /// Beer / thirst tickets.
     Tickets,
@@ -295,21 +300,21 @@ impl HellevatorMonsterRewardTyp {
     }
 }
 
-/// State of a floor in the Hellevator guild raid.
+/// State of a plain (50-floor section) in the Hellevator guild raid.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct HellevatorRaidFloor {
     pub(crate) today: i64,
     pub(crate) yesterday: i64,
 
-    /// The Hellevator points rewarded for clearing this raid floor.
+    /// The Hellevator points (Hell Tokens) rewarded for clearing this plain.
     pub point_reward: u32,
-    /// The silver rewarded for clearing this raid floor.
+    /// The silver rewarded for clearing this plain.
     pub silver_reward: u64,
 
-    /// Names of guild members assigned to this floor today.
+    /// Names of guild members assigned to this plain today.
     pub today_assigned: Vec<String>,
-    /// Names of guild members assigned to this floor yesterday.
+    /// Names of guild members assigned to this plain yesterday.
     pub yesterday_assigned: Vec<String>,
 }
 
@@ -361,7 +366,7 @@ pub struct HellevatorShopTreat {
     pub typ: HellevatorTreatType,
     /// Price in key cards or mushrooms.
     pub price: u32,
-    /// Duration of the effect in floors or time.
+    /// Duration of the effect in floors (stacks up to 24 floors).
     pub duration: u32,
     /// The strength or magnitude of the treat's effect.
     pub effect_strength: u32,
