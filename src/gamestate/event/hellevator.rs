@@ -95,12 +95,15 @@ pub struct Hellevator {
     /// The current floor the player is on.
     pub current_floor: u32,
     /// The total points (Hell Tokens) earned in the current Hellevator run.
+    #[doc(alias = "tokens")]
+    #[doc(alias = "hell_tokens")]
     pub points: u32,
     /// Whether the final reward chest has been claimed via
     /// [`Command::HellevatorClaimFinal`](crate::command::Command::HellevatorClaimFinal).
     pub has_final_reward: bool,
 
     /// Guild points (Hell Tokens) earned today.
+    #[doc(alias = "guild_tokens_today")]
     pub guild_points_today: u32,
     /// The current rank of the player's guild. See
     /// [`Command::HellevatorViewGuildRanking`](crate::command::Command::HellevatorViewGuildRanking)
@@ -109,6 +112,8 @@ pub struct Hellevator {
     /// Information about each plain (group of 50 floors) in the guild raid.
     /// Attack a plain with
     /// [`Command::HellevatorJoinHellAttack`](crate::command::Command::HellevatorJoinHellAttack).
+    #[doc(alias = "plains")]
+    #[doc(alias = "hell_attack")]
     pub guild_raid_floors: Vec<HellevatorRaidFloor>,
 
     /// The time at which signups for the guild raid begin.
@@ -156,8 +161,10 @@ pub struct Hellevator {
     pub current_monster: Option<HellevatorMonster>,
 
     /// Hellevator points (Hell Tokens) earned today.
+    #[doc(alias = "tokens_today")]
     pub earned_today: u32,
     /// Hellevator points (Hell Tokens) earned yesterday.
+    #[doc(alias = "tokens_yesterday")]
     pub earned_yesterday: u32,
 
     pub(crate) brackets: Vec<u32>,
@@ -308,6 +315,7 @@ pub struct HellevatorRaidFloor {
     pub(crate) yesterday: i64,
 
     /// The Hellevator points (Hell Tokens) rewarded for clearing this plain.
+    #[doc(alias = "token_reward")]
     pub point_reward: u32,
     /// The silver rewarded for clearing this plain.
     pub silver_reward: u64,
