@@ -11,22 +11,21 @@ use super::{
 };
 use crate::response::Vals;
 
-/// The personal demon portal
+/// The personal demon portal.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Portal {
-    /// The amount of enemies you have fought in the portal already
+    /// Number of enemies defeated in the portal.
     pub finished: u16,
-    /// If this is true, you can fight the portal via the `FightPortal`
-    /// command. You will have to wait until the next day (on the server) and
-    /// send an `Update` to make sure this is set correctly
+    /// Whether the daily portal fight is available. Fight with
+    /// [`Command::FightPortal`](crate::command::Command::FightPortal).
     pub can_fight: bool,
-    /// The level of the enemy in the portal. For some reason this is always
-    /// wrong by a few levels?
+    /// The level of the current portal enemy.
     pub enemy_level: u32,
-    /// The amount of health the enemy has left
+    /// Remaining health percentage of the current portal enemy.
     pub enemy_hp_percentage: u8,
-    /// Percentage boost to the players hp
+    /// Health bonus percentage granted to the player (1% per defeated enemy).
+    #[doc(alias = "hp_bonus")]
     pub player_hp_bonus: u16,
 }
 
@@ -49,27 +48,28 @@ impl Portal {
     }
 }
 
-/// The information about all generic dungeons in the game. Information about
-/// special dungeons like the portal
+/// Information about light, shadow, and special dungeons. Refresh with
+/// [`Command::UpdateDungeons`](crate::command::Command::UpdateDungeons).
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Dungeons {
-    /// The next time you can fight in the dungeons for free
+    /// When the next free dungeon fight is available.
     pub next_free_fight: Option<DateTime<Local>>,
-    /// All the light dungeons. Notably tower information is also in here
+    /// Progress for all light dungeons. Check with
+    /// [`progress()`](Self::progress).
     pub light: EnumMap<LightDungeon, DungeonProgress>,
-    /// All the shadow dungeons. Notably twister & cont. loop of idols is also
-    /// in here
+    /// Progress for all shadow dungeons. Check with
+    /// [`progress()`](Self::progress).
     pub shadow: EnumMap<ShadowDungeon, DungeonProgress>,
-    /// The personal demon portal
+    /// The personal demon portal.
+    #[doc(alias = "demon_portal")]
     pub portal: Option<Portal>,
-    /// The companions unlocked from unlocking the tower. Note that the tower
-    /// info itself is just handled as a normal light dungeon
+    /// Companions unlocked via the Tower ([`LightDungeon::Tower`]).
     pub companions: Option<EnumMap<CompanionClass, Companion>>,
 }
 
 impl Dungeons {
-    /// Returns the progress for that dungeon
+    /// Returns the progress for the specified dungeon.
     pub fn progress(&self, dungeon: impl Into<Dungeon>) -> DungeonProgress {
         let dungeon: Dungeon = dungeon.into();
         match dungeon {
@@ -78,10 +78,7 @@ impl Dungeons {
         }
     }
 
-    /// Returns the current enemy for that dungeon. Note that the special
-    /// "mirrorimage" enemy will be listed as a warrior with 0 stats/lvl/xp/hp.
-    // If you care about the actual stats, you should map this to the player
-    // stats yourself
+    /// Returns the monster for the current floor of the dungeon, if open.
     #[cfg(feature = "simulation")]
     pub fn current_enemy(
         &self,
@@ -91,24 +88,26 @@ impl Dungeons {
     }
 }
 
-/// The current state of a dungeon
+/// The current state of a dungeon.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DungeonProgress {
-    /// The dungeon has not yet been unlocked
+    /// The dungeon is locked.
     #[default]
     Locked,
-    /// The dungeon is open and can be fought in
+    /// The dungeon is open and can be entered. Fight with
+    /// [`Command::FightDungeon`](crate::command::Command::FightDungeon).
     Open {
-        /// The amount of enemies already finished
+        /// Number of enemies defeated so far.
+        #[doc(alias = "floor")]
+        #[doc(alias = "stage")]
         finished: u16,
     },
-    /// The dungeon has been fully cleared and can not be entered anymore
+    /// The dungeon has been fully cleared.
     Finished,
 }
 
-/// The category of a dungeon. This is only used internally, so there is no
-/// real point for you to use this
+/// Category of dungeon (light or shadow).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum DungeonType {
@@ -118,8 +117,7 @@ pub enum DungeonType {
     Shadow,
 }
 
-/// The category of a dungeon. This is only used internally, so there is no
-/// real point for you to use this
+/// A light or shadow dungeon identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Dungeon {
@@ -144,9 +142,7 @@ impl Dungeon {
     }
 }
 
-/// All possible light dungeons. They are NOT numbered continuously (17 is
-/// missing), so you should use `LightDungeon::iter()`, if you want to iterate
-/// these
+/// All light dungeons. Iterate using `LightDungeon::iter()`.
 #[derive(
     Debug,
     Clone,
@@ -241,8 +237,7 @@ impl From<LightDungeon> for Dungeon {
     }
 }
 
-/// All possible shadow dungeons. You can use `ShadowDungeon::iter()`, if you
-/// want to iterate these
+/// All shadow dungeons. Iterate using `ShadowDungeon::iter()`.
 #[derive(
     Debug,
     Clone,
@@ -361,7 +356,7 @@ fn update_progress<T: FromPrimitive + enum_map::Enum>(
 }
 
 impl Dungeons {
-    /// Check if a specific companion can equip the given item
+    /// Checks whether a companion can equip the given item.
     #[must_use]
     pub fn can_companion_equip(
         &self,
@@ -422,8 +417,7 @@ impl Dungeons {
     }
 }
 
-/// The class of a companion. There is only 1 companion per class, so this is
-/// also a ident of the characters
+/// The class of a companion (Bert, Mark, or Kunigunde).
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, EnumCount, Enum, EnumIter, Hash,
 )]
@@ -447,17 +441,15 @@ impl From<CompanionClass> for Class {
     }
 }
 
-/// All the information about a single companion. The class is not included
-/// here, as you access this via a map, where the key will be the class
+/// Information about a single companion.
 #[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Companion {
-    /// I can not recall, if I made this signed on purpose, because this should
-    /// always be > 0
+    /// The level of this companion.
     pub level: i64,
-    /// The equipment this companion is wearing
+    /// Equipment currently worn by this companion.
     pub equipment: Equipment,
-    /// The total attributes of this companion
+    /// Total attributes of this companion.
     pub attributes: EnumMap<AttributeType, u32>,
 }
 
