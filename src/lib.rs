@@ -25,11 +25,6 @@ pub mod gamestate;
 /// Parsing and decoding utilities for raw server response strings.
 pub mod response;
 
-/// Miscellaneous helper functions kept for backwards compatibility.
-pub mod misc {
-    pub use crate::response::{from_sf_string, to_sf_string};
-}
-
 pub use error::{Result, SFError};
 /// Network session handling for communicating with game servers.
 #[cfg(feature = "session")]

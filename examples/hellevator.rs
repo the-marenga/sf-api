@@ -5,9 +5,9 @@ use chrono::{DateTime, Local};
 use sf_api::{
     command::{Command, ExpeditionSetting, TimeSkip},
     gamestate::{
+        event::hellevator::HellevatorStatus,
         items::{Enchantment, EquipmentSlot},
         tavern::{AvailableTasks, CurrentAction},
-        unlockables::HellevatorStatus,
     },
     session::SimpleSession,
 };

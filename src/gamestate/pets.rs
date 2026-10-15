@@ -4,10 +4,14 @@ use log::error;
 use num_derive::FromPrimitive;
 use strum::{EnumCount, EnumIter, IntoEnumIterator};
 
-use super::{AttributeType, Result, ServerTime, character::Class};
+use super::{AttributeType, ServerTime, character::Class};
 #[cfg(feature = "simulation")]
 use crate::gamestate::items::Equipment;
-use crate::{PlayerId, error::SFError, response::Vals};
+use crate::{
+    PlayerId,
+    error::{Result, SFError},
+    response::Vals,
+};
 
 /// Information about the player's pet collection and habitats.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

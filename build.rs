@@ -17,7 +17,8 @@ fn main() {
     let dungeon_data: AllDungeons =
         serde_json::from_str(&dungeons_json).unwrap();
 
-    // Ordered matching LightDungeon enum definition in src/gamestate/dungeons.rs
+    // Ordered matching LightDungeon enum definition in
+    // src/gamestate/dungeons.rs
     const LIGHT_DUNGEONS: &[&str] = &[
         "DesecratedCatacombs",
         "MinesOfGloria",
@@ -57,7 +58,8 @@ fn main() {
         "MeetingRoom",
     ];
 
-    // Ordered matching ShadowDungeon enum definition in src/gamestate/dungeons.rs
+    // Ordered matching ShadowDungeon enum definition in
+    // src/gamestate/dungeons.rs
     const SHADOW_DUNGEONS: &[&str] = &[
         "DesecratedCatacombs",
         "MinesOfGloria",
@@ -97,10 +99,9 @@ fn main() {
     ];
 
     for name in LIGHT_DUNGEONS {
-        let data = dungeon_data
-            .light
-            .get(*name)
-            .unwrap_or_else(|| panic!("Missing light dungeon in dungeons.json: {name}"));
+        let data = dungeon_data.light.get(*name).unwrap_or_else(|| {
+            panic!("Missing light dungeon in dungeons.json: {name}")
+        });
         let var_name = format!("LIGHT_{}", name.to_uppercase());
         code.push_str(&format!(
             "static {}: [Monster; {}] = [\n",
@@ -116,10 +117,9 @@ fn main() {
     }
 
     for name in SHADOW_DUNGEONS {
-        let data = dungeon_data
-            .shadow
-            .get(*name)
-            .unwrap_or_else(|| panic!("Missing shadow dungeon in dungeons.json: {name}"));
+        let data = dungeon_data.shadow.get(*name).unwrap_or_else(|| {
+            panic!("Missing shadow dungeon in dungeons.json: {name}")
+        });
         let var_name = format!("SHADOW_{}", name.to_uppercase());
         code.push_str(&format!(
             "static {}: [Monster; {}] = [\n",

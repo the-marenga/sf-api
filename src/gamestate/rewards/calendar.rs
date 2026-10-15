@@ -4,7 +4,7 @@ use log::warn;
 use crate::{
     command::AttributeType,
     error::Result,
-    gamestate::{items::PotionType, unlockables::HabitatType},
+    gamestate::{items::PotionType, pets::HabitatType},
     response::Vals,
 };
 

@@ -1,13 +1,13 @@
 //! Tavern activities, quests, dice game, toilet, and expeditions.
 
 /// The dice game played with the gambler in the tavern.
-pub mod dice;
+mod dice;
 /// Expedition events, crossroads choices, and active expeditions.
-pub mod expeditions;
+mod expeditions;
 /// Tavern quests, adventure lengths, and quest rewards.
-pub mod quest;
+mod quest;
 /// The arcane toilet of the gods in the tavern.
-pub mod toilet;
+mod toilet;
 
 pub use dice::*;
 pub use expeditions::*;

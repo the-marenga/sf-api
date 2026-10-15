@@ -32,17 +32,17 @@ use std::{borrow::Borrow, collections::HashMap};
 use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use dungeons::CompanionClass;
 use enum_map::EnumMap;
-pub use event::{hellevator, legendary_dungeon, world_boss};
+use event::hellevator::HellevatorDailyReward;
 use fortress::{FortressResourceType, FortressUnitType};
-use items::{EQUIPMENT_PARSE_LEN, ITEM_PARSE_LEN};
+use items::{EQUIPMENT_PARSE_LEN, ITEM_PARSE_LEN, Shop};
 use log::{error, warn};
+use pets::HabitatType;
 use strum::{EnumCount, IntoEnumIterator};
 use underworld::{TOWER_BLOCK_LEN, TOWER_RESPONSE_LEN, UnderworldBuildingType};
-use unlockables::{HabitatType, HellevatorDailyReward};
 
-pub use crate::error::{Result, SFError};
 use crate::{
     command::{AttributeType, ExpeditionSetting, Language, ShopType},
+    error::{Result, SFError},
     response::{Response, ResponseVal, Vals, from_sf_string},
 };
 
@@ -75,12 +75,12 @@ pub struct GameState {
     /// Contains information about the fortress, if it has been unlocked
     pub fortress: Option<fortress::Fortress>,
     /// Information the pet collection, that a player can build over time
-    pub pets: Option<unlockables::Pets>,
+    pub pets: Option<pets::Pets>,
     /// Contains information about the hellevator, if it is currently active
-    pub hellevator: hellevator::HellevatorEvent,
+    pub hellevator: event::hellevator::HellevatorEvent,
     /// Contains information about the legendary dungeons event, if it is
     /// currently active
-    pub legendary_dungeon: legendary_dungeon::LegendaryDungeonEvent,
+    pub legendary_dungeon: event::legendary_dungeon::LegendaryDungeonEvent,
     /// Contains information about the blacksmith, if it has been unlocked
     pub blacksmith: Option<unlockables::Blacksmith>,
     /// Contains information about the witch, if it has been unlocked
@@ -103,7 +103,7 @@ pub struct GameState {
     /// The current state of the world boss. Note that this here does not
     /// remove itself. You should always make sure `special_event` is ongoing
     /// before acting upon any world boss information
-    pub world_boss: Option<world_boss::WorldBossEvent>,
+    pub world_boss: Option<event::world_boss::WorldBossEvent>,
     /// The language, that the player has set in the client. This will affect
     /// the language of news messages in the inbox (Mail)
     pub language: Option<Language>,
@@ -113,8 +113,6 @@ pub struct GameState {
     /// negative)
     server_time_diff: i64,
 }
-
-pub use items::{Shop, ShopPosition};
 
 impl GameState {
     /// Constructs a new `GameState` directly in a `Box` from the provided
@@ -667,9 +665,10 @@ impl GameState {
                     .update(&val.values::<15>()?, server_time)?;
             }
             "wbtower" => {
-                self.world_boss.get_or_insert_default().battle = Some(
-                    world_boss::WorldBossBattle::parse(&val.values::<106>()?),
-                );
+                self.world_boss.get_or_insert_default().battle =
+                    Some(event::world_boss::WorldBossBattle::parse(
+                        &val.values::<106>()?,
+                    ));
             }
             "wbupgradestore" => {
                 self.world_boss
@@ -683,13 +682,14 @@ impl GameState {
             }
             "wbammo" => {
                 // Special ammo
-                let ammo =
-                    world_boss::WorldBossProjectile::parse(&val.values::<3>()?);
+                let ammo = event::world_boss::WorldBossProjectile::parse(
+                    &val.values::<3>()?,
+                );
                 self.world_boss.get_or_insert_default().projectile = ammo;
             }
             "wbupgrade" => {
                 self.world_boss.get_or_insert_default().catapult =
-                    world_boss::WorldBossCatapult::parse(
+                    event::world_boss::WorldBossCatapult::parse(
                         &val.values::<17>()?,
                         server_time,
                     )?;
@@ -1270,14 +1270,16 @@ impl GameState {
                     .active
                     .get_or_insert_default()
                     .current_monster =
-                    unlockables::HellevatorMonster::parse(&val.list()).ok();
+                    event::hellevator::HellevatorMonster::parse(&val.list())
+                        .ok();
             }
             "gtbonus" => {
                 self.hellevator
                     .active
                     .get_or_insert_default()
                     .daily_treat_bonus =
-                    unlockables::HellevatorTreatBonus::parse(&val.list()).ok();
+                    event::hellevator::HellevatorTreatBonus::parse(&val.list())
+                        .ok();
             }
             "pendingrewards" => {
                 self.mail.update_claimables(&val.list(), server_time);
@@ -1415,13 +1417,14 @@ impl GameState {
                 let dungeons =
                     self.legendary_dungeon.active.get_or_insert_default();
                 dungeons.total_stats =
-                    legendary_dungeon::TotalStats::parse(&val.list())?;
+                    event::legendary_dungeon::TotalStats::parse(&val.list())?;
             }
             "iadungeonstats" => {
                 let dungeons =
                     self.legendary_dungeon.active.get_or_insert_default();
-                dungeons.stats =
-                    legendary_dungeon::Stats::parse(&val.values::<5>()?)?;
+                dungeons.stats = event::legendary_dungeon::Stats::parse(
+                    &val.values::<5>()?,
+                )?;
             }
             "iadungeon" => {
                 let dungeons =

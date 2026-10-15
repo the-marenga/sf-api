@@ -8,13 +8,12 @@ use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
 use super::{
-    Result, SFError, ServerTime,
-    character::Class,
-    dungeons::CompanionClass,
-    unlockables::{EquipmentIdent, HabitatType},
+    ServerTime, character::Class, dungeons::CompanionClass, pets::HabitatType,
+    unlockables::EquipmentIdent,
 };
 use crate::{
     command::{AttributeType, ShopType},
+    error::{Result, SFError},
     response::Vals,
 };
 
