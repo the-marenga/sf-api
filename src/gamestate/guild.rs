@@ -401,10 +401,9 @@ impl Guild {
         // Check if the data is valid
         if !data.len().is_multiple_of(SIZE) {
             warn!("Invalid fightable targets len");
-            return Err(SFError::ParsingError(
-                "Fightable targets invalid length",
-                data.to_string(),
-            ));
+            return Err(SFError::ParsingError(format!(
+                "Fightable targets invalid length: {data}"
+            )));
         }
 
         // Delete any old data

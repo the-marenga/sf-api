@@ -395,10 +395,9 @@ impl Shop {
         };
         for (chunk, item) in data.chunks(ITEM_PARSE_LEN).zip(&mut shop.items) {
             let Some(p_item) = Item::parse(&chunk, server_time)? else {
-                return Err(SFError::ParsingError(
-                    "shop item",
-                    format!("{chunk:?}"),
-                ));
+                return Err(SFError::ParsingError(format!(
+                    "Shop item: {chunk:?}"
+                )));
             };
             *item = p_item;
         }

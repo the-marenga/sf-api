@@ -204,18 +204,18 @@ impl Session {
 
         let Some(tracking) = resp.values().get("tracking") else {
             error!("Got no tracking response from server after registering");
-            return Err(SFError::ParsingError(
-                "register response",
-                resp.raw_response().to_string(),
-            ));
+            return Err(SFError::ParsingError(format!(
+                "Register response: {}",
+                resp.raw_response()
+            )));
         };
 
         if tracking.as_str() != "signup" {
             error!("Got something else than signup response during register");
-            return Err(SFError::ParsingError(
-                "register tracking response",
-                tracking.as_str().to_string(),
-            ));
+            return Err(SFError::ParsingError(format!(
+                "Register tracking response: {} (expected \"signup\")",
+                tracking.as_str()
+            )));
         }
 
         // At this point we are certain, that the server has registered us, so
@@ -693,10 +693,8 @@ impl SimpleSession {
     /// - `ConnectionError`: If the command could not be sent, or the response
     ///   could not successfully be received
     /// - `ParsingError`: If the response from the server was unexpected in some
-    ///   way
-    /// - `TooShortResponse` Similar to `ParsingError`, but specific to a
-    ///   response being too short, which would normally trigger a out of bound
-    ///   panic
+    ///   way, for example a response that was too short or otherwise not
+    ///   following the expected layout
     /// - `ServerError`: If the server itself responded with an ingame error
     ///   like "you do not have enough silver to do that"
     #[allow(clippy::unwrap_used, clippy::missing_panics_doc)]

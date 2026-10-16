@@ -188,10 +188,9 @@ impl SFAccount {
             val_to_string(&res["token"]["access_token"]),
             val_to_string(&res["account"]["uuid"]),
         ) else {
-            return Err(SFError::ParsingError(
-                "missing auth value in api response",
-                format!("{res:?}"),
-            ));
+            return Err(SFError::ParsingError(format!(
+                "Missing auth value in API response: {res:?}"
+            )));
         };
 
         self.session = AccountSession { uuid, bearer_token };
@@ -225,7 +224,9 @@ impl SFAccount {
         #[allow(clippy::indexing_slicing)]
         let characters: Vec<SSOCharacter> =
             serde_json::from_value(res["characters"].take()).map_err(|_| {
-                SFError::ParsingError("missing json value ", String::new())
+                SFError::ParsingError(
+                    "Missing json value in characters".to_string(),
+                )
             })?;
 
         let account = Arc::new(Mutex::new(self));
@@ -312,7 +313,7 @@ async fn send_api_request(
     }
 
     let resp: APIResponse = serde_json::from_str(&text)
-        .map_err(|_| SFError::ParsingError("API response", text))?;
+        .map_err(|_| SFError::ParsingError(format!("API response: {text}")))?;
 
     if !resp.success {
         return Err(SFError::ConnectionError);
@@ -422,7 +423,7 @@ impl ServerLookup {
         }
 
         let resp: ServerResp = serde_json::from_str(&res).map_err(|_| {
-            SFError::ParsingError("server response", res.clone())
+            SFError::ParsingError(format!("Server response: {res}"))
         })?;
 
         let servers: HashMap<i32, ServerInfo> = resp
@@ -452,7 +453,9 @@ impl ServerLookup {
             })
             .collect();
         if servers.is_empty() {
-            return Err(SFError::ParsingError("empty server list", res));
+            return Err(SFError::ParsingError(format!(
+                "Empty server list: {res}"
+            )));
         }
 
         Ok(ServerLookup(servers))

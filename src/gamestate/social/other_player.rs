@@ -177,7 +177,7 @@ impl OtherPlayer {
         self.race = data.parse_enum(18)?;
         self.class =
             data.enum_map(20, |a| a.wrapping_sub(1)).ok_or_else(|| {
-                SFError::ParsingErrorV2(format!(
+                SFError::ParsingError(format!(
                     "Unknown character class: {}",
                     data.u32_or(20, 0)
                 ))

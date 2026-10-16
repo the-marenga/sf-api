@@ -180,7 +180,7 @@ impl CombatLogEntry {
     ) -> Result<CombatLogEntry> {
         let battle_type = data.parse_enum(3)?;
         let time = data.server_time(4, server_time)?.ok_or_else(|| {
-            SFError::ParsingErrorV2("missing combat time".to_string())
+            SFError::ParsingError("missing combat time".to_string())
         })?;
 
         if data.len() > 5 {
@@ -222,7 +222,7 @@ impl InboxEntry {
         server_time: ServerTime,
     ) -> Result<InboxEntry> {
         if data.len() < 5 {
-            return Err(SFError::ParsingErrorV2(format!(
+            return Err(SFError::ParsingError(format!(
                 "Inbox entry too short (len: {})",
                 data.len()
             )));
@@ -231,7 +231,7 @@ impl InboxEntry {
         let last_idx = data.len() - 1;
         let time =
             data.server_time(last_idx, server_time)?.ok_or_else(|| {
-                SFError::ParsingErrorV2("missing msg date".to_string())
+                SFError::ParsingError("missing msg date".to_string())
             })?;
 
         let title_parts = data.slice(3..last_idx);
@@ -241,7 +241,7 @@ impl InboxEntry {
             "3" => MessageType::GuildKicked,
             "5" => MessageType::GuildInvite,
             x if !x.is_empty() && x.chars().all(|a| a.is_ascii_digit()) => {
-                return Err(SFError::ParsingErrorV2(format!(
+                return Err(SFError::ParsingError(format!(
                     "Unknown inbox msg type: {title_raw}"
                 )));
             }
@@ -282,7 +282,7 @@ impl NewsEntry {
     ) -> Result<NewsEntry> {
         let ts = data.i64(2)?;
         let time = data.server_time(2, server_time)?.ok_or_else(|| {
-            SFError::ParsingErrorV2(format!("missing news date: {ts}"))
+            SFError::ParsingError(format!("missing news date: {ts}"))
         })?;
 
         if data.len() > 3 {
@@ -373,7 +373,7 @@ impl ClaimableMail {
                 ClaimableStatus::Claimed
             }
             None => {
-                return Err(SFError::ParsingErrorV2(
+                return Err(SFError::ParsingError(
                     "Missing claimable status".to_string(),
                 ));
             }

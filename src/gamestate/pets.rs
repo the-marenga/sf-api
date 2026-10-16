@@ -433,14 +433,14 @@ impl PetStats {
         let element = match element_raw {
             0 => HabitatType::from_pet_id(i64::from(pet_id)).ok_or_else(
                 || {
-                    SFError::ParsingErrorV2(format!(
+                    SFError::ParsingError(format!(
                         "Could not determine pet habitat type from pet id \
                          {pet_id}"
                     ))
                 },
             )?,
             x => HabitatType::from_typ_id(x).ok_or_else(|| {
-                SFError::ParsingErrorV2(format!(
+                SFError::ParsingError(format!(
                     "Unknown pet element habitat type: {x}"
                 ))
             })?,
