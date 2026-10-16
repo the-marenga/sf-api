@@ -867,7 +867,7 @@ impl<'a> Vals<'a> {
         server_time: ServerTime,
     ) -> Result<Option<DateTime<Local>>, SFError> {
         let raw = self.i64(pos)?;
-        Ok(server_time.convert_to_local_tracked(raw))
+        Ok(server_time.convert_to_local(raw))
     }
 
     /// The timestamp at `pos` as local time, `None` if it is unset or

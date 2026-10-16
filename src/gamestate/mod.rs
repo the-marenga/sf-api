@@ -1496,7 +1496,7 @@ impl ServerTime {
     /// tracking.
     #[must_use]
     #[track_caller]
-    pub(crate) fn convert_to_local_tracked(
+    pub(crate) fn convert_to_local(
         self,
         timestamp: i64,
     ) -> Option<DateTime<Local>> {
@@ -1513,29 +1513,6 @@ impl ServerTime {
                 caller.line(),
                 caller.column()
             );
-            return None;
-        }
-        DateTime::from_timestamp(timestamp - self.0, 0)?
-            .naive_utc()
-            .and_local_timezone(Local)
-            .latest()
-    }
-
-    /// Converts the raw timestamp from the server to the local time.
-    #[must_use]
-    #[allow(unused)]
-    pub(crate) fn convert_to_local(
-        self,
-        timestamp: i64,
-        name: &str,
-    ) -> Option<DateTime<Local>> {
-        if matches!(timestamp, 0 | -1 | 1 | 11) {
-            // For some reason these can be bad
-            return None;
-        }
-
-        if !(1_000_000_000..=3_000_000_000).contains(&timestamp) {
-            warn!("Weird time stamp: {timestamp} for {name}");
             return None;
         }
         DateTime::from_timestamp(timestamp - self.0, 0)?
