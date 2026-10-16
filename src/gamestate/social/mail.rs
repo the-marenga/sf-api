@@ -420,11 +420,6 @@ impl ClaimablePreview {
 mod tests {
     use super::*;
 
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     #[test]
     fn test_combat_log_entry_parse() {
         let raw = "94224194,OpponentPlayer,1,0,1600000000";
@@ -435,7 +430,7 @@ mod tests {
         assert_eq!(entry.player_name, "OpponentPlayer");
         assert!(entry.won);
         assert_eq!(entry.battle_type, CombatMessageType::Arena);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let raw_6 = "76078261,Geli123,0,9,1791901430,0";
         let data_6 = Vals::by(raw_6, ',');
@@ -444,7 +439,7 @@ mod tests {
         assert_eq!(entry_6.msg_id, 76_078_261);
         assert_eq!(entry_6.player_name, "Geli123");
         assert!(!entry_6.won);
-        assert_all_read(&data_6);
+        data_6.assert_all_read();
     }
 
     #[test]
@@ -457,7 +452,7 @@ mod tests {
         assert!(!entry.read);
         assert_eq!(entry.title, "Important News");
         assert_eq!(entry.msg_typ, MessageType::Normal);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let raw_invite = "12346,GuildLeader,1,5,1600000000";
         let data_invite = Vals::by(raw_invite, ',');
@@ -470,7 +465,7 @@ mod tests {
         let with_commas =
             InboxEntry::parse(&data_commas, ServerTime::default()).unwrap();
         assert_eq!(with_commas.title, "Hello,world!");
-        assert_all_read(&data_commas);
+        data_commas.assert_all_read();
     }
 
     #[test]
@@ -481,7 +476,7 @@ mod tests {
         assert_eq!(news.news_id, 1_600_000_000);
         assert_eq!(news.title, "Update Announcement");
         assert!(news.read);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -496,7 +491,7 @@ mod tests {
         assert_eq!(claimable.name, "TESTCODE");
         assert!(claimable.received.is_some());
         assert!(claimable.claimable_until.is_some());
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let mut mail = Mail::default();
         let list_raw = "101/0/10/TESTCODE/1600000000/1700000000/102/1/11/HERO/\
@@ -520,7 +515,7 @@ mod tests {
         assert_eq!(preview.resources[0].amount, 50);
         assert_eq!(preview.resources[1].typ, RewardType::Silver);
         assert_eq!(preview.resources[1].amount, 1000);
-        assert_all_read(&res_data);
+        res_data.assert_all_read();
     }
 
     #[test]
@@ -530,20 +525,20 @@ mod tests {
         let news_data = Vals::by(news_raw, ';');
         mail.update_news_inbox(&news_data, ServerTime::default());
         assert_eq!(mail.news_inbox.len(), 2);
-        assert_all_read(&news_data);
+        news_data.assert_all_read();
 
         let inbox_raw = "10,Sender,0,Title,1600000000";
         let inbox_data = Vals::by(inbox_raw, ';');
         mail.update_inbox(&inbox_data, ServerTime::default());
         assert_eq!(mail.inbox.len(), 1);
         assert_eq!(mail.inbox[0].from, "Sender");
-        assert_all_read(&inbox_data);
+        inbox_data.assert_all_read();
 
         let combat_raw = "1001,OpponentPlayer,1,0,1600000000";
         let combat_data = Vals::by(combat_raw, ';');
         mail.update_combat_log(&combat_data, ServerTime::default());
         assert_eq!(mail.combat_log.len(), 1);
         assert_eq!(mail.combat_log[0].player_name, "OpponentPlayer");
-        assert_all_read(&combat_data);
+        combat_data.assert_all_read();
     }
 }

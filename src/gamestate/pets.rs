@@ -474,11 +474,6 @@ impl PetStats {
 mod tests {
     use super::*;
 
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     #[test]
     fn test_pets_update() {
         let raw = "446275/0/8/60/18/19/58/23/1/1/52/1/26/66/100/1/1/62/100/7/\
@@ -506,7 +501,7 @@ mod tests {
         assert_eq!(pets.atr_bonus[AttributeType::Intelligence], 10365);
         assert_eq!(pets.atr_bonus[AttributeType::Constitution], 6699);
         assert_eq!(pets.atr_bonus[AttributeType::Luck], 4671);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -523,6 +518,6 @@ mod tests {
         assert_eq!(stats.min_damage, 100);
         assert_eq!(stats.max_damage, 150);
         assert_eq!(stats.element, HabitatType::Shadow);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 }

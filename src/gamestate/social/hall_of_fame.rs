@@ -342,11 +342,6 @@ impl HallOfFameUnderworld {
 mod tests {
     use super::*;
 
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     #[test]
     fn test_hall_of_fame_player_parse() {
         let raw = "1,Kiirschsaft,Die Hejels,397,157866,2,de";
@@ -359,7 +354,7 @@ mod tests {
         assert_eq!(player.honor, 157_866);
         assert_eq!(player.class, Class::Mage);
         assert_eq!(player.flag, Flag::parse("de"));
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let raw_empty = "2,SoloPlayer,,100,500,1,";
         let data_empty = Vals::by(raw_empty, ',');
@@ -367,7 +362,7 @@ mod tests {
         assert_eq!(player2.guild, None);
         assert_eq!(player2.flag, None);
         assert_eq!(player2.class, Class::Warrior);
-        assert_all_read(&data_empty);
+        data_empty.assert_all_read();
     }
 
     #[test]
@@ -381,7 +376,7 @@ mod tests {
         assert_eq!(guild.member_count, 50);
         assert_eq!(guild.honor, 123_456);
         assert!(guild.is_attacked);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -395,7 +390,7 @@ mod tests {
         assert_eq!(pets.collected, 100);
         assert_eq!(pets.honor, 5000);
         assert_eq!(pets.unknown, 0);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -408,7 +403,7 @@ mod tests {
         assert_eq!(ft.guild.as_deref(), Some("FortGuild"));
         assert_eq!(ft.upgrade, 50);
         assert_eq!(ft.honor, 9000);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -422,7 +417,7 @@ mod tests {
         assert_eq!(uw.upgrade, 40);
         assert_eq!(uw.honor, 7500);
         assert_eq!(uw.unknown, 0);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -433,7 +428,7 @@ mod tests {
         assert_eq!(hh.rank, 1);
         assert_eq!(hh.name, "HellMaster");
         assert_eq!(hh.tokens, 50000);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -446,35 +441,35 @@ mod tests {
         hof.update_players(&players_data);
         assert_eq!(hof.players.len(), 2);
         assert_eq!(hof.players[0].name, "Kiirschsaft");
-        assert_all_read(&players_data);
+        players_data.assert_all_read();
 
         let guilds_raw = "1,Die Hejels,50,157866,10,de";
         let guilds_data = Vals::by(guilds_raw, ';');
         hof.update_guilds(&guilds_data);
         assert_eq!(hof.guilds.len(), 1);
         assert_eq!(hof.guilds[0].name, "Die Hejels");
-        assert_all_read(&guilds_data);
+        guilds_data.assert_all_read();
 
         let pets_raw = "1,PetMaster,PetGuild,100,157866,0";
         let pets_data = Vals::by(pets_raw, ';');
         hof.update_pets(&pets_data);
         assert_eq!(hof.pets.len(), 1);
         assert_eq!(hof.pets[0].name, "PetMaster");
-        assert_all_read(&pets_data);
+        pets_data.assert_all_read();
 
         let ft_raw = "1,FortressMaster,Die Hejels,500,157866,100,de";
         let ft_data = Vals::by(ft_raw, ';');
         hof.update_fortresses(&ft_data);
         assert_eq!(hof.fortresses.len(), 1);
         assert_eq!(hof.fortresses[0].name, "FortressMaster");
-        assert_all_read(&ft_data);
+        ft_data.assert_all_read();
 
         let uw_raw = "1,UnderworldMaster,Die Hejels,500,157866,15,de";
         let uw_data = Vals::by(uw_raw, ';');
         hof.update_underworlds(&uw_data);
         assert_eq!(hof.underworlds.len(), 1);
         assert_eq!(hof.underworlds[0].name, "UnderworldMaster");
-        assert_all_read(&uw_data);
+        uw_data.assert_all_read();
 
         let hlv_raw = "1,HellevatorHero,1000";
         let hlv_data = Vals::by(hlv_raw, ';');
@@ -482,6 +477,6 @@ mod tests {
         assert_eq!(hof.hellevator.len(), 1);
         assert_eq!(hof.hellevator[0].name, "HellevatorHero");
         assert_eq!(hof.hellevator[0].tokens, 1000);
-        assert_all_read(&hlv_data);
+        hlv_data.assert_all_read();
     }
 }

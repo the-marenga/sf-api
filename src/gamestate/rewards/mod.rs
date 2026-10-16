@@ -223,18 +223,13 @@ pub(crate) fn parse_chests(data: &Vals<'_>) -> Result<[RewardChest; 3]> {
 mod tests {
     use super::*;
 
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     #[test]
     fn test_timed_specials_update_advent_calendar() {
         let mut specials = TimedSpecials::default();
         let data = Vals::from("0");
         specials.update_advent_calendar(&data).unwrap();
         assert_eq!(specials.advent_calendar, None);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let data = Vals::from("3/10");
         specials.update_advent_calendar(&data).unwrap();
@@ -245,6 +240,6 @@ mod tests {
                 amount: 10,
             })
         );
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 }

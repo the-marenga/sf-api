@@ -118,11 +118,6 @@ impl OtherGuild {
 mod tests {
     use super::*;
 
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     #[test]
     fn test_other_guild_updates() {
         let mut guild = OtherGuild::default();
@@ -133,11 +128,11 @@ mod tests {
         assert_eq!(guild.members[0].name, "Leader");
         assert_eq!(guild.members[1].name, "Officer");
         assert_eq!(guild.members[2].name, "Member");
-        assert_all_read(&names_data);
+        names_data.assert_all_read();
 
         let desc_data = Vals::by("010203§Welcome to our guild!", '§');
         guild.update_description_embed(&desc_data);
         assert_eq!(guild.description, "Welcome to our guild!");
-        assert_all_read(&desc_data);
+        desc_data.assert_all_read();
     }
 }

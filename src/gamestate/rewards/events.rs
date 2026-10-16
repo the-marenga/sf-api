@@ -94,11 +94,6 @@ impl Events {
 mod tests {
     use super::*;
 
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     #[test]
     fn test_events_update() {
         let raw = "52/2097664/1792108740/0/1792108740/0/0/0/0";
@@ -107,6 +102,6 @@ mod tests {
         events.update(&data, ServerTime::default()).unwrap();
         assert!(events.ends.is_some());
         assert!(!events.active.is_empty());
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 }

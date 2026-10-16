@@ -505,16 +505,11 @@ mod tests {
     use super::*;
     use crate::gamestate::rewards::{Reward, RewardType};
 
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     #[test]
     fn test_task_parse() {
         let data = Vals::from("2/0/320/1");
         let task = Task::parse(&data).unwrap();
-        assert_all_read(&data);
+        data.assert_all_read();
         assert_eq!(task.typ, TaskType::ConsumeThirstForAdventure);
         assert_eq!(task.current, 0);
         assert_eq!(task.target, 320);
@@ -534,7 +529,7 @@ mod tests {
         assert_eq!(daily.tasks[0].target, 320);
         assert_eq!(daily.tasks[16].typ, TaskType::DefeatGambler);
         assert_eq!(daily.tasks[16].point_reward, 4);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -561,7 +556,7 @@ mod tests {
                 amount: 271_840,
             }
         );
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -576,7 +571,7 @@ mod tests {
             TaskType::WinFightsNoEpicsLegendaries
         );
         assert_eq!(event_tasks.tasks[3].typ, TaskType::WinFightsNoGear);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -595,7 +590,7 @@ mod tests {
         assert_eq!(event_tasks.rewards[2].rewards.len(), 2);
         assert_eq!(event_tasks.rewards[2].rewards[0].typ, RewardType::Silver);
         assert_eq!(event_tasks.rewards[2].rewards[1].typ, RewardType::Beer);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -609,6 +604,6 @@ mod tests {
         assert!(event_tasks.start.is_some());
         assert!(event_tasks.end.is_some());
         assert_eq!(event_tasks.theme, EventTaskTheme::PartTimeNudist);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 }

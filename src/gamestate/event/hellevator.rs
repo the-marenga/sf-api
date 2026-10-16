@@ -606,16 +606,11 @@ impl Hellevator {
 mod tests {
     use super::*;
 
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     #[test]
     fn test_hellevator_treat_bonus_parse() {
         let data = Vals::from("14/30");
         let bonus = HellevatorTreatBonus::parse(&data).unwrap();
-        assert_all_read(&data);
+        data.assert_all_read();
         assert_eq!(bonus.typ, HellevatorTreatBonusType::ExtraDamage);
         assert_eq!(bonus.amount, 30);
     }
@@ -624,7 +619,7 @@ mod tests {
     fn test_hellevator_monster_parse() {
         let data = Vals::from("123/50/2");
         let monster = HellevatorMonster::parse(&data).unwrap();
-        assert_all_read(&data);
+        data.assert_all_read();
         assert_eq!(monster.id, 123);
         assert_eq!(monster.level, 50);
         assert_eq!(monster.typ, HellevatorMonsterElement::Cold);
@@ -644,11 +639,11 @@ mod tests {
         assert_eq!(reward.arcane, 100);
         assert_eq!(reward.metal, 50);
         assert!(reward.claimable());
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let short_data = Vals::from("0/2/0/0");
         assert!(HellevatorDailyReward::parse(&short_data).is_none());
-        assert_all_read(&short_data);
+        short_data.assert_all_read();
     }
 
     #[test]
@@ -659,7 +654,7 @@ mod tests {
         let server_time = ServerTime::default();
         let data = Vals::from(raw);
         hellevator.update(&data, server_time).unwrap();
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -707,7 +702,7 @@ mod tests {
         assert!(event.start.is_some());
         assert!(event.end.is_some());
         assert!(event.collect_time_end.is_some());
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -725,7 +720,7 @@ mod tests {
             hellevator.guild_raid_floors[1].today_assigned,
             vec!["Player2"]
         );
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let raw_yd = "Player3/1";
         let data_yd = Vals::from(raw_yd);
@@ -735,7 +730,7 @@ mod tests {
             hellevator.guild_raid_floors[0].yesterday_assigned,
             vec!["Player3"]
         );
-        assert_all_read(&data_yd);
+        data_yd.assert_all_read();
     }
 
     #[test]
@@ -749,7 +744,7 @@ mod tests {
         assert_eq!(hellevator.guild_raid_floors[0].yesterday, 5);
         assert_eq!(hellevator.guild_raid_floors[0].point_reward, 100);
         assert_eq!(hellevator.guild_raid_floors[0].silver_reward, 50000);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -769,7 +764,7 @@ mod tests {
             HellevatorMonsterRewardTyp::Souls
         );
         assert_eq!(hellevator.monster_rewards[1].amount, 200);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -779,6 +774,6 @@ mod tests {
         let mut hellevator = Hellevator::default();
         hellevator.update_brackets(&data);
         assert_eq!(hellevator.brackets, vec![1, 4, 10]);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 }

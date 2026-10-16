@@ -481,14 +481,6 @@ impl Mount {
 mod tests {
     use super::{super::social::Relationship, *};
 
-    fn assert_all_read(data: &Vals<'_>) {
-        assert_eq!(
-            data.unaccessed_indices(),
-            Vec::<usize>::new(),
-            "unaccessed indices in test data"
-        );
-    }
-
     #[test]
     fn test_portrait_parse() {
         let raw = "4/206/203/2/0/2/7/2/0/0/2/1";
@@ -507,7 +499,7 @@ mod tests {
         assert_eq!(portrait.horns, 0);
         assert_eq!(portrait.special_portrait, 0);
         assert_eq!(portrait.gender, Gender::Male);
-        assert_all_read(&vals);
+        vals.assert_all_read();
     }
 
     #[test]
@@ -543,7 +535,7 @@ mod tests {
         assert_eq!(char.portrait.hair_color, 3);
         assert_eq!(char.portrait.hair, 3);
         assert_eq!(char.portrait.gender, Gender::Male);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -566,7 +558,7 @@ mod tests {
         assert_eq!(char.relations[1].guild, "EnemyGuild");
         assert_eq!(char.relations[1].level, 250);
         assert_eq!(char.relations[1].relation, Relationship::Ignored);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -579,6 +571,6 @@ mod tests {
         assert_eq!(entry.guild, "TestGuild");
         assert_eq!(entry.level, 42);
         assert_eq!(entry.relation, Relationship::Friend);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 }
