@@ -85,7 +85,7 @@ impl Events {
         data.ignore(2, "theme end timestamp");
         data.ignore(3, "unknown flag");
         self.ends = data.server_time(4, server_time)?;
-        data.ignore(5..9, "trailing event values");
+        data.ignore(5..11, "trailing event values");
         Ok(())
     }
 }

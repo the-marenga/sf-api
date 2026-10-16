@@ -429,7 +429,6 @@ impl Dungeons {
     pub(crate) fn update_companion_equipment(
         &mut self,
         data: &Vals<'_>,
-        server_time: ServerTime,
     ) -> Result<()> {
         if data.is_empty() {
             return Ok(());
@@ -439,7 +438,7 @@ impl Dungeons {
             .chunks(EQUIPMENT_PARSE_LEN)
             .zip(companions.values_mut())
         {
-            cmp.equipment = Equipment::parse(&chunk, server_time)?;
+            cmp.equipment = Equipment::parse(&chunk)?;
         }
         Ok(())
     }
@@ -720,17 +719,13 @@ mod tests {
 
         // Empty data does nothing
         let empty_data = Vals::from("");
-        dungeons
-            .update_companion_equipment(&empty_data, ServerTime::default())
-            .unwrap();
+        dungeons.update_companion_equipment(&empty_data).unwrap();
         assert!(dungeons.companions.is_none());
 
         // 3 companion equipment blocks of zeros
         let raw = ["0"; EQUIPMENT_PARSE_LEN * 3].join("/");
         let data = Vals::from(raw.as_str());
-        dungeons
-            .update_companion_equipment(&data, ServerTime::default())
-            .unwrap();
+        dungeons.update_companion_equipment(&data).unwrap();
         data.assert_all_read();
 
         let companions = dungeons.companions.as_ref().unwrap();

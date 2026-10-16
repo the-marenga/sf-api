@@ -287,7 +287,6 @@ impl LegendaryDungeon {
     pub(crate) fn update_pending_items(
         &mut self,
         data: &Vals<'_>,
-        server_time: ServerTime,
     ) -> Result<()> {
         self.pending_items.clear();
         let amount = data.usize(0)?;
@@ -295,7 +294,7 @@ impl LegendaryDungeon {
             return Ok(());
         }
         for chunk in data.window(1..data.len()).chunks(19) {
-            if let Some(item) = Item::parse(&chunk, server_time)? {
+            if let Some(item) = Item::parse(&chunk)? {
                 self.pending_items.push(item);
             } else {
                 log::warn!("Could not parse pending ld item");
@@ -1365,16 +1364,14 @@ mod tests {
         let empty_raw = "0";
         let empty_data = Vals::from(empty_raw);
         let mut ld = LegendaryDungeon::default();
-        ld.update_pending_items(&empty_data, ServerTime::default())
-            .unwrap();
+        ld.update_pending_items(&empty_data).unwrap();
         assert_eq!(ld.pending_items, Vec::new());
         empty_data.assert_all_read();
 
         let item_raw =
             "1/1/0/0/1010/0/149/265/5/4/0/108/72/0/83940/10/0/0/45/0";
         let item_data = Vals::from(item_raw);
-        ld.update_pending_items(&item_data, ServerTime::default())
-            .unwrap();
+        ld.update_pending_items(&item_data).unwrap();
         assert_eq!(ld.pending_items.len(), 1);
         item_data.assert_all_read();
     }

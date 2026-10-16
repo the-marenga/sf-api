@@ -404,14 +404,10 @@ impl ClaimablePreview {
     }
 
     /// Updates the items in this preview from a `pendingreward` response.
-    pub(crate) fn update_items(
-        &mut self,
-        data: &Vals<'_>,
-        server_time: ServerTime,
-    ) {
+    pub(crate) fn update_items(&mut self, data: &Vals<'_>) {
         self.items = data
             .chunks(ITEM_PARSE_LEN)
-            .filter_map(|chunk| Item::parse(&chunk, server_time).ok().flatten())
+            .filter_map(|chunk| Item::parse(&chunk).ok().flatten())
             .collect();
     }
 }
