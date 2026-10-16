@@ -34,7 +34,7 @@ use dungeons::CompanionClass;
 use enum_map::EnumMap;
 use event::hellevator::HellevatorDailyReward;
 use fortress::{FortressResourceType, FortressUnitType};
-use items::{EQUIPMENT_PARSE_LEN, ITEM_PARSE_LEN, Shop};
+use items::Shop;
 use log::{error, warn};
 use pets::HabitatType;
 use strum::{EnumCount, IntoEnumIterator};
@@ -480,7 +480,7 @@ impl GameState {
             "storeitemsshakes" => {
                 let shop = &mut self.shops[ShopType::Weapon];
                 shop.typ = ShopType::Weapon;
-                shop.update(&val.values::<114>()?)?;
+                shop.update(&val.list())?;
             }
             "questofferitems" => {
                 self.tavern.update_quest_items(&val.list());
@@ -489,7 +489,7 @@ impl GameState {
                 self.tavern
                     .toilet
                     .get_or_insert_default()
-                    .update_sacrifices(&val.values::<3>()?);
+                    .update_sacrifices(&val.list());
             }
             "companionequipment" => {
                 self.dungeons.update_companion_equipment(&val.list())?;
@@ -497,26 +497,21 @@ impl GameState {
             "storeitemsfidget" => {
                 let shop = &mut self.shops[ShopType::Magic];
                 shop.typ = ShopType::Magic;
-                shop.update(&val.values::<114>()?)?;
+                shop.update(&val.list())?;
             }
             "ownplayersaveequipment" => {
-                self.character
-                    .equipment
-                    .update(&val.values::<EQUIPMENT_PARSE_LEN>()?)?;
+                self.character.equipment.update(&val.list())?;
             }
             "systemmessagelist" => {}
             "newslist" => {
                 self.mail.update_news_inbox(&val.list_by(';'), server_time);
             }
             "dummieequipment" => {
-                let data = val.values::<EQUIPMENT_PARSE_LEN>()?;
+                let data = val.list();
                 self.character.mannequin =
                     Some(items::Equipment::parse(&data)?);
             }
-            "owntower" => self.update_tower(
-                &val.values::<TOWER_RESPONSE_LEN>()?,
-                server_time,
-            )?,
+            "owntower" => self.update_tower(&val.list(), server_time)?,
             "owngrouprank" => {
                 self.guild.get_or_insert_default().rank =
                     val.into("group rank")?;
@@ -544,13 +539,13 @@ impl GameState {
             "unitprice" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_unit_prices(&val.values::<12>()?)?;
+                    .update_unit_prices(&val.list())?;
             }
             "dicestatus" => {
                 self.tavern.dice_game.update_status(&val.list());
             }
             "dicereward" => {
-                self.tavern.dice_game.update_reward(&val.values::<2>()?)?;
+                self.tavern.dice_game.update_reward(&val.list())?;
             }
             "chathistory" => {
                 self.guild.get_or_insert_default().chat =
@@ -563,17 +558,17 @@ impl GameState {
             "upgradeprice" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_unit_upgrade_info(&val.values::<9>()?)?;
+                    .update_unit_upgrade_info(&val.list())?;
             }
             "unitlevel" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_levels(&val.values::<4>()?)?;
+                    .update_levels(&val.list())?;
             }
             "fortressprice" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_prices(&val.values::<52>()?)?;
+                    .update_prices(&val.list())?;
             }
             "Arenarank" => {
                 if let Some(uw) = self.underworld.as_mut() {
@@ -593,25 +588,23 @@ impl GameState {
             "underworldupgradeprice" => {
                 self.underworld
                     .get_or_insert_default()
-                    .update_underworld_unit_prices(&val.values::<9>()?)?;
+                    .update_underworld_unit_prices(&val.list())?;
             }
             "unlockfeature" => {
                 self.pending_unlocks =
                     unlockables::Unlockable::parse(&val.list())?;
             }
-            "dungeonprogresslight" => self.dungeons.update_progress(
-                &val.values::<37>()?,
-                dungeons::DungeonType::Light,
-            )?,
-            "dungeonprogressshadow" => self.dungeons.update_progress(
-                &val.values::<37>()?,
-                dungeons::DungeonType::Shadow,
-            )?,
+            "dungeonprogresslight" => self
+                .dungeons
+                .update_progress(&val.list(), dungeons::DungeonType::Light)?,
+            "dungeonprogressshadow" => self
+                .dungeons
+                .update_progress(&val.list(), dungeons::DungeonType::Shadow)?,
             "portalprogress" => {
                 self.dungeons
                     .portal
                     .get_or_insert_default()
-                    .update(&val.values::<3>()?, server_time)?;
+                    .update(&val.list(), server_time)?;
             }
             "owntowerlevel" => {
                 // Already in dungeons
@@ -641,29 +634,25 @@ impl GameState {
                 self.hellevator
                     .active
                     .get_or_insert_default()
-                    .update(&val.values::<32>()?, server_time)?;
+                    .update(&val.list(), server_time)?;
             }
             "eventstatus" => {
-                self.special_event = val
-                    .values::<5>()
-                    .and_then(|data| {
-                        event::EventStatus::parse(&data, server_time)
-                    })
-                    .inspect_err(|a| {
-                        log::warn!("Could not parse event status: {a}");
-                    })
-                    .ok();
+                self.special_event =
+                    event::EventStatus::parse(&val.list(), server_time)
+                        .inspect_err(|a| {
+                            log::warn!("Could not parse event status: {a}");
+                        })
+                        .ok();
             }
             "wbcharacter" => {
                 self.world_boss
                     .get_or_insert_default()
-                    .update(&val.values::<15>()?, server_time)?;
+                    .update(&val.list(), server_time)?;
             }
             "wbtower" => {
-                self.world_boss.get_or_insert_default().battle =
-                    Some(event::world_boss::WorldBossBattle::parse(
-                        &val.values::<106>()?,
-                    ));
+                self.world_boss.get_or_insert_default().battle = Some(
+                    event::world_boss::WorldBossBattle::parse(&val.list()),
+                );
             }
             "wbupgradestore" => {
                 self.world_boss
@@ -677,15 +666,14 @@ impl GameState {
             }
             "wbammo" => {
                 // Special ammo
-                let ammo = event::world_boss::WorldBossProjectile::parse(
-                    &val.values::<3>()?,
-                );
+                let ammo =
+                    event::world_boss::WorldBossProjectile::parse(&val.list());
                 self.world_boss.get_or_insert_default().projectile = ammo;
             }
             "wbupgrade" => {
                 self.world_boss.get_or_insert_default().catapult =
                     event::world_boss::WorldBossCatapult::parse(
-                        &val.values::<17>()?,
+                        &val.list(),
                         server_time,
                     )?;
             }
@@ -705,7 +693,7 @@ impl GameState {
             "wbdailychests" => {
                 self.world_boss
                     .get_or_insert_default()
-                    .update_daily_chests(&val.values::<5>()?);
+                    .update_daily_chests(&val.list());
             }
             "maxrank" => {
                 self.hall_of_fames.players_total = val.into("player count")?;
@@ -716,7 +704,7 @@ impl GameState {
             "groupskillprice" => {
                 self.guild
                     .get_or_insert_default()
-                    .update_group_prices(&val.values::<6>()?);
+                    .update_group_prices(&val.list());
             }
             "soldieradvice" => {
                 let advice: u16 = val.into("soldier advice")?;
@@ -766,7 +754,7 @@ impl GameState {
                 other_player
                     .get_or_insert_default()
                     .equipment
-                    .update(&val.values::<EQUIPMENT_PARSE_LEN>()?)?;
+                    .update(&val.list())?;
             }
             "fortresspricereroll" => {
                 self.fortress.get_or_insert_default().opponent_reroll_price =
@@ -785,9 +773,7 @@ impl GameState {
                 let upgraded = self.character.level >= 95
                     && self.pets.is_some()
                     && self.underworld.is_some();
-                self.specials
-                    .wheel
-                    .update_result(&val.values::<2>()?, upgraded)?;
+                self.specials.wheel.update_result(&val.list(), upgraded)?;
             }
             "dailyreward" => {
                 // Dead since last update
@@ -868,7 +854,7 @@ impl GameState {
             "underworldprice" => self
                 .underworld
                 .get_or_insert_default()
-                .update_building_prices(&val.values::<30>()?)?,
+                .update_building_prices(&val.list())?,
             "owngroupknights" => self
                 .guild
                 .get_or_insert_default()
@@ -890,7 +876,7 @@ impl GameState {
                 self.fortress
                     .get_or_insert_default()
                     .hall_of_knights_upgrade_price =
-                    fortress::FortressCost::parse(&val.values::<4>()?)?;
+                    fortress::FortressCost::parse(&val.list())?;
             }
             "goldperhournextlevel" => {
                 // I dont think this matters
@@ -962,7 +948,7 @@ impl GameState {
                 self.specials
                     .tasks
                     .event
-                    .update_info(&val.values::<3>()?, server_time)?;
+                    .update_info(&val.list(), server_time)?;
             }
             "scrapbook" => {
                 self.character.scrapbook =
@@ -993,7 +979,7 @@ impl GameState {
             "ownpetsstats" => {
                 self.pets
                     .get_or_insert_default()
-                    .update_pet_stat(&val.values::<17>()?);
+                    .update_pet_stat(&val.list());
             }
             "ownpets" => {
                 self.pets
@@ -1014,10 +1000,7 @@ impl GameState {
             }
             "otherplayersavepotions" => {
                 other_player.get_or_insert_default().active_potions =
-                    items::parse_active_potions(
-                        &val.values::<10>()?,
-                        server_time,
-                    )?;
+                    items::parse_active_potions(&val.list(), server_time)?;
             }
             "otherplayer" => {
                 let data = val.list();
@@ -1037,7 +1020,7 @@ impl GameState {
             "otherplayerpetbonus" => {
                 other_player
                     .get_or_insert_default()
-                    .update_pet_bonus(&val.values::<6>()?)?;
+                    .update_pet_bonus(&val.list())?;
             }
             "otherplayerunitlevel" => {
                 other_player
@@ -1081,26 +1064,18 @@ impl GameState {
             }
             "battlerewarditem" => {
                 // The item won in the fight, encoded like a regular item
-                let data = val.values::<ITEM_PARSE_LEN>()?;
+                let data = val.list();
                 let item = items::Item::parse(&data)?;
                 self.last_fight.get_or_insert_default().item_won = item;
             }
-            x if x.starts_with("fightheader") => match val.values::<99>() {
-                Ok(data) => self.get_fight(x).update_fighters(&data),
-                Err(err) => {
-                    warn!("Failed to parse the fight header: {err}");
-                }
-            },
-            "fightgroups" => match val.values_by::<4>(',') {
-                Ok(data) => {
-                    self.last_fight
-                        .get_or_insert_default()
-                        .update_groups(&data);
-                }
-                Err(err) => {
-                    warn!("Failed to parse the fight groups: {err}");
-                }
-            },
+            x if x.starts_with("fightheader") => {
+                self.get_fight(x).update_fighters(&val.list());
+            }
+            "fightgroups" => {
+                self.last_fight
+                    .get_or_insert_default()
+                    .update_groups(&val.list_by(','));
+            }
             "fightadditionalplayers" => {
                 // This should be players in guild battles, that have not
                 // participapted. I dont think this matters
@@ -1333,42 +1308,36 @@ impl GameState {
             "fortressstorage" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_resources(&val.values::<16>()?, server_time)?;
+                    .update_resources(&val.list(), server_time)?;
             }
             "fortressunits" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_units(&val.values::<15>()?, server_time)?;
+                    .update_units(&val.list(), server_time)?;
             }
             "fortress" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update(&val.values::<27>()?, server_time)?;
+                    .update(&val.list(), server_time)?;
             }
             "wheel" => {
-                self.specials
-                    .wheel
-                    .update(&val.values::<3>()?, server_time)?;
+                self.specials.wheel.update(&val.list(), server_time)?;
             }
             "dice" => {
-                self.tavern
-                    .dice_game
-                    .update(&val.values::<2>()?, server_time);
+                self.tavern.dice_game.update(&val.list(), server_time);
             }
             "charactergroup" => {
                 self.guild
                     .get_or_insert_default()
                     .update_character_group(&val.list(), server_time);
             }
-            "arena" => self.arena.update(&val.values::<7>()?, server_time)?,
+            "arena" => self.arena.update(&val.list(), server_time)?,
             "ownplayersavepotions" => {
-                self.character.active_potions = items::parse_active_potions(
-                    &val.values::<10>()?,
-                    server_time,
-                )?;
+                self.character.active_potions =
+                    items::parse_active_potions(&val.list(), server_time)?;
             }
             "arcanetoilet" => {
-                let data = val.values::<4>()?;
+                let data = val.list();
                 let toilet_lvl = data.u32_or(0, 0);
                 if toilet_lvl > 0 {
                     self.tavern.toilet.get_or_insert_default().update(&data)?;
@@ -1381,16 +1350,13 @@ impl GameState {
                     val.as_str() != "0";
             }
             "characterstatus" => {
-                self.update_character_status(
-                    &val.values::<33>()?,
-                    server_time,
-                )?;
+                self.update_character_status(&val.list(), server_time)?;
             }
             "ownplayersavecharacter" => {
-                self.update_character_save(&val.values::<70>()?, server_time)?;
+                self.update_character_save(&val.list(), server_time)?;
             }
             "adventure" => {
-                self.tavern.update_quests(&val.values::<23>()?)?;
+                self.tavern.update_quests(&val.list())?;
             }
             "events" => {
                 self.specials.events.update(&val.list(), server_time)?;
@@ -1405,7 +1371,7 @@ impl GameState {
             }
             "iadungeontime" => {
                 self.legendary_dungeon
-                    .update_time(&val.values::<4>()?, server_time)?;
+                    .update_time(&val.list(), server_time)?;
             }
             "iadungeonstatstotal" => {
                 let dungeons =
@@ -1416,9 +1382,8 @@ impl GameState {
             "iadungeonstats" => {
                 let dungeons =
                     self.legendary_dungeon.active.get_or_insert_default();
-                dungeons.stats = event::legendary_dungeon::Stats::parse(
-                    &val.values::<5>()?,
-                )?;
+                dungeons.stats =
+                    event::legendary_dungeon::Stats::parse(&val.list())?;
             }
             "iadungeon" => {
                 let dungeons =
@@ -1476,7 +1441,7 @@ impl GameState {
             "otherplayerfortressinfo" => {
                 other_player
                     .get_or_insert_default()
-                    .update_fortress(&val.values::<6>()?)?;
+                    .update_fortress(&val.list())?;
             }
             x if x.contains("average") && x.ends_with("level") => {
                 // We do not care about avg. item lvl
