@@ -5,30 +5,46 @@ use enum_map::EnumMap;
 use crate::{
     command::AttributeType,
     gamestate::{
-        GameState, character::Class, dungeons::CompanionClass, items::*,
-        social::OtherPlayer, underworld::UnderworldBuildingType,
+        GameState,
+        character::Class,
+        dungeons::CompanionClass,
+        items::{
+            Equipment, EquipmentSlot, Gem, GemSlot, GemType, Item, ItemType,
+            Potion, PotionType, RuneType,
+        },
+        social::OtherPlayer,
+        underworld::UnderworldBuildingType,
     },
-    misc::EnumMapGet,
 };
 
+/// A player or companion character that can be modified (upgraded with
+/// equipment, potions, etc.) before being converted into a fighter for
+/// simulation.
 #[derive(Debug, Clone)]
 pub struct UpgradeableFighter {
+    /// The name of the fighter.
     pub name: Arc<str>,
+    /// Indicates whether the fighter is a companion.
     pub is_companion: bool,
+    /// The level of the fighter.
     pub level: u16,
+    /// The character class of the fighter.
     pub class: Class,
     /// The base attributes without any equipment, or other boosts
     pub attribute_basis: EnumMap<AttributeType, u32>,
+    /// Percentage bonus to attributes from pets.
     pub pet_attribute_bonus_perc: EnumMap<AttributeType, f64>,
 
+    /// The equipped items of the fighter.
     pub equipment: Equipment,
+    /// Currently active potions (up to 3).
     pub active_potions: [Option<Potion>; 3],
     /// This should be the percentage bonus to skills from pets
     /// The hp bonus in percent this player has from the personal demon portal
     pub portal_hp_bonus: u32,
     /// The damage bonus in percent this player has from the guild demon portal
     pub portal_dmg_bonus: u32,
-    // The level of the gladiator in the underworld
+    /// The level of the gladiator building in the underworld.
     pub gladiator: u32,
 }
 impl UpgradeableFighter {
@@ -43,7 +59,7 @@ impl UpgradeableFighter {
         gem: Gem,
         slot: EquipmentSlot,
     ) -> Result<Option<Gem>, Gem> {
-        let Some(item) = self.equipment.0.get_mut(slot).as_mut() else {
+        let Some(item) = self.equipment.0[slot].as_mut() else {
             return Err(gem);
         };
         let Some(gem_slot) = &mut item.gem_slot else {
@@ -61,7 +77,7 @@ impl UpgradeableFighter {
     /// Removes the gem at the provided slot and returns the old gem, if
     /// any
     pub fn extract_gem(&mut self, slot: EquipmentSlot) -> Option<Gem> {
-        let item = self.equipment.0.get_mut(slot).as_mut()?;
+        let item = self.equipment.0[slot].as_mut()?;
         let gem_slot = &mut item.gem_slot?;
 
         let old_gem = match *gem_slot {
@@ -86,7 +102,7 @@ impl UpgradeableFighter {
     /// Removes the potion at the provided slot and returns the old potion, if
     /// any
     pub fn remove_potion(&mut self, slot: usize) -> Option<Potion> {
-        self.active_potions.get_mut(slot).and_then(|a| a.take())
+        self.active_potions.get_mut(slot).and_then(Option::take)
     }
 
     /// Equip the provided item.
@@ -124,21 +140,22 @@ impl UpgradeableFighter {
         }
 
         let res = self.unequip(slot);
-        *self.equipment.0.get_mut(slot) = Some(item);
+        self.equipment.0[slot] = Some(item);
         Ok(res)
     }
 
     /// Unequips the item at the provided slot and returns the old item, if any
     pub fn unequip(&mut self, slot: EquipmentSlot) -> Option<Item> {
-        self.equipment.0.get_mut(slot).take()
+        self.equipment.0[slot].take()
     }
 
     /// Unequips the item at the provided slot and returns the old item, if any
     #[must_use]
     pub fn get_equipment(&self, slot: EquipmentSlot) -> Option<&Item> {
-        self.equipment.0.get(slot).as_ref()
+        self.equipment.0[slot].as_ref()
     }
 
+    /// Creates an [`UpgradeableFighter`] from another player's profile.
     #[must_use]
     pub fn from_other(other: &OtherPlayer) -> Self {
         UpgradeableFighter {
@@ -159,13 +176,15 @@ impl UpgradeableFighter {
         }
     }
 
+    /// Calculates the total attributes including bonuses from equipment, gems,
+    /// and potions.
     #[must_use]
     pub fn attributes(&self) -> EnumMap<AttributeType, u32> {
         let mut total = EnumMap::default();
 
         for equip in self.equipment.0.iter().flat_map(|a| a.1) {
             for (k, v) in &equip.attributes {
-                *total.get_mut(k) += v;
+                total[k] += v;
             }
 
             if let Some(GemSlot::Filled(gem)) = &equip.gem_slot {
@@ -177,7 +196,7 @@ impl UpgradeableFighter {
                     value *= 2;
                 }
 
-                let mut add_atr = |at| *total.get_mut(at) += value;
+                let mut add_atr = |at| total[at] += value;
                 match gem.typ {
                     GemType::Strength => add_atr(AT::Strength),
                     GemType::Dexterity => add_atr(AT::Dexterity),
@@ -204,7 +223,7 @@ impl UpgradeableFighter {
 
         for (k, v) in &mut total {
             let class_bonus = (f64::from(*v) * class_bonus).trunc() as u32;
-            *v += class_bonus + self.attribute_basis.get(k);
+            *v += class_bonus + self.attribute_basis[k];
             if let Some(potion) = self
                 .active_potions
                 .iter()
@@ -214,16 +233,18 @@ impl UpgradeableFighter {
                 *v += (f64::from(*v) * potion.size.effect()) as u32;
             }
 
-            let pet_bonus = (f64::from(*v) * (*pet_boni.get(k))).trunc() as u32;
+            let pet_bonus = (f64::from(*v) * pet_boni[k]).trunc() as u32;
             *v += pet_bonus;
         }
         total
     }
 
+    /// Calculates total hit points based on constitution, class, level,
+    /// potions, portals, and runes.
     #[must_use]
     #[allow(clippy::enum_glob_use)]
     pub fn hit_points(&self, attributes: &EnumMap<AttributeType, u32>) -> i64 {
-        let mut total = i64::from(*attributes.get(AttributeType::Constitution));
+        let mut total = i64::from(attributes[AttributeType::Constitution]);
         total = (total as f64 * self.class.health_multiplier(self.is_companion))
             .trunc() as i64;
 
@@ -265,13 +286,18 @@ impl UpgradeableFighter {
     }
 }
 
+/// A squad containing the player character and optional companion fighters.
 #[derive(Debug)]
 pub struct PlayerFighterSquad {
+    /// The main player character fighter.
     pub character: UpgradeableFighter,
+    /// Optional companion fighters.
     pub companions: Option<EnumMap<CompanionClass, UpgradeableFighter>>,
 }
 
 impl PlayerFighterSquad {
+    /// Creates a new squad containing the character and companions extracted
+    /// from the game state.
     #[must_use]
     pub fn new(gs: &GameState) -> PlayerFighterSquad {
         let mut pet_attribute_bonus_perc = EnumMap::default();
@@ -287,7 +313,7 @@ impl PlayerFighterSquad {
                         200.. => 200,
                     };
                 }
-                *pet_attribute_bonus_perc.get_mut(typ.into()) =
+                pet_attribute_bonus_perc[typ.into()] =
                     f64::from(total_bonus / 100) / 100.0;
             }
         }
@@ -335,7 +361,7 @@ impl PlayerFighterSquad {
             ];
 
             let res = classes.map(|class| {
-                let comp = comps.get(class);
+                let comp = &comps[class];
                 UpgradeableFighter {
                     name: format!("{}'a {class:?} companion", char.name).into(),
                     is_companion: true,

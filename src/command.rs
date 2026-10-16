@@ -7,21 +7,32 @@ use strum::EnumIter;
 use crate::{
     PlayerId,
     gamestate::{
-        ShopPosition,
-        character::*,
+        character::{Class, Gender, Mount, Race},
         dungeons::{CompanionClass, Dungeon},
-        event::*,
-        fortress::*,
+        event::{
+            hellevator::HellevatorTreatType,
+            legendary_dungeon::{
+                DoorType, DungeonEffectType, GemOfFateType,
+                LegendaryDungeonEventTheme, RPSChoice,
+            },
+            world_boss::{ProjectileOfferQuantity, WorldBossTowerSegment},
+        },
+        fortress::{
+            FortressBuildingType, FortressResourceType, FortressUnitType,
+        },
         guild::{Emblem, GuildSkill},
         idle::IdleBuildingType,
-        items::*,
-        legendary_dungeon::{
-            DoorType, DungeonEffectType, GemOfFateType,
-            LegendaryDungeonEventTheme, RPSChoice,
+        items::{
+            EquipmentSlot, ItemCommandIdent, ItemPlace, ItemPosition,
+            PlayerItemPosition, ShopPosition,
         },
+        pets::HabitatType,
         social::Relationship,
-        underworld::*,
-        unlockables::*,
+        underworld::{
+            LureSuggestion, UnderworldBuildingType, UnderworldResourceType,
+            UnderworldUnitType,
+        },
+        unlockables::{EnchantmentIdent, Unlockable},
     },
 };
 
@@ -368,28 +379,42 @@ pub enum Command {
         /// some reason
         use_mushroom: bool,
     },
+    /// Enters the World Boss event screen
     WorldBossEnter,
-    /// Update minor things in the world boss event, such as the attack timers
+    /// Updates World Boss event state, such as attack timers
     WorldBossUpdate,
+    /// Changes the targeted World Boss segment
     WorldBossChangeTarget {
+        /// The segment to target
         target: WorldBossTowerSegment,
     },
-    /// Buys a new catapult for the fight against the world boss
+    /// Rents a catapult for the fight against the World Boss
     WorldBossBuyCatapult {
-        // You can buy catapult with a duration between [1, 10] hours
+        /// Duration of the catapult in hours (up to 10 hours)
         length: u32,
     },
+    /// Buys a catapult upgrade in the World Boss event
     WorldBossBuyUpgrade {
+        /// The index of the offer in
+        /// [`WorldBossEvent::upgrade_offers`](crate::gamestate::event::world_boss::WorldBossEvent::upgrade_offers)
         offer_idx: usize,
+        /// Whether to pay with mushrooms instead of catalysts and resources
         use_mushrooms: bool,
     },
     /// Destroys the catapult currently owned by the player
     WorldBossRemoveCatapult,
-    /// Collects all chests in `available_daily_chests`
+    /// Collects all daily chests in
+    /// [`WorldBossEvent::available_daily_chests`](crate::gamestate::event::world_boss::WorldBossEvent::available_daily_chests)
     WorldBossCollectDailyChests,
+    /// Collects battle rewards from
+    /// [`WorldBossEvent::battle_reward_chests`](crate::gamestate::event::world_boss::WorldBossEvent::battle_reward_chests)
     WorldBossCollectBattleRewards,
+    /// Buys ammunition / projectiles for the World Boss event
     WorldBossProjectileBuy {
+        /// The index of the offer in
+        /// [`WorldBossEvent::projectile_offers`](crate::gamestate::event::world_boss::WorldBossEvent::projectile_offers)
         offer_idx: usize,
+        /// The quantity package to buy
         amount: ProjectileOfferQuantity,
     },
     /// Attacks the requested level of the tower
@@ -427,6 +452,7 @@ pub enum Command {
     /// Brews a potion at the witch. This will consume 10 fruit from the given
     /// habitat
     BrewPotion {
+        /// The habitat fruit type to consume
         fruit_type: HabitatType,
     },
     /// Sets the guild info. Note the info about length limit from
@@ -493,7 +519,7 @@ pub enum Command {
         /// The position of the item, that you want to use at the blacksmith.
         /// See [`PlayerItemPosition`] for how to obtain it
         item_pos: PlayerItemPosition,
-        // The amount of times you want to upgrade this item
+        /// The amount of times you want to upgrade this item
         amount: u32,
     },
     /// Sends the specified message in the guild chat
@@ -535,12 +561,12 @@ pub enum Command {
     },
     /// Collects the reward for event points
     CollectEventTaskReward {
-        /// One of [0,1,2], depending on which reward has been unlocked
+        /// One of \[0,1,2], depending on which reward has been unlocked
         pos: usize,
     },
     /// Collects the reward for collecting points.
     CollectDailyQuestReward {
-        /// One of [0,1,2], depending on which chest you want to collect
+        /// One of \[0,1,2], depending on which chest you want to collect
         pos: usize,
     },
     /// Moves an item from any player owned position into an equipment slot of
@@ -609,12 +635,17 @@ pub enum Command {
     /// skipping the wait, with mushrooms = 0, after the build/upgrade
     /// timer has finished.
     FortressBuildFinish {
+        /// The fortress building whose construction or upgrade to finish
         f_type: FortressBuildingType,
+        /// The amount of mushrooms to use to skip the build timer (0 if the
+        /// timer has expired)
         mushrooms: u32,
     },
     /// Builds new units of the selected type
     FortressBuildUnit {
+        /// The type of unit to build
         unit: FortressUnitType,
+        /// The number of units to build
         count: u32,
     },
     /// Starts the search for gems
@@ -625,19 +656,24 @@ pub enum Command {
     /// mushrooms. The price is one mushroom per 600 sec / 10 minutes of time
     /// remaining
     FortressGemStoneSearchFinish {
+        /// The amount of mushrooms to pay to finish the search immediately
         mushrooms: u32,
     },
     /// Attacks the current fortress attack target with the provided amount of
     /// soldiers
     FortressAttack {
+        /// The number of soldiers to send into the attack
         soldiers: u32,
     },
     /// Re-rolls the enemy in the fortress
     FortressNewEnemy {
+        /// Whether to spend a mushroom to reroll the opponent immediately
         use_mushroom: bool,
     },
     /// Sets the fortress enemy to the counterattack target of the message
     FortressSetCAEnemy {
+        /// The ID of the combat log message containing the counterattack
+        /// target
         msg_id: u32,
     },
     /// Views the replay of a combat log entry
@@ -654,40 +690,53 @@ pub enum Command {
     },
     /// Sends a whisper message to another player
     Whisper {
+        /// The name of the player to send the private message to
         player_name: String,
+        /// The message to send
         message: String,
     },
     /// Collects the resources of the selected type in the underworld
     UnderworldCollect {
+        /// The underworld resource to collect
         resource: UnderworldResourceType,
     },
     /// Upgrades the selected underworld unit by one level
     UnderworldUnitUpgrade {
+        /// The underworld unit type to upgrade
         unit: UnderworldUnitType,
     },
     /// Starts the upgrade of a building in the underworld
     UnderworldUpgradeStart {
+        /// The underworld building to upgrade
         building: UnderworldBuildingType,
+        /// The amount of mushrooms to spend to start the upgrade
         mushrooms: u32,
     },
     /// Cancels the upgrade of a building in the underworld
     UnderworldUpgradeCancel {
+        /// The building (or unit) whose upgrade should be cancelled
         building: UnderworldUnitType,
     },
     /// Finishes an upgrade after the time has run out (or before using
     /// mushrooms)
     UnderworldUpgradeFinish {
+        /// The underworld building whose upgrade to finish
         building: UnderworldBuildingType,
+        /// The amount of mushrooms to spend to finish immediately (0 if timer
+        /// finished)
         mushrooms: u32,
     },
     /// Lures a player into the underworld
     UnderworldAttack {
+        /// The ID of the player to attack in the underworld
         player_id: PlayerId,
     },
     /// Rolls the dice. The first round should be all re-rolls, after that,
     /// either re-roll again, or take some of the dice on the table
     RollDice {
+        /// The currency to pay for rolling the dice
         payment: RollDicePrice,
+        /// The state/selection for each of the 5 dice
         dices: [DiceType; 5],
     },
     /// Feeds one of your pets
@@ -703,11 +752,15 @@ pub enum Command {
     },
     /// Fights with the guild pet against the hydra
     GuildPetBattle {
+        /// Whether to spend a mushroom to fight if the daily free attempt was
+        /// already used
         use_mushroom: bool,
     },
     /// Upgrades an idle building by the requested amount
     IdleUpgrade {
+        /// The idle game building to upgrade
         typ: IdleBuildingType,
+        /// The amount of levels to upgrade by
         amount: IdleUpgradeAmount,
     },
     /// Sacrifice all the money in the idle game for runes
@@ -715,50 +768,68 @@ pub enum Command {
     /// Upgrades a skill to the requested attribute. Should probably be just
     /// current + 1 to mimic a user clicking
     UpgradeSkill {
+        /// The character attribute to upgrade
         attribute: AttributeType,
+        /// The expected attribute value after upgrading
         next_attribute: u32,
     },
     /// Spend 1 mushroom to update the inventory of a shop
     RefreshShop {
+        /// The shop whose inventory to refresh
         shop: ShopType,
     },
     /// Fetches the Hall of Fame page for guilds
     HallOfFameGroupPage {
+        /// The page number in the guild Hall of Fame to fetch
         page: u32,
     },
     /// Crawls the Hall of Fame page for the underworld
     HallOfFameUnderworldPage {
+        /// The page number in the underworld Hall of Fame to fetch
         page: u32,
     },
+    /// Fetches the Hall of Fame page for pets
     HallOfFamePetsPage {
+        /// The page number in the pets Hall of Fame to fetch
         page: u32,
     },
     /// Switch equipment with the mannequin, if it is unlocked
     SwapMannequin,
     /// Updates your flag in the Hall of Fame
     UpdateFlag {
+        /// The country flag to display in the Hall of Fame, or `None` to clear
+        /// it
         flag: Option<Flag>,
     },
     /// Changes if you can receive invites or not
     BlockGuildInvites {
+        /// Whether to block incoming guild invitations
         block_invites: bool,
     },
     /// Changes if you want to get tips in the gui. Does nothing for the API
     ShowTips {
+        /// Whether to show tips in the GUI
         show_tips: bool,
     },
     /// Change your password. Note that I have not tested this and this might
     /// invalidate your session
     ChangePassword {
+        /// The account username
         username: String,
+        /// The current password
         old: String,
+        /// The new password to set
         new: String,
     },
     /// Changes your mail to another address
     ChangeMailAddress {
+        /// The current registered email address
         old_mail: String,
+        /// The new email address to set
         new_mail: String,
+        /// The account password for verification
         password: String,
+        /// The account username
         username: String,
     },
     /// Sets the language of the character. This should be basically
@@ -768,23 +839,31 @@ pub enum Command {
     /// pt-br, ro`
     #[deprecated = "Use the 'SetClientLanguage' enum instead"]
     SetLanguage {
+        /// The country code string of the language to set
         language: String,
     },
     /// Sets the relation to another player
     SetPlayerRelation {
+        /// The ID of the target player
         player_id: PlayerId,
+        /// The relationship status to assign
         relation: Relationship,
     },
     /// I have no character with anything but the default (0) to test this
     /// with. If I had to guess, they continue sequentially
     SetPortraitFrame {
+        /// The ID of the portrait frame to equip
         portrait_id: i64,
     },
     /// Swaps the runes of two items
     SwapRunes {
+        /// The location of the source item
         from: ItemPlace,
+        /// The index position of the source item
         from_pos: usize,
+        /// The location of the destination item
         to: ItemPlace,
+        /// The index position of the destination item
         to_pos: usize,
     },
     /// Changes the look of the item to the selected `raw_model_id` for 10
@@ -792,8 +871,11 @@ pub enum Command {
     /// `model_id + (class as usize) * 1000` if I remember correctly. Pretty
     /// sure nobody will ever use this though, as it is only for looks.
     ChangeItemLook {
+        /// The location of the item
         inv: ItemPlace,
+        /// The index position of the item
         pos: usize,
+        /// The raw appearance / model ID to apply to the item
         raw_model_id: u16,
     },
     /// Continues the expedition by picking one of the <=3 encounters \[0,1,2\]
@@ -819,16 +901,21 @@ pub enum Command {
     },
     /// Starts the normal (not the ultimate) legendary dungeon
     LegendaryDungeonEnter {
+        /// The theme of the legendary dungeon to enter
         theme: LegendaryDungeonEventTheme,
     },
     /// Buy a curse in the `KeyToFailureShop`
     LegendaryDungeonBuyCurse {
+        /// The curse effect to purchase
         effect: DungeonEffectType,
+        /// The number of keys to spend
         keys: u32,
     },
     /// Buy a blessing in the `KeyMasterShop`
     LegendaryDungeonBuyBlessing {
+        /// The blessing effect to purchase
         effect: DungeonEffectType,
+        /// The number of keys to spend
         keys: u32,
     },
     /// Interacts with the encounter. This is the default, just entered the
@@ -840,12 +927,14 @@ pub enum Command {
     /// Leaves the encounter room without interacting with ever having
     /// interacted with the encounter
     LegendaryDungeonEncounterLeave,
+    /// Requests new goods from the merchant in the legendary dungeon
     LegendaryDungeonMerchantNewGoods,
     /// Leaves non-encounter rooms
     LegendaryDungeonRoomLeave,
     /// Play Rock, Paper, Scissors with your provided choice. I don't think
     /// this makes a difference, but you still have the option to choose one
     LegendaryDungeonPlayRPC {
+        /// The RPS choice (Rock, Paper, or Scissors)
         choice: RPSChoice,
     },
     /// Takes an item from the legendary dungeon and moves it to the specified
@@ -882,10 +971,15 @@ pub enum Command {
         /// The type of the door, that you want to enter
         typ: DoorType,
     },
+    /// Selects a Gem of Fate (soul stone) in the legendary dungeon
     LegendaryDungeonPickGem {
+        /// The type of Gem of Fate to select
         gem_type: GemOfFateType,
     },
+    /// Interacts with an object or action in the legendary dungeon using a raw
+    /// action ID
     LegendaryDungeonInteract {
+        /// The raw action ID to send
         val: usize,
     },
     /// Skips the waiting period of the current expedition. Note that mushroom
@@ -906,40 +1000,66 @@ pub enum Command {
     },
     /// Changes the language of the client
     SetClientLanguage {
+        /// The language to set for the client
         language: Language,
     },
+    /// Enters or joins the Hellevator event
     HellevatorEnter,
+    /// Views the guild ranking within the Hellevator event
     HellevatorViewGuildRanking,
+    /// Starts a battle in the Hellevator
     HellevatorFight {
+        /// Whether to use a mushroom to fight when cards/tickets are exhausted
         use_mushroom: bool,
     },
+    /// Purchases a treat or item from the Hellevator shop
     HellevatorBuy {
+        /// The slot/position of the item in the Hellevator shop
         position: usize,
+        /// The treat type being purchased
         typ: HellevatorTreatType,
+        /// The price of the treat
         price: u32,
+        /// Whether to pay with mushrooms
         use_mushroom: bool,
     },
+    /// Refreshes / rerolls the goods in the Hellevator merchant shop
     HellevatorRefreshShop,
+    /// Joins the coordinated guild attack on the Hellevator plain
     HellevatorJoinHellAttack {
+        /// Whether to spend a mushroom for the attack
         use_mushroom: bool,
+        /// The plain/target index for the attack
         plain: usize,
     },
+    /// Claims today's daily reward in the Hellevator event
     HellevatorClaimDaily,
+    /// Claims yesterday's daily reward in the Hellevator event
     HellevatorClaimDailyYesterday,
+    /// Claims the final reward after the Hellevator event concludes
     HellevatorClaimFinal,
+    /// Previews the upcoming rewards for the Hellevator event
     HellevatorPreviewRewards,
+    /// Fetches a page of Hellevator rankings in the Hall of Fame
     HallOfFameHellevatorPage {
+        /// The page index to fetch
         page: usize,
     },
+    /// Previews a pending claimable reward message
     ClaimablePreview {
+        /// The ID of the pending reward message to preview
         msg_id: i64,
     },
+    /// Claims a pending claimable reward
     ClaimableClaim {
+        /// The ID of the pending reward to claim
         msg_id: i64,
     },
     /// Spend 1000 mushrooms to buy a gold frame
     BuyGoldFrame,
+    /// Initiates combat with the monster in the current legendary dungeon room
     LegendaryDungeonMonsterFight,
+    /// Flees or escapes from the monster in the current legendary dungeon room
     LegendaryDungeonMonsterEscape,
 }
 
@@ -959,21 +1079,31 @@ pub enum ExpeditionSetting {
     PreferQuests,
 }
 
+/// Actions that can be performed at the blacksmith
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BlacksmithAction {
+    /// Dismantle an item into resources (metal and arcane splinters)
     Dismantle = 201,
+    /// Add or upgrade a socket on an item using resources
     SocketUpgrade = 202,
+    /// Add or upgrade a socket on an item using mushrooms
     SocketUpgradeWithMushrooms = 212,
+    /// Extract an embedded gem from an item using resources
     GemExtract = 203,
+    /// Extract an embedded gem from an item using mushrooms
     GemExtractWithMushrooms = 213,
 }
 
+/// Payment options for spinning the Wheel of Fortune
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum FortunePayment {
+    /// Pay with lucky coins
     LuckyCoins = 0,
+    /// Pay with mushrooms
     Mushrooms,
+    /// Use a free spin
     FreeTurn,
 }
 
@@ -981,8 +1111,11 @@ pub enum FortunePayment {
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RollDicePrice {
+    /// Free roll
     Free = 0,
+    /// Pay using mushrooms
     Mushrooms,
+    /// Pay using an hourglass
     Hourglass,
 }
 
@@ -1003,7 +1136,8 @@ pub enum DiceType {
     Hourglass,
 }
 
-#[derive(Debug, Clone, Copy)]
+/// The reward won from the tavern dice minigame
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DiceReward {
     /// The resource you have won
@@ -1070,11 +1204,11 @@ impl Command {
     pub(crate) fn request_string(
         &self,
     ) -> Result<String, crate::error::SFError> {
-        const APP_VERSION: &str = "308010000000";
+        const APP_VERSION: &str = "315000000000";
         use crate::{
             error::SFError,
             gamestate::dungeons::{LightDungeon, ShadowDungeon},
-            misc::{HASH_CONST, sha1_hash, to_sf_string},
+            response::to_sf_string,
         };
 
         Ok(match self {
@@ -1983,4 +2117,25 @@ generate_language_enum! {
     Spanish => "es",
     Hungarian => "hu",
     Polish => "pl"
+}
+
+/// Salt constant used in password hashing for the server.
+#[cfg(feature = "session")]
+pub(crate) const HASH_CONST: &str = "ahHoj2woo1eeChiech6ohphoB7Aithoh";
+
+/// Computes the SHA-1 hexadecimal hash of a string.
+#[cfg(feature = "session")]
+#[must_use]
+pub(crate) fn sha1_hash(val: &str) -> String {
+    use std::fmt::Write;
+
+    use sha1::{Digest, Sha1};
+    let mut hasher = Sha1::new();
+    hasher.update(val.as_bytes());
+    let hash = hasher.finalize();
+    let mut result = String::with_capacity(hash.len() * 2);
+    for byte in &hash {
+        _ = write!(result, "{byte:02x}");
+    }
+    result
 }

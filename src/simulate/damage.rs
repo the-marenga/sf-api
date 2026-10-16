@@ -5,9 +5,12 @@ use crate::{
     simulate::{Weapon, fighter::Fighter},
 };
 
+/// A range representing minimum and maximum damage values.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DamageRange {
+    /// The minimum damage value.
     pub min: f64,
+    /// The maximum damage value.
     pub max: f64,
 }
 
@@ -34,9 +37,10 @@ pub(crate) fn calculate_damage(
     target: &Fighter,
     is_secondary: bool,
 ) -> DamageRange {
-    let weapon = match is_secondary {
-        true => &attacker.second_weapon,
-        false => &attacker.first_weapon,
+    let weapon = if is_secondary {
+        &attacker.second_weapon
+    } else {
+        &attacker.first_weapon
     }
     .as_ref();
     let mut damage = get_base_damge(weapon, attacker, is_secondary);
@@ -164,7 +168,10 @@ fn get_hand_damage(attacker: &Fighter, is_secondary: bool) -> DamageRange {
     DamageRange { min, max }
 }
 
-pub fn calculate_fire_ball_damage(attacker: &Fighter, target: &Fighter) -> f64 {
+pub(crate) fn calculate_fire_ball_damage(
+    attacker: &Fighter,
+    target: &Fighter,
+) -> f64 {
     if target.class == Class::Mage {
         return 0.0;
     }
@@ -175,7 +182,10 @@ pub fn calculate_fire_ball_damage(attacker: &Fighter, target: &Fighter) -> f64 {
     (target.max_health / 3.0).ceil().min(dmg)
 }
 
-pub fn calculate_damage_reduction(attacker: &Fighter, target: &Fighter) -> f64 {
+pub(crate) fn calculate_damage_reduction(
+    attacker: &Fighter,
+    target: &Fighter,
+) -> f64 {
     // Mage negates enemy armor
     if attacker.class == Class::Mage {
         return 0.0;
@@ -195,7 +205,7 @@ pub fn calculate_damage_reduction(attacker: &Fighter, target: &Fighter) -> f64 {
     damage_reduction.min(f64::from(max_dmg_reduction) / 100.0)
 }
 
-pub fn calculate_damage_multiplier(
+pub(crate) fn calculate_damage_multiplier(
     attacker: &Fighter,
     target: &Fighter,
 ) -> f64 {
