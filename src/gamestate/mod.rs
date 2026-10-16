@@ -121,15 +121,13 @@ impl GameState {
     /// # Errors
     /// If the response contains any errors, or does not contain enough
     /// information about the player to build a full `GameState`, this will
-    /// return a `ParsingError`, or `TooShortResponse` depending on the
-    /// exact error
+    /// return a `ParsingError`
     pub fn new_boxed(response: Response) -> Result<Box<Self>, SFError> {
         let mut res = Box::<Self>::default();
         res.update(response)?;
         if res.character.level == 0 || res.character.name.is_empty() {
             return Err(SFError::ParsingError(
-                "response did not contain full player state",
-                String::new(),
+                "Response did not contain full player state".to_string(),
             ));
         }
         Ok(res)
@@ -141,8 +139,7 @@ impl GameState {
     /// # Errors
     /// If the response contains any errors, or does not contain enough
     /// information about the player to build a full `GameState`, this will
-    /// return a `ParsingError`, or `TooShortResponse` depending on the
-    /// exact error
+    /// return a `ParsingError`
     pub fn new(response: Response) -> Result<Self, SFError> {
         Self::new_boxed(response).map(|a| *a)
     }
@@ -164,7 +161,7 @@ impl GameState {
         if let Some(ts) = new_vals.get("timestamp").copied() {
             let ts = ts.into("server time stamp")?;
             let server_time = DateTime::from_timestamp(ts, 0).ok_or(
-                SFError::ParsingError("server time stamp", ts.to_string()),
+                SFError::ParsingError(format!("Server time stamp: {ts}")),
             )?;
             self.server_time_diff = (server_time.naive_utc()
                 - response.received_at())
@@ -1007,10 +1004,7 @@ impl GameState {
                 let pet_id = val.into("pet def typ")?;
                 self.pets.get_or_insert_default().opponent.habitat =
                     Some(HabitatType::from_typ_id(pet_id).ok_or(
-                        SFError::ParsingError(
-                            "pet def typ",
-                            format!("{pet_id}"),
-                        ),
+                        SFError::ParsingError(format!("Pet def typ: {pet_id}")),
                     )?);
             }
             "otherplayersavecharacter" => {

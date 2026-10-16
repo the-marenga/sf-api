@@ -48,7 +48,7 @@ impl DiceGame {
     pub(crate) fn update_reward(&mut self, data: &Vals<'_>) -> Result<()> {
         let win_typ =
             data.enum_map(0, |a| a.saturating_sub(1)).ok_or_else(|| {
-                SFError::ParsingErrorV2(format!(
+                SFError::ParsingError(format!(
                     "Invalid dice reward type: {}",
                     data.str_or(0, "")
                 ))

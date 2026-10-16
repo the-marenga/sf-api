@@ -77,10 +77,9 @@ impl WheelReward {
                 if upgraded {
                     let res = WheelRewardType::PetItem(
                         PetItem::parse(amount).ok_or_else(|| {
-                            SFError::ParsingError(
-                                "pet wheel reward type",
-                                amount.to_string(),
-                            )
+                            SFError::ParsingError(format!(
+                                "Pet wheel reward type: {amount}"
+                            ))
                         })?,
                     );
                     amount = 1;

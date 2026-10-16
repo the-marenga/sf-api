@@ -356,7 +356,7 @@ impl Fighter {
     /// Index 15 is a name fallback that marks underworld minions.
     ///
     /// # Errors
-    /// [`SFError::ParsingErrorV2`] if the record is too short, contains an
+    /// [`SFError::ParsingError`] if the record is too short, contains an
     /// unparsable number or has an unknown class.
     pub(crate) fn parse(data: &Vals<'_>) -> Result<Fighter> {
         // The fields of the record that are still unmodelled:
@@ -398,7 +398,7 @@ impl Fighter {
         let class =
             data.enum_map(27, |raw| raw.wrapping_sub(1))
                 .ok_or_else(|| {
-                    SFError::ParsingErrorV2(format!(
+                    SFError::ParsingError(format!(
                         "Unknown fighter class: {}",
                         data.u32_or(27, 0)
                     ))

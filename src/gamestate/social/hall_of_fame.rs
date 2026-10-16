@@ -182,7 +182,7 @@ impl HallOfFamePlayer {
     pub(crate) fn parse(data: &Vals<'_>) -> Result<Self> {
         let class =
             data.enum_map(5, |raw| raw.wrapping_sub(1)).ok_or_else(|| {
-                SFError::ParsingErrorV2(format!(
+                SFError::ParsingError(format!(
                     "Invalid hof class: {}",
                     data.str_or(5, "")
                 ))

@@ -187,10 +187,9 @@ impl Response {
             && !body.starts_with("success")
             && !body.starts_with("Success")
         {
-            return Err(SFError::ParsingError(
-                "unexpected server response",
-                body.to_string(),
-            ));
+            return Err(SFError::ParsingError(format!(
+                "Unexpected server response: {body}"
+            )));
         }
 
         if body.starts_with("error") || body.starts_with("Error") {
@@ -295,7 +294,9 @@ impl<'a> ResponseVal<'a> {
     ) -> Result<T, SFError> {
         self.value.trim().parse().map_err(|_| {
             error!("Could not convert {name} into target type: {self}");
-            SFError::ParsingError(name, self.value.to_string())
+            SFError::ParsingError(format!(
+                "Could not convert {name} into target type: {self}"
+            ))
         })
     }
 
@@ -341,7 +342,7 @@ impl<'a> ResponseVal<'a> {
     /// Splits this response value by `/` into a [`Vals`] of exactly `N` values.
     ///
     /// # Errors
-    /// [`SFError::ParsingErrorV2`] if the response is empty or has fewer than
+    /// [`SFError::ParsingError`] if the response is empty or has fewer than
     /// `N` values.
     #[track_caller]
     pub(crate) fn values<const N: usize>(self) -> Result<Vals<'a>, SFError> {
@@ -353,7 +354,7 @@ impl<'a> ResponseVal<'a> {
     /// warning.
     ///
     /// # Errors
-    /// [`SFError::ParsingErrorV2`] if the response is empty or has fewer than
+    /// [`SFError::ParsingError`] if the response is empty or has fewer than
     /// `N` values.
     #[track_caller]
     pub(crate) fn values_by<const N: usize>(
@@ -365,7 +366,7 @@ impl<'a> ResponseVal<'a> {
         let caller = std::panic::Location::caller();
         let k = key_desc(self.key);
         if vals.is_empty() {
-            return Err(SFError::ParsingErrorV2(format!(
+            return Err(SFError::ParsingError(format!(
                 "Server response value{k} is empty at {}:{}:{}",
                 caller.file(),
                 caller.line(),
@@ -384,7 +385,7 @@ impl<'a> ResponseVal<'a> {
             );
             vals.truncate(N);
         } else if vals.len() < N {
-            return Err(SFError::ParsingErrorV2(format!(
+            return Err(SFError::ParsingError(format!(
                 "Server response{k} is missing {} values at {}:{}:{}",
                 N - vals.len(),
                 caller.file(),
@@ -519,7 +520,7 @@ macro_rules! accessors {
             #[doc = concat!("Parses the value at `pos` as `", stringify!($ty), "`.")]
             ///
             /// # Errors
-            /// [`SFError::ParsingErrorV2`] if `pos` is out of bounds or
+            /// [`SFError::ParsingError`] if `pos` is out of bounds or
             /// unparsable.
             #[track_caller]
             pub fn $name(&self, pos: usize) -> Result<$ty, SFError> {
@@ -684,12 +685,12 @@ impl<'a> Vals<'a> {
     /// The value at `pos`.
     ///
     /// # Errors
-    /// [`SFError::ParsingErrorV2`] if `pos` is out of bounds.
+    /// [`SFError::ParsingError`] if `pos` is out of bounds.
     #[track_caller]
     pub fn get(&self, pos: usize) -> Result<&'a str, SFError> {
         let Some(val) = self.value(pos) else {
             let caller = std::panic::Location::caller();
-            return Err(SFError::ParsingErrorV2(format!(
+            return Err(SFError::ParsingError(format!(
                 "Index out of bounds{} (pos:{pos},len:{}) at {}:{}:{}",
                 key_desc(self.key),
                 self.len(),
@@ -704,14 +705,14 @@ impl<'a> Vals<'a> {
     /// Parses the value at `pos` into `T`.
     ///
     /// # Errors
-    /// [`SFError::ParsingErrorV2`] if `pos` is out of bounds or the value does
+    /// [`SFError::ParsingError`] if `pos` is out of bounds or the value does
     /// not parse.
     #[track_caller]
     fn parse<T: FromStr>(&self, pos: usize, ty: &str) -> Result<T, SFError> {
         let val = self.get(pos)?;
         val.trim().parse().map_err(|_| {
             let caller = std::panic::Location::caller();
-            SFError::ParsingErrorV2(format!(
+            SFError::ParsingError(format!(
                 "Invalid {ty}{} (pos:{pos},val:{val}) at {}:{}:{}",
                 key_desc(self.key),
                 caller.file(),
@@ -841,7 +842,7 @@ impl<'a> Vals<'a> {
     /// The value at `pos`.
     ///
     /// # Errors
-    /// [`SFError::ParsingErrorV2`] if `pos` is out of bounds.
+    /// [`SFError::ParsingError`] if `pos` is out of bounds.
     #[track_caller]
     pub fn str(&self, pos: usize) -> Result<&'a str, SFError> {
         self.get(pos)
@@ -885,7 +886,7 @@ impl<'a> Vals<'a> {
     /// Parses a known enum at `pos` via [`FromPrimitive`].
     ///
     /// # Errors
-    /// [`SFError::ParsingErrorV2`] if `pos` is out of bounds or the value is
+    /// [`SFError::ParsingError`] if `pos` is out of bounds or the value is
     /// not a variant of `T`.
     #[track_caller]
     pub fn parse_enum<T: FromPrimitive>(
@@ -904,7 +905,7 @@ impl<'a> Vals<'a> {
                     caller.line(),
                     caller.column()
                 );
-                SFError::ParsingErrorV2(format!(
+                SFError::ParsingError(format!(
                     "Unknown enum variant {raw} for {}",
                     std::any::type_name::<T>()
                 ))
@@ -915,7 +916,7 @@ impl<'a> Vals<'a> {
     /// `-1`, `1` or `11`).
     ///
     /// # Errors
-    /// [`SFError::ParsingErrorV2`] if `pos` is out of bounds or unparsable.
+    /// [`SFError::ParsingError`] if `pos` is out of bounds or unparsable.
     #[track_caller]
     pub fn server_time(
         &self,
@@ -1062,14 +1063,14 @@ mod tests {
         assert_eq!(vals.i64_or(99, -1), -1);
         assert_eq!(vals.str_or(99, "default"), "default");
 
-        // Out of bounds error should be ParsingErrorV2 with file/line
+        // Out of bounds error should be ParsingError with file/line
         let err = vals.get(99).unwrap_err();
-        assert!(matches!(err, SFError::ParsingErrorV2(_)));
+        assert!(matches!(err, SFError::ParsingError(_)));
         assert!(err.to_string().contains("Index out of bounds"));
 
-        // Type parse error should be ParsingErrorV2 with file/line
+        // Type parse error should be ParsingError with file/line
         let err = vals.u32(3).unwrap_err();
-        assert!(matches!(err, SFError::ParsingErrorV2(_)));
+        assert!(matches!(err, SFError::ParsingError(_)));
         assert!(err.to_string().contains("Invalid u32"));
     }
 
@@ -1091,7 +1092,7 @@ mod tests {
 
         // Missing values error
         let err = rval.values::<10>().unwrap_err();
-        assert!(matches!(err, SFError::ParsingErrorV2(_)));
+        assert!(matches!(err, SFError::ParsingError(_)));
         assert!(err.to_string().contains("missing 5 values"));
         assert!(err.to_string().contains("test_key"));
 
@@ -1102,7 +1103,7 @@ mod tests {
             sub_key: "",
         };
         let err = empty_val.values::<3>().unwrap_err();
-        assert!(matches!(err, SFError::ParsingErrorV2(_)));
+        assert!(matches!(err, SFError::ParsingError(_)));
         assert!(err.to_string().contains("is empty"));
         assert!(err.to_string().contains("empty_key"));
     }
