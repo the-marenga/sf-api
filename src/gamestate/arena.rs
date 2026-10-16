@@ -1149,7 +1149,7 @@ mod tests {
             Local::now().naive_local(),
         )
         .unwrap();
-        let data = resp.values()["fightgroups"].values_by::<4>(',').unwrap();
+        let data = resp.values()["fightgroups"].list_by(',');
 
         let mut fight = Fight::default();
         fight.update_groups(&data);

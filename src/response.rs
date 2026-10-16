@@ -338,63 +338,6 @@ impl<'a> ResponseVal<'a> {
     pub(crate) fn list_by(&self, delim: char) -> Vals<'a> {
         Vals::owned(split_values(self.value, delim), self.key)
     }
-
-    /// Splits this response value by `/` into a [`Vals`] of exactly `N` values.
-    ///
-    /// # Errors
-    /// [`SFError::ParsingError`] if the response is empty or has fewer than
-    /// `N` values.
-    #[track_caller]
-    pub(crate) fn values<const N: usize>(self) -> Result<Vals<'a>, SFError> {
-        self.values_by::<N>('/')
-    }
-
-    /// Splits this response value by `delim` into a [`Vals`] of exactly `N`
-    /// values. A response with more than `N` values is truncated with a
-    /// warning.
-    ///
-    /// # Errors
-    /// [`SFError::ParsingError`] if the response is empty or has fewer than
-    /// `N` values.
-    #[track_caller]
-    pub(crate) fn values_by<const N: usize>(
-        self,
-        delim: char,
-    ) -> Result<Vals<'a>, SFError> {
-        const { assert!(N > 0, "value bound N must be greater than 0") };
-        let mut vals = split_values(self.value, delim);
-        let caller = std::panic::Location::caller();
-        let k = key_desc(self.key);
-        if vals.is_empty() {
-            return Err(SFError::ParsingError(format!(
-                "Server response value{k} is empty at {}:{}:{}",
-                caller.file(),
-                caller.line(),
-                caller.column()
-            )));
-        }
-        if vals.len() > N {
-            warn!(
-                "Server response{k} contains {} unexpected values at \
-                 {}:{}:{}: {:?}",
-                vals.len() - N,
-                caller.file(),
-                caller.line(),
-                caller.column(),
-                vals.get(N..).unwrap_or_default()
-            );
-            vals.truncate(N);
-        } else if vals.len() < N {
-            return Err(SFError::ParsingError(format!(
-                "Server response{k} is missing {} values at {}:{}:{}",
-                N - vals.len(),
-                caller.file(),
-                caller.line(),
-                caller.column()
-            )));
-        }
-        Ok(Vals::owned(vals, self.key))
-    }
 }
 
 impl std::fmt::Display for ResponseVal<'_> {
@@ -1074,40 +1017,6 @@ mod tests {
         assert!(err.to_string().contains("Invalid u32"));
     }
 
-    #[test]
-    fn test_values_tracking_and_truncate() {
-        let rval = ResponseVal {
-            key: "test_key",
-            value: "1/2/3/4/5",
-            sub_key: "k",
-        };
-        assert_eq!(rval.key(), "test_key");
-        // Expected 3, but got 5: should warn and truncate to 3
-        let vals = rval.values::<3>().unwrap();
-        assert_eq!(vals.key(), "test_key");
-        assert_eq!(vals.len(), 3);
-        assert_eq!(vals.u32(0).unwrap(), 1);
-        assert_eq!(vals.u32(2).unwrap(), 3);
-        assert_eq!(vals.window(0..1).key(), "test_key");
-
-        // Missing values error
-        let err = rval.values::<10>().unwrap_err();
-        assert!(matches!(err, SFError::ParsingError(_)));
-        assert!(err.to_string().contains("missing 5 values"));
-        assert!(err.to_string().contains("test_key"));
-
-        // Empty response error
-        let empty_val = ResponseVal {
-            key: "empty_key",
-            value: "",
-            sub_key: "",
-        };
-        let err = empty_val.values::<3>().unwrap_err();
-        assert!(matches!(err, SFError::ParsingError(_)));
-        assert!(err.to_string().contains("is empty"));
-        assert!(err.to_string().contains("empty_key"));
-    }
-
     #[derive(Debug, PartialEq, Eq, num_derive::FromPrimitive)]
     enum TestEnum {
         First = 1,
@@ -1145,15 +1054,15 @@ mod tests {
             value: "10,20;30,40",
             sub_key: "",
         };
-        let semi = comma_val.values_by::<2>(';').unwrap();
+        let semi = comma_val.list_by(';');
         assert_eq!(semi.key(), "custom_delim");
         assert_eq!(semi.str(0).unwrap(), "10,20");
         assert_eq!(semi.str(1).unwrap(), "30,40");
 
-        // More values than expected are truncated instead of erroring
-        let truncated = rval.values::<4>().unwrap();
-        assert_eq!(truncated.len(), 4);
-        assert_eq!(truncated.key(), "chunk_test");
+        // A list keeps every value, however many there are
+        let unbound = rval.list();
+        assert_eq!(unbound.len(), 6);
+        assert_eq!(unbound.key(), "chunk_test");
     }
 
     #[test]
