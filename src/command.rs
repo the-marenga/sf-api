@@ -561,12 +561,12 @@ pub enum Command {
     },
     /// Collects the reward for event points
     CollectEventTaskReward {
-        /// One of [0,1,2], depending on which reward has been unlocked
+        /// One of \[0,1,2], depending on which reward has been unlocked
         pos: usize,
     },
     /// Collects the reward for collecting points.
     CollectDailyQuestReward {
-        /// One of [0,1,2], depending on which chest you want to collect
+        /// One of \[0,1,2], depending on which chest you want to collect
         pos: usize,
     },
     /// Moves an item from any player owned position into an equipment slot of
