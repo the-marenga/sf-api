@@ -176,6 +176,7 @@ impl Expedition {
         data.ignore(14, "unknown expedition field");
         self.busy_since = data.server_time_opt(15, server_time);
         self.busy_until = data.server_time_opt(16, server_time);
+        data.ignore(17..21, "unknown expedition state fields");
         Ok(())
     }
 
@@ -254,13 +255,12 @@ pub struct ExpeditionBoss {
 }
 
 impl ExpeditionBoss {
-    /// Parses an expedition boss from a 2-value chunk: `[monster_id, items]`.
+    /// Parses an expedition boss from a `[monster_id, items]` list. The server
+    /// may omit the item count, in which case it defaults to 0.
     pub(crate) fn parse(data: &Vals<'_>) -> Self {
         let raw_id = data.i64_or(0, 0);
-        Self {
-            id: -raw_id,
-            items: data.u8_or(1, 3),
-        }
+        let items = if data.len() > 1 { data.u8_or(1, 0) } else { 0 };
+        Self { id: -raw_id, items }
     }
 }
 
@@ -604,6 +604,16 @@ mod tests {
             "unread values in {boss_data}"
         );
 
+        // The server may send only the monster id, omitting the item count.
+        let boss_only_id = Vals::from("-162");
+        exp.boss = ExpeditionBoss::parse(&boss_only_id);
+        assert_eq!(exp.boss.id, 162);
+        assert_eq!(exp.boss.items, 0);
+        assert!(
+            boss_only_id.unaccessed_indices().is_empty(),
+            "unread values in {boss_only_id}"
+        );
+
         let half_raw = "45/3/100/4/50000";
         let half_data = Vals::from(half_raw);
         exp.update_halftime(&half_data);
@@ -636,6 +646,19 @@ mod tests {
         assert!(
             state_data.unaccessed_indices().is_empty(),
             "unread values in {state_data}"
+        );
+
+        // Newer servers append extra fields after `busy_until`.
+        let state_raw_extra = "5/0/2/22/0/0/0/10/20/22/0/0/0/150/0/1600000000/\
+                               1600000600/5/-5/0/1";
+        let state_data_extra = Vals::from(state_raw_extra);
+        exp.update_state(&state_data_extra, ServerTime::default())
+            .unwrap();
+        assert_eq!(exp.current_floor, 5);
+        assert!(exp.busy_since.is_some());
+        assert!(
+            state_data_extra.unaccessed_indices().is_empty(),
+            "unread values in {state_data_extra}"
         );
     }
 }

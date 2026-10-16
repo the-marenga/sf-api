@@ -925,8 +925,10 @@ impl GameState {
                 // }
             }
             "expeditionmonster" => {
+                // The server may omit the item count, sending only the
+                // monster id, so parse from a variable-length list.
                 self.tavern.expeditions.active.get_or_insert_default().boss =
-                    tavern::ExpeditionBoss::parse(&val.values::<2>()?);
+                    tavern::ExpeditionBoss::parse(&val.list());
             }
             "expeditionhalftime" => {
                 self.tavern
