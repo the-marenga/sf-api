@@ -472,7 +472,7 @@ impl GameState {
             }
             "sfhomeid" => {}
             "backpack" => {
-                self.character.inventory.update(&val.list(), server_time)?;
+                self.character.inventory.update(&val.list())?;
             }
             "itemlevelshop" => {
                 self.shop_item_lvl = val.into("shop lvl")?;
@@ -480,10 +480,10 @@ impl GameState {
             "storeitemsshakes" => {
                 let shop = &mut self.shops[ShopType::Weapon];
                 shop.typ = ShopType::Weapon;
-                shop.update(&val.values::<114>()?, server_time)?;
+                shop.update(&val.values::<114>()?)?;
             }
             "questofferitems" => {
-                self.tavern.update_quest_items(&val.list(), server_time);
+                self.tavern.update_quest_items(&val.list());
             }
             "toiletstate" => {
                 self.tavern
@@ -492,19 +492,17 @@ impl GameState {
                     .update_sacrifices(&val.values::<3>()?);
             }
             "companionequipment" => {
-                self.dungeons
-                    .update_companion_equipment(&val.list(), server_time)?;
+                self.dungeons.update_companion_equipment(&val.list())?;
             }
             "storeitemsfidget" => {
                 let shop = &mut self.shops[ShopType::Magic];
                 shop.typ = ShopType::Magic;
-                shop.update(&val.values::<114>()?, server_time)?;
+                shop.update(&val.values::<114>()?)?;
             }
             "ownplayersaveequipment" => {
-                self.character.equipment.update(
-                    &val.values::<EQUIPMENT_PARSE_LEN>()?,
-                    server_time,
-                )?;
+                self.character
+                    .equipment
+                    .update(&val.values::<EQUIPMENT_PARSE_LEN>()?)?;
             }
             "systemmessagelist" => {}
             "newslist" => {
@@ -513,7 +511,7 @@ impl GameState {
             "dummieequipment" => {
                 let data = val.values::<EQUIPMENT_PARSE_LEN>()?;
                 self.character.mannequin =
-                    Some(items::Equipment::parse(&data, server_time)?);
+                    Some(items::Equipment::parse(&data)?);
             }
             "owntower" => self.update_tower(
                 &val.values::<TOWER_RESPONSE_LEN>()?,
@@ -765,10 +763,10 @@ impl GameState {
                 other_player.get_or_insert_default().name.set(val.as_str());
             }
             "otherplayersaveequipment" => {
-                other_player.get_or_insert_default().equipment.update(
-                    &val.values::<EQUIPMENT_PARSE_LEN>()?,
-                    server_time,
-                )?;
+                other_player
+                    .get_or_insert_default()
+                    .equipment
+                    .update(&val.values::<EQUIPMENT_PARSE_LEN>()?)?;
             }
             "fortresspricereroll" => {
                 self.fortress.get_or_insert_default().opponent_reroll_price =
@@ -1084,7 +1082,7 @@ impl GameState {
             "battlerewarditem" => {
                 // The item won in the fight, encoded like a regular item
                 let data = val.values::<ITEM_PARSE_LEN>()?;
-                let item = items::Item::parse(&data, server_time)?;
+                let item = items::Item::parse(&data)?;
                 self.last_fight.get_or_insert_default().item_won = item;
             }
             x if x.starts_with("fightheader") => match val.values::<99>() {
@@ -1290,7 +1288,7 @@ impl GameState {
                 self.mail
                     .open_claimable
                     .get_or_insert_default()
-                    .update_items(&val.list(), server_time);
+                    .update_items(&val.list());
             }
             "fightablegroups" => {
                 self.guild
@@ -1434,7 +1432,7 @@ impl GameState {
                 self.legendary_dungeon
                     .active
                     .get_or_insert_default()
-                    .update_pending_items(&val.list(), server_time)?;
+                    .update_pending_items(&val.list())?;
             }
             "ialootitem" => {
                 // The stuff, that was looted after a fight

@@ -146,6 +146,6 @@ mod tests {
         let data = Vals::from(raw);
         events.update(&data, ServerTime::default()).unwrap();
         assert!(events.sales[Sale::BlackFriday]);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 }

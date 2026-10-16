@@ -17,7 +17,7 @@ pub use toilet::*;
 use crate::{
     error::Result,
     gamestate::{
-        ExpeditionSetting, ServerTime,
+        ExpeditionSetting,
         items::{ITEM_PARSE_LEN, Item},
     },
     response::Vals,
@@ -105,14 +105,10 @@ impl Tavern {
     }
 
     /// Updates quest offer items from a `questofferitems` response.
-    pub(crate) fn update_quest_items(
-        &mut self,
-        data: &Vals<'_>,
-        server_time: ServerTime,
-    ) {
+    pub(crate) fn update_quest_items(&mut self, data: &Vals<'_>) {
         for (chunk, quest) in data.chunks(ITEM_PARSE_LEN).zip(&mut self.quests)
         {
-            quest.item = Item::parse(&chunk, server_time).ok().flatten();
+            quest.item = Item::parse(&chunk).ok().flatten();
         }
     }
 }
@@ -145,7 +141,7 @@ mod tests {
         let empty_item = "0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0";
         let raw = format!("{item_raw}/{empty_item}/{empty_item}");
         let data = Vals::from(raw.as_str());
-        tavern.update_quest_items(&data, ServerTime::default());
+        tavern.update_quest_items(&data);
         assert!(tavern.quests[0].item.is_some());
         assert_eq!(tavern.quests[0].item.as_ref().unwrap().price, 83940);
         assert!(tavern.quests[1].item.is_none());

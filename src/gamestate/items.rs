@@ -105,24 +105,17 @@ impl Inventory {
     }
 
     /// Parses the backpack from a response list.
-    pub(crate) fn parse(
-        data: &Vals<'_>,
-        server_time: ServerTime,
-    ) -> Result<Self> {
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Self> {
         let backpack = data
             .chunks(ITEM_PARSE_LEN)
-            .map(|chunk| Item::parse(&chunk, server_time))
+            .map(|chunk| Item::parse(&chunk))
             .collect::<Result<Vec<_>, _>>()?;
         Ok(Self { backpack })
     }
 
     /// Updates the backpack from a response list.
-    pub(crate) fn update(
-        &mut self,
-        data: &Vals<'_>,
-        server_time: ServerTime,
-    ) -> Result<()> {
-        *self = Self::parse(data, server_time)?;
+    pub(crate) fn update(&mut self, data: &Vals<'_>) -> Result<()> {
+        *self = Self::parse(data)?;
         Ok(())
     }
 }
@@ -384,17 +377,13 @@ impl Shop {
     }
 
     /// Parses a shop from a 114-element response chunk.
-    pub(crate) fn parse(
-        data: &Vals<'_>,
-        server_time: ServerTime,
-        typ: ShopType,
-    ) -> Result<Shop> {
+    pub(crate) fn parse(data: &Vals<'_>, typ: ShopType) -> Result<Shop> {
         let mut shop = Shop {
             typ,
             ..Default::default()
         };
         for (chunk, item) in data.chunks(ITEM_PARSE_LEN).zip(&mut shop.items) {
-            let Some(p_item) = Item::parse(&chunk, server_time)? else {
+            let Some(p_item) = Item::parse(&chunk)? else {
                 return Err(SFError::ParsingError(format!(
                     "Shop item: {chunk:?}"
                 )));
@@ -405,12 +394,8 @@ impl Shop {
     }
 
     /// Updates the shop's items from a 114-element response chunk.
-    pub(crate) fn update(
-        &mut self,
-        data: &Vals<'_>,
-        server_time: ServerTime,
-    ) -> Result<()> {
-        *self = Self::parse(data, server_time, self.typ)?;
+    pub(crate) fn update(&mut self, data: &Vals<'_>) -> Result<()> {
+        *self = Self::parse(data, self.typ)?;
         Ok(())
     }
 }
@@ -454,26 +439,19 @@ impl Equipment {
     }
 
     /// Parses equipment from a fixed 190-element response chunk.
-    pub(crate) fn parse(
-        data: &Vals<'_>,
-        server_time: ServerTime,
-    ) -> Result<Equipment> {
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Equipment> {
         let mut res = Equipment::default();
         for (chunk, slot) in
             data.chunks(ITEM_PARSE_LEN).zip(res.0.as_mut_slice())
         {
-            *slot = Item::parse(&chunk, server_time)?;
+            *slot = Item::parse(&chunk)?;
         }
         Ok(res)
     }
 
     /// Updates equipment from a fixed 190-element response chunk.
-    pub(crate) fn update(
-        &mut self,
-        data: &Vals<'_>,
-        server_time: ServerTime,
-    ) -> Result<()> {
-        *self = Self::parse(data, server_time)?;
+    pub(crate) fn update(&mut self, data: &Vals<'_>) -> Result<()> {
+        *self = Self::parse(data)?;
         Ok(())
     }
 }
@@ -851,16 +829,13 @@ impl Item {
 
     /// Parses an item from a fixed 19-element response chunk.
     #[allow(clippy::cast_possible_truncation)]
-    pub(crate) fn parse(
-        data: &Vals<'_>,
-        server_time: ServerTime,
-    ) -> Result<Option<Self>> {
-        let Some(typ) = ItemType::parse(data, server_time)? else {
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Option<Self>> {
+        let Some(typ) = ItemType::parse(data)? else {
             data.ignore_all("empty item slot");
             return Ok(None);
         };
 
-        data.ignore(4, "unused timestamp");
+        data.ignore(4, "enchantment value");
         if !typ.is_weapon() {
             data.ignore(6, "weapon damage field on non-weapon item");
         }
@@ -991,7 +966,7 @@ pub enum Enchantment {
     SwordOfVengeance = 11,
     /// Finds more mushrooms
     MariosBeard = 31,
-    /// Shortens travel time
+    /// Finds more metal
     ManyFeetBoots = 41,
     /// Increased reaction score in combat
     ShadowOfTheCowboy = 51,
@@ -1003,7 +978,7 @@ pub enum Enchantment {
     UnholyAcquisitiveness = 81,
     /// Find extra gold on expeditions
     TheGraveRobbersPrayer = 91,
-    /// Increase the chance of loot against other players
+    /// Find more arcane splinters
     RobberBaronRitual = 101,
 }
 
@@ -1220,10 +1195,7 @@ impl ItemType {
             .is_some_and(|e| e.enchantment().is_some())
     }
 
-    pub(crate) fn parse(
-        data: &Vals<'_>,
-        _server_time: ServerTime,
-    ) -> Result<Option<Self>> {
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Option<Self>> {
         let raw_typ = data.u8_or(0, 255);
         let unknown_item = |name: &'static str| {
             warn!("Could not parse item of type: {raw_typ}. {name} is faulty");
@@ -1626,7 +1598,7 @@ mod tests {
     fn test_equipment_parse() {
         let raw = ["0"; EQUIPMENT_PARSE_LEN].join("/");
         let vals = Vals::from(raw.as_str());
-        let equipment = Equipment::parse(&vals, ServerTime::default()).unwrap();
+        let equipment = Equipment::parse(&vals).unwrap();
         assert!(equipment.0.values().all(Option::is_none));
     }
 
@@ -1635,7 +1607,7 @@ mod tests {
         let raw = ["0"; EQUIPMENT_PARSE_LEN].join("/");
         let vals = Vals::from(raw.as_str());
         let mut equipment = Equipment::default();
-        equipment.update(&vals, ServerTime::default()).unwrap();
+        equipment.update(&vals).unwrap();
         vals.assert_all_read();
         assert!(equipment.0.values().all(Option::is_none));
     }
@@ -1644,7 +1616,7 @@ mod tests {
     fn test_item_parse() {
         let raw = "1/0/0/1010/0/149/265/5/4/0/108/72/0/83940/10/0/0/45/0";
         let vals = Vals::from(raw);
-        let item = Item::parse(&vals, ServerTime::default()).unwrap().unwrap();
+        let item = Item::parse(&vals).unwrap().unwrap();
         vals.assert_all_read();
         assert_eq!(item.price, 83940);
     }
@@ -1655,7 +1627,7 @@ mod tests {
                    0/0/0/0/0/0/0/45408/0/0/36/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
                    0/0/0/0/0";
         let vals = Vals::from(raw);
-        let inventory = Inventory::parse(&vals, ServerTime::default()).unwrap();
+        let inventory = Inventory::parse(&vals).unwrap();
         vals.assert_all_read();
         assert_eq!(inventory.backpack.len(), 3);
         assert!(inventory.backpack[0].is_some());
@@ -1666,7 +1638,7 @@ mod tests {
 
         let mut inv = Inventory::default();
         let vals2 = Vals::from(raw);
-        inv.update(&vals2, ServerTime::default()).unwrap();
+        inv.update(&vals2).unwrap();
         vals2.assert_all_read();
         assert_eq!(inv.backpack.len(), 3);
         assert_eq!(inv.backpack[0].as_ref().unwrap().price, 36384);
@@ -1681,8 +1653,7 @@ mod tests {
                    61/37/0/52141/10/0/0/49/0/6/0/0/1010/0/117/0/3/4/0/55/45/0/\
                    20897/1/0/0/50/0";
         let vals = Vals::from(raw);
-        let shop = Shop::parse(&vals, ServerTime::default(), ShopType::Weapon)
-            .unwrap();
+        let shop = Shop::parse(&vals, ShopType::Weapon).unwrap();
         vals.assert_all_read();
         assert_eq!(shop.typ, ShopType::Weapon);
         assert_eq!(shop.items[0].price, 61046);
@@ -1691,7 +1662,7 @@ mod tests {
         let mut target_shop = Shop::default();
         let vals2 = Vals::from(raw);
         target_shop.typ = ShopType::Weapon;
-        target_shop.update(&vals2, ServerTime::default()).unwrap();
+        target_shop.update(&vals2).unwrap();
         vals2.assert_all_read();
         assert_eq!(target_shop.items[0].price, 61046);
     }
