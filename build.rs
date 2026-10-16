@@ -167,8 +167,8 @@ fn main() {
     }
 
     code.push_str(
-        "\npub static DUNGEON_MONSTERS_LIGHT: EnumMap<LightDungeon, &'static \
-         [Monster]> = EnumMap::from_array([\n",
+        "\npub(crate) static DUNGEON_MONSTERS_LIGHT: EnumMap<LightDungeon, \
+         &'static [Monster]> = EnumMap::from_array([\n",
     );
     for name in LIGHT_DUNGEONS {
         code.push_str(&format!(
@@ -179,8 +179,8 @@ fn main() {
     code.push_str("]);\n\n");
 
     code.push_str(
-        "pub static DUNGEON_MONSTERS_SHADOW: EnumMap<ShadowDungeon, &'static \
-         [Monster]> = EnumMap::from_array([\n",
+        "pub(crate) static DUNGEON_MONSTERS_SHADOW: EnumMap<ShadowDungeon, \
+         &'static [Monster]> = EnumMap::from_array([\n",
     );
     for name in SHADOW_DUNGEONS {
         code.push_str(&format!(
@@ -191,7 +191,7 @@ fn main() {
     code.push_str("]);\n\n");
 
     code.push_str(
-        "pub static PET_MONSTERS: [(HabitatType, &[Monster]); 5] = [\n",
+        "pub(crate) static PET_MONSTERS: [(HabitatType, &[Monster]); 5] = [\n",
     );
     for habitat in ["Shadow", "Light", "Earth", "Fire", "Water"] {
         code.push_str(&format!(
