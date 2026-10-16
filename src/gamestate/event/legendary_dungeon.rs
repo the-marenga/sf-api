@@ -1190,11 +1190,6 @@ pub enum RPSChoice {
 mod tests {
     use super::*;
 
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     #[test]
     fn test_legendary_dungeon_event_update_time() {
         let raw = "4/1781884800/1782676800/1782763200";
@@ -1208,7 +1203,7 @@ mod tests {
         assert!(event.start.is_some());
         assert!(event.end.is_some());
         assert!(event.close.is_some());
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -1251,7 +1246,7 @@ mod tests {
         assert_eq!(ld.doors[1].trap, None);
         assert_eq!(ld.encounter, RoomEncounter::BronzeChest);
         assert_eq!(ld.keys, 3);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -1266,7 +1261,7 @@ mod tests {
         assert_eq!(ld.room_type, RoomType::Encounter);
         assert_eq!(ld.encounter, RoomEncounter::Crate1);
         assert_eq!(ld.keys, 2);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -1279,7 +1274,7 @@ mod tests {
         assert_eq!(stats.keys_found, 5);
         assert_eq!(stats.silver_found, 50000);
         assert_eq!(stats.attempts, 3);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -1292,14 +1287,14 @@ mod tests {
         assert_eq!(total.enemies_defeated, 150);
         assert_eq!(total.epics_found, 12);
         assert_eq!(total.gold_found, 1_000_000);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         // Also test 5-element format
         let raw5 = "1/2/3/4/5";
         let data5 = Vals::from(raw5);
         let total5 = TotalStats::parse(&data5).unwrap();
         assert_eq!(total5.legendaries_found, 1);
-        assert_all_read(&data5);
+        data5.assert_all_read();
     }
 
     #[test]
@@ -1311,11 +1306,11 @@ mod tests {
         assert_eq!(offer.max_uses, 2);
         assert_eq!(offer.strength, 50);
         assert_eq!(offer.keys, 10);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let empty = Vals::from("0/0/0");
         assert!(MerchantOffer::parse(&empty).unwrap().is_none());
-        assert_all_read(&empty);
+        empty.assert_all_read();
     }
 
     #[test]
@@ -1327,7 +1322,7 @@ mod tests {
         assert_eq!(ld.merchant_offers.len(), 2);
         assert_eq!(ld.merchant_offers[0].typ, DungeonEffectType::Raider);
         assert_eq!(ld.merchant_offers[1].typ, DungeonEffectType::BrokenArmor);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -1347,11 +1342,11 @@ mod tests {
             gem.disadvantage_effect,
             Some(GemOfFateSpecialDisadvantage::WeakerMonstersSpawn)
         );
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let empty = Vals::from("0/0/0/0/0/0");
         assert!(GemOfFate::parse(&empty).unwrap().is_none());
-        assert_all_read(&empty);
+        empty.assert_all_read();
     }
 
     #[test]
@@ -1362,7 +1357,7 @@ mod tests {
         ld.update_soul_stones(&data).unwrap();
         assert_eq!(ld.active_gems.len(), 2);
         assert_eq!(ld.available_gems.len(), 1);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -1373,7 +1368,7 @@ mod tests {
         ld.update_pending_items(&empty_data, ServerTime::default())
             .unwrap();
         assert_eq!(ld.pending_items, Vec::new());
-        assert_all_read(&empty_data);
+        empty_data.assert_all_read();
 
         let item_raw =
             "1/1/0/0/1010/0/149/265/5/4/0/108/72/0/83940/10/0/0/45/0";
@@ -1381,6 +1376,6 @@ mod tests {
         ld.update_pending_items(&item_data, ServerTime::default())
             .unwrap();
         assert_eq!(ld.pending_items.len(), 1);
-        assert_all_read(&item_data);
+        item_data.assert_all_read();
     }
 }

@@ -137,11 +137,6 @@ impl Calendar {
 mod tests {
     use super::*;
 
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     #[test]
     fn test_calendar_reward_parse() {
         let data = Vals::from("12/1");
@@ -151,19 +146,19 @@ mod tests {
             CalendarRewardType::Attribute(AttributeType::Dexterity)
         );
         assert_eq!(reward.amount, 1);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let data = Vals::from("21/1");
         let reward = CalendarReward::parse(&data).unwrap();
         assert_eq!(reward.typ, CalendarRewardType::LevelUp);
         assert_eq!(reward.amount, 1);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let data = Vals::from("16/5");
         let reward = CalendarReward::parse(&data).unwrap();
         assert_eq!(reward.typ, CalendarRewardType::Fruit(HabitatType::Shadow));
         assert_eq!(reward.amount, 5);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -188,6 +183,6 @@ mod tests {
                 amount: 1,
             }
         );
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 }

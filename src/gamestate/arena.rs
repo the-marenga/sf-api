@@ -796,13 +796,6 @@ mod tests {
     use super::*;
     use crate::response::Vals;
 
-    /// Asserts that every value of `data` was read or explicitly ignored. The
-    /// read tracking only exists in debug builds.
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     /// Parses a single [`FIGHTER_RECORD_LEN`] value fighter record.
     fn parse_fighter(record: &str) -> Fighter {
         let data = Vals::from(record);
@@ -815,7 +808,7 @@ mod tests {
         let mut arena = Arena::default();
         let data = Vals::from("1785018466/0/111111/222222/333333/1/1");
         arena.update(&data, ServerTime::default()).unwrap();
-        assert_all_read(&data);
+        data.assert_all_read();
 
         assert_eq!(arena.enemy_ids, [111_111, 222_222, 333_333]);
         assert_eq!(arena.fights_for_xp, 0);
@@ -833,7 +826,7 @@ mod tests {
         let mut fight = SingleFight::default();
         let data = Vals::from(raw);
         fight.update_fighters(&data);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let a = fight.fighter_a.unwrap();
         assert_eq!(a.typ, FighterTyp::Player);
@@ -991,7 +984,7 @@ mod tests {
         let mut fight = SingleFight::default();
         let data = Vals::from(raw);
         fight.update_rounds(&data, 2);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         assert_eq!(fight.actions.len(), 8);
         assert_eq!(fight.actions[0].outcome, FightOutcome::Evaded);
@@ -1025,7 +1018,7 @@ mod tests {
         let data = Vals::from(raw);
         let mut fight = SingleFight::default();
         fight.update_rounds(&data, 2);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         assert_eq!(fight.actions.len(), 1);
         let action = &fight.actions[0];
@@ -1059,7 +1052,7 @@ mod tests {
         // An unsupported version must not keep the previous rounds around
         fight.update_rounds(&data, 1);
         assert_eq!(fight.actions.len(), 0, "stale rounds kept around");
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -1068,7 +1061,7 @@ mod tests {
         let raw = "1/1/0/822/0/100/0/204025/200284/0/0/0/0/0/0/0/0/0/0/0/0";
         let data = Vals::from(raw);
         fight.update_result(&data);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         assert!(fight.has_player_won);
         assert_eq!(fight.xp_change, 822);
@@ -1086,7 +1079,7 @@ mod tests {
         // pillaged souls at index 3.
         let data = Vals::from("1/1/0/42/0/0/0/0/0/0/0/0");
         fight.update_result(&data);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         assert!(fight.has_player_won);
         assert_eq!(fight.extra, FightExtra::UnderworldLure { souls: 42 });
@@ -1102,7 +1095,7 @@ mod tests {
                    3438403/1/45/0/0";
         let data = Vals::from(raw);
         fight.update_result(&data);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         assert!(fight.has_player_won);
         let FightExtra::Fortress {
@@ -1130,7 +1123,7 @@ mod tests {
             "1/1/0/0/0/0/0/1533/1533/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/41/30/13";
         let data = Vals::from(raw);
         fight.update_result(&data);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let FightExtra::Fortress {
             soldiers,

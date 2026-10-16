@@ -567,11 +567,6 @@ impl UpgradeOffer {
 mod tests {
     use super::*;
 
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     #[test]
     fn test_world_boss_event_update() {
         let raw = "10/20/5/1/576/1784829600/5000/3470/2029/1000/200/50/3/0/\
@@ -579,7 +574,7 @@ mod tests {
         let data = Vals::from(raw);
         let mut event = WorldBossEvent::default();
         event.update(&data, ServerTime::default()).unwrap();
-        assert_all_read(&data);
+        data.assert_all_read();
 
         assert_eq!(event.catalysts, 10);
         assert_eq!(event.medals, 20);
@@ -602,7 +597,7 @@ mod tests {
         let empty_raw = "0/0/0/0/0/0/0";
         let empty_data = Vals::from(empty_raw);
         event.update_upgrade_store(&empty_data);
-        assert_all_read(&empty_data);
+        empty_data.assert_all_read();
         assert_eq!(event.upgrade_offers, []);
 
         // Single offer: typ=1 (Motor), restriction=1 (Top), effect=700,
@@ -610,7 +605,7 @@ mod tests {
         let raw = "1/1/700/1000/4/50/5";
         let data = Vals::from(raw);
         event.update_upgrade_store(&data);
-        assert_all_read(&data);
+        data.assert_all_read();
         assert_eq!(event.upgrade_offers.len(), 1);
         let offer = &event.upgrade_offers[0];
         assert_eq!(offer.typ, WorldBossCatapultUpgradeType::Motor);
@@ -630,7 +625,7 @@ mod tests {
         let empty_raw = "0/0/0/0/0/0";
         let empty_data = Vals::from(empty_raw);
         event.update_ammo_store(&empty_data);
-        assert_all_read(&empty_data);
+        empty_data.assert_all_read();
         assert_eq!(event.projectile_offers, []);
 
         // Single offer: typ=1 (Impacting), small amount=20, large amount=50,
@@ -638,7 +633,7 @@ mod tests {
         let raw = "1/20/50/80/100/250";
         let data = Vals::from(raw);
         event.update_ammo_store(&data);
-        assert_all_read(&data);
+        data.assert_all_read();
         assert_eq!(event.projectile_offers.len(), 1);
         let offer = &event.projectile_offers[0];
         assert_eq!(offer.typ, WorldBossProjectileType::Impacting);
@@ -667,7 +662,7 @@ mod tests {
         let raw = "1/2/3/4/5";
         let data = Vals::from(raw);
         event.update_daily_chests(&data);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         assert_eq!(event.available_daily_chests[WorldBossChest::BattleLoot], 1);
         assert_eq!(
@@ -693,12 +688,12 @@ mod tests {
         let empty_raw = "0/0/0";
         let empty_data = Vals::from(empty_raw);
         assert!(WorldBossProjectile::parse(&empty_data).is_none());
-        assert_all_read(&empty_data);
+        empty_data.assert_all_read();
 
         let raw = "1/15/80";
         let data = Vals::from(raw);
         let projectile = WorldBossProjectile::parse(&data).unwrap();
-        assert_all_read(&data);
+        data.assert_all_read();
         assert_eq!(projectile.typ, WorldBossProjectileType::Impacting);
         assert_eq!(projectile.amount, 15);
         assert_eq!(projectile.extra_dmg, 80);
@@ -714,7 +709,7 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
-        assert_all_read(&inactive_data);
+        inactive_data.assert_all_read();
 
         // Active catapult with one upgrade
         let active_raw = "1784829600/1/1/2/700/0/0/0/0/0/0/0/0/0/0/0/0";
@@ -723,7 +718,7 @@ mod tests {
             WorldBossCatapult::parse(&active_data, ServerTime::default())
                 .unwrap()
                 .unwrap();
-        assert_all_read(&active_data);
+        active_data.assert_all_read();
 
         let upgrade = catapult.upgrades[0].as_ref().unwrap();
         assert_eq!(upgrade.typ, WorldBossCatapultUpgradeType::Motor);
@@ -771,7 +766,7 @@ mod tests {
         let raw = parts.join("/");
         let data = Vals::from(raw.as_str());
         let battle = WorldBossBattle::parse(&data);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         assert_eq!(battle.boss_nr, 1);
         assert_eq!(battle.unknown, 40);

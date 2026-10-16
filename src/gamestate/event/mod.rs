@@ -160,17 +160,12 @@ impl EventStatus {
 mod tests {
     use super::*;
 
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     #[test]
     fn test_event_status_parse_legendary_dungeon() {
         let raw = "1/2/1784829600/1785096000/1785700800";
         let data = Vals::from(raw);
         let status = EventStatus::parse(&data, ServerTime::default()).unwrap();
-        assert_all_read(&data);
+        data.assert_all_read();
 
         assert_eq!(
             status.typ,
@@ -188,7 +183,7 @@ mod tests {
         let raw = "6/1/1784829600/1785096000/1785700800";
         let data = Vals::from(raw);
         let status = EventStatus::parse(&data, ServerTime::default()).unwrap();
-        assert_all_read(&data);
+        data.assert_all_read();
 
         assert_eq!(
             status.typ,
@@ -204,7 +199,7 @@ mod tests {
         let raw = "2/0/1784829600/1785096000/1785700800";
         let data = Vals::from(raw);
         let status = EventStatus::parse(&data, ServerTime::default()).unwrap();
-        assert_all_read(&data);
+        data.assert_all_read();
 
         assert_eq!(status.typ, SpecialEventType::Hellevator);
         assert!(status.start.is_some());

@@ -264,11 +264,6 @@ impl RelationEntry {
 mod tests {
     use super::*;
 
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     #[test]
     fn test_other_player_update_pet_bonus() {
         let raw = "302106/13/15/13/16/16";
@@ -280,7 +275,7 @@ mod tests {
         assert_eq!(player.attribute_pet_bonus[AttributeType::Intelligence], 13);
         assert_eq!(player.attribute_pet_bonus[AttributeType::Luck], 16);
         assert_eq!(player.attribute_pet_bonus[AttributeType::Strength], 16);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -296,7 +291,7 @@ mod tests {
         assert_eq!(ft.mage_count, 15);
         assert_eq!(ft.lootable_wood, 29_882_513);
         assert_eq!(ft.lootable_stone, 1_088_585);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -325,7 +320,7 @@ mod tests {
         assert_eq!(player.scrapbook_count, Some(1385));
         assert_eq!(player.gladiator_lvl, 14);
         assert_eq!(player.attribute_basis[AttributeType::Strength], 3251);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -335,7 +330,7 @@ mod tests {
         let unit_data = Vals::from(unit_raw);
         player.update_unit_levels(&unit_data);
         assert_eq!(player.wall_combat_lvl, 15);
-        assert_all_read(&unit_data);
+        unit_data.assert_all_read();
 
         player.update_fortress_rank(42);
         assert_eq!(player.fortress.unwrap().rank, 42);

@@ -161,30 +161,25 @@ mod tests {
     use super::*;
     use crate::gamestate::pets::HabitatType;
 
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     #[test]
     fn test_wheel_reward_parse() {
         let data = Vals::from("0/5");
         let reward = WheelReward::parse(&data, false).unwrap();
         assert_eq!(reward.typ, WheelRewardType::Mushrooms);
         assert_eq!(reward.amount, 5);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let data = Vals::from("1/10");
         let reward = WheelReward::parse(&data, true).unwrap();
         assert_eq!(reward.typ, WheelRewardType::Arcane);
         assert_eq!(reward.amount, 10);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let data = Vals::from("1/10");
         let reward = WheelReward::parse(&data, false).unwrap();
         assert_eq!(reward.typ, WheelRewardType::Wood);
         assert_eq!(reward.amount, 10);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let data = Vals::from("3/1");
         let reward = WheelReward::parse(&data, true).unwrap();
@@ -193,7 +188,7 @@ mod tests {
             WheelRewardType::PetItem(PetItem::Egg(HabitatType::Shadow))
         );
         assert_eq!(reward.amount, 1);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -205,7 +200,7 @@ mod tests {
         wheel.update(&data, server_time).unwrap();
         assert_eq!(wheel.spins_today, 0);
         assert!(wheel.next_free_spin.is_some());
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -220,6 +215,6 @@ mod tests {
                 amount: 5,
             })
         );
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 }

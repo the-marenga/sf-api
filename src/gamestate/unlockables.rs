@@ -397,11 +397,6 @@ fn parse_scrapbook_item(item_idx: i64) -> Option<EquipmentIdent> {
 mod tests {
     use super::*;
 
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     #[test]
     fn test_unlockable_parse() {
         let data = Vals::from("1/2/3/4");
@@ -419,7 +414,7 @@ mod tests {
                 },
             ]
         );
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -436,7 +431,7 @@ mod tests {
         assert!(!witch.cauldron_bubbling);
         assert!(witch.enchantments[Enchantment::SwordOfVengeance].is_some());
         assert!(witch.enchantments[Enchantment::ShadowOfTheCowboy].is_some());
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -459,11 +454,11 @@ mod tests {
         let scrapbook = ScrapBook::parse(&data).unwrap();
         assert_eq!(scrapbook.monster.len(), 95);
         assert_eq!(scrapbook.items.len(), 460);
-        assert_all_read(&data);
+        data.assert_all_read();
 
         let empty_data = Vals::from("AAAAAAAAAA==");
         assert!(ScrapBook::parse(&empty_data).is_none());
-        assert_all_read(&empty_data);
+        empty_data.assert_all_read();
     }
 
     #[test]
@@ -511,6 +506,6 @@ mod tests {
         bs.update(&data, ServerTime::default());
         assert_eq!(bs.dismantle_left, 5);
         assert!(bs.last_dismantled.is_some());
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 }

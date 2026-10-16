@@ -36,11 +36,6 @@ impl Toilet {
 mod tests {
     use super::*;
 
-    fn assert_all_read(data: &Vals<'_>) {
-        let unread = data.unaccessed_indices();
-        assert!(unread.is_empty(), "unread values {unread:?} in {data}");
-    }
-
     #[test]
     fn test_toilet_update() {
         let raw = "12/500/1600000000/1000";
@@ -50,7 +45,7 @@ mod tests {
         assert_eq!(toilet.aura, 12);
         assert_eq!(toilet.mana_currently, 500);
         assert_eq!(toilet.mana_total, 1000);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 
     #[test]
@@ -60,6 +55,6 @@ mod tests {
         let mut toilet = Toilet::default();
         toilet.update_sacrifices(&data);
         assert_eq!(toilet.sacrifices_left, 3);
-        assert_all_read(&data);
+        data.assert_all_read();
     }
 }
