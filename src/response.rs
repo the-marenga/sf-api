@@ -711,7 +711,10 @@ impl<'a> Vals<'a> {
     ///
     /// # Panics
     /// Panics if `n == 0`.
-    pub(crate) fn chunks(&self, n: usize) -> impl Iterator<Item = Vals<'_>> + '_ {
+    pub(crate) fn chunks(
+        &self,
+        n: usize,
+    ) -> impl Iterator<Item = Vals<'_>> + '_ {
         assert!(n > 0, "chunk size must be greater than 0");
         self.mark_all();
         if !self.len().is_multiple_of(n) {
@@ -727,7 +730,9 @@ impl<'a> Vals<'a> {
 
     /// An iterator over the values, marking all of them as read.
     #[allow(clippy::iter_without_into_iter)]
-    pub(crate) fn iter(&self) -> std::iter::Copied<std::slice::Iter<'_, &'a str>> {
+    pub(crate) fn iter(
+        &self,
+    ) -> std::iter::Copied<std::slice::Iter<'_, &'a str>> {
         self.mark_all();
         self.values().iter().copied()
     }
@@ -748,7 +753,11 @@ impl<'a> Vals<'a> {
     /// Marks every position in every range of `ranges` as read, so none is
     /// reported as unaccessed. Positions past the end of the response are
     /// skipped.
-    pub(crate) fn ignore_unmodelled(&self, ranges: &[Range<usize>], reason: &str) {
+    pub(crate) fn ignore_unmodelled(
+        &self,
+        ranges: &[Range<usize>],
+        reason: &str,
+    ) {
         for range in ranges {
             self.ignore(range.clone(), reason);
         }
@@ -812,7 +821,11 @@ impl<'a> Vals<'a> {
     /// Parses an enum at `pos` via [`FromPrimitive`], returning `default` if
     /// that is not possible.
     #[must_use]
-    pub(crate) fn enum_or<T: FromPrimitive>(&self, pos: usize, default: T) -> T {
+    pub(crate) fn enum_or<T: FromPrimitive>(
+        &self,
+        pos: usize,
+        default: T,
+    ) -> T {
         self.enum_opt(pos).unwrap_or(default)
     }
 

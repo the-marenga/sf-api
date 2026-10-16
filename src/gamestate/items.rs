@@ -459,7 +459,8 @@ impl Equipment {
 /// The number of values in an item response chunk.
 pub(crate) const ITEM_PARSE_LEN: usize = 19;
 /// The number of values in a full equipment response chunk.
-pub(crate) const EQUIPMENT_PARSE_LEN: usize = ITEM_PARSE_LEN * EquipmentSlot::COUNT;
+pub(crate) const EQUIPMENT_PARSE_LEN: usize =
+    ITEM_PARSE_LEN * EquipmentSlot::COUNT;
 
 /// Information about a single item. This can be anything, that is either in a
 /// inventory, in a reward slot, or similar
