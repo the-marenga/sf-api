@@ -2120,11 +2120,13 @@ generate_language_enum! {
 }
 
 /// Salt constant used in password hashing for the server.
-pub const HASH_CONST: &str = "ahHoj2woo1eeChiech6ohphoB7Aithoh";
+#[cfg(feature = "session")]
+pub(crate) const HASH_CONST: &str = "ahHoj2woo1eeChiech6ohphoB7Aithoh";
 
 /// Computes the SHA-1 hexadecimal hash of a string.
+#[cfg(feature = "session")]
 #[must_use]
-pub fn sha1_hash(val: &str) -> String {
+pub(crate) fn sha1_hash(val: &str) -> String {
     use std::fmt::Write;
 
     use sha1::{Digest, Sha1};

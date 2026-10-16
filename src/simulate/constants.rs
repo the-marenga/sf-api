@@ -16,7 +16,7 @@ use crate::{
 include!(concat!(env!("OUT_DIR"), "/dungeon_data.rs"));
 
 #[must_use]
-pub fn get_dungeon_enemies(dungeon: Dungeon) -> &'static [Monster] {
+pub(crate) fn get_dungeon_enemies(dungeon: Dungeon) -> &'static [Monster] {
     match dungeon {
         Dungeon::Light(light) => DUNGEON_MONSTERS_LIGHT[light],
         Dungeon::Shadow(shadow) => DUNGEON_MONSTERS_SHADOW[shadow],

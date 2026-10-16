@@ -130,7 +130,7 @@ fn simulate_fight(
 struct InBattleCache(Vec<((FighterIdent, FighterIdent), InBattleFighter)>);
 
 impl InBattleCache {
-    pub fn get_or_insert(
+    fn get_or_insert(
         &mut self,
         this: &Fighter,
         other: &Fighter,

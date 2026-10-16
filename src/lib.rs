@@ -9,7 +9,8 @@
     clippy::print_stderr,
     missing_debug_implementations,
     clippy::pedantic,
-    missing_docs
+    missing_docs,
+    unreachable_pub
 )]
 #![allow(clippy::module_name_repetitions, clippy::too_many_lines)]
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::indexing_slicing))]

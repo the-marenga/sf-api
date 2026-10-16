@@ -168,7 +168,7 @@ fn get_hand_damage(attacker: &Fighter, is_secondary: bool) -> DamageRange {
     DamageRange { min, max }
 }
 
-pub fn calculate_fire_ball_damage(attacker: &Fighter, target: &Fighter) -> f64 {
+pub(crate) fn calculate_fire_ball_damage(attacker: &Fighter, target: &Fighter) -> f64 {
     if target.class == Class::Mage {
         return 0.0;
     }
@@ -179,7 +179,7 @@ pub fn calculate_fire_ball_damage(attacker: &Fighter, target: &Fighter) -> f64 {
     (target.max_health / 3.0).ceil().min(dmg)
 }
 
-pub fn calculate_damage_reduction(attacker: &Fighter, target: &Fighter) -> f64 {
+pub(crate) fn calculate_damage_reduction(attacker: &Fighter, target: &Fighter) -> f64 {
     // Mage negates enemy armor
     if attacker.class == Class::Mage {
         return 0.0;
@@ -199,7 +199,7 @@ pub fn calculate_damage_reduction(attacker: &Fighter, target: &Fighter) -> f64 {
     damage_reduction.min(f64::from(max_dmg_reduction) / 100.0)
 }
 
-pub fn calculate_damage_multiplier(
+pub(crate) fn calculate_damage_multiplier(
     attacker: &Fighter,
     target: &Fighter,
 ) -> f64 {

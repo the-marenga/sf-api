@@ -973,8 +973,10 @@ impl GameState {
                     val.into("max upgrade lvl")?;
             }
             "singleportalenemylevel" => {
-                self.dungeons.portal.get_or_insert_default().enemy_level =
-                    val.into("portal lvl").unwrap_or(u32::MAX);
+                // Ignored: this is the level of the portal floor you already
+                // fought, not the enemy you are about to face (which sits one
+                // floor higher). The server never sends the level of the
+                // upcoming enemy
             }
             "ownpetsstats" => {
                 self.pets
