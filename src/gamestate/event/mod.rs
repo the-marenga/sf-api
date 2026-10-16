@@ -3,9 +3,9 @@
 //! Contains generic event scheduling status
 //! ([`EventStatus`](crate::gamestate::event::EventStatus)) and submodules
 //! for individual events:
-//! - [`hellevator`]
-//! - [`legendary_dungeon`]
-//! - [`world_boss`]
+//! - [`hellevator`](crate::gamestate::event::hellevator)
+//! - [`legendary_dungeon`](crate::gamestate::event::legendary_dungeon)
+//! - [`world_boss`](crate::gamestate::event::world_boss)
 
 /// Hellevator event module
 pub mod hellevator;

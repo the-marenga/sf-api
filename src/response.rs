@@ -541,8 +541,8 @@ macro_rules! accessors {
     };
 }
 
-/// An index into a [`Vals`]: a single position or a range of them, as accepted
-/// by [`Vals::ignore`].
+/// An index into a `Vals`: a single position or a range of them, as accepted
+/// by `Vals::ignore`.
 pub trait IgnoreIndex {
     /// The half-open, `len`-clamped range of positions this index selects.
     fn positions(self, len: usize) -> Range<usize>;
