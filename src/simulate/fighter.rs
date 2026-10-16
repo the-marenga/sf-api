@@ -380,13 +380,13 @@ pub(crate) fn calculate_crit_chance(
 
 impl InBattleFighter {
     /// Shorthand to check if this fighter is a mage
-    pub fn is_mage(&self) -> bool {
+    pub(crate) fn is_mage(&self) -> bool {
         self.class == Class::Mage
     }
 
     /// Update the stats that are affected by the opponent with a new oponent
     /// without resetting persistent data points
-    pub fn update_opponent(
+    pub(crate) fn update_opponent(
         &mut self,
         main: &Fighter,
         opponent: &Fighter,
@@ -408,7 +408,7 @@ impl InBattleFighter {
 
     /// Does a full attack turn for this fighter against the target. Returns
     /// true, if the opponent has won
-    pub fn attack(
+    pub(crate) fn attack(
         &mut self,
         target: &mut InBattleFighter,
         round: &mut u32,
@@ -743,7 +743,7 @@ impl InBattleFighter {
     }
 
     /// Any kind of attack, that happens at the start of a 1v1 fight
-    pub fn attack_before_fight(
+    pub(crate) fn attack_before_fight(
         &mut self,
         target: &mut InBattleFighter,
         round: &mut u32,
@@ -759,7 +759,7 @@ impl InBattleFighter {
     }
 
     /// Do we deny the opponents next turn?
-    pub fn will_skips_opponent_round(
+    pub(crate) fn will_skips_opponent_round(
         &mut self,
         target: &mut InBattleFighter,
         _round: &mut u32,
@@ -786,7 +786,7 @@ impl InBattleFighter {
     /// Applies the given damage to this fighter. The damage will be reduced,
     /// if possible and if applicable this fighter may revive. If the fighter
     /// ends up dead, this will return true.
-    pub fn take_attack_dmg(
+    pub(crate) fn take_attack_dmg(
         &mut self,
         damage: f64,
         round: &mut u32,
@@ -870,7 +870,7 @@ impl InBattleFighter {
     }
 
     /// Checks if this fighter manages to block/dodge the enemies attack
-    pub fn will_take_attack(&mut self, rng: &mut Rng) -> bool {
+    pub(crate) fn will_take_attack(&mut self, rng: &mut Rng) -> bool {
         match &mut self.class_data {
             ClassData::Warrior { block_chance } => {
                 rng.i32(1..=100) > *block_chance

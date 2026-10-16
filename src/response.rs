@@ -411,7 +411,7 @@ impl<'a> From<&'a str> for Vals<'a> {
 impl<'a> Vals<'a> {
     /// Creates a new [`Vals`] by splitting `raw` by `delim`.
     #[must_use]
-    pub fn by(raw: &'a str, delim: char) -> Self {
+    pub(crate) fn by(raw: &'a str, delim: char) -> Self {
         Vals::owned(split_values(raw, delim), "")
     }
 }
@@ -466,7 +466,7 @@ macro_rules! accessors {
             /// [`SFError::ParsingError`] if `pos` is out of bounds or
             /// unparsable.
             #[track_caller]
-            pub fn $name(&self, pos: usize) -> Result<$ty, SFError> {
+            pub(crate) fn $name(&self, pos: usize) -> Result<$ty, SFError> {
                 self.parse(pos, stringify!($ty))
             }
 
@@ -477,7 +477,7 @@ macro_rules! accessors {
             )]
             #[track_caller]
             #[must_use]
-            pub fn $or(&self, pos: usize, default: $ty) -> $ty {
+            pub(crate) fn $or(&self, pos: usize, default: $ty) -> $ty {
                 self.parse_or(pos, default, stringify!($ty))
             }
         )+
@@ -486,7 +486,7 @@ macro_rules! accessors {
 
 /// An index into a `Vals`: a single position or a range of them, as accepted
 /// by `Vals::ignore`.
-pub trait IgnoreIndex {
+pub(crate) trait IgnoreIndex {
     /// The half-open, `len`-clamped range of positions this index selects.
     fn positions(self, len: usize) -> Range<usize>;
 }
@@ -611,7 +611,7 @@ impl<'a> Vals<'a> {
     /// Panics if any value in `self` was not accessed.
     #[cfg(test)]
     #[track_caller]
-    pub fn assert_all_read(&self) {
+    pub(crate) fn assert_all_read(&self) {
         assert!(
             self.unaccessed_indices().is_empty(),
             "unread values in {self}: {:?}",
@@ -621,7 +621,7 @@ impl<'a> Vals<'a> {
 
     /// The value at `pos`, marking it as read.
     #[must_use]
-    pub fn get_str(&self, pos: usize) -> Option<&'a str> {
+    pub(crate) fn get_str(&self, pos: usize) -> Option<&'a str> {
         self.value(pos)
     }
 
@@ -630,7 +630,7 @@ impl<'a> Vals<'a> {
     /// # Errors
     /// [`SFError::ParsingError`] if `pos` is out of bounds.
     #[track_caller]
-    pub fn get(&self, pos: usize) -> Result<&'a str, SFError> {
+    pub(crate) fn get(&self, pos: usize) -> Result<&'a str, SFError> {
         let Some(val) = self.value(pos) else {
             let caller = std::panic::Location::caller();
             return Err(SFError::ParsingError(format!(
@@ -678,7 +678,7 @@ impl<'a> Vals<'a> {
 
     /// The `range` of values, marking them as read.
     #[must_use]
-    pub fn slice(&self, range: Range<usize>) -> &[&'a str] {
+    pub(crate) fn slice(&self, range: Range<usize>) -> &[&'a str] {
         for pos in range.clone() {
             let _ = self.value(pos);
         }
@@ -691,7 +691,7 @@ impl<'a> Vals<'a> {
     /// are relative to the window, out of range values are clamped. Reads
     /// through the window mark the same values as read at the source.
     #[must_use]
-    pub fn window(&self, range: Range<usize>) -> Vals<'_> {
+    pub(crate) fn window(&self, range: Range<usize>) -> Vals<'_> {
         let end = range.end.min(self.len());
         let start = range.start.min(end);
         Vals {
@@ -711,7 +711,7 @@ impl<'a> Vals<'a> {
     ///
     /// # Panics
     /// Panics if `n == 0`.
-    pub fn chunks(&self, n: usize) -> impl Iterator<Item = Vals<'_>> + '_ {
+    pub(crate) fn chunks(&self, n: usize) -> impl Iterator<Item = Vals<'_>> + '_ {
         assert!(n > 0, "chunk size must be greater than 0");
         self.mark_all();
         if !self.len().is_multiple_of(n) {
@@ -727,28 +727,28 @@ impl<'a> Vals<'a> {
 
     /// An iterator over the values, marking all of them as read.
     #[allow(clippy::iter_without_into_iter)]
-    pub fn iter(&self) -> std::iter::Copied<std::slice::Iter<'_, &'a str>> {
+    pub(crate) fn iter(&self) -> std::iter::Copied<std::slice::Iter<'_, &'a str>> {
         self.mark_all();
         self.values().iter().copied()
     }
 
     /// Marks the value(s) at `index` as read, so they are not reported as
     /// unaccessed. `index` is a position or a range, like `slice::get`.
-    pub fn ignore(&self, index: impl IgnoreIndex, _reason: &str) {
+    pub(crate) fn ignore(&self, index: impl IgnoreIndex, _reason: &str) {
         for pos in index.positions(self.len()) {
             let _ = self.value(pos);
         }
     }
 
     /// Marks every value as read, so none is reported as unaccessed.
-    pub fn ignore_all(&self, _reason: &str) {
+    pub(crate) fn ignore_all(&self, _reason: &str) {
         self.mark_all();
     }
 
     /// Marks every position in every range of `ranges` as read, so none is
     /// reported as unaccessed. Positions past the end of the response are
     /// skipped.
-    pub fn ignore_unmodelled(&self, ranges: &[Range<usize>], reason: &str) {
+    pub(crate) fn ignore_unmodelled(&self, ranges: &[Range<usize>], reason: &str) {
         for range in ranges {
             self.ignore(range.clone(), reason);
         }
@@ -758,7 +758,7 @@ impl<'a> Vals<'a> {
     ///
     /// # Errors
     /// If writing to `f` fails.
-    pub fn fmt_values(
+    pub(crate) fn fmt_values(
         &self,
         f: &mut std::fmt::Formatter<'_>,
     ) -> std::fmt::Result {
@@ -787,14 +787,14 @@ impl<'a> Vals<'a> {
     /// # Errors
     /// [`SFError::ParsingError`] if `pos` is out of bounds.
     #[track_caller]
-    pub fn str(&self, pos: usize) -> Result<&'a str, SFError> {
+    pub(crate) fn str(&self, pos: usize) -> Result<&'a str, SFError> {
         self.get(pos)
     }
 
     /// The value at `pos`, or `default` if it is out of bounds.
     #[track_caller]
     #[must_use]
-    pub fn str_or(&self, pos: usize, default: &'a str) -> &'a str {
+    pub(crate) fn str_or(&self, pos: usize, default: &'a str) -> &'a str {
         self.get(pos).unwrap_or_else(|err| {
             warn!("{err}");
             default
@@ -804,7 +804,7 @@ impl<'a> Vals<'a> {
     /// Parses an enum at `pos` via [`FromPrimitive`], or `None` if that is not
     /// possible.
     #[must_use]
-    pub fn enum_opt<T: FromPrimitive>(&self, pos: usize) -> Option<T> {
+    pub(crate) fn enum_opt<T: FromPrimitive>(&self, pos: usize) -> Option<T> {
         let val = self.i64(pos).ok()?;
         T::from_i64(val).or_else(|| T::from_u64(val.cast_unsigned()))
     }
@@ -812,12 +812,12 @@ impl<'a> Vals<'a> {
     /// Parses an enum at `pos` via [`FromPrimitive`], returning `default` if
     /// that is not possible.
     #[must_use]
-    pub fn enum_or<T: FromPrimitive>(&self, pos: usize, default: T) -> T {
+    pub(crate) fn enum_or<T: FromPrimitive>(&self, pos: usize, default: T) -> T {
         self.enum_opt(pos).unwrap_or(default)
     }
 
     /// Parses an enum at `pos` via [`FromPrimitive`] from `f(raw)`.
-    pub fn enum_map<T: FromPrimitive, F: FnOnce(u32) -> u32>(
+    pub(crate) fn enum_map<T: FromPrimitive, F: FnOnce(u32) -> u32>(
         &self,
         pos: usize,
         f: F,
@@ -832,7 +832,7 @@ impl<'a> Vals<'a> {
     /// [`SFError::ParsingError`] if `pos` is out of bounds or the value is
     /// not a variant of `T`.
     #[track_caller]
-    pub fn parse_enum<T: FromPrimitive>(
+    pub(crate) fn parse_enum<T: FromPrimitive>(
         &self,
         pos: usize,
     ) -> Result<T, SFError> {
@@ -861,7 +861,7 @@ impl<'a> Vals<'a> {
     /// # Errors
     /// [`SFError::ParsingError`] if `pos` is out of bounds or unparsable.
     #[track_caller]
-    pub fn server_time(
+    pub(crate) fn server_time(
         &self,
         pos: usize,
         server_time: ServerTime,
@@ -874,7 +874,7 @@ impl<'a> Vals<'a> {
     /// unparsable.
     #[track_caller]
     #[must_use]
-    pub fn server_time_opt(
+    pub(crate) fn server_time_opt(
         &self,
         pos: usize,
         server_time: ServerTime,

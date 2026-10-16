@@ -20,9 +20,9 @@ use crate::{
 };
 
 /// Default cryptographic session identifier.
-pub const DEFAULT_CRYPTO_ID: &str = "0-00000000000000";
+pub(crate) const DEFAULT_CRYPTO_ID: &str = "0-00000000000000";
 /// Default session token identifier before login.
-pub const DEFAULT_SESSION_ID: &str = "00000000000000000000000000000000";
+pub(crate) const DEFAULT_SESSION_ID: &str = "00000000000000000000000000000000";
 
 /// The session, that manages the server communication for a character
 #[derive(Debug, Clone)]

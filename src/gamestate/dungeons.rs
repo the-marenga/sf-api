@@ -20,8 +20,6 @@ pub struct Portal {
     /// Whether the daily portal fight is available. Fight with
     /// [`Command::FightPortal`](crate::command::Command::FightPortal).
     pub can_fight: bool,
-    /// The level of the current portal enemy.
-    pub enemy_level: u32,
     /// Remaining health percentage of the current portal enemy.
     pub enemy_hp_percentage: u8,
     /// Health bonus percentage granted to the player (1% per defeated enemy).
