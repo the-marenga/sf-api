@@ -575,7 +575,7 @@ impl Default for ConnectionOptions {
     fn default() -> Self {
         Self {
             user_agent: Some(DEFAULT_USER_AGENT.to_string()),
-            expected_server_version: 2022,
+            expected_server_version: 2024,
             error_on_unsupported_version: false,
             proxy: None,
         }
