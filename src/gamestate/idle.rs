@@ -1,123 +1,199 @@
-#![allow(clippy::module_name_repetitions)]
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
 use num_bigint::BigInt;
 use strum::EnumIter;
 
 use super::ServerTime;
+use crate::response::Vals;
 
-/// The idle clicker game where you invest money and get runes by sacrificing
+/// Information about the idle clicker minigame (the Arena).
+///
+/// Sacrifice money for runes with
+/// [`Command::IdleSacrifice`](crate::command::Command::IdleSacrifice).
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IdleGame {
-    /// The current amount of money the player
+    /// The current amount of money the player has in the idle game.
     pub current_money: BigInt,
-    /// The current amount of runes the player
+    /// The current amount of runes the player has collected from sacrifices.
     pub current_runes: BigInt,
-    /// The amount of times the player reset their idle game
+    /// The number of times the player has sacrificed (reset) their idle game.
+    #[doc(alias = "sacrifices")]
     pub resets: u32,
-    /// Runes you get, when you sacrifice
+    /// The amount of runes awarded on the next sacrifice with
+    /// [`Command::IdleSacrifice`](crate::command::Command::IdleSacrifice).
     pub sacrifice_runes: BigInt,
-    /// The time at which new items will be present in the shop
+    /// The time at which new items will be available at the merchant.
     pub merchant_new_goods: DateTime<Local>,
-    /// I think this the total amount of money you have sacrificed, or the last
-    /// plus X, or something related to that. I am not sure and I do not
-    /// really care
+    /// The total amount of money sacrificed across all resets.
     pub total_sacrificed: BigInt,
     // Slightly larger than current_money, but I have no Idea why.
     _current_money_2: BigInt,
-    /// Information about all the possible buildings
+    /// Information about all buildings in the idle game. Upgrade with
+    /// [`Command::IdleUpgrade`](crate::command::Command::IdleUpgrade).
     pub buildings: EnumMap<IdleBuildingType, IdleBuilding>,
 }
 
-/// A single building in the idle game
+/// A single building in the idle game.
+///
+/// Upgrade with [`Command::IdleUpgrade`](crate::command::Command::IdleUpgrade).
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct IdleBuilding {
-    /// The current level of this building
+    /// The current level of this building.
     pub level: u32,
-    /// The amount of money this earns on the next gather
+    /// The amount of money this earns on each production cycle.
     pub earning: BigInt,
-    /// The time at which this building started it's production cycle. Note
-    /// that this is likely to be in the past for quickly producing
-    /// buildings
+    /// The time at which this building started its production cycle. May be
+    /// in the past for quickly producing buildings.
     pub cycle_start: Option<DateTime<Local>>,
-    /// The time at which this building will finish it's current production
-    /// cycle. Note that this is likely to be in the past for quickly producing
-    /// buildings
+    /// The time at which this building will finish its current production
+    /// cycle. May be in the past for quickly producing buildings.
     pub cycle_end: Option<DateTime<Local>>,
-    /// Has the upgrade for this building been bought?
+    /// Whether the permanent speed boost upgrade (platinum/golden) for this
+    /// building has been purchased.
+    #[doc(alias = "platinum")]
     pub golden: bool,
-    /// The price to upgrade this building once
+    /// The price to upgrade this building by 1 level with
+    /// [`IdleUpgradeAmount::One`](crate::command::IdleUpgradeAmount::One).
     pub upgrade_cost: BigInt,
-    /// The price to upgrade this building 10x
+    /// The price to upgrade this building by 10 levels with
+    /// [`IdleUpgradeAmount::Ten`](crate::command::IdleUpgradeAmount::Ten).
     pub upgrade_cost_10x: BigInt,
-    /// The price to upgrade this building 25x
+    /// The price to upgrade this building by 25 levels with
+    /// [`IdleUpgradeAmount::TwentyFive`](crate::command::IdleUpgradeAmount::TwentyFive).
     pub upgrade_cost_25x: BigInt,
-    /// The price to upgrade this building 100x
+    /// The price to upgrade this building by 100 levels with
+    /// [`IdleUpgradeAmount::Hundred`](crate::command::IdleUpgradeAmount::Hundred).
     pub upgrade_cost_100x: BigInt,
 }
 
 impl IdleGame {
-    pub(crate) fn parse_idle_game(
-        data: &[BigInt],
+    /// Parses the idle game state from an `idle` response of at least 118
+    /// values.
+    pub(crate) fn parse(
+        data: &Vals<'_>,
         server_time: ServerTime,
     ) -> Option<IdleGame> {
         if data.len() < 118 {
             return None;
         }
 
+        data.ignore(0..2, "idle unknown prefix");
+        let resets = data.u32_or(2, 0);
+        let merchant_new_goods = data.server_time_opt(63, server_time)?;
+        let current_money = data.bigint(72).ok()?;
+        let total_sacrificed = data.bigint(73).ok()?;
+        let current_money_2 = data.bigint(74).ok()?;
+        let sacrifice_runes = data.bigint(75).ok()?;
+        let current_runes = data.bigint(76).ok()?;
+        data.ignore(77, "unknown idle field");
+
         let mut res = IdleGame {
-            resets: data.get(2)?.try_into().ok()?,
-            merchant_new_goods: server_time.convert_to_local(
-                data.get(63)?.try_into().ok()?,
-                "trader time",
-            )?,
-            current_money: data.get(72)?.clone(),
-            total_sacrificed: data.get(73)?.clone(),
-            _current_money_2: data.get(74)?.clone(),
-            sacrifice_runes: data.get(75)?.clone(),
-            current_runes: data.get(76)?.clone(),
+            resets,
+            merchant_new_goods,
+            current_money,
+            total_sacrificed,
+            _current_money_2: current_money_2,
+            sacrifice_runes,
+            current_runes,
             buildings: EnumMap::default(),
         };
 
-        // We could do this above.. but I do not want to..
         for (pos, building) in
             res.buildings.as_mut_array().iter_mut().enumerate()
         {
-            building.level = data.get(pos + 3)?.try_into().ok()?;
-            building.earning.clone_from(data.get(pos + 13)?);
-            building.cycle_start = server_time.convert_to_local(
-                data.get(pos + 23)?.try_into().ok()?,
-                "idle cycle start time",
-            );
-            building.cycle_end = server_time.convert_to_local(
-                data.get(pos + 33)?.try_into().ok()?,
-                "idle cycle end time",
-            );
-            building.golden = data.get(pos + 53)? == &1.into();
-            building.upgrade_cost.clone_from(data.get(pos + 78)?);
-            building.upgrade_cost_10x.clone_from(data.get(pos + 88)?);
-            building.upgrade_cost_25x.clone_from(data.get(pos + 98)?);
-            building.upgrade_cost_100x.clone_from(data.get(pos + 108)?);
+            building.level = data.u32_or(pos + 3, 0);
+            building.earning = data.bigint(pos + 13).ok()?;
+            building.cycle_start = data.server_time_opt(pos + 23, server_time);
+            building.cycle_end = data.server_time_opt(pos + 33, server_time);
+            building.golden = data.get_str(pos + 53) == Some("1");
+            building.upgrade_cost = data.bigint(pos + 78).ok()?;
+            building.upgrade_cost_10x = data.bigint(pos + 88).ok()?;
+            building.upgrade_cost_25x = data.bigint(pos + 98).ok()?;
+            building.upgrade_cost_100x = data.bigint(pos + 108).ok()?;
         }
+
+        data.ignore(43..53, "idle unused building slot");
+        data.ignore(64..72, "idle unknown fields");
+        if data.len() > 118 {
+            data.ignore(118..data.len(), "trailing idle fields");
+        }
+
         Some(res)
     }
 }
 
-/// The type of a building in the idle game
+/// The type of a building in the idle game.
+///
+/// Upgrade with [`Command::IdleUpgrade`](crate::command::Command::IdleUpgrade).
 #[derive(Debug, Clone, Copy, Enum, EnumIter, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum IdleBuildingType {
+    /// The seat building.
     Seat = 1,
+    /// The popcorn stand building.
     PopcornStand,
+    /// The parking lot building.
     ParkingLot,
+    /// The trap building.
     Trap,
+    /// The drinks building.
     Drinks,
+    /// The deadly trap building.
     DeadlyTrap,
+    /// The VIP seat building.
     VIPSeat,
+    /// The snacks building.
     Snacks,
+    /// The straying monsters building.
     StrayingMonsters,
+    /// The toilet building.
     Toilet,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_idle_game_parse() {
+        // Construct a synthetic 118-value idle response
+        let mut parts = vec!["0".to_string(); 118];
+        parts[2] = "5".to_string(); // resets
+        for i in 0..10 {
+            parts[3 + i] = format!("{}", (i + 1) * 10); // levels
+            parts[13 + i] = format!("{}", (i + 1) * 1000); // earnings
+            parts[23 + i] = "1600000000".to_string(); // cycle_start
+            parts[33 + i] = "1600000100".to_string(); // cycle_end
+            parts[53 + i] = if i % 2 == 0 { "1" } else { "0" }.to_string(); // golden
+            parts[78 + i] = format!("{}", (i + 1) * 50); // upgrade_cost
+            parts[88 + i] = format!("{}", (i + 1) * 500); // upgrade_cost_10x
+            parts[98 + i] = format!("{}", (i + 1) * 1250); // upgrade_cost_25x
+            parts[108 + i] = format!("{}", (i + 1) * 5000); // upgrade_cost_100x
+        }
+        parts[63] = "1600003600".to_string(); // merchant_new_goods
+        parts[72] = "100000000000".to_string(); // current_money
+        parts[73] = "5000000000".to_string(); // total_sacrificed
+        parts[74] = "100000000001".to_string(); // _current_money_2
+        parts[75] = "250".to_string(); // sacrifice_runes
+        parts[76] = "1000".to_string(); // current_runes
+
+        let raw = parts.join("/");
+        let data = Vals::from(raw.as_str());
+        let idle = IdleGame::parse(&data, ServerTime::default()).unwrap();
+        data.assert_all_read();
+
+        assert_eq!(idle.resets, 5);
+        assert_eq!(idle.current_money, BigInt::from(100_000_000_000u64));
+        assert_eq!(idle.sacrifice_runes, BigInt::from(250));
+        assert_eq!(idle.current_runes, BigInt::from(1000));
+        assert_eq!(idle.buildings[IdleBuildingType::Seat].level, 10);
+        assert_eq!(
+            idle.buildings[IdleBuildingType::Seat].earning,
+            BigInt::from(1000)
+        );
+        assert!(idle.buildings[IdleBuildingType::Seat].golden);
+        assert!(!idle.buildings[IdleBuildingType::PopcornStand].golden);
+    }
 }

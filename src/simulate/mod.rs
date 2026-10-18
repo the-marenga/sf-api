@@ -14,18 +14,15 @@
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation
 )]
-use std::sync::Arc;
 
+pub use damage::DamageRange;
 use enum_map::{Enum, EnumMap};
 use fastrand::Rng;
+pub use fighter::Fighter;
 use fighter::InBattleFighter;
 use strum::EnumIter;
+pub use upgradeable::{PlayerFighterSquad, UpgradeableFighter};
 
-pub use crate::simulate::{
-    damage::DamageRange,
-    fighter::Fighter,
-    upgradeable::{PlayerFighterSquad, UpgradeableFighter},
-};
 use crate::{
     command::AttributeType, gamestate::character::Class,
     simulate::fighter::FighterIdent,
@@ -47,6 +44,8 @@ pub struct Weapon {
     pub damage: DamageRange,
 }
 
+/// The result of a fight simulation containing the win ratio and number of won
+/// fights.
 #[derive(Debug, Clone, Default)]
 pub struct FightSimulationResult {
     /// The amount percentage of fights, that were won (0.0-1.0)
@@ -131,7 +130,7 @@ fn simulate_fight(
 struct InBattleCache(Vec<((FighterIdent, FighterIdent), InBattleFighter)>);
 
 impl InBattleCache {
-    pub fn get_or_insert(
+    fn get_or_insert(
         &mut self,
         this: &Fighter,
         other: &Fighter,
@@ -298,29 +297,48 @@ enum FightOutcome {
     SimulationBroken,
 }
 
+/// The elemental types available in the game, affecting rune damage and
+/// resistances.
 #[derive(Debug, Clone, Copy, Enum, EnumIter, Hash, PartialEq, Eq)]
 pub enum Element {
+    /// Fire element.
     Fire,
+    /// Cold element.
     Cold,
+    /// Lightning element.
     Lightning,
 }
 
+/// Represents an enemy monster with combat attributes and stats.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Monster {
+    /// The name of the monster.
     pub name: &'static str,
+    /// The monster's level.
     pub level: u16,
+    /// The character class of the monster.
     pub class: Class,
+    /// The attributes of the monster.
     pub attributes: EnumMap<AttributeType, u32>,
+    /// The health points of the monster.
     pub hp: u64,
+    /// The minimum base damage of the monster's attack.
     pub min_dmg: u32,
+    /// The maximum base damage of the monster's attack.
     pub max_dmg: u32,
+    /// The armor value of the monster.
     pub armor: u32,
+    /// Optional elemental rune bonus and resistances for the monster.
     pub runes: Option<MonsterRunes>,
 }
 
+/// Elemental rune damage and resistances possessed by a monster.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MonsterRunes {
+    /// The element type of the monster's rune damage.
     pub damage_type: Element,
+    /// The percentage damage bonus from the elemental rune.
     pub damage: i32,
+    /// The elemental damage reduction resistances.
     pub resistances: EnumMap<Element, i32>,
 }

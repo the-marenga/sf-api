@@ -2,22 +2,27 @@ use std::{borrow::Borrow, fmt::Debug, str::FromStr, time::Duration};
 
 use base64::Engine;
 use log::{error, trace, warn};
-use reqwest::{Client, Proxy, header::*};
+use reqwest::{
+    Client, Proxy,
+    header::{ACCEPT_LANGUAGE, HeaderMap, HeaderName, HeaderValue, REFERER},
+};
 use url::Url;
 
-pub use crate::response::*;
 use crate::{
-    command::Command,
+    PlayerId,
+    command::{Command, HASH_CONST, sha1_hash},
     error::SFError,
     gamestate::{
         GameState,
         character::{Class, Gender, Race},
     },
-    misc::{
-        DEFAULT_CRYPTO_ID, DEFAULT_CRYPTO_KEY, DEFAULT_SESSION_ID, HASH_CONST,
-        sha1_hash,
-    },
+    response::Response,
 };
+
+/// Default cryptographic session identifier.
+pub(crate) const DEFAULT_CRYPTO_ID: &str = "0-00000000000000";
+/// Default session token identifier before login.
+pub(crate) const DEFAULT_SESSION_ID: &str = "00000000000000000000000000000000";
 
 /// The session, that manages the server communication for a character
 #[derive(Debug, Clone)]
@@ -30,11 +35,11 @@ pub struct Session {
     /// The id of our session. This will remain the same as long as our login
     /// is valid and nobody else logs in
     session_id: String,
+    /// The player id of the logged in character
+    player_id: PlayerId,
     /// The amount of commands we have sent
-    player_id: u32,
     login_count: u32,
     crypto_id: String,
-    crypto_key: String,
     // We keep this instead of creating a new one, because as per the reqwest
     // docs: "The Client holds a connection pool internally, so it is advised
     // that you create one and reuse it."
@@ -108,7 +113,6 @@ impl Session {
             client,
             session_id: DEFAULT_SESSION_ID.to_string(),
             crypto_id: DEFAULT_CRYPTO_ID.to_string(),
-            crypto_key: DEFAULT_CRYPTO_KEY.to_string(),
             login_count: 1,
             options,
             player_id: 0,
@@ -119,7 +123,6 @@ impl Session {
     /// back to the "not logged in" state. This is basically the equivalent of
     /// clearing browserdata, to logout
     fn logout(&mut self) {
-        self.crypto_key = DEFAULT_CRYPTO_KEY.to_string();
         self.crypto_id = DEFAULT_CRYPTO_ID.to_string();
         self.login_count = 1;
         self.session_id = DEFAULT_SESSION_ID.to_string();
@@ -201,18 +204,18 @@ impl Session {
 
         let Some(tracking) = resp.values().get("tracking") else {
             error!("Got no tracking response from server after registering");
-            return Err(SFError::ParsingError(
-                "register response",
-                resp.raw_response().to_string(),
-            ));
+            return Err(SFError::ParsingError(format!(
+                "Register response: {}",
+                resp.raw_response()
+            )));
         };
 
         if tracking.as_str() != "signup" {
             error!("Got something else than signup response during register");
-            return Err(SFError::ParsingError(
-                "register tracking response",
-                tracking.as_str().to_string(),
-            ));
+            return Err(SFError::ParsingError(format!(
+                "Register tracking response: {} (expected \"signup\")",
+                tracking.as_str()
+            )));
         }
 
         // At this point we are certain, that the server has registered us, so
@@ -368,10 +371,15 @@ impl Session {
         account: std::sync::Arc<tokio::sync::Mutex<crate::sso::SFAccount>>,
         server_lookup: &crate::sso::ServerLookup,
     ) -> Result<Session, SFError> {
-        let url = server_lookup.get(character.server_id)?;
-        let session = account.lock().await.session.clone();
-        let client = account.lock().await.client.clone();
-        let options = account.lock().await.options.clone();
+        let server = server_lookup.get(character.server_id).ok_or(
+            SFError::InvalidRequest("There is no server with this id"),
+        )?;
+        let url = server.url.clone();
+        let acct = account.lock().await;
+        let session = acct.session.clone();
+        let client = acct.client.clone();
+        let options = acct.options.clone();
+        drop(acct);
 
         let ld = LoginData::SSO {
             username: character.name,
@@ -392,6 +400,17 @@ impl Session {
                 username: character_name,
                 ..
             } => character_name,
+        }
+    }
+
+    /// The player ID of the character this session is responsible for, if
+    /// known.
+    #[must_use]
+    pub fn player_id(&self) -> Option<PlayerId> {
+        if self.player_id == 0 {
+            None
+        } else {
+            Some(self.player_id)
         }
     }
 
@@ -537,10 +556,14 @@ pub struct ConnectionOptions {
     pub error_on_unsupported_version: bool,
 }
 
+/// Configuration settings for connecting through an HTTP/HTTPS proxy.
 #[derive(Debug, Clone)]
 pub struct ProxySettings {
+    /// The URL of the proxy server (e.g. `http://proxy.example.com:8080`).
     pub url: String,
+    /// Optional username for proxy authentication.
     pub username: Option<String>,
+    /// Optional password for proxy authentication.
     pub password: Option<String>,
 }
 
@@ -552,18 +575,19 @@ impl Default for ConnectionOptions {
     fn default() -> Self {
         Self {
             user_agent: Some(DEFAULT_USER_AGENT.to_string()),
-            expected_server_version: 2022,
+            expected_server_version: 2024,
             error_on_unsupported_version: false,
             proxy: None,
         }
     }
 }
 
+/// A high-level session wrapper that maintains and updates the local
+/// [`GameState`].
 #[derive(Debug)]
-#[allow(clippy::module_name_repetitions)]
 pub struct SimpleSession {
     session: Session,
-    gamestate: Option<GameState>,
+    gamestate: Option<Box<GameState>>,
 }
 
 impl SimpleSession {
@@ -585,7 +609,7 @@ impl SimpleSession {
             .ok_or(SFError::ConnectionError)?;
         let mut session = Session::new(username, password, connection);
         let resp = session.login().await?;
-        let gs = GameState::new(resp)?;
+        let gs = GameState::new_boxed(resp)?;
         Self::short_sleep().await;
         Ok(Self {
             session,
@@ -647,14 +671,14 @@ impl SimpleSession {
     /// currently logged in
     #[must_use]
     pub fn game_state(&self) -> Option<&GameState> {
-        self.gamestate.as_ref()
+        self.gamestate.as_deref()
     }
 
     /// Returns a mutable reference to the game state, if this `SimpleSession`
     /// is currently logged in
     #[must_use]
     pub fn game_state_mut(&mut self) -> Option<&mut GameState> {
-        self.gamestate.as_mut()
+        self.gamestate.as_deref_mut()
     }
 
     /// Sends the command and updates the gamestate with the response from the
@@ -669,10 +693,8 @@ impl SimpleSession {
     /// - `ConnectionError`: If the command could not be sent, or the response
     ///   could not successfully be received
     /// - `ParsingError`: If the response from the server was unexpected in some
-    ///   way
-    /// - `TooShortResponse` Similar to `ParsingError`, but specific to a
-    ///   response being too short, which would normally trigger a out of bound
-    ///   panic
+    ///   way, for example a response that was too short or otherwise not
+    ///   following the expected layout
     /// - `ServerError`: If the server itself responded with an ingame error
     ///   like "you do not have enough silver to do that"
     #[allow(clippy::unwrap_used, clippy::missing_panics_doc)]
@@ -682,7 +704,7 @@ impl SimpleSession {
     ) -> Result<&mut GameState, SFError> {
         if self.gamestate.is_none() {
             let resp = self.session.login().await?;
-            let gs = GameState::new(resp)?;
+            let gs = GameState::new_boxed(resp)?;
             self.gamestate = Some(gs);
             Self::short_sleep().await;
         }
@@ -702,6 +724,18 @@ impl SimpleSession {
             return Err(e);
         }
 
-        Ok(self.gamestate.as_mut().unwrap())
+        Ok(self.gamestate.as_deref_mut().unwrap())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_login_future_size() {
+        let fut = SimpleSession::login("", "", "");
+        // Ensure the login future does not embed GameState (22+ KB)
+        assert!(std::mem::size_of_val(&fut) < std::mem::size_of::<GameState>());
     }
 }

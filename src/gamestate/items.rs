@@ -8,18 +8,20 @@ use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
 use super::{
-    CFPGet, Class, EnumMapGet, HabitatType, SFError, ServerTime,
+    ServerTime, character::Class, dungeons::CompanionClass, pets::HabitatType,
     unlockables::EquipmentIdent,
 };
 use crate::{
     command::{AttributeType, ShopType},
-    gamestate::{CCGet, CGet, ShopPosition, dungeons::CompanionClass},
+    error::{Result, SFError},
+    response::Vals,
 };
 
 /// The basic inventory, that every player has
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Inventory {
+    /// All item slots in the backpack.
     pub backpack: Vec<Option<Item>>,
 }
 
@@ -49,10 +51,10 @@ impl BagPosition {
 }
 
 impl Inventory {
-    // Splits the backpack, as if it was the old bag/fortress chest layout.
-    // The first slice will be the bag, the second the fortress chest.
-    // If the backback if empty for unknown reasons, or is shorter than 5
-    // elements, both slices will be empty
+    /// Splits the backpack, as if it was the old bag/fortress chest layout.
+    /// The first slice will be the bag, the second the fortress chest.
+    /// If the backpack is empty or has fewer than 5 elements, both slices will
+    /// be empty.
     #[must_use]
     pub fn as_split(&self) -> (&[Option<Item>], &[Option<Item>]) {
         if self.backpack.len() < 5 {
@@ -61,10 +63,10 @@ impl Inventory {
         self.backpack.split_at(5)
     }
 
-    // Splits the backpack, as if it was the old bag/fortress chest layout.
-    // The first slice will be the bag, the second the fortress chest
-    // If the backback if empty for unknown reasons, or is shorter than 5
-    // elements, both slices will be emptys
+    /// Splits the backpack mutably, as if it was the old bag/fortress chest
+    /// layout. The first slice will be the bag, the second the fortress
+    /// chest. If the backpack is empty or has fewer than 5 elements, both
+    /// slices will be empty.
     #[must_use]
     pub fn as_split_mut(
         &mut self,
@@ -88,6 +90,7 @@ impl Inventory {
         None
     }
 
+    /// Returns the number of empty slots in the backpack.
     #[must_use]
     pub fn count_free_slots(&self) -> usize {
         self.backpack.iter().filter(|slot| slot.is_none()).count()
@@ -100,26 +103,48 @@ impl Inventory {
             .enumerate()
             .map(|(pos, item)| (BagPosition(pos), item.as_ref()))
     }
+
+    /// Parses the backpack from a response list.
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Self> {
+        let backpack = data
+            .chunks(ITEM_PARSE_LEN)
+            .map(|chunk| Item::parse(&chunk))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self { backpack })
+    }
+
+    /// Updates the backpack from a response list.
+    pub(crate) fn update(&mut self, data: &Vals<'_>) -> Result<()> {
+        *self = Self::parse(data)?;
+        Ok(())
+    }
 }
 
 /// All the parts of `ItemPlace`, that are owned by the player
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum PlayerItemPlace {
+    /// Equipped items on the character.
     Equipment = 1,
+    /// Items in the 5 main inventory slots.
     MainInventory = 2,
+    /// Items in the extended inventory (fortress chest).
     ExtendedInventory = 5,
-    // Less often usefull and possibly invalid for certain commands
+    /// Equipment on the warrior companion (Bert).
     WarriorCompanion = 101,
+    /// Equipment on the mage companion (Kunigunde).
     MageCompanion = 102,
+    /// Equipment on the scout companion (Mark).
     ScoutCompanion = 103,
 }
 
+/// The position of an item across any item storage location.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ItemPosition {
+    /// The place where the item is stored.
     pub place: ItemPlace,
+    /// The 0-based position of the item within that place.
     pub position: usize,
 }
 
@@ -243,12 +268,13 @@ impl PlayerItemPlace {
     }
 }
 
-/// All the parts of `ItemPlace`, that are owned by the player
+/// The subdivisions of the player inventory.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum InventoryType {
+    /// The primary 5-slot inventory.
     MainInventory = 2,
+    /// The extended inventory unlocked via the fortress chest.
     ExtendedInventory = 5,
 }
 
@@ -272,6 +298,105 @@ impl InventoryType {
                 PlayerItemPlace::ExtendedInventory
             }
         }
+    }
+}
+
+/// The position of an item in a shop.
+#[derive(Debug, Default, Clone, PartialEq, Eq, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ShopPosition {
+    /// The shop type.
+    pub typ: ShopType,
+    /// The 0-based position within the shop.
+    pub pos: usize,
+}
+
+impl std::fmt::Display for ShopPosition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.typ as usize, self.pos + 1)
+    }
+}
+
+impl ShopPosition {
+    /// The shop type.
+    #[must_use]
+    pub fn shop(&self) -> ShopType {
+        self.typ
+    }
+    /// The 0-based position within the shop.
+    #[must_use]
+    pub fn position(&self) -> usize {
+        self.pos
+    }
+}
+
+/// A shop, that you can buy items from
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct Shop {
+    /// The type of shop (Weapon or Magic).
+    pub typ: ShopType,
+    /// The items this shop has for sale
+    pub items: [Item; 6],
+}
+
+impl Default for Shop {
+    fn default() -> Self {
+        let items = core::array::from_fn(|_| Item {
+            typ: ItemType::Unknown(0),
+            price: u32::MAX,
+            mushroom_price: u32::MAX,
+            model_id: 0,
+            class: None,
+            type_specific_val: 0,
+            attributes: EnumMap::default(),
+            gem_slot: None,
+            rune: None,
+            enchantment: None,
+            color: 0,
+            upgrade_count: 0,
+            item_quality: 0,
+            is_washed: false,
+            full_model_id: 0,
+        });
+
+        Self {
+            items,
+            typ: ShopType::Magic,
+        }
+    }
+}
+
+impl Shop {
+    /// Creates an iterator over the shop items.
+    pub fn iter(&self) -> impl Iterator<Item = (ShopPosition, &Item)> {
+        self.items
+            .iter()
+            .enumerate()
+            .map(|(pos, item)| (ShopPosition { typ: self.typ, pos }, item))
+    }
+
+    /// Parses a shop from a 114-element response chunk.
+    pub(crate) fn parse(data: &Vals<'_>, typ: ShopType) -> Result<Shop> {
+        let mut shop = Shop {
+            typ,
+            ..Default::default()
+        };
+        for (chunk, item) in data.chunks(ITEM_PARSE_LEN).zip(&mut shop.items) {
+            let Some(p_item) = Item::parse(&chunk)? else {
+                return Err(SFError::ParsingError(format!(
+                    "Shop item: {chunk:?}"
+                )));
+            };
+            *item = p_item;
+        }
+        Ok(shop)
+    }
+
+    /// Updates the shop's items from a 114-element response chunk.
+    pub(crate) fn update(&mut self, data: &Vals<'_>) -> Result<()> {
+        *self = Self::parse(data, self.typ)?;
+        Ok(())
     }
 }
 
@@ -306,36 +431,36 @@ impl Equipment {
     /// Checks if the character has an item with the enchantment equipped
     #[must_use]
     pub fn has_enchantment(&self, enchantment: Enchantment) -> bool {
-        let item = self.0.get(enchantment.equipment_slot());
+        let item = &self.0[enchantment.equipment_slot()];
         if let Some(item) = item {
             return item.enchantment == Some(enchantment);
         }
         false
     }
 
-    /// Expects the input `data` to have items directly at data[0]
-    #[allow(clippy::indexing_slicing)]
-    pub(crate) fn parse(
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<Equipment, SFError> {
+    /// Parses equipment from a fixed 190-element response chunk.
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Equipment> {
         let mut res = Equipment::default();
-        if !data.len().is_multiple_of(ITEM_PARSE_LEN) {
-            return Err(SFError::ParsingError(
-                "Invalid Equipment",
-                format!("{data:?}"),
-            ));
-        }
         for (chunk, slot) in
-            data.chunks_exact(ITEM_PARSE_LEN).zip(res.0.as_mut_slice())
+            data.chunks(ITEM_PARSE_LEN).zip(res.0.as_mut_slice())
         {
-            *slot = Item::parse(chunk, server_time)?;
+            *slot = Item::parse(&chunk)?;
         }
         Ok(res)
     }
+
+    /// Updates equipment from a fixed 190-element response chunk.
+    pub(crate) fn update(&mut self, data: &Vals<'_>) -> Result<()> {
+        *self = Self::parse(data)?;
+        Ok(())
+    }
 }
 
+/// The number of values in an item response chunk.
 pub(crate) const ITEM_PARSE_LEN: usize = 19;
+/// The number of values in a full equipment response chunk.
+pub(crate) const EQUIPMENT_PARSE_LEN: usize =
+    ITEM_PARSE_LEN * EquipmentSlot::COUNT;
 
 /// Information about a single item. This can be anything, that is either in a
 /// inventory, in a reward slot, or similar
@@ -382,7 +507,8 @@ pub struct Item {
     pub is_washed: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// Identification data for an item used when sending commands to the server.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ItemCommandIdent {
     typ: u8,
@@ -401,9 +527,14 @@ impl std::fmt::Display for ItemCommandIdent {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+/// The payment in resources received when dismantling or upgrading an item at
+/// the blacksmith.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BlacksmithPayment {
+    /// The amount of metal.
     pub metal: u64,
+    /// The amount of arcane splinters.
     pub arcane: u64,
 }
 
@@ -697,42 +828,44 @@ impl Item {
         }
     }
 
-    /// Parses an item, that starts at the start of the given data
-    pub(crate) fn parse(
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<Option<Self>, SFError> {
-        let Some(typ) = ItemType::parse(data, server_time)? else {
+    /// Parses an item from a fixed 19-element response chunk.
+    #[allow(clippy::cast_possible_truncation)]
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Option<Self>> {
+        let Some(typ) = ItemType::parse(data)? else {
+            data.ignore_all("empty item slot");
             return Ok(None);
         };
 
-        let enchantment = data.cfpget(2, "item enchantment", |a| a)?;
-        let gem_slot_val = data.cimget(1, "gem slot val", |a| a)?;
-        let gem_pwr = data.cimget(16, "gem pwr", |a| a)?;
+        data.ignore(4, "enchantment value");
+        if !typ.is_weapon() {
+            data.ignore(6, "weapon damage field on non-weapon item");
+        }
+        if typ.equipment_slot().is_none() {
+            for pos in 7..=12 {
+                data.ignore(pos, "attributes on non-equipment item");
+            }
+        }
 
-        let gem_slot = GemSlot::parse(gem_slot_val, gem_pwr);
+        let enchantment = data.enum_opt(2);
+        let gem_slot_val = data.i64_or(1, 0);
+        let gem_pwr = data.u32_or(16, 0);
+
+        let gem_slot = GemSlot::parse(gem_slot_val, i64::from(gem_pwr));
 
         let class = if typ.is_class_item() {
-            data.cfpget(3, "item class", |x| (x & 0xFFFF) / 1000)?
+            data.enum_map(3, |raw| (raw & 0xFFFF) / 1000)
         } else {
             None
         };
+
         let mut rune = None;
         let mut attributes: EnumMap<AttributeType, u32> = EnumMap::default();
-        let price = data.csiget(13, "item price", u32::MAX)?;
+        let price = data.u32_or(13, u32::MAX);
 
         if typ.equipment_slot().is_some() {
             for i in 0..3 {
-                let atr_typ = data.cget(i + 7, "item atr typ")?;
-                let Ok(atr_typ) = atr_typ.try_into() else {
-                    warn!("Invalid attribute typ: {atr_typ}, {typ:?}");
-                    continue;
-                };
-                let atr_val = data.cget(i + 10, "item atr val")?;
-                let Ok(atr_val): Result<u32, _> = atr_val.try_into() else {
-                    warn!("Invalid attribute value: {atr_val}, {typ:?}");
-                    continue;
-                };
+                let atr_typ = data.usize_or(i + 7, 0);
+                let atr_val = data.u32_or(i + 10, 0);
                 match atr_typ {
                     0 => {}
                     1..=5 => {
@@ -740,7 +873,7 @@ impl Item {
                         else {
                             continue;
                         };
-                        *attributes.get_mut(atr_typ) += atr_val;
+                        attributes[atr_typ] += atr_val;
                     }
                     6 => {
                         for atr in attributes.values_mut() {
@@ -753,7 +886,7 @@ impl Item {
                             AttributeType::Constitution,
                             AttributeType::Luck,
                         ] {
-                            *attributes.get_mut(atr) += atr_val;
+                            attributes[atr] += atr_val;
                         }
                     }
                     22 => {
@@ -762,7 +895,7 @@ impl Item {
                             AttributeType::Constitution,
                             AttributeType::Luck,
                         ] {
-                            *attributes.get_mut(atr) += atr_val;
+                            attributes[atr] += atr_val;
                         }
                     }
                     23 => {
@@ -771,7 +904,7 @@ impl Item {
                             AttributeType::Constitution,
                             AttributeType::Luck,
                         ] {
-                            *attributes.get_mut(atr) += atr_val;
+                            attributes[atr] += atr_val;
                         }
                     }
                     rune_typ => {
@@ -792,16 +925,14 @@ impl Item {
                 }
             }
         }
-        let model_id: u16 =
-            data.cimget(3, "item model id", |x| (x & 0xFFFF) % 1000)?;
+
+        let model_id: u16 = ((data.u32_or(3, 0) & 0xFFFF) % 1000) as u16;
 
         let color = match model_id {
-            ..=49 if typ != ItemType::Talisman => data
-                .get(5..=12)
-                .map(|a| a.iter().sum::<i64>())
-                .map(|a| (a % 5) + 1)
-                .and_then(|a| a.try_into().ok())
-                .unwrap_or(1),
+            ..=49 if typ != ItemType::Talisman => {
+                let sum: u64 = (5..=12).map(|pos| data.u64_or(pos, 0)).sum();
+                ((sum % 5) + 1) as u8
+            }
             _ => 1,
         };
 
@@ -809,18 +940,18 @@ impl Item {
             typ,
             model_id,
             rune,
-            type_specific_val: data.csiget(5, "effect value", 0)?,
+            type_specific_val: data.u32_or(5, 0),
             gem_slot,
             enchantment,
             class,
             attributes,
             color,
             price,
-            mushroom_price: data.csiget(14, "mushroom price", u32::MAX)?,
-            upgrade_count: data.csiget(15, "upgrade count", u8::MAX)?,
-            item_quality: data.csiget(17, "item quality", 0)?,
-            is_washed: data.csiget(18, "is washed", 0)? != 0,
-            full_model_id: data.csiget(3, "raw model id", 0)?,
+            mushroom_price: data.u32_or(14, u32::MAX),
+            upgrade_count: data.u8_or(15, u8::MAX),
+            item_quality: data.u32_or(17, 0),
+            is_washed: data.u32_or(18, 0) != 0,
+            full_model_id: data.u32_or(3, 0),
         };
         Ok(Some(item))
     }
@@ -836,7 +967,7 @@ pub enum Enchantment {
     SwordOfVengeance = 11,
     /// Finds more mushrooms
     MariosBeard = 31,
-    /// Shortens travel time
+    /// Finds more metal
     ManyFeetBoots = 41,
     /// Increased reaction score in combat
     ShadowOfTheCowboy = 51,
@@ -848,13 +979,14 @@ pub enum Enchantment {
     UnholyAcquisitiveness = 81,
     /// Find extra gold on expeditions
     TheGraveRobbersPrayer = 91,
-    /// Increase the chance of loot against other players
+    /// Find more arcane splinters
     RobberBaronRitual = 101,
 }
 
 impl Enchantment {
+    /// Returns the equipment slot that this enchantment can be applied to.
     #[must_use]
-    pub fn equipment_slot(&self) -> EquipmentSlot {
+    pub fn equipment_slot(self) -> EquipmentSlot {
         match self {
             Enchantment::SwordOfVengeance => EquipmentSlot::Weapon,
             Enchantment::MariosBeard => EquipmentSlot::BreastPlate,
@@ -1039,7 +1171,7 @@ impl ItemType {
         )
     }
 
-    /// The equipment slot, that this item type can be equipped to
+    /// Returns the equipment slot, that this item type can be equipped to.
     #[must_use]
     pub fn equipment_slot(&self) -> Option<EquipmentSlot> {
         Some(match self {
@@ -1064,26 +1196,23 @@ impl ItemType {
             .is_some_and(|e| e.enchantment().is_some())
     }
 
-    pub(crate) fn parse(
-        data: &[i64],
-        _server_time: ServerTime,
-    ) -> Result<Option<Self>, SFError> {
-        let raw_typ: u8 = data.csimget(0, "item type", 255, |a| a & 0xFF)?;
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Option<Self>> {
+        let raw_typ = data.u8_or(0, 255);
         let unknown_item = |name: &'static str| {
-            warn!("Could no parse item of type: {raw_typ}. {name} is faulty");
+            warn!("Could not parse item of type: {raw_typ}. {name} is faulty");
             Ok(Some(ItemType::Unknown(raw_typ)))
         };
 
-        let sub_ident = data.cget(3, "item sub type")?;
+        let sub_ident = data.i64(3)?;
 
         Ok(Some(match raw_typ {
             0 => return Ok(None),
             1 => ItemType::Weapon {
-                min_dmg: data.csiget(5, "weapon min dmg", 0)?,
-                max_dmg: data.csiget(6, "weapon min dmg", 0)?,
+                min_dmg: data.u32_or(5, 0),
+                max_dmg: data.u32_or(6, 0),
             },
             2 => ItemType::Shield {
-                block_chance: data.csiget(5, "shield block chance", 0)?,
+                block_chance: data.u32_or(5, 0),
             },
             3 => ItemType::BreastPlate,
             4 => ItemType::FootWear,
@@ -1118,12 +1247,7 @@ impl ItemType {
                     let Some(typ) = FromPrimitive::from_i64(id) else {
                         return unknown_item("resource type");
                     };
-                    ItemType::Resource {
-                        // TODO:
-                        // data.csiget(7, "resource amount", 0)?,
-                        amount: 0,
-                        typ,
-                    }
+                    ItemType::Resource { amount: 0, typ }
                 } else {
                     let Some(typ) = PotionType::parse(id) else {
                         return unknown_item("potion type");
@@ -1134,19 +1258,13 @@ impl ItemType {
                     ItemType::Potion(Potion {
                         typ,
                         size,
-                        // TODO:
                         expires: None,
-                        // expires: data.cstget(
-                        //     4,
-                        //     "potion expires",
-                        //     server_time,
-                        // )?,
                     })
                 }
             }
             13 => ItemType::Scrapbook,
             15 => {
-                let gem_value = data.csiget(16, "gem pwr", 0)?;
+                let gem_value = data.u32_or(16, 0);
                 let Some(typ) = GemType::parse(sub_ident, gem_value) else {
                     return unknown_item("gem type");
                 };
@@ -1251,10 +1369,12 @@ impl PotionType {
 /// The size and with that, the strength, that this potion has
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum PotionSize {
+    /// Small potion providing a 10% bonus.
     Small,
+    /// Medium potion providing a 15% bonus.
     Medium,
+    /// Large potion providing a 25% bonus.
     Large,
 }
 
@@ -1265,8 +1385,9 @@ impl PartialOrd for PotionSize {
 }
 
 impl PotionSize {
+    /// Returns the stat multiplier given by this potion size.
     #[must_use]
-    pub fn effect(&self) -> f64 {
+    pub fn effect(self) -> f64 {
         match self {
             PotionSize::Small => 0.1,
             PotionSize::Medium => 0.15,
@@ -1424,12 +1545,16 @@ impl EquipmentSlot {
 /// An item usable for pets
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[allow(missing_docs)]
 pub enum PetItem {
+    /// Regular pet egg of the specified habitat.
     Egg(HabitatType),
+    /// Special pet egg of the specified habitat.
     SpecialEgg(HabitatType),
+    /// Golden egg found in the mine or tavern.
     GoldenEgg,
+    /// Nest item to unlock pet habitat viewing.
     Nest,
+    /// Fruit to feed and level up pets of the specified habitat.
     Fruit(HabitatType),
 }
 
@@ -1446,20 +1571,128 @@ impl PetItem {
     }
 }
 
+/// Parses the active potions from a 10-value potions response chunk.
 pub(crate) fn parse_active_potions(
-    data: &[i64],
+    data: &Vals<'_>,
     server_time: ServerTime,
-) -> [Option<Potion>; 3] {
-    if data.len() < 10 {
-        return Default::default();
+) -> Result<[Option<Potion>; 3]> {
+    data.ignore(0, "character id");
+    data.ignore(7..10, "potion power");
+    let mut potions: [Option<Potion>; 3] = Default::default();
+    for (i, potion) in potions.iter_mut().enumerate() {
+        let typ_val = data.i64(i + 1)?;
+        let typ = PotionType::parse(typ_val);
+        let size = PotionSize::parse(typ_val);
+        let expires = data.server_time_opt(i + 4, server_time);
+        if let (Some(typ), Some(size)) = (typ, size) {
+            *potion = Some(Potion { typ, size, expires });
+        }
     }
-    #[allow(clippy::indexing_slicing)]
-    core::array::from_fn(move |i| {
-        Some(Potion {
-            typ: PotionType::parse(data[i + 1])?,
-            size: PotionSize::parse(data[i + 1])?,
-            expires: server_time.convert_to_local(data[4 + i], "potion exp"),
-            // 6 => effect, but no idea why we would want to use that
-        })
-    })
+    Ok(potions)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_equipment_parse() {
+        let raw = ["0"; EQUIPMENT_PARSE_LEN].join("/");
+        let vals = Vals::from(raw.as_str());
+        let equipment = Equipment::parse(&vals).unwrap();
+        assert!(equipment.0.values().all(Option::is_none));
+    }
+
+    #[test]
+    fn test_equipment_update() {
+        let raw = ["0"; EQUIPMENT_PARSE_LEN].join("/");
+        let vals = Vals::from(raw.as_str());
+        let mut equipment = Equipment::default();
+        equipment.update(&vals).unwrap();
+        vals.assert_all_read();
+        assert!(equipment.0.values().all(Option::is_none));
+    }
+
+    #[test]
+    fn test_item_parse() {
+        let raw = "1/0/0/1010/0/149/265/5/4/0/108/72/0/83940/10/0/0/45/0";
+        let vals = Vals::from(raw);
+        let item = Item::parse(&vals).unwrap().unwrap();
+        vals.assert_all_read();
+        assert_eq!(item.price, 83940);
+    }
+
+    #[test]
+    fn test_inventory_parse_and_update() {
+        let raw = "15/0/0/23/0/0/0/0/0/0/0/0/0/36384/0/0/31/0/0/15/0/0/30/0/0/\
+                   0/0/0/0/0/0/0/45408/0/0/36/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/\
+                   0/0/0/0/0";
+        let vals = Vals::from(raw);
+        let inventory = Inventory::parse(&vals).unwrap();
+        vals.assert_all_read();
+        assert_eq!(inventory.backpack.len(), 3);
+        assert!(inventory.backpack[0].is_some());
+        assert_eq!(inventory.backpack[0].as_ref().unwrap().price, 36384);
+        assert!(inventory.backpack[1].is_some());
+        assert!(inventory.backpack[2].is_none());
+        assert_eq!(inventory.count_free_slots(), 1);
+
+        let mut inv = Inventory::default();
+        let vals2 = Vals::from(raw);
+        inv.update(&vals2).unwrap();
+        vals2.assert_all_read();
+        assert_eq!(inv.backpack.len(), 3);
+        assert_eq!(inv.backpack[0].as_ref().unwrap().price, 36384);
+    }
+
+    #[test]
+    fn test_shop_parse_and_update() {
+        let raw = "4/1/0/1008/0/143/0/2/0/0/88/0/0/61046/0/0/0/48/0/7/0/0/\
+                   1008/0/107/0/2/0/0/87/0/0/63276/0/0/0/47/0/1/0/0/1010/0/\
+                   149/265/5/4/0/108/72/0/83940/10/0/0/45/0/4/0/0/1009/0/134/\
+                   0/1/3/0/54/44/0/19480/1/0/0/49/0/3/0/0/1008/0/135/0/5/4/0/\
+                   61/37/0/52141/10/0/0/49/0/6/0/0/1010/0/117/0/3/4/0/55/45/0/\
+                   20897/1/0/0/50/0";
+        let vals = Vals::from(raw);
+        let shop = Shop::parse(&vals, ShopType::Weapon).unwrap();
+        vals.assert_all_read();
+        assert_eq!(shop.typ, ShopType::Weapon);
+        assert_eq!(shop.items[0].price, 61046);
+        assert_eq!(shop.items[2].price, 83940);
+
+        let mut target_shop = Shop::default();
+        let vals2 = Vals::from(raw);
+        target_shop.typ = ShopType::Weapon;
+        target_shop.update(&vals2).unwrap();
+        vals2.assert_all_read();
+        assert_eq!(target_shop.items[0].price, 61046);
+    }
+
+    #[test]
+    fn test_parse_active_potions() {
+        // Empty potions
+        let raw = "1039746/0/0/0/0/0/0/0/0/0";
+        let vals = Vals::from(raw);
+        let potions =
+            parse_active_potions(&vals, ServerTime::default()).unwrap();
+        vals.assert_all_read();
+        assert!(potions.iter().all(Option::is_none));
+
+        // Active potions
+        let raw_active =
+            "1039746/1/6/16/1700000000/1700000000/1700000000/10/15/25";
+        let vals_active = Vals::from(raw_active);
+        let active =
+            parse_active_potions(&vals_active, ServerTime::default()).unwrap();
+        vals_active.assert_all_read();
+        assert!(active[0].is_some());
+        assert_eq!(active[0].as_ref().unwrap().typ, PotionType::Strength);
+        assert_eq!(active[0].as_ref().unwrap().size, PotionSize::Small);
+        assert!(active[1].is_some());
+        assert_eq!(active[1].as_ref().unwrap().typ, PotionType::Strength);
+        assert_eq!(active[1].as_ref().unwrap().size, PotionSize::Medium);
+        assert!(active[2].is_some());
+        assert_eq!(active[2].as_ref().unwrap().typ, PotionType::EternalLife);
+        assert_eq!(active[2].as_ref().unwrap().size, PotionSize::Large);
+    }
 }
