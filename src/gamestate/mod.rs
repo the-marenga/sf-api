@@ -1469,6 +1469,22 @@ impl GameState {
             x if x.starts_with("fightdecoration") => {
                 // Cosmetic decoration data: always `0/0/0/0` so far
             }
+            "titledetails" => {
+                // "1/2/1531/Annersch/1761696098/1/BigMic/1761696128/1/Tutar/
+                // 1761696128/1"
+            }
+            "subscriptionexpiredlist" => {
+                // "r" <- I assume a list of old vip subscriptions?
+            }
+            "receiptlist" => {
+                // "r" <- No idea
+            }
+            "dungeonprogressclass" => {
+                // "0/0/-1/-1/-1" <- Prosumably the stages of the new dungeons
+            }
+            "classportalprogress" => {
+                // "104/0/0" <- ???
+            }
             x => {
                 warn!("Update ignored {x} -> {val:?}");
             }
