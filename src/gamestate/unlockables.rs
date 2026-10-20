@@ -5,7 +5,11 @@ use enum_map::EnumMap;
 use log::warn;
 use strum::IntoEnumIterator;
 
-use super::{ServerTime, character::Class, items::EquipmentSlot};
+use super::{
+    ServerTime,
+    character::Class,
+    items::{EPIC_MODEL_START, EquipmentSlot},
+};
 use crate::{error::Result, gamestate::items::Enchantment, response::Vals};
 
 /// Information about the witch cauldron and unlocked enchantments.
@@ -383,6 +387,18 @@ fn parse_scrapbook_item(item_idx: i64) -> Option<EquipmentIdent> {
             (relative_pos + 4) / 5
         } as u16;
 
+        // `SCRAPBOOK_SLOTS` only knows where the *next* section starts, not
+        // where the items of this section end. The game reserves the space in
+        // between, so a position can be past the last real item of its own
+        // section. Continuing the formula over that reserved space is fine as
+        // long as it stays below the epic band, but once it reaches into it, it
+        // produces idents that the epic section right after it already claims.
+        // Talisman 1300..=1324 and warrior weapon 1610..=1664 do exactly that,
+        // so they are dropped instead of shadowing the actual epics
+        if !is_epic && model_id >= EPIC_MODEL_START {
+            return None;
+        }
+
         return Some(EquipmentIdent {
             class: *class,
             typ: *typ,
@@ -396,6 +412,7 @@ fn parse_scrapbook_item(item_idx: i64) -> Option<EquipmentIdent> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::gamestate::items::LEGENDARY_MODEL_START;
 
     #[test]
     fn test_unlockable_parse() {
@@ -496,6 +513,70 @@ mod tests {
         assert!(parse_scrapbook_item(1954).is_none());
         assert!(parse_scrapbook_item(1955).is_none());
         assert!(parse_scrapbook_item(1956).is_some());
+    }
+
+    /// The reserved space after a talisman and a warrior weapon section used to
+    /// be mapped to model ids that the epic section right after it already
+    /// claimed. Those reserved positions are now dropped, the epic ones keep
+    /// the ident
+    #[test]
+    fn test_parse_scrapbook_item_reserved_does_not_hit_epic_band() {
+        // Talismans: reserved 1288..1324 extrapolated to models 38..=74, while
+        // the epic talismans at 1325.. use 50..=89
+        assert!(parse_scrapbook_item(1299).is_some());
+        assert!(parse_scrapbook_item(1300).is_none());
+        assert_eq!(
+            parse_scrapbook_item(1325).map(|i| (i.typ, i.model_id, i.color)),
+            Some((EquipmentSlot::Talisman, 50, 1))
+        );
+
+        // Warrior weapons: reserved 1515..1664 extrapolated to models 31..=60,
+        // while the epic weapons at 1665.. use 50..=89
+        assert!(parse_scrapbook_item(1609).is_some());
+        assert!(parse_scrapbook_item(1610).is_none());
+        assert_eq!(
+            parse_scrapbook_item(1665)
+                .map(|i| (i.typ, i.class, i.model_id, i.color)),
+            Some((EquipmentSlot::Weapon, Some(Class::Warrior), 50, 1))
+        );
+    }
+
+    /// Every scrapbook position must map to a unique ident. Otherwise it is
+    /// ambiguous whether a player has collected an item or not
+    #[test]
+    fn test_parse_scrapbook_item_is_injective() {
+        let mut seen = std::collections::HashMap::new();
+        let mut duplicates = Vec::new();
+
+        for index in 801..=4224 {
+            let Some(ident) = parse_scrapbook_item(index) else {
+                continue;
+            };
+            if let Some(previous) = seen.insert(ident, index) {
+                duplicates.push((previous, index, ident));
+            }
+        }
+
+        assert!(
+            duplicates.is_empty(),
+            "scrapbook positions parsed to the same ident: {duplicates:?}"
+        );
+    }
+
+    /// Scrapbook positions never claim ids of a band, that the mapping does not
+    /// model. The legendary band is not part of it (yet)
+    #[test]
+    fn test_parse_scrapbook_item_model_bands() {
+        for index in 801..=4224 {
+            let Some(ident) = parse_scrapbook_item(index) else {
+                continue;
+            };
+            assert!(
+                ident.model_id < LEGENDARY_MODEL_START,
+                "position {index} parsed to legendary model {}",
+                ident.model_id
+            );
+        }
     }
 
     #[test]

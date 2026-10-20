@@ -462,6 +462,13 @@ pub(crate) const ITEM_PARSE_LEN: usize = 19;
 pub(crate) const EQUIPMENT_PARSE_LEN: usize =
     ITEM_PARSE_LEN * EquipmentSlot::COUNT;
 
+/// The first model id that belongs to the epic band. Normal items use the
+/// model ids below this
+pub(crate) const EPIC_MODEL_START: u16 = 50;
+
+/// The first model id that belongs to the legendary band
+pub(crate) const LEGENDARY_MODEL_START: u16 = 90;
+
 /// Information about a single item. This can be anything, that is either in a
 /// inventory, in a reward slot, or similar
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -734,13 +741,13 @@ impl Item {
     /// Checks if this item is an epic
     #[must_use]
     pub fn is_epic(&self) -> bool {
-        self.model_id >= 50
+        self.model_id >= EPIC_MODEL_START
     }
 
     /// Checks if this item is a legendary
     #[must_use]
     pub fn is_legendary(&self) -> bool {
-        self.model_id >= 90
+        self.model_id >= LEGENDARY_MODEL_START
     }
 
     /// The armor rating of this item. This is just the `effect_val`, if any
