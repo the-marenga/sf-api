@@ -409,6 +409,57 @@ impl GameState {
         );
     }
 
+    pub(crate) fn update_character_save(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        self.character.update(data, server_time);
+        self.guild.get_or_insert_default().portal.damage_bonus =
+            data.u8_or(26, 0);
+        self.dungeons.portal.get_or_insert_default().player_hp_bonus =
+            data.u16_or(28, 0);
+    }
+
+    pub(crate) fn update_character_status(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        data.ignore(0, "unknown character status value");
+        self.tavern.current_action = CurrentAction::parse(
+            data.i64_or(1, 0),
+            data.i64_or(2, 0),
+            data.server_time_opt(3, server_time),
+        );
+        // Index 4 contains the current action start.
+        data.ignore(4, "current action start");
+
+        self.tavern.beer_max = data.u8_or(5, 0);
+        self.tavern.thirst_for_adventure_sec = data.u32_or(6, 0);
+        self.tavern.beer_drunk = data.u8_or(7, 0);
+        self.specials.calendar.collected = data.usize_or(8, 245);
+        self.specials.calendar.next_possible =
+            data.server_time_opt(9, server_time);
+        data.ignore(10..20, "unmodelled character status values");
+
+        self.pets.get_or_insert_default().next_free_exploration =
+            data.server_time_opt(20, server_time);
+        self.dungeons.next_free_fight = data.server_time_opt(21, server_time);
+
+        let healing_start = data.server_time_opt(22, server_time);
+        if let Some(start) = healing_start {
+            self.legendary_dungeon
+                .active
+                .get_or_insert_default()
+                .healing_start = Some(start);
+        } else if let Some(active) = self.legendary_dungeon.active.as_mut() {
+            active.healing_start = None;
+        }
+
+        data.ignore(23..data.len(), "extra character status values");
+    }
+
     pub(crate) fn update_resources(
         &mut self,
         res: &[i64],
@@ -1893,147 +1944,10 @@ impl GameState {
                     val.as_str() != "0";
             }
             "characterstatus" => {
-                let data: Vec<i64> = val.into_list("char status")?;
-
-                self.tavern.current_action = CurrentAction::parse(
-                    data.cget(1, "action id")?,
-                    data.cget(2, "action sec")?,
-                    data.cstget(3, "current action time", server_time)?,
-                );
-
-                // NOTE: [4] contains the start
-                self.tavern.beer_max = data.csiget(5, "beer total", 0)?;
-
-                self.tavern.thirst_for_adventure_sec =
-                    data.csiget(6, "remaining ALU", 0)?;
-                self.tavern.beer_drunk =
-                    data.csiget(7, "beer drunk count", 0)?;
-                self.specials.calendar.collected =
-                    data.csiget(8, "calendar collected", 245)?;
-                self.specials.calendar.next_possible =
-                    data.cstget(9, "calendar next", server_time)?;
-                // 0
-                // 0
-                // 0
-                // 0
-                // 0
-                // 1513       // was [15]
-                // 1541087831 // acc creation time?
-                // 0
-                // 0
-                // 0
-                self.pets
-                    .get_or_insert_with(Default::default)
-                    .next_free_exploration =
-                    data.cstget(20, "pet next free exp", server_time)?;
-                self.dungeons.next_free_fight =
-                    data.cstget(21, "dungeon timer", server_time)?;
-                if let Some(start) =
-                    data.cstget(22, "dungeon timer", server_time)?
-                {
-                    self.legendary_dungeon
-                        .active
-                        .get_or_insert_default()
-                        .healing_start = Some(start);
-                }
-                // 0
-                // 1
-                // 0
-                // 0
-                // 0
-                // 0
-                // 0
-                // 0
-                // 0
+                self.update_character_status(&val.list(), server_time);
             }
             "ownplayersavecharacter" => {
-                let data: Vec<i64> = val.into_list("char save")?;
-
-                // 1482984989 // creation time? secret id?
-                self.character.player_id = data.csiget(1, "player id", 0)?;
-                // 0
-                self.character.level =
-                    data.csimget(3, "level", 0, |a| a & 0xFFFF)?;
-                self.character.experience = data.csiget(4, "experience", 0)?;
-                self.character.next_level_xp =
-                    data.csiget(5, "xp to next lvl", 0)?;
-                self.character.honor = data.csiget(6, "honor", 0)?;
-                self.character.rank = data.csiget(7, "rank", 0)?;
-                self.character.portrait =
-                    Portrait::parse(data.skip(8, "portrait")?)
-                        .unwrap_or_default();
-                ///// Portrait
-                // 4
-                // 206
-                // 203
-                // 2
-                // 0
-                // 2
-                // 7
-                // 2
-                // 0
-                // 0
-                self.character.race = data.cfpuget(18, "char race", |a| a)?;
-                // 2
-                // ////
-                self.character.class =
-                    data.cfpuget(20, "character class", |a| a - 1)?;
-                self.character.mount =
-                    data.cfpget(21, "character mount", |a| a & 0xFF)?;
-                // 0
-                self.character.armor = data.csiget(23, "total armor", 0)?;
-                self.character.min_damage = data.csiget(24, "min damage", 0)?;
-                self.character.max_damage = data.csiget(25, "max damage", 0)?;
-                self.guild
-                    .get_or_insert_with(Default::default)
-                    .portal
-                    .damage_bonus =
-                    data.cimget(26, "portal dmg bonus", |a| a)?;
-                // 4280492 ??
-                self.dungeons
-                    .portal
-                    .get_or_insert_with(Default::default)
-                    .player_hp_bonus =
-                    data.csimget(28, "portal hp bonus", 0, |a| a)?;
-                self.character.mount_end =
-                    data.cstget(29, "mount end", server_time)?;
-                update_enum_map(
-                    &mut self.character.attribute_basis,
-                    data.skip(30, "char attr basis")?,
-                );
-                update_enum_map(
-                    &mut self.character.attribute_additions,
-                    data.skip(35, "char attr adds")?,
-                );
-                update_enum_map(
-                    &mut self.character.attribute_times_bought,
-                    data.skip(40, "char attr tb")?,
-                );
-                // 0
-                // 0
-                // 0
-                // 0
-                // 1
-                // 17
-                // 0
-                // 0
-                // 0
-                // 66
-                // 0
-                // 7
-                // 18
-                // 0
-                // 0
-                // 0
-                // 0
-                // 0
-                // 0
-                // 0
-                // 80315    // guild_id ?
-                // 12122    // sb count
-                // 0
-                // 31
-                // 15       // gladiators
+                self.update_character_save(&val.list(), server_time);
             }
             "adventure" => {
                 let data: Vec<i64> = val.into_list("char save")?;
@@ -2284,9 +2198,72 @@ pub struct NormalCost {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
+    #![allow(
+        clippy::unwrap_used,
+        clippy::indexing_slicing,
+        clippy::needless_range_loop
+    )]
 
     use super::*;
+
+    fn character_save_values() -> Vec<String> {
+        let mut values = vec!["0".to_owned(); 70];
+        values[0] = "ignored".to_owned();
+        values[1] = "123456".to_owned();
+        values[2] = "ignored".to_owned();
+        values[3] = "1048618".to_owned();
+        values[4] = "9000000000".to_owned();
+        values[5] = "12345678".to_owned();
+        values[6] = "4321".to_owned();
+        values[7] = "17".to_owned();
+        values[8] = "4".to_owned();
+        values[9] = "206".to_owned();
+        values[10] = "103".to_owned();
+        values[11] = "2".to_owned();
+        values[12] = "104".to_owned();
+        values[13] = "5".to_owned();
+        values[14] = "6".to_owned();
+        values[15] = "7".to_owned();
+        values[16] = "108".to_owned();
+        values[17] = "9".to_owned();
+        values[18] = "3".to_owned();
+        values[19] = "1".to_owned();
+        values[20] = "4".to_owned();
+        values[21] = "260".to_owned();
+        values[22] = "ignored".to_owned();
+        values[23] = "98765".to_owned();
+        values[24] = "123".to_owned();
+        values[25] = "456".to_owned();
+        values[26] = "12".to_owned();
+        values[27] = "ignored".to_owned();
+        values[28] = "345".to_owned();
+        values[29] = "1700000029".to_owned();
+        for idx in 30..45 {
+            values[idx] = (idx - 29).to_string();
+        }
+        values[45..].fill("ignored".to_owned());
+        values
+    }
+
+    fn character_status_values() -> Vec<String> {
+        let mut values = vec!["0".to_owned(); 33];
+        values[0] = "ignored".to_owned();
+        values[1] = "1".to_owned();
+        values[2] = "8".to_owned();
+        values[3] = "1700000003".to_owned();
+        values[4] = "ignored".to_owned();
+        values[5] = "12".to_owned();
+        values[6] = "345".to_owned();
+        values[7] = "4".to_owned();
+        values[8] = "17".to_owned();
+        values[9] = "1700000009".to_owned();
+        values[10..20].fill("ignored".to_owned());
+        values[20] = "1700000020".to_owned();
+        values[21] = "1700000021".to_owned();
+        values[22] = "1700000022".to_owned();
+        values[23..].fill("ignored".to_owned());
+        values
+    }
 
     #[test]
     fn updates_the_whole_tower_response() {
@@ -2364,5 +2341,331 @@ mod tests {
         )
         .unwrap();
         assert!(GameState::default().update(response).is_ok());
+    }
+
+    #[test]
+    fn updates_the_whole_character_save_response() {
+        let server_time = ServerTime(3_600);
+        let raw = character_save_values().join("/");
+        let data = Vals::from(raw.as_str());
+        assert_eq!(data.len(), 70);
+
+        let mut state = GameState::default();
+        state.update_character_save(&data, server_time);
+        data.assert_all_read();
+
+        assert_eq!(state.character.player_id, 123_456);
+        assert_eq!(state.character.level, 42);
+        assert_eq!(state.character.experience, 9_000_000_000);
+        assert_eq!(state.character.next_level_xp, 12_345_678);
+        assert_eq!(state.character.honor, 4_321);
+        assert_eq!(state.character.rank, 17);
+        assert_eq!(state.character.race, Race::Dwarf);
+        assert_eq!(state.character.class, Class::Assassin);
+        assert_eq!(state.character.mount, Some(Mount::Dragon));
+        assert_eq!(state.character.armor, 98_765);
+        assert_eq!(state.character.min_damage, 123);
+        assert_eq!(state.character.max_damage, 456);
+        let expected_mount_end = server_time
+            .convert_to_local(1_700_000_029, "mount end")
+            .unwrap();
+        assert_eq!(
+            state.character.mount_end.as_ref(),
+            Some(&expected_mount_end)
+        );
+        assert_eq!(
+            state.character.portrait,
+            Portrait {
+                gender: Gender::Male,
+                hair_color: 2,
+                hair: 6,
+                mouth: 4,
+                brows: 3,
+                eyes: 2,
+                beards: 4,
+                nose: 5,
+                ears: 6,
+                extra: 7,
+                horns: 8,
+                special_portrait: 9,
+            }
+        );
+        assert_eq!(
+            state.character.attribute_basis,
+            EnumMap::from_array([1, 2, 3, 4, 5])
+        );
+        assert_eq!(
+            state.character.attribute_additions,
+            EnumMap::from_array([6, 7, 8, 9, 10])
+        );
+        assert_eq!(
+            state.character.attribute_times_bought,
+            EnumMap::from_array([11, 12, 13, 14, 15])
+        );
+        assert_eq!(state.guild.as_ref().unwrap().portal.damage_bonus, 12);
+        assert_eq!(
+            state.dungeons.portal.as_ref().unwrap().player_hp_bonus,
+            345
+        );
+    }
+
+    #[test]
+    fn malformed_character_save_values_use_independent_defaults() {
+        let server_time = ServerTime(3_600);
+        let mut values = character_save_values();
+        let raw = values.join("/");
+        let data = Vals::from(raw.as_str());
+        let mut state = GameState::default();
+        state.update_character_save(&data, server_time);
+        data.assert_all_read();
+
+        for pos in [
+            1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+            21, 23, 24, 25, 26,
+        ] {
+            values[pos] = "malformed".to_owned();
+        }
+        values[30..45].fill("malformed".to_owned());
+        values[44] = "55".to_owned();
+
+        let raw = values.join("/");
+        let data = Vals::from(raw.as_str());
+        state.update_character_save(&data, server_time);
+        data.assert_all_read();
+
+        assert_eq!(state.character.player_id, 0);
+        assert_eq!(state.character.level, 0);
+        assert_eq!(state.character.experience, 0);
+        assert_eq!(state.character.next_level_xp, 0);
+        assert_eq!(state.character.honor, 0);
+        assert_eq!(state.character.rank, 0);
+        assert_eq!(state.character.race, Race::Human);
+        assert_eq!(state.character.class, Class::Warrior);
+        assert_eq!(state.character.mount, None);
+        assert_eq!(state.character.armor, 0);
+        assert_eq!(state.character.min_damage, 0);
+        assert_eq!(state.character.max_damage, 0);
+        let expected_mount_end = server_time
+            .convert_to_local(1_700_000_029, "mount end")
+            .unwrap();
+        assert_eq!(
+            state.character.mount_end.as_ref(),
+            Some(&expected_mount_end)
+        );
+        assert_eq!(
+            state.character.portrait,
+            Portrait {
+                gender: Gender::Female,
+                hair_color: 1,
+                hair: 0,
+                mouth: 1,
+                brows: 1,
+                eyes: 1,
+                beards: 1,
+                nose: 1,
+                ears: 1,
+                extra: 1,
+                horns: 1,
+                special_portrait: 0,
+            }
+        );
+        assert_eq!(
+            state.character.attribute_basis,
+            EnumMap::from_array([0; 5])
+        );
+        assert_eq!(
+            state.character.attribute_additions,
+            EnumMap::from_array([0; 5])
+        );
+        assert_eq!(
+            state.character.attribute_times_bought,
+            EnumMap::from_array([0, 0, 0, 0, 55])
+        );
+        assert_eq!(state.guild.as_ref().unwrap().portal.damage_bonus, 0);
+        assert_eq!(
+            state.dungeons.portal.as_ref().unwrap().player_hp_bonus,
+            345
+        );
+    }
+
+    #[test]
+    fn updates_the_whole_character_status_response() {
+        let server_time = ServerTime(3_600);
+        let raw = character_status_values().join("/");
+        let data = Vals::from(raw.as_str());
+        assert_eq!(data.len(), 33);
+
+        let mut state = GameState::default();
+        state.update_character_status(&data, server_time);
+        data.assert_all_read();
+
+        let expected_action_end = server_time
+            .convert_to_local(1_700_000_003, "current action time")
+            .unwrap();
+        match state.tavern.current_action {
+            CurrentAction::CityGuard { hours, busy_until } => {
+                assert_eq!(hours, 8);
+                assert_eq!(busy_until, expected_action_end);
+            }
+            action => panic!("unexpected current action: {action:?}"),
+        }
+        assert_eq!(state.tavern.beer_max, 12);
+        assert_eq!(state.tavern.thirst_for_adventure_sec, 345);
+        assert_eq!(state.tavern.beer_drunk, 4);
+        assert_eq!(state.specials.calendar.collected, 17);
+        let expected_calendar_next = server_time
+            .convert_to_local(1_700_000_009, "calendar next")
+            .unwrap();
+        assert_eq!(
+            state.specials.calendar.next_possible.as_ref(),
+            Some(&expected_calendar_next)
+        );
+        let expected_pet_next = server_time
+            .convert_to_local(1_700_000_020, "pet next free exploration")
+            .unwrap();
+        assert_eq!(
+            state.pets.as_ref().unwrap().next_free_exploration.as_ref(),
+            Some(&expected_pet_next)
+        );
+        let expected_dungeon_next = server_time
+            .convert_to_local(1_700_000_021, "dungeon next free fight")
+            .unwrap();
+        assert_eq!(
+            state.dungeons.next_free_fight.as_ref(),
+            Some(&expected_dungeon_next)
+        );
+        let expected_healing_start = server_time
+            .convert_to_local(1_700_000_022, "healing start")
+            .unwrap();
+        assert_eq!(
+            state
+                .legendary_dungeon
+                .active
+                .as_ref()
+                .unwrap()
+                .healing_start
+                .as_ref(),
+            Some(&expected_healing_start)
+        );
+    }
+
+    #[test]
+    fn zero_character_status_healing_time_clears_only_existing_state() {
+        let server_time = ServerTime(3_600);
+        let mut values = character_status_values();
+        values[22] = "0".to_owned();
+        let raw = values.join("/");
+        let old_start = server_time
+            .convert_to_local(1_700_000_100, "test healing start")
+            .unwrap();
+
+        let data = Vals::from(raw.as_str());
+        let mut cached_state = GameState::default();
+        cached_state.legendary_dungeon.active =
+            Some(LegendaryDungeon::default());
+        cached_state
+            .legendary_dungeon
+            .active
+            .as_mut()
+            .unwrap()
+            .healing_start = Some(old_start);
+        cached_state.update_character_status(&data, server_time);
+        data.assert_all_read();
+        assert!(
+            cached_state
+                .legendary_dungeon
+                .active
+                .as_ref()
+                .unwrap()
+                .healing_start
+                .is_none()
+        );
+
+        let data = Vals::from(raw.as_str());
+        let mut empty_state = GameState::default();
+        empty_state.update_character_status(&data, server_time);
+        data.assert_all_read();
+        assert!(empty_state.legendary_dungeon.active.is_none());
+    }
+
+    #[test]
+    fn truncated_malformed_character_status_uses_defaults() {
+        let server_time = ServerTime(3_600);
+        let raw = "ignored/malformed/malformed/malformed/ignored/malformed/\
+                   malformed/malformed/malformed/malformed";
+        let data = Vals::from(raw);
+        let old_time = server_time
+            .convert_to_local(1_700_000_100, "test status time")
+            .unwrap();
+        let mut state = GameState::default();
+        state.tavern.current_action = CurrentAction::CityGuard {
+            hours: 9,
+            busy_until: old_time,
+        };
+        state.tavern.beer_max = 9;
+        state.tavern.thirst_for_adventure_sec = 9;
+        state.tavern.beer_drunk = 9;
+        state.specials.calendar.collected = 9;
+        state.specials.calendar.next_possible = Some(old_time);
+        state.pets = Some(Pets {
+            next_free_exploration: Some(old_time),
+            ..Default::default()
+        });
+        state.dungeons.next_free_fight = Some(old_time);
+        state.legendary_dungeon.active = Some(LegendaryDungeon::default());
+        state
+            .legendary_dungeon
+            .active
+            .as_mut()
+            .unwrap()
+            .healing_start = Some(old_time);
+
+        state.update_character_status(&data, server_time);
+        data.assert_all_read();
+
+        assert_eq!(state.tavern.current_action, CurrentAction::Idle);
+        assert_eq!(state.tavern.beer_max, 0);
+        assert_eq!(state.tavern.thirst_for_adventure_sec, 0);
+        assert_eq!(state.tavern.beer_drunk, 0);
+        assert_eq!(state.specials.calendar.collected, 245);
+        assert!(state.specials.calendar.next_possible.is_none());
+        assert!(state.pets.as_ref().unwrap().next_free_exploration.is_none());
+        assert!(state.dungeons.next_free_fight.is_none());
+        assert!(
+            state
+                .legendary_dungeon
+                .active
+                .as_ref()
+                .unwrap()
+                .healing_start
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn portrait_tolerates_invalid_values_and_ignores_extras() {
+        let data = Vals::from(
+            "256/9223372036854775807/-1/-1/-1/-1/-1/-1/-1/99/-1/-1/extra",
+        );
+        let portrait = Portrait::parse_vals(&data);
+        data.assert_all_read();
+
+        assert_eq!(
+            portrait,
+            Portrait {
+                gender: Gender::Female,
+                hair_color: 100,
+                hair: 7,
+                mouth: 1,
+                brows: 1,
+                eyes: 1,
+                beards: 1,
+                nose: 1,
+                ears: 1,
+                extra: 1,
+                horns: 1,
+                special_portrait: 99,
+            }
+        );
     }
 }

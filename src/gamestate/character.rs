@@ -5,8 +5,10 @@ use enum_map::EnumMap;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use super::{NormalCost, RelationEntry, SFError, ScrapBook};
-use crate::{PlayerId, command::*, gamestate::items::*, misc::*};
+use super::{NormalCost, RelationEntry, SFError, ScrapBook, ServerTime};
+use crate::{
+    PlayerId, command::*, gamestate::items::*, misc::*, response::Vals,
+};
 
 /// Everything, that can be considered part of the character and not the rest
 /// of the world
@@ -91,6 +93,45 @@ pub struct Character {
     pub relations: Vec<RelationEntry>,
 }
 
+impl Character {
+    pub(crate) fn update(&mut self, data: &Vals<'_>, server_time: ServerTime) {
+        data.ignore(0, "character creation time or secret id");
+        self.player_id = data.u32_or(1, 0);
+        data.ignore(2, "unknown character save value");
+        self.level = u16::try_from(data.i64_or(3, 0) & 0xffff).unwrap_or(0);
+        self.experience = data.u64_or(4, 0);
+        self.next_level_xp = data.u64_or(5, 0);
+        self.honor = data.u32_or(6, 0);
+        self.rank = data.u32_or(7, 0);
+        self.portrait = Portrait::parse_vals(&data.window(8..20));
+        self.race = data.enum_or(18, Race::Human);
+        self.class = data
+            .enum_map(20, |raw| raw.wrapping_sub(1))
+            .unwrap_or(Class::Warrior);
+        self.mount = data.enum_map(21, |raw| raw & 0xff);
+        data.ignore(22, "unknown character save value");
+        self.armor = data.u64_or(23, 0);
+        self.min_damage = data.u32_or(24, 0);
+        self.max_damage = data.u32_or(25, 0);
+        // Indices 26 and 28 are read by GameState::update_character_save.
+        data.ignore(27, "unknown character save value");
+        self.mount_end = data.server_time_opt(29, server_time);
+
+        for (idx, value) in self.attribute_basis.values_mut().enumerate() {
+            *value = data.u32_or(30 + idx, 0);
+        }
+        for (idx, value) in self.attribute_additions.values_mut().enumerate() {
+            *value = data.u32_or(35 + idx, 0);
+        }
+        for (idx, value) in self.attribute_times_bought.values_mut().enumerate()
+        {
+            *value = data.u32_or(40 + idx, 0);
+        }
+
+        data.ignore(45..data.len(), "unmodelled character save values");
+    }
+}
+
 /// All the exclusively cosmetic info necessary to build a player image, that is
 /// otherwise useless. As these values might change their based on each other,
 /// some of them are not fully parsed (to a more descriptive enum)
@@ -115,8 +156,33 @@ pub struct Portrait {
 }
 
 impl Portrait {
+    pub(crate) fn parse_vals(data: &Vals<'_>) -> Portrait {
+        let packed_hair = data.i64_or(1, 100);
+        let portrait = Portrait {
+            mouth: u8::try_from(data.i64_or(0, 1)).unwrap_or(1),
+            hair_color: u8::try_from(packed_hair / 100).unwrap_or(100),
+            hair: u8::try_from(packed_hair % 100).unwrap_or(1),
+            brows: u8::try_from(data.i64_or(2, 1) % 100).unwrap_or(1),
+            eyes: u8::try_from(data.i64_or(3, 1)).unwrap_or(1),
+            beards: u8::try_from(data.i64_or(4, 1) % 100).unwrap_or(1),
+            nose: u8::try_from(data.i64_or(5, 1)).unwrap_or(1),
+            ears: u8::try_from(data.i64_or(6, 1)).unwrap_or(1),
+            extra: u8::try_from(data.i64_or(7, 1)).unwrap_or(1),
+            horns: u8::try_from(data.i64_or(8, 1) % 100).unwrap_or(1),
+            special_portrait: data.i64_or(9, 0),
+            gender: Gender::from_i64(data.i64_or(11, 0) % 2)
+                .unwrap_or_default(),
+        };
+        // The race at relative index 10 is parsed by Character::update.
+        data.ignore(10, "race parsed by the character save caller");
+        data.ignore(12..data.len(), "extra portrait values");
+        portrait
+    }
+
+    // Keep the other-player parser's existing eager behavior until it is
+    // migrated.
     pub(crate) fn parse(data: &[i64]) -> Result<Portrait, SFError> {
-        Ok(Self {
+        Ok(Portrait {
             mouth: data.csiget(0, "mouth", 1)?,
             hair_color: data.csimget(1, "hair color", 100, |a| a / 100)?,
             hair: data.csimget(1, "hair", 1, |a| a % 100)?,
