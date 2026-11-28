@@ -9,6 +9,9 @@ use log::{debug, error, trace, warn};
 
 use crate::error::SFError;
 
+mod vals;
+pub(crate) use vals::Vals;
+
 /// A bunch of new information about the state of the server and/or the
 /// player
 ///
@@ -227,8 +230,14 @@ impl Response {
                         continue;
                     }
 
-                    let old_val =
-                        res.insert(key, ResponseVal { value, sub_key });
+                    let old_val = res.insert(
+                        key,
+                        ResponseVal {
+                            key,
+                            value,
+                            sub_key,
+                        },
+                    );
                     if let Some(old_val) = old_val {
                         let old = old_val.as_str();
                         debug!("Overwrote [{key}]: {old} => {value}");
@@ -247,14 +256,24 @@ impl Response {
 /// This is the raw &str, that the server sent as a value to some key. This
 /// often requires extra conversions/parsing to use practically, so we associate
 /// the most common parsing functions as methods to this data.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 #[allow(clippy::module_name_repetitions)]
 pub struct ResponseVal<'a> {
+    key: &'a str,
     value: &'a str,
     sub_key: &'a str,
 }
 
-impl ResponseVal<'_> {
+impl std::fmt::Debug for ResponseVal<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResponseVal")
+            .field("value", &self.value)
+            .field("sub_key", &self.sub_key)
+            .finish()
+    }
+}
+
+impl<'a> ResponseVal<'a> {
     /// Converts the response value into the required type
     ///
     /// # Errors
@@ -297,6 +316,30 @@ impl ResponseVal<'_> {
             .collect()
     }
 
+    /// Splits this response value by `/` into a lazy [`Vals`] view.
+    ///
+    /// This is the migration seam for parsers that need typed, on-demand
+    /// access. The existing eager [`into_list`](Self::into_list) API remains
+    /// unchanged.
+    #[must_use]
+    #[allow(dead_code)]
+    pub(crate) fn list(&self) -> Vals<'a> {
+        self.list_by('/')
+    }
+
+    /// Splits this response value by `delim` into a lazy [`Vals`] view.
+    #[must_use]
+    #[allow(dead_code)]
+    pub(crate) fn list_by(&self, delim: char) -> Vals<'a> {
+        Vals::new(self.value, self.key, delim)
+    }
+
+    /// Returns the response key this value came from.
+    #[must_use]
+    pub fn key(&self) -> &str {
+        self.key
+    }
+
     /// The way keys are parsed will trim some info from the string. The key for
     /// the player save `ownplayersave` is actually `ownplayersave.playerSave`.
     /// As this `.playerSave` is not relevant here and not in most cases, I
@@ -318,5 +361,43 @@ impl ResponseVal<'_> {
 impl std::fmt::Display for ResponseVal<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.value)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
+
+    use super::*;
+
+    #[test]
+    fn response_val_exposes_a_keyed_lazy_list() {
+        let response = Response::parse(
+            "resources:1/2/3".to_string(),
+            NaiveDateTime::default(),
+        )
+        .unwrap();
+        let value = response.values()["resources"];
+        let vals = value.list();
+
+        assert_eq!(value.key(), "resources");
+        assert_eq!(vals.key(), "resources");
+        assert_eq!(vals.u32(1).unwrap(), 2);
+        vals.ignore(0, "test first value");
+        vals.ignore(2, "test last value");
+        vals.assert_all_read();
+    }
+
+    #[test]
+    fn eager_into_list_remains_available() {
+        let response = Response::parse(
+            "resources:1/2/3".to_string(),
+            NaiveDateTime::default(),
+        )
+        .unwrap();
+        let values = response.values()["resources"]
+            .into_list::<u32>("resources")
+            .unwrap();
+        assert_eq!(values, [1, 2, 3]);
     }
 }
