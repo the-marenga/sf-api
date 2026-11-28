@@ -1043,6 +1043,7 @@ pub enum ShopType {
 pub enum TimeSkip {
     Mushroom = 1,
     Glass = 2,
+    Free = 4,
 }
 
 /// The allowed amounts, that you can upgrade idle buildings by
