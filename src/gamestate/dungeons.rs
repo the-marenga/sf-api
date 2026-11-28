@@ -8,7 +8,7 @@ use super::{
     AttributeType, CCGet, Class, EnumMapGet, Item, SFError, ServerTime,
     items::Equipment,
 };
-use crate::misc::soft_into;
+use crate::{misc::soft_into, response::Vals};
 
 /// The personal demon portal
 #[derive(Debug, Default, Clone)]
@@ -359,6 +359,23 @@ pub struct Companion {
     pub equipment: Equipment,
     /// The total attributes of this companion
     pub attributes: EnumMap<AttributeType, u32>,
+}
+
+impl Companion {
+    pub(crate) fn update(&mut self, data: &Vals<'_>) {
+        self.level = data.i64_or(0, 0);
+        for (idx, attr) in self.attributes.values_mut().enumerate() {
+            *attr = data.u32_or(4 + idx, 0);
+        }
+        data.ignore(1, "companion index (1, 2, 3)");
+        data.ignore(2, "always 0");
+        data.ignore(3, "always 0");
+        data.ignore(9..14, "2nd attribute map (basis or additions?)");
+        data.ignore(14..19, "always 0");
+        data.ignore(19..22, "unknown, maybe hp and damage");
+        data.ignore(22..143, "old companion equipment, now 0");
+        data.ignore(147, "trailing value (10/13, 2, 0)");
+    }
 }
 
 #[cfg(feature = "simulation")]
