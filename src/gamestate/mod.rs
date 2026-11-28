@@ -913,16 +913,13 @@ impl GameState {
                 let upgraded = self.character.level >= 95
                     && self.pets.is_some()
                     && self.underworld.is_some();
-                self.specials.wheel.result = Some(WheelReward::parse(
-                    &val.into_list("wheel result")?,
-                    upgraded,
-                )?);
+                self.specials.wheel.update_result(&val.list(), upgraded)?;
             }
             "dailyreward" => {
-                // Dead since last update
+                val.list().ignore_all("daily reward is no longer used");
             }
             "calenderreward" => {
-                // Probably removed and should be irrelevant
+                val.list().ignore_all("calendar reward is no longer used");
             }
             "oktoberfest" => {
                 // Not sure if this is still used, but it seems to just be
@@ -952,12 +949,7 @@ impl GameState {
             "calenderinfo" => {
                 // This is twice in the original response.
                 // This API sucks LMAO
-                let data: Vec<i64> = val.into_list("calendar")?;
-                self.specials.calendar.rewards.clear();
-                for p in data.chunks_exact(2) {
-                    let reward = CalendarReward::parse(p)?;
-                    self.specials.calendar.rewards.push(reward);
-                }
+                self.specials.calendar.update_rewards(&val.list());
             }
             "othergroupattack" => {
                 other_guild.get_or_insert_with(Default::default).attacks =
@@ -1088,9 +1080,7 @@ impl GameState {
                 // This should already be in resources
             }
             "dailytaskrewardpreview" => {
-                let vals: Vec<i64> =
-                    val.into_list("event task reward preview")?;
-                self.specials.tasks.daily.rewards = parse_rewards(&vals);
+                self.specials.tasks.daily.update_rewards(&val.list());
             }
             "expeditionevent" => {
                 let data: Vec<i64> = val.into_list("exp event")?;
@@ -1223,38 +1213,19 @@ impl GameState {
                 exp.update_encounters(&data);
             }
             "eventtasklist" => {
-                let data: Vec<i64> = val.into_list("etl")?;
-                self.specials.tasks.event.tasks.clear();
-                for c in data.chunks_exact(4) {
-                    let task = Task::parse(c)?;
-                    self.specials.tasks.event.tasks.push(task);
-                }
+                self.specials.tasks.event.update_tasks(&val.list());
             }
             "eventtaskrewardpreview" => {
-                let vals: Vec<i64> =
-                    val.into_list("event task reward preview")?;
-
-                self.specials.tasks.event.rewards = parse_rewards(&vals);
+                self.specials.tasks.event.update_rewards(&val.list());
             }
             "dailytasklist" => {
-                let data: Vec<i64> = val.into_list("daily tasks list")?;
-                self.specials.tasks.daily.tasks.clear();
-
-                // I think the first value here is the amount of > 1 bell
-                // quests
-                for d in data.skip(1, "daily tasks")?.chunks_exact(4) {
-                    self.specials.tasks.daily.tasks.push(Task::parse(d)?);
-                }
+                self.specials.tasks.daily.update_tasks(&val.list());
             }
             "eventtaskinfo" => {
-                let data: Vec<i64> = val.into_list("eti")?;
-                self.specials.tasks.event.theme = data
-                    .cfpget(2, "event task theme", |a| a)?
-                    .unwrap_or(EventTaskTheme::Unknown);
-                self.specials.tasks.event.start =
-                    data.cstget(0, "event t start", server_time)?;
-                self.specials.tasks.event.end =
-                    data.cstget(1, "event t end", server_time)?;
+                self.specials
+                    .tasks
+                    .event
+                    .update_info(&val.list(), server_time);
             }
             "scrapbook" => {
                 self.character.scrapbook = ScrapBook::parse(val.as_str());
@@ -1479,6 +1450,7 @@ impl GameState {
             "reward" => {
                 // This is the task reward, which you should already know
                 // from collecting
+                val.list().ignore_all("task reward is already known");
             }
             "gtdailypoints" => {
                 self.hellevator
@@ -1615,65 +1587,19 @@ impl GameState {
                     HellevatorTreatBonus::parse(&val.list());
             }
             "pendingrewards" => {
-                let vals: Vec<_> = val.as_str().split('/').collect();
-                self.mail.claimables = vals
-                    .chunks_exact(6)
-                    .flat_map(|chunk| -> Result<ClaimableMail, SFError> {
-                        let start = chunk.cfsuget(4, "p reward start")?;
-                        let end = chunk.cfsuget(5, "p reward end")?;
-
-                        let status = match chunk.cget(1, "p read")? {
-                            "0" => ClaimableStatus::Unread,
-                            "1" => ClaimableStatus::Read,
-                            "2" => ClaimableStatus::Claimed,
-                            x => {
-                                warn!("Unknown claimable status: {x}");
-                                ClaimableStatus::Claimed
-                            }
-                        };
-
-                        Ok(ClaimableMail {
-                            typ: FromPrimitive::from_i64(
-                                chunk.cfsuget(2, "claimable typ")?,
-                            )
-                            .unwrap_or_default(),
-                            msg_id: chunk.cfsuget(0, "msg_id")?,
-                            status,
-                            name: chunk.cget(3, "reward code")?.to_string(),
-                            received: server_time
-                                .convert_to_local(start, "p start"),
-                            claimable_until: server_time
-                                .convert_to_local(end, "p end"),
-                        })
-                    })
-                    .collect();
+                self.mail.update_claimables(&val.list(), server_time);
             }
             "pendingrewardressources" => {
-                let vals: Vec<i64> =
-                    val.into_list("pendingrewardressources")?;
-
                 self.mail
                     .open_claimable
                     .get_or_insert_with(Default::default)
-                    .resources = vals
-                    .chunks_exact(2)
-                    .flat_map(|chunk| -> Result<Reward, SFError> {
-                        Ok(Reward {
-                            typ: RewardType::parse(chunk.cget(0, "c typ")?),
-                            amount: chunk.csiget(1, "c amount", 1)?,
-                        })
-                    })
-                    .collect();
+                    .update_resources(&val.list());
             }
             "pendingreward" => {
-                let data = val.list();
                 self.mail
                     .open_claimable
                     .get_or_insert_with(Default::default)
-                    .items = data
-                    .chunks(ITEM_PARSE_LEN)
-                    .filter_map(|chunk| Item::parse(&chunk).ok().flatten())
-                    .collect();
+                    .update_items(&val.list());
             }
             "fightablegroups" => {
                 self.guild
@@ -1681,11 +1607,7 @@ impl GameState {
                     .update_fightable_targets(&val.list())?;
             }
             "adventscalendar" => {
-                let vals: Vec<i64> = val.into_list("advent door")?;
-                self.specials.advent_calendar = match vals.first() {
-                    Some(0) | None => None,
-                    _ => Reward::parse(&vals).ok(),
-                };
+                self.specials.update_advent_calendar(&val.list());
             }
             "fortresschances" => {
                 // chances for different gems to drop in the gem mine / 100
@@ -1735,12 +1657,7 @@ impl GameState {
                     .update(&val.list(), server_time);
             }
             "wheel" => {
-                let data: Vec<i64> = val.into_list("wheel")?;
-                // [0] => 2 ??
-                self.specials.wheel.spins_today =
-                    data.csiget(1, "lucky turns", 0)?;
-                self.specials.wheel.next_free_spin =
-                    data.cstget(2, "next lucky turn", server_time)?;
+                self.specials.wheel.update(&val.list(), server_time);
             }
             "dice" => {
                 let data: Vec<i64> = val.into_list("dice")?;
@@ -1797,7 +1714,7 @@ impl GameState {
                 }
             }
             "events" => {
-                self.specials.events.update(val.as_str(), server_time)?;
+                self.specials.events.update(&val.list(), server_time);
             }
             "tavernspecialend" | "tavernspecialsub" | "tavernspecial" => {
                 // Removed old way to serve events
