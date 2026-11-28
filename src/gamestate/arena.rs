@@ -5,6 +5,7 @@ use super::{items::*, *};
 use crate::{
     PlayerId,
     misc::{ArrSkip, CGet},
+    response::Vals,
 };
 
 /// The arena, that a player can fight other players in
@@ -88,40 +89,44 @@ pub enum FightExtra {
 impl Fight {
     pub(crate) fn update_result(
         &mut self,
-        data: &[i64],
-        server_time: ServerTime,
+        data: &Vals<'_>,
     ) -> Result<(), SFError> {
-        self.has_player_won = data.cget(0, "has_player_won")? != 0;
-        self.silver_change = data.cget(2, "fight silver change")?;
+        self.has_player_won = data.i64_or(0, 0) != 0;
+        self.silver_change = data.i64_or(2, 0);
 
         // Underworld lure (fightresult.underworldpillage) — short format
         if data.len() < 20 {
             self.extra = FightExtra::UnderworldLure {
-                souls: data.csiget(3, "underworld souls", 0)?,
+                souls: data.i64_or(3, 0),
             };
+            data.ignore(1, "unmodelled fight result flag");
+            data.ignore(4..data.len(), "unmodelled lure fields");
             return Ok(());
         }
 
-        self.xp_change = data.csiget(3, "fight xp", 0)?;
-        self.mushroom_change = data.csiget(4, "fight mushrooms", 0)?;
-        self.honor_change = data.cget(5, "fight honor")?;
+        self.xp_change = data.u64_or(3, 0);
+        self.mushroom_change = data.u8_or(4, 0);
+        self.honor_change = data.i64_or(5, 0);
 
-        self.rank_pre_fight = data.csiget(7, "fight rank pre", 0)?;
-        self.rank_post_fight = data.csiget(8, "fight rank post", 0)?;
-        let item = data.skip(9, "fight item")?;
-        self.item_won = Item::parse(item, server_time)?;
+        self.rank_pre_fight = data.u32_or(7, 0);
+        self.rank_post_fight = data.u32_or(8, 0);
+        let item_end = (9 + ITEM_PARSE_LEN).min(data.len());
+        self.item_won = Item::parse(&data.window(9..item_end))?;
 
         // Extended fortress fight data (fightresult.fortresspillagerv1)
         if data.len() >= 25 {
             self.extra = FightExtra::Fortress {
-                soldiers: data.csiget(24, "soldiers", 0)?,
-                stone: data.csiget(21, "fortress stone", 0)?,
-                wood: data.csiget(22, "fortress wood", 0)?,
-                archers_defeated: data.csiget(25, "archers defeated", 0)?,
-                mages_defeated: data.csiget(26, "mages defeated", 0)?,
+                soldiers: data.u32_or(24, 0),
+                stone: data.i64_or(21, 0),
+                wood: data.i64_or(22, 0),
+                archers_defeated: data.u32_or(25, 0),
+                mages_defeated: data.u32_or(26, 0),
             };
         }
 
+        data.ignore(1, "unmodelled fight result flag");
+        data.ignore(6, "unmodelled fight result value");
+        data.ignore(28..data.len(), "unmodelled fight result tail");
         Ok(())
     }
 
@@ -709,4 +714,97 @@ pub enum FighterTyp {
     UnderworldMinion,
     /// A pet
     Pet,
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
+
+    use super::*;
+
+    #[test]
+    fn parses_a_short_lure_result() {
+        let data = Vals::from("1/0/-10/5");
+        let mut fight = Fight::default();
+        fight.update_result(&data).unwrap();
+
+        assert!(fight.has_player_won);
+        assert_eq!(fight.silver_change, -10);
+        assert!(matches!(
+            fight.extra,
+            FightExtra::UnderworldLure { souls: 5 }
+        ));
+        data.assert_all_read();
+    }
+
+    #[test]
+    fn malformed_fight_result_numbers_use_defaults() {
+        let mut values = vec!["0"; 20];
+        values[0] = "1";
+        values[2] = "-10";
+        values[3] = "invalid";
+        let raw = values.join("/");
+        let data = Vals::from(raw.as_str());
+        let mut fight = Fight::default();
+        fight.update_result(&data).unwrap();
+        assert_eq!(fight.xp_change, 0);
+        data.assert_all_read();
+    }
+
+    #[test]
+    fn truncated_fight_result_items_use_defaults() {
+        let raw = "1/0/-10/100/2/3/0/4/5/1/0/0/1010/0/149/265/5/4/0/108/72/0/\
+                   83940/10/0/0/45";
+        let data = Vals::from(raw);
+        let mut fight = Fight::default();
+        fight.update_result(&data).unwrap();
+        let item = fight.item_won.as_ref().unwrap();
+        assert_eq!(item.price, 83_940);
+        assert!(!item.is_washed);
+        data.assert_all_read();
+    }
+
+    #[test]
+    fn invalid_fortress_counts_default_to_zero() {
+        let mut values = vec!["0"; 28];
+        values[0] = "1";
+        values[24] = "-1";
+        values[25] = "-1";
+        values[26] = "-1";
+        let raw = values.join("/");
+        let data = Vals::from(raw.as_str());
+        let mut fight = Fight::default();
+        fight.update_result(&data).unwrap();
+
+        let FightExtra::Fortress {
+            soldiers,
+            archers_defeated,
+            mages_defeated,
+            ..
+        } = fight.extra
+        else {
+            panic!("expected fortress fight metadata");
+        };
+        assert_eq!(soldiers, 0);
+        assert_eq!(archers_defeated, 0);
+        assert_eq!(mages_defeated, 0);
+        data.assert_all_read();
+    }
+
+    #[test]
+    fn parses_the_item_from_a_battle_result() {
+        let raw = "1/0/-10/100/2/3/0/4/5/1/0/0/1010/0/149/265/5/4/0/108/72/0/\
+                   83940/10/0/0/45/0";
+        let data = Vals::from(raw);
+        let mut fight = Fight::default();
+        fight.update_result(&data).unwrap();
+
+        assert_eq!(fight.xp_change, 100);
+        assert_eq!(fight.mushroom_change, 2);
+        assert_eq!(fight.honor_change, 3);
+        assert_eq!(fight.rank_pre_fight, 4);
+        assert_eq!(fight.rank_post_fight, 5);
+        assert_eq!(fight.item_won.as_ref().unwrap().price, 83_940);
+        data.assert_all_read();
+    }
 }

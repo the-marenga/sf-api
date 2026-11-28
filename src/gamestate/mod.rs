@@ -22,7 +22,7 @@ use chrono::{DateTime, Duration, Local, NaiveDateTime};
 use enum_map::EnumMap;
 use log::{error, warn};
 use num_traits::FromPrimitive;
-use strum::{EnumCount, IntoEnumIterator};
+use strum::IntoEnumIterator;
 
 use crate::{
     command::*,
@@ -33,7 +33,7 @@ use crate::{
         tavern::*, underworld::*, unlockables::*,
     },
     misc::*,
-    response::{Response, ResponseVal},
+    response::{Response, ResponseVal, Vals},
 };
 
 /// Represent the full state of the game at some point in time
@@ -179,18 +179,16 @@ impl Shop {
     }
 
     pub(crate) fn parse(
-        data: &[i64],
-        server_time: ServerTime,
+        data: &Vals<'_>,
         typ: ShopType,
     ) -> Result<Shop, SFError> {
         let mut shop = Shop::default();
         shop.typ = typ;
-        for (idx, item) in shop.items.iter_mut().enumerate() {
-            let d = data.skip(idx * ITEM_PARSE_LEN, "shop item")?;
-            let Some(p_item) = Item::parse(d, server_time)? else {
+        for (chunk, item) in data.chunks(ITEM_PARSE_LEN).zip(&mut shop.items) {
+            let Some(p_item) = Item::parse(&chunk)? else {
                 return Err(SFError::ParsingError(
                     "shop item",
-                    format!("{d:?}"),
+                    format!("{chunk:?}"),
                 ));
             };
             *item = p_item;
@@ -490,27 +488,21 @@ impl GameState {
                 .set(val.as_str()),
             "sfhomeid" => {}
             "backpack" => {
-                let data: Vec<i64> = val.into_list("backpack")?;
-                self.character.inventory.backpack = data
-                    .chunks_exact(ITEM_PARSE_LEN)
-                    .map(|a| Item::parse(a, server_time))
-                    .collect::<Result<Vec<_>, _>>()?;
+                self.character.inventory.update(&val.list())?;
             }
             "itemlevelshop" => {
                 self.shop_item_lvl = val.into("shop lvl")?;
             }
             "storeitemsshakes" => {
-                let data: Vec<i64> = val.into_list("weapon store")?;
                 *self.shops.get_mut(ShopType::Weapon) =
-                    Shop::parse(&data, server_time, ShopType::Weapon)?;
+                    Shop::parse(&val.list(), ShopType::Weapon)?;
             }
             "questofferitems" => {
-                for (chunk, quest) in val
-                    .into_list("quest items")?
-                    .chunks_exact(19)
-                    .zip(&mut self.tavern.quests)
+                let data = val.list();
+                for (chunk, quest) in
+                    data.chunks(ITEM_PARSE_LEN).zip(&mut self.tavern.quests)
                 {
-                    quest.item = Item::parse(chunk, server_time)?;
+                    quest.item = Item::parse(&chunk)?;
                 }
             }
             #[allow(
@@ -528,7 +520,7 @@ impl GameState {
                 toilet.sacrifices_left = vals[2] as u32;
             }
             "companionequipment" => {
-                let data: Vec<i64> = val.into_list("quest items")?;
+                let data = val.list();
                 if data.is_empty() {
                     return Ok(());
                 }
@@ -539,22 +531,17 @@ impl GameState {
                     .values_mut()
                     .enumerate()
                 {
-                    let data = data.skip(
-                        (19 * EquipmentSlot::COUNT) * idx,
-                        "companion item",
-                    )?;
-                    cmp.equipment = Equipment::parse(data, server_time)?;
+                    let start = EQUIPMENT_PARSE_LEN * idx;
+                    cmp.equipment =
+                        Equipment::parse(&data.window(start..data.len()))?;
                 }
             }
             "storeitemsfidget" => {
-                let data: Vec<i64> = val.into_list("magic store")?;
                 *self.shops.get_mut(ShopType::Magic) =
-                    Shop::parse(&data, server_time, ShopType::Magic)?;
+                    Shop::parse(&val.list(), ShopType::Magic)?;
             }
             "ownplayersaveequipment" => {
-                let data: Vec<i64> = val.into_list("player equipment")?;
-                self.character.equipment =
-                    Equipment::parse(&data, server_time)?;
+                self.character.equipment.update(&val.list())?;
             }
             "systemmessagelist" => {}
             "newslist" => {
@@ -568,9 +555,7 @@ impl GameState {
                 }
             }
             "dummieequipment" => {
-                let m: Vec<i64> = val.into_list("mannequin")?;
-                self.character.mannequin =
-                    Some(Equipment::parse(&m, server_time)?);
+                self.character.mannequin = Some(Equipment::parse(&val.list())?);
             }
             "owntower" => {
                 let data = val.into_list("tower")?;
@@ -885,9 +870,8 @@ impl GameState {
                     .set(val.as_str());
             }
             "otherplayersaveequipment" => {
-                let data: Vec<i64> = val.into_list("other player equipment")?;
                 other_player.get_or_insert_with(Default::default).equipment =
-                    Equipment::parse(&data, server_time)?;
+                    Equipment::parse(&val.list())?;
             }
             "fortresspricereroll" => {
                 self.fortress
@@ -1407,10 +1391,9 @@ impl GameState {
                 }
             }
             "fightresult" => {
-                let data: Vec<i64> = val.into_list("fight result")?;
                 self.last_fight
                     .get_or_insert_with(Default::default)
-                    .update_result(&data, server_time)?;
+                    .update_result(&val.list())?;
                 // Note: The sub_key from this, can improve fighter parsing
             }
             x if x.starts_with("fightheader") => {
@@ -1788,16 +1771,13 @@ impl GameState {
                     .collect();
             }
             "pendingreward" => {
-                let vals: Vec<i64> = val.into_list("pending item")?;
+                let data = val.list();
                 self.mail
                     .open_claimable
                     .get_or_insert_with(Default::default)
-                    .items = vals
-                    .chunks_exact(ITEM_PARSE_LEN)
-                    .flat_map(|a|
-                            // Might be broken
-                            Item::parse(a, server_time))
-                    .flatten()
+                    .items = data
+                    .chunks(ITEM_PARSE_LEN)
+                    .filter_map(|chunk| Item::parse(&chunk).ok().flatten())
                     .collect();
             }
             "fightablegroups" => {
@@ -2124,15 +2104,14 @@ impl GameState {
                 let dungeons =
                     self.legendary_dungeon.active.get_or_insert_default();
                 dungeons.pending_items.clear();
-                let data: Vec<i64> = val.into_list("iapendingitems")?;
-                let amount: i64 = data.cget(0, "pending amount")?;
+                let data = val.list();
+                let amount = data.i64(0)?;
                 if amount < 1 {
+                    data.ignore_all("no pending legendary dungeon items");
                     return Ok(());
                 }
-                for slice in
-                    data.skip(1, "ld items")?.chunks_exact(ITEM_PARSE_LEN)
-                {
-                    let Some(item) = Item::parse(slice, server_time)? else {
+                for chunk in data.window(1..data.len()).chunks(ITEM_PARSE_LEN) {
+                    let Some(item) = Item::parse(&chunk)? else {
                         warn!("Could not parse pending ld item");
                         continue;
                     };
@@ -2311,4 +2290,33 @@ pub struct NormalCost {
     pub silver: u64,
     /// The amount of mushrooms something costs
     pub mushrooms: u16,
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+
+    #[test]
+    fn truncated_companion_equipment_uses_empty_defaults() {
+        let raw = ["0"; EQUIPMENT_PARSE_LEN].join("/");
+        let response = Response::parse(
+            format!("companionequipment:{raw}"),
+            NaiveDateTime::default(),
+        )
+        .unwrap();
+        assert!(GameState::default().update(response).is_ok());
+    }
+
+    #[test]
+    fn two_companion_equipment_blocks_keep_legacy_behavior() {
+        let raw = ["0"; EQUIPMENT_PARSE_LEN * 2].join("/");
+        let response = Response::parse(
+            format!("companionequipment:{raw}"),
+            NaiveDateTime::default(),
+        )
+        .unwrap();
+        assert!(GameState::default().update(response).is_ok());
+    }
 }

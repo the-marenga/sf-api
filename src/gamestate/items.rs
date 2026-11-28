@@ -8,12 +8,13 @@ use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
 use super::{
-    CFPGet, Class, EnumMapGet, HabitatType, SFError, ServerTime,
+    Class, EnumMapGet, HabitatType, SFError, ServerTime,
     unlockables::EquipmentIdent,
 };
 use crate::{
     command::{AttributeType, ShopType},
-    gamestate::{CCGet, CGet, ShopPosition, dungeons::CompanionClass},
+    gamestate::{ShopPosition, dungeons::CompanionClass},
+    response::Vals,
 };
 
 /// The basic inventory, that every player has
@@ -99,6 +100,21 @@ impl Inventory {
             .iter()
             .enumerate()
             .map(|(pos, item)| (BagPosition(pos), item.as_ref()))
+    }
+
+    /// Parses the backpack from a response list.
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Self, SFError> {
+        let backpack = data
+            .chunks(ITEM_PARSE_LEN)
+            .map(|chunk| Item::parse(&chunk))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Self { backpack })
+    }
+
+    /// Updates the backpack from a response list.
+    pub(crate) fn update(&mut self, data: &Vals<'_>) -> Result<(), SFError> {
+        *self = Self::parse(data)?;
+        Ok(())
     }
 }
 
@@ -313,29 +329,27 @@ impl Equipment {
         false
     }
 
-    /// Expects the input `data` to have items directly at data[0]
-    #[allow(clippy::indexing_slicing)]
-    pub(crate) fn parse(
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<Equipment, SFError> {
+    /// Parses equipment from a response list.
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Equipment, SFError> {
         let mut res = Equipment::default();
-        if !data.len().is_multiple_of(ITEM_PARSE_LEN) {
-            return Err(SFError::ParsingError(
-                "Invalid Equipment",
-                format!("{data:?}"),
-            ));
-        }
         for (chunk, slot) in
-            data.chunks_exact(ITEM_PARSE_LEN).zip(res.0.as_mut_slice())
+            data.chunks(ITEM_PARSE_LEN).zip(res.0.as_mut_slice())
         {
-            *slot = Item::parse(chunk, server_time)?;
+            *slot = Item::parse(&chunk)?;
         }
         Ok(res)
+    }
+
+    /// Updates equipment from a response list.
+    pub(crate) fn update(&mut self, data: &Vals<'_>) -> Result<(), SFError> {
+        *self = Self::parse(data)?;
+        Ok(())
     }
 }
 
 pub(crate) const ITEM_PARSE_LEN: usize = 19;
+pub(crate) const EQUIPMENT_PARSE_LEN: usize =
+    ITEM_PARSE_LEN * EquipmentSlot::COUNT;
 
 /// Information about a single item. This can be anything, that is either in a
 /// inventory, in a reward slot, or similar
@@ -697,40 +711,60 @@ impl Item {
         }
     }
 
-    /// Parses an item, that starts at the start of the given data
-    pub(crate) fn parse(
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<Option<Self>, SFError> {
-        let Some(typ) = ItemType::parse(data, server_time)? else {
+    /// Parses an item from a fixed 19-value response chunk.
+    #[allow(clippy::cast_possible_truncation)]
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Option<Self>, SFError> {
+        let Some(typ) = ItemType::parse(data)? else {
+            data.ignore_all("empty item slot");
             return Ok(None);
         };
 
-        let enchantment = data.cfpget(2, "item enchantment", |a| a)?;
-        let gem_slot_val = data.cimget(1, "gem slot val", |a| a)?;
-        let gem_pwr = data.cimget(16, "gem pwr", |a| a)?;
+        data.ignore(4, "enchantment value");
+        if !typ.is_weapon() {
+            data.ignore(6, "weapon damage field on non-weapon item");
+        }
+        if typ.equipment_slot().is_none() {
+            data.ignore(7..13, "attributes on non-equipment item");
+        }
 
+        let enchantment = data.enum_opt(2);
+        let gem_slot_val = data.i64_or(1, 0);
+        let gem_pwr = data.i64_or(16, 0);
         let gem_slot = GemSlot::parse(gem_slot_val, gem_pwr);
 
         let class = if typ.is_class_item() {
-            data.cfpget(3, "item class", |x| (x & 0xFFFF) / 1000)?
+            let raw = data.i64_or(3, 0);
+            Class::from_i64((raw & 0xFFFF) / 1000)
         } else {
             None
         };
         let mut rune = None;
         let mut attributes: EnumMap<AttributeType, u32> = EnumMap::default();
-        let price = data.csiget(13, "item price", u32::MAX)?;
+        let price = data.u32_or(13, u32::MAX);
 
         if typ.equipment_slot().is_some() {
             for i in 0..3 {
-                let atr_typ = data.cget(i + 7, "item atr typ")?;
-                let Ok(atr_typ) = atr_typ.try_into() else {
-                    warn!("Invalid attribute typ: {atr_typ}, {typ:?}");
+                let Some(raw_typ) = data.i64(i + 7).ok() else {
+                    data.ignore(
+                        i + 10,
+                        "value paired with invalid attribute type",
+                    );
                     continue;
                 };
-                let atr_val = data.cget(i + 10, "item atr val")?;
-                let Ok(atr_val): Result<u32, _> = atr_val.try_into() else {
-                    warn!("Invalid attribute value: {atr_val}, {typ:?}");
+                let Ok(atr_typ) = usize::try_from(raw_typ) else {
+                    data.ignore(
+                        i + 10,
+                        "value paired with invalid attribute type",
+                    );
+                    warn!("Invalid attribute typ: {raw_typ}, {typ:?}");
+                    continue;
+                };
+                let Some(raw_val) = data.i64(i + 10).ok() else {
+                    warn!("Invalid attribute value at item field {}", i + 10);
+                    continue;
+                };
+                let Ok(atr_val) = u32::try_from(raw_val) else {
+                    warn!("Invalid attribute value: {raw_val}, {typ:?}");
                     continue;
                 };
                 match atr_typ {
@@ -792,16 +826,15 @@ impl Item {
                 }
             }
         }
-        let model_id: u16 =
-            data.cimget(3, "item model id", |x| (x & 0xFFFF) % 1000)?;
+        let raw_model_id = data.i64_or(3, 0);
+        let model_id =
+            u16::try_from((raw_model_id & 0xFFFF) % 1000).unwrap_or(0);
 
         let color = match model_id {
-            ..=49 if typ != ItemType::Talisman => data
-                .get(5..=12)
-                .map(|a| a.iter().sum::<i64>())
-                .map(|a| (a % 5) + 1)
-                .and_then(|a| a.try_into().ok())
-                .unwrap_or(1),
+            ..=49 if typ != ItemType::Talisman => {
+                let sum: i64 = (5..=12).map(|pos| data.i64_or(pos, 0)).sum();
+                u8::try_from((sum % 5) + 1).unwrap_or(1)
+            }
             _ => 1,
         };
 
@@ -809,18 +842,18 @@ impl Item {
             typ,
             model_id,
             rune,
-            type_specific_val: data.csiget(5, "effect value", 0)?,
+            type_specific_val: data.u32_or(5, 0),
             gem_slot,
             enchantment,
             class,
             attributes,
             color,
             price,
-            mushroom_price: data.csiget(14, "mushroom price", u32::MAX)?,
-            upgrade_count: data.csiget(15, "upgrade count", u8::MAX)?,
-            item_quality: data.csiget(17, "item quality", 0)?,
-            is_washed: data.csiget(18, "is washed", 0)? != 0,
-            full_model_id: data.csiget(3, "raw model id", 0)?,
+            mushroom_price: data.u32_or(14, u32::MAX),
+            upgrade_count: data.u8_or(15, u8::MAX),
+            item_quality: data.u32_or(17, 0),
+            is_washed: data.u32_or(18, 0) != 0,
+            full_model_id: data.u32_or(3, 0),
         };
         Ok(Some(item))
     }
@@ -1064,26 +1097,23 @@ impl ItemType {
             .is_some_and(|e| e.enchantment().is_some())
     }
 
-    pub(crate) fn parse(
-        data: &[i64],
-        _server_time: ServerTime,
-    ) -> Result<Option<Self>, SFError> {
-        let raw_typ: u8 = data.csimget(0, "item type", 255, |a| a & 0xFF)?;
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Option<Self>, SFError> {
+        let raw_typ = data.u8_or(0, 255);
         let unknown_item = |name: &'static str| {
             warn!("Could no parse item of type: {raw_typ}. {name} is faulty");
             Ok(Some(ItemType::Unknown(raw_typ)))
         };
 
-        let sub_ident = data.cget(3, "item sub type")?;
+        let sub_ident = data.i64_or(3, 0);
 
         Ok(Some(match raw_typ {
             0 => return Ok(None),
             1 => ItemType::Weapon {
-                min_dmg: data.csiget(5, "weapon min dmg", 0)?,
-                max_dmg: data.csiget(6, "weapon min dmg", 0)?,
+                min_dmg: data.u32_or(5, 0),
+                max_dmg: data.u32_or(6, 0),
             },
             2 => ItemType::Shield {
-                block_chance: data.csiget(5, "shield block chance", 0)?,
+                block_chance: data.u32_or(5, 0),
             },
             3 => ItemType::BreastPlate,
             4 => ItemType::FootWear,
@@ -1146,7 +1176,7 @@ impl ItemType {
             }
             13 => ItemType::Scrapbook,
             15 => {
-                let gem_value = data.csiget(16, "gem pwr", 0)?;
+                let gem_value = data.u32_or(16, 0);
                 let Some(typ) = GemType::parse(sub_ident, gem_value) else {
                     return unknown_item("gem type");
                 };
@@ -1462,4 +1492,142 @@ pub(crate) fn parse_active_potions(
             // 6 => effect, but no idea why we would want to use that
         })
     })
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
+
+    use super::*;
+
+    #[test]
+    fn parses_an_item_and_consumes_every_field() {
+        let raw = "1/0/0/1010/0/149/265/5/4/0/108/72/0/83940/10/0/0/45/0";
+        let vals = Vals::from(raw);
+        let item = Item::parse(&vals).unwrap().unwrap();
+
+        assert_eq!(item.price, 83_940);
+        assert_eq!(item.model_id, 10);
+        assert_eq!(item.full_model_id, 1010);
+        assert_eq!(item.upgrade_count, 0);
+        vals.assert_all_read();
+    }
+
+    #[test]
+    fn unknown_item_strings_do_not_break_parsing() {
+        let raw =
+            "1/0/0/1010/future-value/149/265/5/4/0/108/72/0/83940/10/0/0/45/0";
+        let vals = Vals::from(raw);
+        let item = Item::parse(&vals).unwrap().unwrap();
+        assert_eq!(item.price, 83_940);
+        vals.assert_all_read();
+    }
+
+    #[test]
+    fn malformed_item_numbers_use_per_field_defaults() {
+        let raw = "1/0/0/1010/0/149/265/5/4/0/108/72/0/invalid/10/0/0/45/0";
+        let vals = Vals::from(raw);
+        let item = Item::parse(&vals).unwrap().unwrap();
+        assert_eq!(item.price, u32::MAX);
+        vals.assert_all_read();
+    }
+
+    #[test]
+    fn invalid_rune_strengths_do_not_create_zero_runes() {
+        let raw = "1/0/0/1010/0/149/265/31/0/0/-1/0/0/83940/10/0/0/45/0";
+        let vals = Vals::from(raw);
+        let item = Item::parse(&vals).unwrap().unwrap();
+        assert!(item.rune.is_none());
+        vals.assert_all_read();
+    }
+
+    #[test]
+    fn invalid_attribute_types_still_consume_their_values() {
+        let raw = "10/0/0/1010/0/0/0/999/0/0/5/0/0/0/0/0/0/0/0";
+        let vals = Vals::from(raw);
+        let item = Item::parse(&vals).unwrap().unwrap();
+        assert_eq!(item.typ, ItemType::Talisman);
+        vals.assert_all_read();
+    }
+
+    #[test]
+    fn truncated_items_use_per_field_defaults() {
+        let raw = "1/0/0/1010/0/149/265/5/4/0/108/72/0/83940/10/0/0/45";
+        let vals = Vals::from(raw);
+        let item = Item::parse(&vals).unwrap().unwrap();
+        assert!(!item.is_washed);
+        vals.assert_all_read();
+    }
+
+    #[test]
+    fn raw_model_ids_are_masked_before_narrowing() {
+        let raw = "1/0/0/-1/0/149/265/5/4/0/108/72/0/83940/10/0/0/45/0";
+        let vals = Vals::from(raw);
+        let item = Item::parse(&vals).unwrap().unwrap();
+        assert_eq!(item.model_id, 535);
+        assert_eq!(item.full_model_id, 0);
+        vals.assert_all_read();
+    }
+
+    #[test]
+    fn empty_item_slots_are_explicitly_ignored() {
+        let raw = ["0"; ITEM_PARSE_LEN].join("/");
+        let vals = Vals::from(raw.as_str());
+        assert!(Item::parse(&vals).unwrap().is_none());
+        vals.assert_all_read();
+    }
+
+    #[test]
+    fn parses_and_updates_equipment() {
+        let raw = ["0"; EQUIPMENT_PARSE_LEN].join("/");
+        let vals = Vals::from(raw.as_str());
+        let equipment = Equipment::parse(&vals).unwrap();
+        assert!(equipment.0.values().all(Option::is_none));
+        vals.assert_all_read();
+
+        let vals = Vals::from(raw.as_str());
+        let mut equipment = Equipment::default();
+        equipment.update(&vals).unwrap();
+        assert!(equipment.0.values().all(Option::is_none));
+        vals.assert_all_read();
+    }
+
+    #[test]
+    fn parses_and_updates_the_backpack() {
+        let mut chunks = vec![vec![0; ITEM_PARSE_LEN]; 3];
+        chunks[0][0] = 15;
+        chunks[0][3] = 23;
+        chunks[0][13] = 36_384;
+        chunks[0][16] = 31;
+        chunks[1][0] = 15;
+        chunks[1][3] = 30;
+        chunks[1][13] = 45_408;
+        chunks[1][16] = 36;
+        let raw = chunks
+            .iter()
+            .map(|chunk| {
+                chunk
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join("/")
+            })
+            .collect::<Vec<_>>()
+            .join("/");
+        let vals = Vals::from(raw.as_str());
+        let inventory = Inventory::parse(&vals).unwrap();
+        assert_eq!(inventory.backpack.len(), 3);
+        assert_eq!(inventory.backpack[0].as_ref().unwrap().price, 36_384);
+        assert_eq!(inventory.backpack[1].as_ref().unwrap().price, 45_408);
+        assert!(inventory.backpack[2].is_none());
+        assert_eq!(inventory.count_free_slots(), 1);
+        vals.assert_all_read();
+
+        let vals = Vals::from(raw.as_str());
+        let mut inventory = Inventory::default();
+        inventory.update(&vals).unwrap();
+        assert_eq!(inventory.backpack.len(), 3);
+        assert_eq!(inventory.count_free_slots(), 1);
+        vals.assert_all_read();
+    }
 }
