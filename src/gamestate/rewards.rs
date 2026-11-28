@@ -1,14 +1,16 @@
 use std::collections::HashSet;
 
 use chrono::{DateTime, Local};
+use enum_map::{Enum, EnumMap};
 use log::warn;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
-use strum::EnumIter;
+use strum::{EnumIter, IntoEnumIterator};
 
 use super::{
-    ArrSkip, CCGet, CGet, IdleBuildingType, LightDungeon, Mount, ShopType,
-    character::Class, items::*, tavern::Location, unlockables::HabitatType,
+    ArrSkip, CCGet, CGet, CSTGet, IdleBuildingType, LightDungeon, Mount,
+    ServerTime, ShopType, character::Class, items::*, tavern::Location,
+    unlockables::HabitatType,
 };
 use crate::{command::AttributeType, error::SFError};
 
@@ -208,8 +210,81 @@ pub struct TimedSpecials {
 pub struct Events {
     /// All of the events active in the tavern
     pub active: HashSet<Event>,
+    /// All of the sales, that are currently active
+    pub sales: EnumMap<Sale, bool>,
     /// The time at which all of the events end. Mostly just Sunday 23:59.
     pub ends: Option<DateTime<Local>>,
+}
+
+/// A sale, that the server can run on top of the regular events
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter, Hash, Enum)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Sale {
+    /// The black friday sale, that happens around the end of november.
+    BlackFriday,
+}
+
+impl Sale {
+    /// Maps the sale name, that the server appends to the `events` response,
+    /// to the corresponding sale
+    pub(crate) fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "blackfridaysale" => Some(Self::BlackFriday),
+
+            _ => None,
+        }
+    }
+}
+
+impl Events {
+    /// Updates this state from the raw server response for the `events` key
+    pub(crate) fn update(
+        &mut self,
+        val: &str,
+        server_time: ServerTime,
+    ) -> Result<(), SFError> {
+        // The list is normally purely numeric, but the server appends the
+        // name of an active sale like `blackfridaysale` to it
+        let mut data: Vec<i64> = Vec::new();
+        let mut sales: Vec<Sale> = Vec::new();
+        for part in val.split('/') {
+            let part = part.trim();
+            if part.is_empty() {
+                continue;
+            }
+            if let Ok(number) = part.parse() {
+                data.push(number);
+            } else {
+                match Sale::from_name(part) {
+                    Some(sale) => sales.push(sale),
+                    None => warn!("Unknown sale: {part}"),
+                }
+            }
+        }
+        if data.len() < 8 {
+            return Ok(());
+        }
+
+        // [0] might be the events theme (tavern decoration)?
+        self.active.clear();
+        let flags = data.cget(1, "events")?;
+        for (idx, event) in Event::iter().enumerate() {
+            if (flags & (1 << idx)) > 0 {
+                self.active.insert(event);
+            }
+        }
+        // NOTE: there are two end times, that seem to be identical. I will
+        // just guess, that [4] is the correct one and [2] is for the theme
+        self.ends = data.cstget(4, "event end", server_time)?;
+
+        self.sales = EnumMap::default();
+        for sale in sales {
+            self.sales[sale] = true;
+        }
+
+        // [3],[5],[6],[7] are just 0, so no idea what they could be
+        Ok(())
+    }
 }
 
 /// Grants rewards once a day

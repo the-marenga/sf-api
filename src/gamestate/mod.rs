@@ -2078,25 +2078,7 @@ impl GameState {
                 }
             }
             "events" => {
-                let data: Vec<i64> = val.into_list("events")?;
-                if data.len() < 8 {
-                    return Ok(());
-                }
-                // [0] might be the events theme (tavern decoration)?
-                self.specials.events.active.clear();
-                let flags = data.cget(1, "events")?;
-                for (idx, event) in Event::iter().enumerate() {
-                    if (flags & (1 << idx)) > 0 {
-                        self.specials.events.active.insert(event);
-                    }
-                }
-                // NOTE: there are two end times, that seem to be identical.
-                // I will just guess, that [4] is the correct one and [2] is
-                // for the theme
-                self.specials.events.ends =
-                    data.cstget(4, "event end", server_time)?;
-
-                // [3],[5],[6],[7] are just 0, so no idea what they could be
+                self.specials.events.update(val.as_str(), server_time)?;
             }
             "tavernspecialend" | "tavernspecialsub" | "tavernspecial" => {
                 // Removed old way to serve events
