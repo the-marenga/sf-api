@@ -104,7 +104,6 @@ impl Inventory {
 
     /// Parses the backpack from a response list.
     pub(crate) fn parse(data: &Vals<'_>) -> Result<Self, SFError> {
-        data.ensure_i64()?;
         let backpack = data
             .chunks(ITEM_PARSE_LEN)
             .map(|chunk| Item::parse(&chunk))
@@ -332,14 +331,7 @@ impl Equipment {
 
     /// Parses equipment from a response list.
     pub(crate) fn parse(data: &Vals<'_>) -> Result<Equipment, SFError> {
-        data.ensure_i64()?;
         let mut res = Equipment::default();
-        if !data.len().is_multiple_of(ITEM_PARSE_LEN) {
-            return Err(SFError::ParsingError(
-                "Invalid Equipment",
-                format!("{data:?}"),
-            ));
-        }
         for (chunk, slot) in
             data.chunks(ITEM_PARSE_LEN).zip(res.0.as_mut_slice())
         {
@@ -358,24 +350,6 @@ impl Equipment {
 pub(crate) const ITEM_PARSE_LEN: usize = 19;
 pub(crate) const EQUIPMENT_PARSE_LEN: usize =
     ITEM_PARSE_LEN * EquipmentSlot::COUNT;
-
-fn required_u32_or(
-    data: &Vals<'_>,
-    pos: usize,
-    default: u32,
-) -> Result<u32, SFError> {
-    data.get(pos)?;
-    Ok(data.u32_or(pos, default))
-}
-
-fn required_u8_or(
-    data: &Vals<'_>,
-    pos: usize,
-    default: u8,
-) -> Result<u8, SFError> {
-    data.get(pos)?;
-    Ok(data.u8_or(pos, default))
-}
 
 /// Information about a single item. This can be anything, that is either in a
 /// inventory, in a reward slot, or similar
@@ -740,7 +714,6 @@ impl Item {
     /// Parses an item from a fixed 19-value response chunk.
     #[allow(clippy::cast_possible_truncation)]
     pub(crate) fn parse(data: &Vals<'_>) -> Result<Option<Self>, SFError> {
-        data.ensure_i64()?;
         let Some(typ) = ItemType::parse(data)? else {
             data.ignore_all("empty item slot");
             return Ok(None);
@@ -754,24 +727,30 @@ impl Item {
             data.ignore(7..13, "attributes on non-equipment item");
         }
 
-        let enchantment = Enchantment::from_i64(data.i64(2)?);
-        let gem_slot_val = data.i64(1)?;
-        let gem_pwr = data.i64(16)?;
+        let enchantment = data.enum_opt(2);
+        let gem_slot_val = data.i64_or(1, 0);
+        let gem_pwr = data.i64_or(16, 0);
         let gem_slot = GemSlot::parse(gem_slot_val, gem_pwr);
 
         let class = if typ.is_class_item() {
-            let raw = data.i64(3)?;
+            let raw = data.i64_or(3, 0);
             Class::from_i64((raw & 0xFFFF) / 1000)
         } else {
             None
         };
         let mut rune = None;
         let mut attributes: EnumMap<AttributeType, u32> = EnumMap::default();
-        let price = required_u32_or(data, 13, u32::MAX)?;
+        let price = data.u32_or(13, u32::MAX);
 
         if typ.equipment_slot().is_some() {
             for i in 0..3 {
-                let raw_typ = data.i64(i + 7)?;
+                let Some(raw_typ) = data.i64(i + 7).ok() else {
+                    data.ignore(
+                        i + 10,
+                        "value paired with invalid attribute type",
+                    );
+                    continue;
+                };
                 let Ok(atr_typ) = usize::try_from(raw_typ) else {
                     data.ignore(
                         i + 10,
@@ -780,7 +759,10 @@ impl Item {
                     warn!("Invalid attribute typ: {raw_typ}, {typ:?}");
                     continue;
                 };
-                let raw_val = data.i64(i + 10)?;
+                let Some(raw_val) = data.i64(i + 10).ok() else {
+                    warn!("Invalid attribute value at item field {}", i + 10);
+                    continue;
+                };
                 let Ok(atr_val) = u32::try_from(raw_val) else {
                     warn!("Invalid attribute value: {raw_val}, {typ:?}");
                     continue;
@@ -844,7 +826,7 @@ impl Item {
                 }
             }
         }
-        let raw_model_id = data.i64(3)?;
+        let raw_model_id = data.i64_or(3, 0);
         let model_id =
             u16::try_from((raw_model_id & 0xFFFF) % 1000).unwrap_or(0);
 
@@ -860,18 +842,18 @@ impl Item {
             typ,
             model_id,
             rune,
-            type_specific_val: required_u32_or(data, 5, 0)?,
+            type_specific_val: data.u32_or(5, 0),
             gem_slot,
             enchantment,
             class,
             attributes,
             color,
             price,
-            mushroom_price: required_u32_or(data, 14, u32::MAX)?,
-            upgrade_count: required_u8_or(data, 15, u8::MAX)?,
-            item_quality: required_u32_or(data, 17, 0)?,
-            is_washed: required_u32_or(data, 18, 0)? != 0,
-            full_model_id: required_u32_or(data, 3, 0)?,
+            mushroom_price: data.u32_or(14, u32::MAX),
+            upgrade_count: data.u8_or(15, u8::MAX),
+            item_quality: data.u32_or(17, 0),
+            is_washed: data.u32_or(18, 0) != 0,
+            full_model_id: data.u32_or(3, 0),
         };
         Ok(Some(item))
     }
@@ -1116,22 +1098,22 @@ impl ItemType {
     }
 
     pub(crate) fn parse(data: &Vals<'_>) -> Result<Option<Self>, SFError> {
-        let raw_typ = u8::try_from(data.i64(0)? & 0xFF).unwrap_or(255);
+        let raw_typ = data.u8_or(0, 255);
         let unknown_item = |name: &'static str| {
             warn!("Could no parse item of type: {raw_typ}. {name} is faulty");
             Ok(Some(ItemType::Unknown(raw_typ)))
         };
 
-        let sub_ident = data.i64(3)?;
+        let sub_ident = data.i64_or(3, 0);
 
         Ok(Some(match raw_typ {
             0 => return Ok(None),
             1 => ItemType::Weapon {
-                min_dmg: required_u32_or(data, 5, 0)?,
-                max_dmg: required_u32_or(data, 6, 0)?,
+                min_dmg: data.u32_or(5, 0),
+                max_dmg: data.u32_or(6, 0),
             },
             2 => ItemType::Shield {
-                block_chance: required_u32_or(data, 5, 0)?,
+                block_chance: data.u32_or(5, 0),
             },
             3 => ItemType::BreastPlate,
             4 => ItemType::FootWear,
@@ -1194,7 +1176,7 @@ impl ItemType {
             }
             13 => ItemType::Scrapbook,
             15 => {
-                let gem_value = required_u32_or(data, 16, 0)?;
+                let gem_value = data.u32_or(16, 0);
                 let Some(typ) = GemType::parse(sub_ident, gem_value) else {
                     return unknown_item("gem type");
                 };
@@ -1532,10 +1514,22 @@ mod tests {
     }
 
     #[test]
-    fn malformed_item_numbers_fail_instead_of_defaulting() {
+    fn unknown_item_strings_do_not_break_parsing() {
+        let raw =
+            "1/0/0/1010/future-value/149/265/5/4/0/108/72/0/83940/10/0/0/45/0";
+        let vals = Vals::from(raw);
+        let item = Item::parse(&vals).unwrap().unwrap();
+        assert_eq!(item.price, 83_940);
+        vals.assert_all_read();
+    }
+
+    #[test]
+    fn malformed_item_numbers_use_per_field_defaults() {
         let raw = "1/0/0/1010/0/149/265/5/4/0/108/72/0/invalid/10/0/0/45/0";
         let vals = Vals::from(raw);
-        assert!(Item::parse(&vals).is_err());
+        let item = Item::parse(&vals).unwrap().unwrap();
+        assert_eq!(item.price, u32::MAX);
+        vals.assert_all_read();
     }
 
     #[test]
@@ -1557,10 +1551,12 @@ mod tests {
     }
 
     #[test]
-    fn truncated_items_fail_when_required_fields_are_missing() {
+    fn truncated_items_use_per_field_defaults() {
         let raw = "1/0/0/1010/0/149/265/5/4/0/108/72/0/83940/10/0/0/45";
         let vals = Vals::from(raw);
-        assert!(Item::parse(&vals).is_err());
+        let item = Item::parse(&vals).unwrap().unwrap();
+        assert!(!item.is_washed);
+        vals.assert_all_read();
     }
 
     #[test]

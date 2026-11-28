@@ -323,34 +323,6 @@ impl<'a> Vals<'a> {
         Ok(value)
     }
 
-    /// Validates that every value is parseable as `i64` without marking any
-    /// value read.
-    ///
-    /// This preserves the eager numeric validation of the legacy response
-    /// parsers while keeping typed access lazy.
-    ///
-    /// # Errors
-    /// [`SFError::ParsingError`] if any value is not a valid `i64`.
-    #[track_caller]
-    pub(crate) fn ensure_i64(&self) -> Result<(), SFError> {
-        let caller = std::panic::Location::caller();
-        for (pos, value) in self.values().iter().enumerate() {
-            value.trim().parse::<i64>().map_err(|_| {
-                SFError::ParsingError(
-                    "response value",
-                    format!(
-                        "Invalid i64{} (pos:{pos},val:{value}) at {}:{}:{}",
-                        key_desc(self.key),
-                        caller.file(),
-                        caller.line(),
-                        caller.column()
-                    ),
-                )
-            })?;
-        }
-        Ok(())
-    }
-
     /// Parses the value at `pos` into `T`.
     #[track_caller]
     fn parse<T: FromStr>(&self, pos: usize, ty: &str) -> Result<T, SFError> {
@@ -660,15 +632,6 @@ mod tests {
         assert_eq!(vals.u32_or(2, 7), 7);
         assert_eq!(vals.u32_or(99, 9), 9);
         assert_eq!(vals.str_or(99, "default"), "default");
-    }
-
-    #[test]
-    fn numeric_validation_does_not_mark_values_read() {
-        let vals = Vals::new("1/not-a-number", "resources", '/');
-        let err = vals.ensure_i64().unwrap_err();
-        assert!(err.to_string().contains("resources"));
-        assert_eq!(vals.unaccessed_indices(), vec![0, 1]);
-        vals.ignore_all("test validation failure");
     }
 
     #[test]

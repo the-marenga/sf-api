@@ -86,24 +86,18 @@ pub enum FightExtra {
     UnderworldLure { souls: i64 },
 }
 
-fn required_u32_or(data: &Vals<'_>, pos: usize) -> Result<u32, SFError> {
-    data.get(pos)?;
-    Ok(data.u32_or(pos, 0))
-}
-
 impl Fight {
     pub(crate) fn update_result(
         &mut self,
         data: &Vals<'_>,
     ) -> Result<(), SFError> {
-        data.ensure_i64()?;
-        self.has_player_won = data.i64(0)? != 0;
-        self.silver_change = data.i64(2)?;
+        self.has_player_won = data.i64_or(0, 0) != 0;
+        self.silver_change = data.i64_or(2, 0);
 
         // Underworld lure (fightresult.underworldpillage) — short format
         if data.len() < 20 {
             self.extra = FightExtra::UnderworldLure {
-                souls: data.i64(3)?,
+                souls: data.i64_or(3, 0),
             };
             data.ignore(1, "unmodelled fight result flag");
             data.ignore(4..data.len(), "unmodelled lure fields");
@@ -112,7 +106,7 @@ impl Fight {
 
         self.xp_change = data.u64_or(3, 0);
         self.mushroom_change = data.u8_or(4, 0);
-        self.honor_change = data.i64(5)?;
+        self.honor_change = data.i64_or(5, 0);
 
         self.rank_pre_fight = data.u32_or(7, 0);
         self.rank_post_fight = data.u32_or(8, 0);
@@ -122,11 +116,11 @@ impl Fight {
         // Extended fortress fight data (fightresult.fortresspillagerv1)
         if data.len() >= 25 {
             self.extra = FightExtra::Fortress {
-                soldiers: required_u32_or(data, 24)?,
-                stone: data.i64(21)?,
-                wood: data.i64(22)?,
-                archers_defeated: required_u32_or(data, 25)?,
-                mages_defeated: required_u32_or(data, 26)?,
+                soldiers: data.u32_or(24, 0),
+                stone: data.i64_or(21, 0),
+                wood: data.i64_or(22, 0),
+                archers_defeated: data.u32_or(25, 0),
+                mages_defeated: data.u32_or(26, 0),
             };
         }
 
@@ -744,19 +738,30 @@ mod tests {
     }
 
     #[test]
-    fn malformed_fight_result_numbers_fail() {
-        let data = Vals::from("1/0/-10/invalid/2/3/0/4/5");
+    fn malformed_fight_result_numbers_use_defaults() {
+        let mut values = vec!["0"; 20];
+        values[0] = "1";
+        values[2] = "-10";
+        values[3] = "invalid";
+        let raw = values.join("/");
+        let data = Vals::from(raw.as_str());
         let mut fight = Fight::default();
-        assert!(fight.update_result(&data).is_err());
+        fight.update_result(&data).unwrap();
+        assert_eq!(fight.xp_change, 0);
+        data.assert_all_read();
     }
 
     #[test]
-    fn truncated_fight_result_items_fail() {
+    fn truncated_fight_result_items_use_defaults() {
         let raw = "1/0/-10/100/2/3/0/4/5/1/0/0/1010/0/149/265/5/4/0/108/72/0/\
                    83940/10/0/0/45";
         let data = Vals::from(raw);
         let mut fight = Fight::default();
-        assert!(fight.update_result(&data).is_err());
+        fight.update_result(&data).unwrap();
+        let item = fight.item_won.as_ref().unwrap();
+        assert_eq!(item.price, 83_940);
+        assert!(!item.is_washed);
+        data.assert_all_read();
     }
 
     #[test]

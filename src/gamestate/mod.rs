@@ -182,15 +182,8 @@ impl Shop {
         data: &Vals<'_>,
         typ: ShopType,
     ) -> Result<Shop, SFError> {
-        data.ensure_i64()?;
         let mut shop = Shop::default();
         shop.typ = typ;
-        if data.len() < ITEM_PARSE_LEN * shop.items.len() {
-            return Err(SFError::ParsingError(
-                "shop item",
-                format!("{data:?}"),
-            ));
-        }
         for (chunk, item) in data.chunks(ITEM_PARSE_LEN).zip(&mut shop.items) {
             let Some(p_item) = Item::parse(&chunk)? else {
                 return Err(SFError::ParsingError(
@@ -506,7 +499,6 @@ impl GameState {
             }
             "questofferitems" => {
                 let data = val.list();
-                data.ensure_i64()?;
                 for (chunk, quest) in
                     data.chunks(ITEM_PARSE_LEN).zip(&mut self.tavern.quests)
                 {
@@ -532,7 +524,6 @@ impl GameState {
                 if data.is_empty() {
                     return Ok(());
                 }
-                data.ensure_i64()?;
                 for (idx, cmp) in self
                     .dungeons
                     .companions
@@ -541,13 +532,6 @@ impl GameState {
                     .enumerate()
                 {
                     let start = EQUIPMENT_PARSE_LEN * idx;
-                    if start > data.len() {
-                        return Err(SFError::TooShortResponse {
-                            name: "companion item",
-                            pos: start,
-                            array: data.to_string(),
-                        });
-                    }
                     cmp.equipment =
                         Equipment::parse(&data.window(start..data.len()))?;
                 }
@@ -1788,7 +1772,6 @@ impl GameState {
             }
             "pendingreward" => {
                 let data = val.list();
-                data.ensure_i64()?;
                 self.mail
                     .open_claimable
                     .get_or_insert_with(Default::default)
@@ -2122,7 +2105,6 @@ impl GameState {
                     self.legendary_dungeon.active.get_or_insert_default();
                 dungeons.pending_items.clear();
                 let data = val.list();
-                data.ensure_i64()?;
                 let amount = data.i64(0)?;
                 if amount < 1 {
                     data.ignore_all("no pending legendary dungeon items");
@@ -2317,15 +2299,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn truncated_companion_equipment_still_errors() {
+    fn truncated_companion_equipment_uses_empty_defaults() {
         let raw = ["0"; EQUIPMENT_PARSE_LEN].join("/");
         let response = Response::parse(
             format!("companionequipment:{raw}"),
             NaiveDateTime::default(),
         )
         .unwrap();
-        let err = GameState::default().update(response).unwrap_err();
-        assert!(matches!(err, SFError::TooShortResponse { .. }));
+        assert!(GameState::default().update(response).is_ok());
     }
 
     #[test]
