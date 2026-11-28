@@ -605,7 +605,7 @@ impl GameState {
             "unitprice" => {
                 self.fortress
                     .get_or_insert_with(Default::default)
-                    .update_unit_prices(&val.into_list("fortress units")?)?;
+                    .update_unit_prices(&val.list());
             }
             "dicestatus" => {
                 let dices: Option<Vec<DiceType>> = val
@@ -635,21 +635,17 @@ impl GameState {
             "upgradeprice" => {
                 self.fortress
                     .get_or_insert_with(Default::default)
-                    .update_unit_upgrade_info(
-                        &val.into_list("fortress unit upgrade prices")?,
-                    )?;
+                    .update_unit_upgrade_info(&val.list());
             }
             "unitlevel" => {
                 self.fortress
                     .get_or_insert_with(Default::default)
-                    .update_levels(&val.into_list("fortress unit levels")?)?;
+                    .update_levels(&val.list());
             }
             "fortressprice" => {
                 self.fortress
                     .get_or_insert_with(Default::default)
-                    .update_prices(
-                        &val.into_list("fortress upgrade prices")?,
-                    )?;
+                    .update_prices(&val.list());
             }
             "Arenarank" => {
                 if let Some(uw) = self.underworld.as_mut() {
@@ -874,14 +870,16 @@ impl GameState {
                     Equipment::parse(&val.list())?;
             }
             "fortresspricereroll" => {
+                let data = val.list();
                 self.fortress
                     .get_or_insert_with(Default::default)
-                    .opponent_reroll_price = val.into("fortress reroll")?;
+                    .opponent_reroll_price = data.u64_or(0, 0);
             }
             "fortresswalllevel" => {
+                let data = val.list();
                 self.fortress
                     .get_or_insert_with(Default::default)
-                    .wall_combat_lvl = val.into("fortress wall lvl")?;
+                    .wall_combat_lvl = data.u16_or(0, 0);
             }
             "dragongoldbonus" => {
                 self.character.mount_dragon_refund = val.into("dragon gold")?;
@@ -1057,9 +1055,8 @@ impl GameState {
             "fortressGroupPrice" => {
                 self.fortress
                     .get_or_insert_with(Default::default)
-                    .hall_of_knights_upgrade_price = FortressCost::parse(
-                    &val.into_list("hall of knights prices")?,
-                )?;
+                    .hall_of_knights_upgrade_price =
+                    FortressCost::parse(&val.list());
             }
             "goldperhournextlevel" => {
                 // I dont think this matters
@@ -1825,20 +1822,19 @@ impl GameState {
                 // {pid}/2/2/0/{rank}/1761884016/482/10/0/217/1761821390/482
             }
             "fortressstorage" => {
-                self.fortress.get_or_insert_default().update_resources(
-                    &val.into_list("ft resources")?,
-                    server_time,
-                )?;
+                self.fortress
+                    .get_or_insert_default()
+                    .update_resources(&val.list(), server_time);
             }
             "fortressunits" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update_units(&val.into_list("ft units")?, server_time)?;
+                    .update_units(&val.list(), server_time);
             }
             "fortress" => {
                 self.fortress
                     .get_or_insert_default()
-                    .update(&val.into_list("fortress")?, server_time)?;
+                    .update(&val.list(), server_time);
             }
             "wheel" => {
                 let data: Vec<i64> = val.into_list("wheel")?;
