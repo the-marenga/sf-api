@@ -1,12 +1,12 @@
 use chrono::{DateTime, Local};
-use num_traits::FromPrimitive;
 
 use super::{items::*, *};
-use crate::{
-    PlayerId,
-    misc::{ArrSkip, CGet},
-    response::Vals,
-};
+use crate::{PlayerId, response::Vals};
+
+const FIGHTER_RECORD_LEN: usize = 47;
+const ROUND_LEN_PLAIN: usize = 9;
+const ROUND_LEN_ONE_EFFECT: usize = 12;
+const ROUND_LEN_TWO_EFFECTS: usize = 15;
 
 /// The arena, that a player can fight other players in
 #[derive(Debug, Default, Clone)]
@@ -20,6 +20,18 @@ pub struct Arena {
     /// The amount of fights this character has already fought today, that
     /// gave xp. 0-10
     pub fights_for_xp: u8,
+}
+
+impl Arena {
+    pub(crate) fn update(&mut self, data: &Vals<'_>, server_time: ServerTime) {
+        self.next_free_fight = data.server_time_opt(0, server_time);
+        self.fights_for_xp = data.u8_or(1, 0);
+        for (idx, enemy) in self.enemy_ids.iter_mut().enumerate() {
+            *enemy = data.u32_or(2 + idx, 0);
+        }
+        data.ignore(5, "unknown arena value");
+        data.ignore(6, "unknown arena value");
+    }
 }
 
 /// A complete fight, which can be between multiple fighters for guild/tower
@@ -130,16 +142,15 @@ impl Fight {
         Ok(())
     }
 
-    pub(crate) fn update_groups(&mut self, val: &str) {
-        let mut groups = val.split(',');
-
+    pub(crate) fn update_groups(&mut self, data: &Vals<'_>) {
         let (Some(aid), Some(did), Some(aname), Some(dname)) = (
-            groups.next().and_then(|a| a.parse().ok()),
-            groups.next().and_then(|a| a.parse().ok()),
-            groups.next(),
-            groups.next(),
+            data.u32(0).ok(),
+            data.u32(1).ok(),
+            data.str(2).ok(),
+            data.str(3).ok(),
         ) else {
-            warn!("Invalid fight group: {val}");
+            warn!("Invalid fight group: {data}");
+            data.ignore_all("invalid fight group");
             return;
         };
 
@@ -147,6 +158,7 @@ impl Fight {
         self.group_defender_id = Some(did);
         self.group_attacker_name = Some(aname.to_string());
         self.group_defender_name = Some(dname.to_string());
+        data.ignore(4..data.len(), "extra fight group values");
     }
 }
 
@@ -167,107 +179,92 @@ pub struct SingleFight {
 }
 
 impl SingleFight {
-    pub(crate) fn update_fighters(&mut self, data: &str) {
-        let data = data.split('/').collect::<Vec<_>>();
+    pub(crate) fn update_fighters(&mut self, data: &Vals<'_>) {
         if data.len() < 60 {
             self.fighter_a = None;
             self.fighter_b = None;
             warn!("Fighter response too short");
+            data.ignore_all("fighter response too short");
             return;
         }
-        // Each fighter has the same number of fields (49), but the leading
-        // padding before the actual data may differ. The first fighter starts
-        // at offset 0. The second fighter starts at an offset that gives it
-        // the same number of leading zeros as the first fighter so that
-        // Fighter::parse can find the id at index 5.
-        //
-        // Empirically the data layout is:
-        //   Fighter A (49 values) | separator (1) | Fighter B (49 values)
-        // With total = 99, split_at(47) gives:
-        //   Fighter A: 47 values (indices 0-46) - loses 2 trailing zeros
-        //   Fighter B: 52 values (indices 47-98) - gains 5 leading zeros
-        //     (2 from Fighter A trailer + 1 separator + 2 Fighter B padding)
-        // This makes the id land at index 5 for both fighters.
-        let (fighter_a, fighter_b) = data.split_at(47);
-        self.fighter_a = Fighter::parse(fighter_a);
-        self.fighter_b = Fighter::parse(fighter_b);
+
+        let second = FIGHTER_RECORD_LEN..FIGHTER_RECORD_LEN * 2;
+        let fighter_a = data.window(0..FIGHTER_RECORD_LEN);
+        self.fighter_a = if let Ok(fighter) = Fighter::parse(&fighter_a) {
+            Some(fighter)
+        } else {
+            fighter_a.ignore_all("invalid fighter record");
+            None
+        };
+        let fighter_b = data.window(second);
+        self.fighter_b = if let Ok(fighter) = Fighter::parse(&fighter_b) {
+            Some(fighter)
+        } else {
+            fighter_b.ignore_all("invalid fighter record");
+            None
+        };
+
+        data.ignore(
+            FIGHTER_RECORD_LEN * 2..FIGHTER_RECORD_LEN * 2 + 5,
+            "trailing fighter header values",
+        );
+        data.ignore(
+            FIGHTER_RECORD_LEN * 2 + 5..data.len(),
+            "extra fighter header values",
+        );
     }
 
     pub(crate) fn update_rounds(
         &mut self,
-        data: &str,
+        data: &Vals<'_>,
         fight_version: u32,
-    ) -> Result<(), SFError> {
+    ) {
         self.actions.clear();
 
         if fight_version != 2 {
-            // Unsupported fight version
-            return Ok(());
+            data.ignore_all("unsupported fight version");
+            return;
         }
-        // Format variants (all values are i64):
-        //   9-value  (no effects):
-        //     actor / 0 / type / outcome / 0 / actor_hp / target_hp / 0 / 0
-        //   12-value (one fighter has an effect):
-        //     actor / 0 / type / outcome / 0 / actor_hp / target_hp / [5
-        // extras]       Actor's effect:  [who=1,  flag,       id,
-        // rem,         trail=0]       Opponent effect: [0,
-        // marker=1,   flag,  id,          rem]   15-value (both
-        // fighters have effects, or one has two):     actor / 0 / type
-        // / outcome / 0 / actor_hp / target_hp / [8 extras]
-        //       [who1, eff1_flag, eff1_id, eff1_rem, who2, eff2_flag, eff2_id,
-        // eff2_rem]       who={0→opponent, ≠0→actor}
-        let raw: Vec<&str> = data.split('/').collect();
-        // Parse once to i64 for robust stride detection
-        let values: Vec<i64> =
-            raw.iter().filter_map(|s| s.parse().ok()).collect();
 
         let mut i = 0;
-        while i + 9 <= values.len() {
-            let extras_first = values.cget(i + 7, "extras_first")?; // 0 if none; who=0 → opponent, ≠0 → actor
-            let extras_second = values.cget(i + 8, "extras_second")?;
+        while i + ROUND_LEN_PLAIN <= data.len() {
+            let extras_first = data.i64_or(i + 7, 0);
+            let extras_second = data.i64_or(i + 8, 0);
 
-            // Detect stride: 9-value if both effect slots are 0
             let stride = if extras_first == 0 && extras_second == 0 {
-                9
-            } else if i + 15 <= values.len()
-                && matches!(values.cget(i + 12, "stride_p12")?, 1..=3)
+                ROUND_LEN_PLAIN
+            } else if i + ROUND_LEN_TWO_EFFECTS <= data.len()
+                && matches!(data.i64_or(i + ROUND_LEN_ONE_EFFECT, 0), 1..=3)
             {
-                // 15-value: position 12 is the second effect-block's flag
-                // (1=Ability, 2=Minion, 3=Poison). In any other format,
-                // position 12 is the next action's actor_id (>3 or <0).
-                15
-            } else if i + 12 <= values.len() {
-                12
+                ROUND_LEN_TWO_EFFECTS
+            } else if i + ROUND_LEN_ONE_EFFECT <= data.len() {
+                ROUND_LEN_ONE_EFFECT
             } else {
-                9
+                ROUND_LEN_PLAIN
             };
 
-            let acting_id = values.cget(i, "acting_id")?;
-            let action_type: u32 =
-                u32::try_from(values.cget(i + 2, "action_type")?).unwrap_or(0);
-            let outcome_code: u32 =
-                u32::try_from(values.cget(i + 3, "outcome")?).unwrap_or(0);
-
+            let acting_id = data.i64_or(i, 0);
+            let action_type = data.u32_or(i + 2, 0);
+            let outcome_code = data.u32_or(i + 3, 0);
             let action = FightActionType::parse(action_type);
             let outcome = match outcome_code {
                 3 => FightOutcome::Blocked,
                 4 => FightOutcome::Evaded,
                 _ => FightOutcome::Normal,
             };
+            let actor_life = data.i64_or(i + 5, 0);
+            let target_life = data.i64_or(i + 6, 0);
+            let actor_state = FighterState::from_raw(data.i64_or(i + 1, 0));
+            let defender_state = FighterState::from_raw(data.i64_or(i + 4, 0));
 
-            let actor_life = values.cget(i + 5, "actor_life")?;
-            let target_life = values.cget(i + 6, "target_life")?;
-
-            let actor_state =
-                FighterState::from_raw(values.cget(i + 1, "actor_state")?);
-            let defender_state =
-                FighterState::from_raw(values.cget(i + 4, "defender_state")?);
-
-            let (actor_effect, opponent_effect) = if stride > 9 {
-                let extras_start = values.skip(i + 7, "extras")?;
-                let extra_vals =
-                    extras_start.get(..(stride - 7)).unwrap_or(&[]);
-                parse_active_effect(extra_vals)
+            let (actor_effect, opponent_effect) = if stride > ROUND_LEN_PLAIN {
+                if stride == ROUND_LEN_ONE_EFFECT {
+                    data.ignore(
+                        i + ROUND_LEN_ONE_EFFECT - 1,
+                        "unused effect trailer slot",
+                    );
+                }
+                parse_active_effect(&data.window(i + 7..i + stride))
             } else {
                 (None, None)
             };
@@ -283,20 +280,16 @@ impl SingleFight {
                 actor_state,
                 defender_state,
             });
-
             i += stride;
         }
 
-        if i < values.len() {
-            let trailing = raw.get(i..).unwrap_or(&[]);
+        if i < data.len() {
             warn!(
                 "{} trailing unparsed values in fight.r: {:?}",
-                values.len() - i,
-                trailing,
+                data.len() - i,
+                data.slice(i..data.len()),
             );
         }
-
-        Ok(())
     }
 }
 
@@ -323,37 +316,49 @@ pub struct Fighter {
 }
 
 impl Fighter {
-    // TODO: Make this return Result?
-    pub(crate) fn parse(data: &[&str]) -> Option<Fighter> {
-        let fighter_typ: i64 = data.cfsget(5, "fighter typ").ok()??;
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Fighter, SFError> {
+        data.ignore_unmodelled(
+            &[0..5, 9..10, 16..27, 28..FIGHTER_RECORD_LEN],
+            "fighter field that is not modelled",
+        );
 
-        let mut fighter_type = match fighter_typ {
+        let name_fallback = data.get_str(15).unwrap_or_default();
+        let raw_id = data.i64_or(5, 0);
+        let mut fighter_type = match raw_id {
             -391 => FighterTyp::Companion(CompanionClass::Warrior),
             -392 => FighterTyp::Companion(CompanionClass::Mage),
             -393 => FighterTyp::Companion(CompanionClass::Scout),
             1.. => FighterTyp::Player,
             x => {
-                let monster_id = soft_into(-x, "monster_id", 0);
+                let monster_id = x
+                    .checked_neg()
+                    .and_then(|id| u16::try_from(id).ok())
+                    .unwrap_or_else(|| {
+                        warn!("Invalid monster id: {x}");
+                        0
+                    });
                 FighterTyp::Monster(monster_id)
             }
         };
 
         let mut attributes = EnumMap::default();
-        let raw_atrs =
-            parse_vec(data.get(10..15)?, "fighter attributes", |a| {
-                a.parse().ok()
-            })
-            .ok()?;
-        update_enum_map(&mut attributes, &raw_atrs);
+        for (idx, attr) in attributes.values_mut().enumerate() {
+            *attr = data.u32_or(10 + idx, 0);
+        }
 
-        let class: i32 = data.cfsget(27, "fighter class").ok().flatten()?;
-        let class: Class = FromPrimitive::from_i32(class - 1)?;
+        let class =
+            data.enum_map(27, |raw| raw.wrapping_sub(1))
+                .ok_or_else(|| {
+                    SFError::ParsingError(
+                        "fighter class",
+                        format!(
+                            "Unknown fighter class: {}",
+                            data.u32_or(27, 0)
+                        ),
+                    )
+                })?;
 
-        let id = data.cfsget(5, "fighter id").ok()?.unwrap_or_default();
-
-        // Parse the name field, which doubles as fighter-type override for
-        // special NPCs (fortress units, underworld minions) and pets.
-        let raw_name = data.cget(6, "fighter name").ok()?;
+        let raw_name = data.str_or(6, "");
         let name = match raw_name.parse::<i64>() {
             Ok(-719..=-710) => {
                 fighter_type = FighterTyp::FortressSoldier;
@@ -373,25 +378,24 @@ impl Fighter {
             }
             Ok(..=-1) => None,
             Ok(0) => {
-                let uwm_id = data.cget(15, "fighter uwm").ok()?;
-                if ["-910", "-935", "-933", "-924"].contains(&uwm_id) {
+                if ["-910", "-935", "-933", "-924"].contains(&name_fallback) {
                     fighter_type = FighterTyp::UnderworldMinion;
                 }
                 None
             }
-            Ok(pid) if pid == id && fighter_type == FighterTyp::Player => {
+            Ok(pid) if pid == raw_id && fighter_type == FighterTyp::Player => {
                 fighter_type = FighterTyp::Pet;
                 None
             }
             _ => Some(raw_name.to_string()),
         };
 
-        Some(Fighter {
+        Ok(Fighter {
             typ: fighter_type,
-            id,
+            id: raw_id,
             name,
-            level: data.cfsget(7, "fighter lvl").ok()??,
-            life: data.cfsget(8, "fighter life").ok()??,
+            level: data.u32_or(7, 0),
+            life: data.u32_or(8, 0),
             attributes,
             class,
         })
@@ -594,23 +598,15 @@ impl FightActionType {
     }
 }
 
-/// Safely clamp an `i64` to `u32`, treating negatives as 0.
-fn clamp_u32(v: i64) -> u32 {
-    u32::try_from(v.max(0)).unwrap_or(0)
-}
-
-/// Parse a single active effect from three consecutive `extras` values.
-fn parse_one_effect(extras: &[i64], start: usize) -> Option<ActiveEffect> {
-    if start + 2 >= extras.len() {
-        return None;
-    }
-    let flag = extras.cget(start, "eff_f").unwrap_or(0);
-    let id = extras.cget(start + 1, "eff_id").unwrap_or(0);
-    let remaining = extras.cget(start + 2, "eff_rem").unwrap_or(0);
+/// Parse a single active effect from an effect block: `flag / id / remaining`.
+fn parse_one_effect(block: &Vals<'_>) -> Option<ActiveEffect> {
+    let flag = block.u32_or(0, 0);
+    let id = block.u32_or(1, 0);
+    let remaining = block.u32_or(2, 0);
     Some(match flag {
         1 => ActiveEffect::Ability {
-            id: clamp_u32(id),
-            remaining_rounds: clamp_u32(remaining),
+            id,
+            remaining_rounds: remaining,
         },
         2 => ActiveEffect::Minion {
             minion_type: match id {
@@ -619,11 +615,11 @@ fn parse_one_effect(extras: &[i64], start: usize) -> Option<ActiveEffect> {
                 3 => Minion::Golem,
                 _ => return None,
             },
-            remaining_actions: clamp_u32(remaining),
+            remaining_actions: remaining,
         },
         3 => ActiveEffect::Poison {
-            id: clamp_u32(id),
-            remaining_rounds: clamp_u32(remaining),
+            id,
+            remaining_rounds: remaining,
         },
         _ => {
             warn!(
@@ -631,40 +627,28 @@ fn parse_one_effect(extras: &[i64], start: usize) -> Option<ActiveEffect> {
                  remaining={remaining}"
             );
             ActiveEffect::Unknown {
-                flag: clamp_u32(flag),
-                id: clamp_u32(id),
-                remaining: clamp_u32(remaining),
+                flag,
+                id,
+                remaining,
             }
         }
     })
 }
 
-/// Parse the 5 (12-value) or 8 (15-value) extra values into active effects.
-///
-/// 12-value (5 extras):
-///   [who=1,    flag, id, rem, trail=0]  → (actor,   None)
-///   [0,        marker=1, flag, id, rem] → (None,    opponent)
-///
-/// 15-value (8 extras):
-///   [who1, flag1, id1, rem1, who2, flag2, id2, rem2]
-///   who=0      → that block belongs to the **opponent**
-///   who≠0      → that block belongs to the **actor**
-///   When both blocks belong to the same fighter, only the first
-///   is returned (the second is typically an expired sentinel).
+/// Parses the 5 (single effect round) or 8 (double effect round) extra values
+/// into active effects.
 fn parse_active_effect(
-    extras: &[i64],
+    extras: &Vals<'_>,
 ) -> (Option<ActiveEffect>, Option<ActiveEffect>) {
     if extras.len() < 4 {
         return (None, None);
     }
 
     if extras.len() >= 8 {
-        // 15-value: two effect blocks, each with an ownership flag
-        let who1_actor = extras.first().copied().unwrap_or(0) != 0;
-        let who2_actor = extras.get(4).copied().unwrap_or(0) != 0;
-
-        let eff1 = parse_one_effect(extras, 1);
-        let eff2 = parse_one_effect(extras, 5);
+        let who1_actor = extras.i64_or(0, 0) != 0;
+        let who2_actor = extras.i64_or(4, 0) != 0;
+        let eff1 = parse_one_effect(&extras.window(1..4));
+        let eff2 = parse_one_effect(&extras.window(5..8));
 
         let actor_effect = if who1_actor {
             eff1
@@ -680,14 +664,11 @@ fn parse_active_effect(
         } else {
             None
         };
-
         (actor_effect, opponent_effect)
-    } else if extras.first().copied().unwrap_or(0) != 0 {
-        // 12-value, actor's effect: [who=1, flag, id, rem, trail=0]
-        (parse_one_effect(extras, 1), None)
+    } else if extras.i64_or(0, 0) != 0 {
+        (parse_one_effect(&extras.window(1..4)), None)
     } else {
-        // 12-value, opponent's effect: [0, marker=1, flag, id, rem]
-        (None, parse_one_effect(extras, 2))
+        (None, parse_one_effect(&extras.window(2..5)))
     }
 }
 
@@ -721,6 +702,181 @@ mod tests {
     #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 
     use super::*;
+
+    fn fighter_record(id: i64, name: &str, fallback: i64) -> String {
+        let mut values = vec!["0".to_string(); FIGHTER_RECORD_LEN];
+        values[5] = id.to_string();
+        values[6] = name.to_string();
+        values[7] = "50".to_string();
+        values[8] = "1000".to_string();
+        values[10] = "10".to_string();
+        values[15] = fallback.to_string();
+        values[27] = "1".to_string();
+        values.join("/")
+    }
+
+    #[test]
+    fn updates_arena_and_tolerates_unknown_strings() {
+        let data = Vals::from("1785018466/0/111111/222222/333333/1/1");
+        let mut arena = Arena::default();
+        arena.update(&data, ServerTime::default());
+        data.assert_all_read();
+        assert_eq!(arena.enemy_ids, [111_111, 222_222, 333_333]);
+        assert!(arena.next_free_fight.is_some());
+
+        let data =
+            Vals::from("future/future/future/future/future/future/future");
+        arena.update(&data, ServerTime::default());
+        data.assert_all_read();
+        assert_eq!(arena.enemy_ids, [0, 0, 0]);
+    }
+
+    #[test]
+    fn updates_fighter_records() {
+        let first = fighter_record(111_111, "PlayerOne", 0);
+        let second = fighter_record(222_222, "PlayerTwo", 0);
+        let raw = format!("{first}/{second}/0/0/0/0/0");
+        let data = Vals::from(raw.as_str());
+        let mut fight = SingleFight::default();
+        fight.update_fighters(&data);
+        data.assert_all_read();
+
+        let a = fight.fighter_a.unwrap();
+        assert_eq!(a.typ, FighterTyp::Player);
+        assert_eq!(a.id, 111_111);
+        assert_eq!(a.name.as_deref(), Some("PlayerOne"));
+        assert_eq!(a.level, 50);
+        assert_eq!(a.life, 1000);
+        assert_eq!(a.class, Class::Warrior);
+        assert_eq!(a.attributes[AttributeType::Strength], 10);
+
+        let b = fight.fighter_b.unwrap();
+        assert_eq!(b.id, 222_222);
+        assert_eq!(b.name.as_deref(), Some("PlayerTwo"));
+    }
+
+    #[test]
+    fn parses_special_fighter_types() {
+        let cases = [
+            (
+                -391,
+                "-391",
+                0,
+                FighterTyp::Companion(CompanionClass::Warrior),
+            ),
+            (712, "-712", 0, FighterTyp::FortressSoldier),
+            (111_111, "111111", 0, FighterTyp::Pet),
+            (0, "0", 0, FighterTyp::Monster(0)),
+            (0, "0", -910, FighterTyp::UnderworldMinion),
+        ];
+        for (id, name, fallback, expected) in cases {
+            let raw = fighter_record(id, name, fallback);
+            let data = Vals::from(raw.as_str());
+            assert_eq!(Fighter::parse(&data).unwrap().typ, expected);
+            data.assert_all_read();
+        }
+    }
+
+    #[test]
+    fn updates_rounds_and_effects() {
+        let raw = "111111/0/0/4/0/167268/55080/0/0/222222/0/0/0/0/55080/\
+                   166066/0/0/111111/0/1/4/0/166066/55080/0/0/222222/0/0/0/0/\
+                   55080/164601/0/0/111111/0/11/0/0/164601/55080/1/2/3/4/0/\
+                   111111/0/15/0/0/164601/27830/1/2/3/3/0/222222/0/0/0/0/\
+                   27830/162633/0/1/2/3/3/111111/0/1/0/0/162633/-6030/1/2/3/3/\
+                   0";
+        let data = Vals::from(raw);
+        let mut fight = SingleFight::default();
+        fight.update_rounds(&data, 2);
+        data.assert_all_read();
+
+        assert_eq!(fight.actions.len(), 8);
+        assert_eq!(fight.actions[0].outcome, FightOutcome::Evaded);
+        assert_eq!(fight.actions[4].action, FightActionType::Summon);
+        assert!(matches!(
+            fight.actions[4].actor_effect,
+            Some(ActiveEffect::Minion {
+                minion_type: Minion::Golem,
+                remaining_actions: 4,
+            })
+        ));
+        assert_eq!(fight.actions[7].other_new_life, -6030);
+    }
+
+    #[test]
+    fn updates_double_effect_rounds() {
+        let data = Vals::from("2/0/0/0/0/1000/500/1/2/1/3/0/3/7/2");
+        let mut fight = SingleFight::default();
+        fight.update_rounds(&data, 2);
+        data.assert_all_read();
+
+        assert_eq!(fight.actions.len(), 1);
+        let action = &fight.actions[0];
+        assert!(matches!(
+            action.actor_effect,
+            Some(ActiveEffect::Minion {
+                minion_type: Minion::Skeleton,
+                remaining_actions: 3,
+            })
+        ));
+        assert!(matches!(
+            action.opponent_effect,
+            Some(ActiveEffect::Poison {
+                id: 7,
+                remaining_rounds: 2,
+            })
+        ));
+    }
+
+    #[test]
+    fn unsupported_round_versions_clear_and_ignore_data() {
+        let data = Vals::from("1/0/0/0/0/100/50/0/0");
+        let mut fight = SingleFight::default();
+        fight.update_rounds(&data, 2);
+        assert_eq!(fight.actions.len(), 1);
+        fight.update_rounds(&data, 1);
+        assert_eq!(fight.actions.len(), 0);
+        data.assert_all_read();
+    }
+
+    #[test]
+    fn invalid_fighter_records_are_fully_consumed() {
+        let mut values: Vec<String> = fighter_record(111_111, "PlayerOne", 0)
+            .split('/')
+            .map(str::to_string)
+            .collect();
+        values[27] = "999".to_string();
+        let invalid = values.join("/");
+        let valid = fighter_record(222_222, "PlayerTwo", 0);
+        let raw = format!("{invalid}/{valid}/0/0/0/0/0");
+        let data = Vals::from(raw.as_str());
+        let mut fight = SingleFight::default();
+        fight.update_fighters(&data);
+        assert!(fight.fighter_a.is_none());
+        assert!(fight.fighter_b.is_some());
+        data.assert_all_read();
+    }
+
+    #[test]
+    fn updates_fight_groups() {
+        let data = Vals::by("111111,222222,PlayerOne,PlayerTwo", ',');
+        let mut fight = Fight::default();
+        fight.update_groups(&data);
+        data.assert_all_read();
+        assert_eq!(fight.group_attacker_id, Some(111_111));
+        assert_eq!(fight.group_defender_id, Some(222_222));
+        assert_eq!(fight.group_attacker_name.as_deref(), Some("PlayerOne"));
+        assert_eq!(fight.group_defender_name.as_deref(), Some("PlayerTwo"));
+    }
+
+    #[test]
+    fn invalid_fight_groups_are_fully_consumed() {
+        let data = Vals::by("invalid,222222,PlayerOne,PlayerTwo", ',');
+        let mut fight = Fight::default();
+        fight.update_groups(&data);
+        data.assert_all_read();
+        assert_eq!(fight.group_attacker_id, None);
+    }
 
     #[test]
     fn parses_a_short_lure_result() {
