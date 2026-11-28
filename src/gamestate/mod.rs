@@ -1,5 +1,6 @@
 pub mod arena;
 pub mod character;
+pub mod deeds;
 pub mod dungeons;
 pub mod event;
 pub mod fortress;
@@ -28,9 +29,9 @@ use crate::{
     command::*,
     error::*,
     gamestate::{
-        arena::*, character::*, dungeons::*, event::*, fortress::*, guild::*,
-        idle::*, items::*, legendary_dungeon::*, rewards::*, social::*,
-        tavern::*, underworld::*, unlockables::*,
+        arena::*, character::*, deeds::*, dungeons::*, event::*, fortress::*,
+        guild::*, idle::*, items::*, legendary_dungeon::*, rewards::*,
+        social::*, tavern::*, underworld::*, unlockables::*,
     },
     misc::*,
     response::{Response, ResponseVal, Vals},
@@ -76,6 +77,8 @@ pub struct GameState {
     pub witch: Option<Witch>,
     /// Tracker for small challenges, that a player can complete
     pub achievements: Achievements,
+    /// The progress of the player towards the deeds of glory
+    pub deeds: Deeds,
     /// The boring idle game
     pub idle_game: Option<IdleGame>,
     /// Contains the features this char is able to unlock right now
@@ -1797,6 +1800,9 @@ impl GameState {
                 // big/medium/small/orange/black/others
                 // 3334/3333/3333/0/1700/8300
             }
+            "deeds" => {
+                self.deeds.update(&val.into_list("deeds")?);
+            }
             "deedsandtitlesplayersave" => {
                 // The deeds of glory of the player
                 // {pid}/{glory}/{rank}/{bronze}/{silver}/{gold}/2/2/0/1/58/0/
@@ -1805,6 +1811,9 @@ impl GameState {
             "deedshelves" => {
                 // deedshelves (subkey => 1)
                 // 1
+            }
+            "newdeeds" => {
+                self.deeds.update_new(&val.into_list("newdeeds")?);
             }
             "titleinfos" => {
                 // let data:Vec<_> = val.as_str().split('/').collect();
