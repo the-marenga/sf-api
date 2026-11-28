@@ -773,6 +773,10 @@ impl Item {
             for i in 0..3 {
                 let raw_typ = data.i64(i + 7)?;
                 let Ok(atr_typ) = usize::try_from(raw_typ) else {
+                    data.ignore(
+                        i + 10,
+                        "value paired with invalid attribute type",
+                    );
                     warn!("Invalid attribute typ: {raw_typ}, {typ:?}");
                     continue;
                 };
@@ -1540,6 +1544,15 @@ mod tests {
         let vals = Vals::from(raw);
         let item = Item::parse(&vals).unwrap().unwrap();
         assert!(item.rune.is_none());
+        vals.assert_all_read();
+    }
+
+    #[test]
+    fn invalid_attribute_types_still_consume_their_values() {
+        let raw = "10/0/0/1010/0/0/0/999/0/0/5/0/0/0/0/0/0/0/0";
+        let vals = Vals::from(raw);
+        let item = Item::parse(&vals).unwrap().unwrap();
+        assert_eq!(item.typ, ItemType::Talisman);
         vals.assert_all_read();
     }
 
