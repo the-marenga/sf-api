@@ -8,7 +8,7 @@ use num_traits::FromPrimitive;
 use strum::{EnumIter, IntoEnumIterator};
 
 use super::{
-    CCGet, CGet, IdleBuildingType, LightDungeon, Mount, ServerTime, ShopType,
+    IdleBuildingType, LightDungeon, Mount, ServerTime, ShopType,
     character::Class, items::*, tavern::Location, unlockables::HabitatType,
 };
 use crate::{command::AttributeType, error::SFError, response::Vals};
@@ -925,13 +925,6 @@ impl RewardType {
 }
 
 impl Reward {
-    pub(crate) fn parse(data: &[i64]) -> Result<Reward, SFError> {
-        Ok(Reward {
-            typ: RewardType::parse(data.cget(0, "reward typ")?),
-            amount: data.csiget(1, "reward amount", 0)?,
-        })
-    }
-
     pub(crate) fn parse_vals(data: &Vals<'_>) -> Reward {
         let typ = RewardType::parse(data.i64_or(0, 0));
         let amount = u64::try_from(data.i64_or(1, 0)).unwrap_or(0);
