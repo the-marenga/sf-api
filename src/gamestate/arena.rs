@@ -86,6 +86,11 @@ pub enum FightExtra {
     UnderworldLure { souls: i64 },
 }
 
+fn required_u32_or(data: &Vals<'_>, pos: usize) -> Result<u32, SFError> {
+    data.get(pos)?;
+    Ok(data.u32_or(pos, 0))
+}
+
 impl Fight {
     pub(crate) fn update_result(
         &mut self,
@@ -117,11 +122,11 @@ impl Fight {
         // Extended fortress fight data (fightresult.fortresspillagerv1)
         if data.len() >= 25 {
             self.extra = FightExtra::Fortress {
-                soldiers: data.u32(24)?,
+                soldiers: required_u32_or(data, 24)?,
                 stone: data.i64(21)?,
                 wood: data.i64(22)?,
-                archers_defeated: data.u32(25)?,
-                mages_defeated: data.u32(26)?,
+                archers_defeated: required_u32_or(data, 25)?,
+                mages_defeated: required_u32_or(data, 26)?,
             };
         }
 
@@ -719,7 +724,7 @@ pub enum FighterTyp {
 
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
+    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 
     use super::*;
 
@@ -752,6 +757,33 @@ mod tests {
         let data = Vals::from(raw);
         let mut fight = Fight::default();
         assert!(fight.update_result(&data).is_err());
+    }
+
+    #[test]
+    fn invalid_fortress_counts_default_to_zero() {
+        let mut values = vec!["0"; 28];
+        values[0] = "1";
+        values[24] = "-1";
+        values[25] = "-1";
+        values[26] = "-1";
+        let raw = values.join("/");
+        let data = Vals::from(raw.as_str());
+        let mut fight = Fight::default();
+        fight.update_result(&data).unwrap();
+
+        let FightExtra::Fortress {
+            soldiers,
+            archers_defeated,
+            mages_defeated,
+            ..
+        } = fight.extra
+        else {
+            panic!("expected fortress fight metadata");
+        };
+        assert_eq!(soldiers, 0);
+        assert_eq!(archers_defeated, 0);
+        assert_eq!(mages_defeated, 0);
+        data.assert_all_read();
     }
 
     #[test]
