@@ -143,22 +143,6 @@ pub fn to_sf_string(val: &str) -> String {
     new
 }
 
-pub(crate) fn parse_vec<B: Display + Copy + std::fmt::Debug, T, F>(
-    data: &[B],
-    name: &'static str,
-    func: F,
-) -> Result<Vec<T>, SFError>
-where
-    F: Fn(B) -> Option<T>,
-{
-    data.iter()
-        .map(|a| {
-            func(*a)
-                .ok_or_else(|| SFError::ParsingError(name, format!("{data:?}")))
-        })
-        .collect()
-}
-
 fn raw_cget<T: Copy + std::fmt::Debug>(
     val: &[T],
     pos: usize,
@@ -264,24 +248,10 @@ impl<T: Copy + std::fmt::Debug + Display, I: TryFrom<T>> CCGet<T, I> for [T] {
 }
 
 pub(crate) trait CSGet<T: FromStr> {
-    fn cfsget(
-        &self,
-        pos: usize,
-        name: &'static str,
-    ) -> Result<Option<T>, SFError>;
     fn cfsuget(&self, pos: usize, name: &'static str) -> Result<T, SFError>;
 }
 
 impl<T: FromStr> CSGet<T> for [&str] {
-    fn cfsget(
-        &self,
-        pos: usize,
-        name: &'static str,
-    ) -> Result<Option<T>, SFError> {
-        let raw = raw_cget(self, pos, name)?;
-        Ok(warning_from_str(raw, name))
-    }
-
     fn cfsuget(&self, pos: usize, name: &'static str) -> Result<T, SFError> {
         let raw = raw_cget(self, pos, name)?;
         let Some(val) = warning_from_str(raw, name) else {

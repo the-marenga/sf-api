@@ -1394,12 +1394,12 @@ impl GameState {
                 // Note: The sub_key from this, can improve fighter parsing
             }
             x if x.starts_with("fightheader") => {
-                self.get_fight(x).update_fighters(val.as_str());
+                self.get_fight(x).update_fighters(&val.list());
             }
             "fightgroups" => {
                 let fight =
                     self.last_fight.get_or_insert_with(Default::default);
-                fight.update_groups(val.as_str());
+                fight.update_groups(&val.list_by(','));
             }
             "fightadditionalplayers" => {
                 // This should be players in guild battles, that have not
@@ -1416,10 +1416,7 @@ impl GameState {
                     .and_then(|v| v.as_str().parse().ok())
                     .unwrap_or(1);
                 let fight = self.get_fight(x);
-                if let Err(e) = fight.update_rounds(val.as_str(), fight_version)
-                {
-                    warn!("Failed to parse fight rounds: {e}");
-                }
+                fight.update_rounds(&val.list(), fight_version);
             }
             "othergroupname" => {
                 other_guild
@@ -1867,15 +1864,7 @@ impl GameState {
                 // [6] => ????
             }
             "arena" => {
-                let data: Vec<i64> = val.into_list("arena")?;
-                self.arena.next_free_fight =
-                    data.cstget(0, "next battle time", server_time)?;
-                self.arena.fights_for_xp =
-                    data.csiget(1, "arena xp fights", 0)?;
-                for (idx, val) in self.arena.enemy_ids.iter_mut().enumerate() {
-                    *val = data.csiget(2 + idx, "arena enemy id", 0)?;
-                }
-                // [5] => ??
+                self.arena.update(&val.list(), server_time);
             }
             "ownplayersavepotions" => {
                 let data: Vec<i64> = val.into_list("potions")?;
