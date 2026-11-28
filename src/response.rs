@@ -322,14 +322,12 @@ impl<'a> ResponseVal<'a> {
     /// access. The existing eager [`into_list`](Self::into_list) API remains
     /// unchanged.
     #[must_use]
-    #[allow(dead_code)]
     pub(crate) fn list(&self) -> Vals<'a> {
         self.list_by('/')
     }
 
     /// Splits this response value by `delim` into a lazy [`Vals`] view.
     #[must_use]
-    #[allow(dead_code)]
     pub(crate) fn list_by(&self, delim: char) -> Vals<'a> {
         Vals::new(self.value, self.key, delim)
     }
