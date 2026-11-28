@@ -150,6 +150,7 @@ impl Fight {
             data.str(3).ok(),
         ) else {
             warn!("Invalid fight group: {data}");
+            data.ignore_all("invalid fight group");
             return;
         };
 
@@ -188,9 +189,20 @@ impl SingleFight {
         }
 
         let second = FIGHTER_RECORD_LEN..FIGHTER_RECORD_LEN * 2;
-        self.fighter_a =
-            Fighter::parse(&data.window(0..FIGHTER_RECORD_LEN)).ok();
-        self.fighter_b = Fighter::parse(&data.window(second)).ok();
+        let fighter_a = data.window(0..FIGHTER_RECORD_LEN);
+        self.fighter_a = if let Ok(fighter) = Fighter::parse(&fighter_a) {
+            Some(fighter)
+        } else {
+            fighter_a.ignore_all("invalid fighter record");
+            None
+        };
+        let fighter_b = data.window(second);
+        self.fighter_b = if let Ok(fighter) = Fighter::parse(&fighter_b) {
+            Some(fighter)
+        } else {
+            fighter_b.ignore_all("invalid fighter record");
+            None
+        };
 
         data.ignore(
             FIGHTER_RECORD_LEN * 2..FIGHTER_RECORD_LEN * 2 + 5,
@@ -828,6 +840,24 @@ mod tests {
     }
 
     #[test]
+    fn invalid_fighter_records_are_fully_consumed() {
+        let mut values: Vec<String> = fighter_record(111_111, "PlayerOne", 0)
+            .split('/')
+            .map(str::to_string)
+            .collect();
+        values[27] = "999".to_string();
+        let invalid = values.join("/");
+        let valid = fighter_record(222_222, "PlayerTwo", 0);
+        let raw = format!("{invalid}/{valid}/0/0/0/0/0");
+        let data = Vals::from(raw.as_str());
+        let mut fight = SingleFight::default();
+        fight.update_fighters(&data);
+        assert!(fight.fighter_a.is_none());
+        assert!(fight.fighter_b.is_some());
+        data.assert_all_read();
+    }
+
+    #[test]
     fn updates_fight_groups() {
         let data = Vals::by("111111,222222,PlayerOne,PlayerTwo", ',');
         let mut fight = Fight::default();
@@ -837,6 +867,15 @@ mod tests {
         assert_eq!(fight.group_defender_id, Some(222_222));
         assert_eq!(fight.group_attacker_name.as_deref(), Some("PlayerOne"));
         assert_eq!(fight.group_defender_name.as_deref(), Some("PlayerTwo"));
+    }
+
+    #[test]
+    fn invalid_fight_groups_are_fully_consumed() {
+        let data = Vals::by("invalid,222222,PlayerOne,PlayerTwo", ',');
+        let mut fight = Fight::default();
+        fight.update_groups(&data);
+        data.assert_all_read();
+        assert_eq!(fight.group_attacker_id, None);
     }
 
     #[test]
