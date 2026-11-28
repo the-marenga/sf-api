@@ -534,27 +534,9 @@ impl GameState {
                 *self.shops.get_mut(ShopType::Weapon) =
                     Shop::parse(&val.list(), ShopType::Weapon)?;
             }
-            "questofferitems" => {
-                let data = val.list();
-                for (chunk, quest) in
-                    data.chunks(ITEM_PARSE_LEN).zip(&mut self.tavern.quests)
-                {
-                    quest.item = Item::parse(&chunk)?;
-                }
-            }
-            #[allow(
-                clippy::indexing_slicing,
-                clippy::cast_sign_loss,
-                clippy::cast_possible_truncation
-            )]
-            #[allow(deprecated)]
+            "questofferitems" => self.tavern.update_quest_items(&val.list())?,
             "toiletstate" => {
-                let vals: Vec<i64> = val.into_list("toilet state")?;
-                if vals.len() < 3 {
-                    return Ok(());
-                }
-                let toilet = self.tavern.toilet.get_or_insert_default();
-                toilet.sacrifices_left = vals[2] as u32;
+                Toilet::update_sacrifices(&val.list(), &mut self.tavern.toilet);
             }
             "companionequipment" => {
                 let data = val.list();
@@ -619,23 +601,8 @@ impl GameState {
                     .get_or_insert_with(Default::default)
                     .update_unit_prices(&val.list());
             }
-            "dicestatus" => {
-                let dices: Option<Vec<DiceType>> = val
-                    .into_list("dice status")?
-                    .into_iter()
-                    .map(FromPrimitive::from_u8)
-                    .collect();
-                self.tavern.dice_game.current_dice = dices.unwrap_or_default();
-            }
-            "dicereward" => {
-                let data: Vec<u32> = val.into_list("dice reward")?;
-                let win_typ: DiceType =
-                    data.cfpuget(0, "dice reward", |a| a - 1)?;
-                self.tavern.dice_game.reward = Some(DiceReward {
-                    win_typ,
-                    amount: data.cget(1, "dice reward amount")?,
-                });
-            }
+            "dicestatus" => self.tavern.dice_game.update_status(&val.list()),
+            "dicereward" => self.tavern.dice_game.update_reward(&val.list())?,
             "chathistory" => {
                 self.guild.get_or_insert_with(Default::default).chat =
                     ChatMessage::parse_messages(val.as_str());
@@ -995,134 +962,43 @@ impl GameState {
                 self.specials.tasks.daily.update_rewards(&val.list());
             }
             "expeditionevent" => {
-                let data: Vec<i64> = val.into_list("exp event")?;
-                self.tavern.expeditions.start =
-                    data.cstget(0, "expedition start", server_time)?;
-                let end = data.cstget(1, "expedition end", server_time)?;
-                self.tavern.expeditions.end = end;
+                self.tavern
+                    .expeditions
+                    .update_event(&val.list(), server_time);
             }
             "expeditions" => {
-                let data: Vec<i64> = val.into_list("exp event")?;
-
-                if !data.len().is_multiple_of(8) {
-                    warn!(
-                        "Available expeditions have weird size: {data:?} {}",
-                        data.len()
-                    );
-                }
-                self.tavern.expeditions.available = data
-                    .chunks_exact(8)
-                    .map(|data| {
-                        Ok(AvailableExpedition {
-                            target: data
-                                .cfpget(0, "expedition typ", |a| a)?
-                                .unwrap_or_default(),
-                            location_1: data
-                                .cfpget(4, "exp loc 1", |a| a)?
-                                .unwrap_or_default(),
-                            location_2: data
-                                .cfpget(5, "exp loc 2", |a| a)?
-                                .unwrap_or_default(),
-                            thirst_for_adventure_sec: data
-                                .csiget(6, "exp alu", 600)?,
-                            special: data.cfpget(7, "exp special", |a| a)?,
-                        })
-                    })
-                    .collect::<Result<_, _>>()?;
+                self.tavern.expeditions.update_available(&val.list());
             }
             "expeditionrewardresources" => {
-                // I would assume, that everything we get is just update
-                // elsewhere, so I dont care about parsing this
+                val.list()
+                    .ignore_all("expedition reward resources are not modelled");
             }
             "expeditionreward" => {
-                // This works, but I dont think anyone cares about that. It
-                // will just be in the inv. anyways
-                // let data:Vec<i64> = val.into_list("expedition reward")?;
-                // for chunk in data.chunks_exact(ITEM_PARSE_LEN){
-                //     let item = Item::parse(chunk, server_time);
-                //     println!("{item:#?}");
-                // }
+                val.list().ignore_all("expedition rewards are not modelled");
             }
             "expeditionmonster" => {
-                let data: Vec<i64> = val.into_list("expedition monster")?;
-                let exp = self
-                    .tavern
-                    .expeditions
-                    .active
-                    .get_or_insert_with(Default::default);
-
-                exp.boss = ExpeditionBoss {
-                    id: data
-                        .cfpget(0, "expedition monster", |a| -a)?
-                        .unwrap_or_default(),
-                    items: soft_into(
-                        data.get(1).copied().unwrap_or_default(),
-                        "exp monster items",
-                        3,
-                    ),
-                };
+                let data = val.list();
+                let boss = ExpeditionBoss::parse(&data)?;
+                self.tavern.expeditions.active.get_or_insert_default().boss =
+                    boss;
             }
             "expeditionhalftime" => {
-                let data: Vec<i64> = val.into_list("halftime exp")?;
-                let exp = self
-                    .tavern
-                    .expeditions
-                    .active
-                    .get_or_insert_with(Default::default);
-
-                exp.halftime_for_boss_id =
-                    -data.cget(0, "halftime for boss id")?;
-                exp.rewards = data
-                    .skip(1, "halftime choice")?
-                    .chunks_exact(2)
-                    .map(Reward::parse)
-                    .collect::<Result<_, _>>()?;
+                self.tavern.expeditions.update_halftime(&val.list())?;
             }
             "expeditionstate" => {
-                let data: Vec<i64> = val.into_list("exp state")?;
-                let exp = self
-                    .tavern
-                    .expeditions
-                    .active
-                    .get_or_insert_with(Default::default);
-                exp.floor_stage = data.cget(2, "floor stage")?;
-
-                exp.target_thing = data
-                    .cfpget(3, "expedition target", |a| a)?
-                    .unwrap_or_default();
-                exp.target_current = data.csiget(7, "exp current", 100)?;
-                exp.target_amount = data.csiget(8, "exp target", 100)?;
-
-                exp.current_floor = data.csiget(0, "clearing", 0)?;
-                exp.heroism = data.csiget(13, "heroism", 0)?;
-
-                exp.busy_since = data.cstget(15, "exp start", server_time)?;
-                exp.busy_until = data.cstget(16, "exp busy", server_time)?;
-
-                for (x, item) in data
-                    .skip(9, "exp items")?
-                    .iter()
-                    .copied()
-                    .zip(&mut exp.items)
-                {
-                    *item = match FromPrimitive::from_i64(x) {
-                        None if x != 0 => {
-                            warn!("Unknown item: {x}");
-                            Some(ExpeditionThing::Unknown)
-                        }
-                        x => x,
-                    };
-                }
+                let data = val.list();
+                let mut exp =
+                    self.tavern.expeditions.active.take().unwrap_or_default();
+                exp.update_state(&data, server_time);
+                self.tavern.expeditions.active = Some(exp);
             }
             "expeditioncrossroad" => {
-                // 3/3/132/0/2/2
-                let data: Vec<i64> = val.into_list("cross")?;
-                let exp = self
-                    .tavern
+                let data = val.list();
+                self.tavern
                     .expeditions
                     .active
-                    .get_or_insert_with(Default::default);
-                exp.update_encounters(&data);
+                    .get_or_insert_default()
+                    .update_encounters(&data);
             }
             "eventtasklist" => {
                 self.specials.tasks.event.update_tasks(&val.list());
@@ -1257,7 +1133,7 @@ impl GameState {
                 }
             }
             "workreward" => {
-                // Should be irrelevant
+                val.list().ignore_all("work rewards are not modelled");
             }
             x if x.starts_with("winnerid") => {
                 // For all winnerid's, except the last one, the winnerid
@@ -1547,13 +1423,7 @@ impl GameState {
             "wheel" => {
                 self.specials.wheel.update(&val.list(), server_time);
             }
-            "dice" => {
-                let data: Vec<i64> = val.into_list("dice")?;
-                self.tavern.dice_game.next_free =
-                    data.cstget(0, "dice next", server_time)?;
-                self.tavern.dice_game.remaining =
-                    data.csiget(1, "rem dice games", 0)?;
-            }
+            "dice" => self.tavern.dice_game.update(&val.list(), server_time),
             "charactergroup" => {
                 self.guild
                     .get_or_insert_with(Default::default)
@@ -1567,15 +1437,16 @@ impl GameState {
                     items::parse_active_potions(&val.list(), server_time);
             }
             "arcanetoilet" => {
-                let data: Vec<i64> = val.into_list("toilet")?;
-
+                let data = val.list();
                 // Toilet remains none as long as its level is 0
-                let toilet_lvl = data.cget(0, "toilet lvl")?;
+                let toilet_lvl = data.i64_or(0, 0);
                 if toilet_lvl > 0 {
                     self.tavern
                         .toilet
                         .get_or_insert_with(Default::default)
                         .update(&data, server_time)?;
+                } else {
+                    data.ignore_all("inactive toilet");
                 }
             }
             "vipstatus" => {
@@ -1588,23 +1459,12 @@ impl GameState {
             "ownplayersavecharacter" => {
                 self.update_character_save(&val.list(), server_time);
             }
-            "adventure" => {
-                let data: Vec<i64> = val.into_list("char save")?;
-                // 198 - Might be the person to give you the quest?
-                // 198 - ??
-                for (slice, quest) in data
-                    .skip(2, "quests")?
-                    .chunks_exact(7)
-                    .zip(&mut self.tavern.quests)
-                {
-                    quest.update(slice)?;
-                }
-            }
+            "adventure" => self.tavern.update_quests(&val.list()),
             "events" => {
                 self.specials.events.update(&val.list(), server_time);
             }
             "tavernspecialend" | "tavernspecialsub" | "tavernspecial" => {
-                // Removed old way to serve events
+                val.list().ignore_all("removed old way to serve events");
             }
             "subscriptionstatus" => {}
             // Legendary Dungeons

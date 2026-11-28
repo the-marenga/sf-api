@@ -4,13 +4,21 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
 use super::{
-    CCGet, CFPGet, CSTGet, ExpeditionSetting, SFError, ServerTime, items::Item,
+    ExpeditionSetting, SFError, ServerTime,
+    items::{ITEM_PARSE_LEN, Item},
 };
 use crate::{
     command::{DiceReward, DiceType},
-    gamestate::rewards::Reward,
-    misc::soft_into,
+    gamestate::rewards::{Reward, RewardType},
+    misc::{CFPGet, soft_into},
+    response::Vals,
 };
+
+/// Parses a known enum from raw server data, warning about new variants.
+fn new_enum<T: FromPrimitive>(raw: i64, name: &'static str) -> Option<T> {
+    // Delegate to the legacy helper so its warning semantics stay identical.
+    [raw].cfpget(0, name, |a| a).ok().flatten()
+}
 
 /// Anything related to things you can do in the tavern
 #[derive(Debug, Clone, Default)]
@@ -85,6 +93,64 @@ impl ExpeditionsEvent {
     pub fn active_mut(&mut self) -> Option<&mut Expedition> {
         self.active.as_mut().filter(|a| !a.is_finished())
     }
+
+    pub(crate) fn update_event(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        self.start = data.server_time_opt(0, server_time);
+        self.end = data.server_time_opt(1, server_time);
+        data.ignore(2.., "extra expedition event values");
+    }
+
+    pub(crate) fn update_available(&mut self, data: &Vals<'_>) {
+        if !data.len().is_multiple_of(8) {
+            warn!(
+                "Available expeditions have weird size: {data:?} {}",
+                data.len()
+            );
+        }
+        let complete = data.len() / 8;
+        self.available = (0..complete)
+            .map(|idx| {
+                AvailableExpedition::parse(&data.window(idx * 8..(idx + 1) * 8))
+            })
+            .collect();
+        data.ignore(complete * 8.., "partial available expedition tail");
+    }
+
+    pub(crate) fn update_halftime(
+        &mut self,
+        data: &Vals<'_>,
+    ) -> Result<(), SFError> {
+        let raw = data
+            .i64(0)
+            .inspect_err(|_| data.ignore_all("malformed halftime data"))?;
+        let halftime_for_boss_id = raw.wrapping_neg();
+        let reward_data = data.window(1..data.len());
+        let complete = reward_data.len() / 2;
+        let mut rewards = Vec::with_capacity(complete);
+        for idx in 0..complete {
+            let chunk = reward_data.window(idx * 2..(idx + 1) * 2);
+            let typ = RewardType::parse(chunk.i64_or(0, 0));
+            let raw_amount = chunk.i64_or(1, 0);
+            let amount = u64::try_from(raw_amount).unwrap_or_else(|_| {
+                warn!(
+                    "Invalid value for reward amount in server response: \
+                     {raw_amount}"
+                );
+                0
+            });
+            rewards.push(Reward { typ, amount });
+        }
+        reward_data.ignore(complete * 2.., "odd halftime reward tail");
+
+        let exp = self.active.get_or_insert_default();
+        exp.halftime_for_boss_id = halftime_for_boss_id;
+        exp.rewards = rewards;
+        Ok(())
+    }
 }
 
 /// Information about the current state of the dice game
@@ -100,6 +166,52 @@ pub struct DiceGame {
     pub current_dice: Vec<DiceType>,
     /// Whatever we won in the dice game
     pub reward: Option<DiceReward>,
+}
+
+impl DiceGame {
+    pub(crate) fn update(&mut self, data: &Vals<'_>, server_time: ServerTime) {
+        self.next_free = data.server_time_opt(0, server_time);
+        self.remaining = data.u8_or(1, 0);
+        data.ignore(2.., "extra dice values");
+    }
+
+    pub(crate) fn update_status(&mut self, data: &Vals<'_>) {
+        let mut valid = true;
+        let mut dices = Vec::with_capacity(data.len());
+        for raw in data.iter() {
+            match raw.parse::<u8>().ok().and_then(DiceType::from_u8) {
+                Some(typ) => dices.push(typ),
+                None => valid = false,
+            }
+        }
+        self.current_dice = if valid { dices } else { Vec::new() };
+    }
+
+    pub(crate) fn update_reward(
+        &mut self,
+        data: &Vals<'_>,
+    ) -> Result<(), SFError> {
+        let reward = (|| {
+            let raw = data.u32(0)?;
+            let win_typ = DiceType::from_u32(raw.saturating_sub(1))
+                .ok_or_else(|| {
+                    SFError::ParsingError("dice reward type", raw.to_string())
+                })?;
+            let amount = data.u32(1)?;
+            data.ignore(2.., "extra dice reward values");
+            Ok(DiceReward { win_typ, amount })
+        })();
+        match reward {
+            Ok(reward) => {
+                self.reward = Some(reward);
+                Ok(())
+            }
+            Err(err) => {
+                data.ignore_all("malformed dice reward");
+                Err(err)
+            }
+        }
+    }
 }
 
 /// The tasks you will presented with, when clicking the person in the tavern.
@@ -147,6 +259,42 @@ impl Tavern {
     #[must_use]
     pub fn can_change_questing_preference(&self) -> bool {
         self.thirst_for_adventure_sec == 6000 && self.beer_drunk == 0
+    }
+
+    pub(crate) fn update_quests(&mut self, data: &Vals<'_>) {
+        data.ignore(0..2, "quest header values");
+        let quest_data = data.window(2..data.len());
+        let complete = quest_data.len() / 7;
+        for (idx, quest) in self.quests.iter_mut().enumerate().take(complete) {
+            quest.update(&quest_data.window(idx * 7..(idx + 1) * 7));
+        }
+        quest_data.ignore(complete * 7.., "partial quest tail");
+        data.ignore(23.., "values beyond the third quest");
+    }
+
+    pub(crate) fn update_quest_items(
+        &mut self,
+        data: &Vals<'_>,
+    ) -> Result<(), SFError> {
+        let complete = data.len() / ITEM_PARSE_LEN;
+        for (idx, quest) in
+            self.quests.iter_mut().enumerate().take(complete.min(3))
+        {
+            let chunk =
+                data.window(idx * ITEM_PARSE_LEN..(idx + 1) * ITEM_PARSE_LEN);
+            quest.item = Item::parse(&chunk)
+                .inspect_err(|_| data.ignore_all("bad quest item"))?;
+        }
+        let leftover = data.len() % ITEM_PARSE_LEN;
+        if leftover > 0 {
+            warn!(
+                "Server response contains {leftover} leftover values when \
+                 chunked by {ITEM_PARSE_LEN}"
+            );
+        }
+        data.ignore(complete * ITEM_PARSE_LEN.., "partial quest item tail");
+        data.ignore(3 * ITEM_PARSE_LEN.., "quest items beyond the third slot");
+        Ok(())
     }
 }
 
@@ -205,16 +353,16 @@ impl Quest {
         matches!(self.monster_id, 139 | 145 | 148 | 152 | 155 | 157)
     }
 
-    pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
-        // NOTE: I think [0], [1] was just flavor text
-        self.monster_id = data.csimget(2, "quest monster id", 0, |a| -a)?;
-        self.location_id = data
-            .cfpget(3, "quest location id", |a| a)?
+    pub(crate) fn update(&mut self, data: &Vals<'_>) {
+        // NOTE: [0], [1] are just flavor text
+        data.ignore(0..2, "quest flavor text");
+        self.monster_id = soft_into(-data.i64_or(2, 0), "quest monster id", 0);
+        self.location_id = new_enum(data.i64_or(3, 0), "quest location id")
             .unwrap_or_default();
-        self.base_length = data.csiget(4, "quest length", 100_000)?;
-        self.base_experience = data.csiget(5, "quest xp", 0)?;
-        self.base_silver = data.csiget(6, "quest silver", 0)?;
-        Ok(())
+        self.base_length = data.u32_or(4, 100_000);
+        self.base_experience = data.u32_or(5, 0);
+        self.base_silver = data.u32_or(6, 0);
+        data.ignore(7.., "extra quest values");
     }
 }
 
@@ -293,16 +441,34 @@ pub struct Toilet {
 }
 
 impl Toilet {
+    /// Updates the daily sacrifice count, without creating a locked toilet.
+    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+    pub(crate) fn update_sacrifices(
+        data: &Vals<'_>,
+        toilet: &mut Option<Toilet>,
+    ) {
+        if data.len() < 3 {
+            data.ignore_all("short toilet state");
+            return;
+        }
+        data.ignore(0..2, "unknown toilet state values");
+        toilet.get_or_insert_with(Default::default).sacrifices_left =
+            data.i64_or(2, 0) as u32;
+        data.ignore(3.., "extra toilet state values");
+    }
+
+    #[allow(clippy::unnecessary_wraps)]
     pub(crate) fn update(
         &mut self,
-        data: &[i64],
+        data: &Vals<'_>,
         server_time: ServerTime,
     ) -> Result<(), SFError> {
-        self.aura = data.csiget(0, "aura level", 0)?;
-        self.mana_currently = data.csiget(1, "mana now", 0)?;
+        self.aura = data.u32_or(0, 0);
+        self.mana_currently = data.u32_or(1, 0);
         // TODO: What is this? Last time we flushed/got an item?
-        let _unknown_time = data.cstget(2, "mana time", server_time)?;
-        self.mana_total = data.csiget(3, "mana missing", 1000)?;
+        let _unknown_time = data.server_time_opt(2, server_time);
+        self.mana_total = data.u32_or(3, 1000);
+        data.ignore(4.., "extra toilet values");
         Ok(())
     }
 }
@@ -340,24 +506,72 @@ pub struct Expedition {
 }
 
 impl Expedition {
-    pub(crate) fn update_encounters(&mut self, data: &[i64]) {
+    pub(crate) fn update_encounters(&mut self, data: &Vals<'_>) {
         if !data.len().is_multiple_of(2) {
             warn!("weird encounters: {data:?}");
         }
-        let default_ecp = |ci| {
-            warn!("Unknown encounter: {ci}");
-            ExpeditionThing::Unknown
-        };
-        self.encounters = data
-            .chunks_exact(2)
-            .filter_map(|ci| {
-                let raw = *ci.first()?;
-                let typ = FromPrimitive::from_i64(raw)
-                    .unwrap_or_else(|| default_ecp(raw));
-                let heroism = soft_into(*ci.get(1)?, "e heroism", 0);
-                Some(ExpeditionEncounter { typ, heroism })
+        let complete = data.len() / 2;
+        self.encounters = (0..complete)
+            .map(|idx| {
+                let pair = data.window(idx * 2..(idx + 1) * 2);
+                let raw = pair
+                    .value(0)
+                    .and_then(|raw| raw.parse::<i64>().ok())
+                    .unwrap_or_default();
+                let typ = FromPrimitive::from_i64(raw).unwrap_or_else(|| {
+                    warn!("Unknown encounter: {raw}");
+                    ExpeditionThing::Unknown
+                });
+                let heroism = pair
+                    .value(1)
+                    .and_then(|raw| raw.parse::<i64>().ok())
+                    .map_or(0, |raw| soft_into(raw, "e heroism", 0));
+                ExpeditionEncounter { typ, heroism }
             })
             .collect();
+        data.ignore(complete * 2.., "odd encounter tail");
+    }
+
+    pub(crate) fn update_state(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        let floor_stage = data.i64_or(2, 0);
+        let target_thing = new_enum(data.i64_or(3, 0), "expedition target")
+            .unwrap_or_default();
+        let target_current = data.u8_or(7, 100);
+        let target_amount = data.u8_or(8, 100);
+        let current_floor = data.u8_or(0, 0);
+        let heroism = data.i32_or(13, 0);
+        let busy_since = data.server_time_opt(15, server_time);
+        let busy_until = data.server_time_opt(16, server_time);
+
+        let mut items = self.items;
+        for (raw, item) in data.slice(9..13).iter().zip(items.iter_mut()) {
+            let x = raw.parse::<i64>().unwrap_or_default();
+            *item = match ExpeditionThing::from_i64(x) {
+                None if x != 0 => {
+                    warn!("Unknown item: {x}");
+                    Some(ExpeditionThing::Unknown)
+                }
+                other => other,
+            };
+        }
+        data.ignore(1, "unknown expedition state value");
+        data.ignore(4..7, "unknown expedition state values");
+        data.ignore(14, "unknown expedition state value");
+        data.ignore(17.., "extra expedition state values");
+
+        self.floor_stage = floor_stage;
+        self.target_thing = target_thing;
+        self.target_current = target_current;
+        self.target_amount = target_amount;
+        self.current_floor = current_floor;
+        self.heroism = heroism;
+        self.busy_since = busy_since;
+        self.busy_until = busy_until;
+        self.items = items;
     }
 
     /// Returns the current stage the player is doing. This is dependent on
@@ -432,6 +646,22 @@ pub struct ExpeditionBoss {
     pub id: i64,
     /// The amount of items this boss is supposed to drop
     pub items: u8,
+}
+
+impl ExpeditionBoss {
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Self, SFError> {
+        let raw = data
+            .i64(0)
+            .inspect_err(|_| data.ignore_all("malformed expedition boss"))?;
+        let id = raw.wrapping_neg();
+        let raw_items = data
+            .value(1)
+            .and_then(|raw| raw.parse::<i64>().ok())
+            .unwrap_or_default();
+        let items = soft_into(raw_items, "exp monster items", 3);
+        data.ignore(2.., "extra expedition boss values");
+        Ok(Self { id, items })
+    }
 }
 
 /// One of up to three encounters you can find. In comparison to
@@ -622,6 +852,28 @@ pub struct AvailableExpedition {
     pub special: Option<ExpeditionSpecial>,
 }
 
+impl AvailableExpedition {
+    pub(crate) fn parse(data: &Vals<'_>) -> Self {
+        let target =
+            new_enum(data.i64_or(0, 0), "expedition typ").unwrap_or_default();
+        data.ignore(1..4, "unused expedition fields");
+        let location_1 =
+            new_enum(data.i64_or(4, 0), "exp loc 1").unwrap_or_default();
+        let location_2 =
+            new_enum(data.i64_or(5, 0), "exp loc 2").unwrap_or_default();
+        let thirst_for_adventure_sec = data.u32_or(6, 600);
+        let special = new_enum(data.i64_or(7, 0), "exp special");
+        data.ignore(8.., "extra expedition fields");
+        Self {
+            target,
+            thirst_for_adventure_sec,
+            location_1,
+            location_2,
+            special,
+        }
+    }
+}
+
 /// A special reward, that will be encountered, or earned by going on this
 /// expedition
 #[derive(Debug, Clone, Copy, PartialEq, Eq, FromPrimitive)]
@@ -642,4 +894,355 @@ pub enum ExpeditionSpecial {
 pub enum GambleResult {
     SilverChange(i64),
     MushroomChange(i32),
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
+
+    use super::*;
+
+    fn item_chunk() -> Vec<i64> {
+        let mut chunk = vec![0; ITEM_PARSE_LEN];
+        chunk[0] = 15;
+        chunk[3] = 23;
+        chunk[13] = 36_384;
+        chunk[16] = 31;
+        chunk
+    }
+
+    fn join(values: &[i64]) -> String {
+        values
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()
+            .join("/")
+    }
+
+    #[test]
+    fn quest_update_uses_per_field_defaults() {
+        let mut quest = Quest::default();
+        let data = Vals::from("flavor/flavor/-5/1/600/100/200/extra");
+        quest.update(&data);
+        data.assert_all_read();
+        assert_eq!(quest.monster_id, 5);
+        assert_eq!(quest.location_id, Location::SprawlingJungle);
+        assert_eq!(quest.base_length, 600);
+        assert_eq!(quest.base_experience, 100);
+        assert_eq!(quest.base_silver, 200);
+
+        let mut quest = Quest::default();
+        let data = Vals::from("flavor/flavor/-2");
+        quest.update(&data);
+        data.assert_all_read();
+        assert_eq!(quest.monster_id, 2);
+        assert_eq!(quest.location_id, Location::default());
+        assert_eq!(quest.base_length, 100_000);
+        assert_eq!(quest.base_experience, 0);
+        assert_eq!(quest.base_silver, 0);
+    }
+
+    #[test]
+    fn update_quests_parses_only_complete_chunks() {
+        let mut tavern = Tavern::default();
+        let values = [
+            "h0", "h1", "f", "f", "-1", "1", "100", "10", "20", "f", "f", "-2",
+            "2", "200", "20", "30", "f", "f", "-3", "3", "300", "30", "40",
+            "extra",
+        ];
+        let raw = values.join("/");
+        let data = Vals::from(raw.as_str());
+        tavern.update_quests(&data);
+        data.assert_all_read();
+        assert_eq!(tavern.quests[0].base_length, 100);
+        assert_eq!(tavern.quests[1].base_length, 200);
+        assert_eq!(tavern.quests[2].base_length, 300);
+
+        // A partial fourth chunk is ignored, never parsed as a quest.
+        let mut tavern = Tavern::default();
+        let data = Vals::from(
+            "h0/h1/f/f/-1/1/100/10/20/f/f/-2/2/200/20/30/partial1/partial2",
+        );
+        tavern.update_quests(&data);
+        data.assert_all_read();
+        assert_eq!(tavern.quests[0].base_length, 100);
+        assert_eq!(tavern.quests[1].base_length, 200);
+        assert_eq!(tavern.quests[2].base_length, 0);
+    }
+
+    #[test]
+    fn quest_items_skip_partial_tails_and_keep_omitted_slots() {
+        let full = join(&item_chunk());
+        let original = Item::parse(&Vals::from(full.as_str())).unwrap();
+        let mut tavern = Tavern::default();
+        tavern.quests[1].item = original.clone();
+
+        let raw = format!("{full}/tail1/tail2/tail3");
+        let data = Vals::from(raw.as_str());
+        tavern.update_quest_items(&data).unwrap();
+        data.assert_all_read();
+        assert!(tavern.quests[0].item.is_some());
+        assert!(tavern.quests[1].item.is_some());
+        assert!(tavern.quests[2].item.is_none());
+
+        // Two complete chunks plus values after the third slot are ignored.
+        let mut tavern = Tavern::default();
+        let raw = format!("{full}/{full}/{full}/extra1/extra2");
+        let data = Vals::from(raw.as_str());
+        tavern.update_quest_items(&data).unwrap();
+        data.assert_all_read();
+        assert!(tavern.quests.iter().all(|quest| quest.item.is_some()));
+    }
+
+    #[test]
+    fn toiletstate_short_does_not_create_a_toilet() {
+        let mut toilet = Some(Toilet {
+            sacrifices_left: 7,
+            ..Default::default()
+        });
+        let data = Vals::from("0/1");
+        Toilet::update_sacrifices(&data, &mut toilet);
+        data.assert_all_read();
+        assert_eq!(toilet.unwrap().sacrifices_left, 7);
+
+        let mut toilet = None;
+        let data = Vals::from("0/1");
+        Toilet::update_sacrifices(&data, &mut toilet);
+        data.assert_all_read();
+        assert!(toilet.is_none());
+    }
+
+    #[test]
+    fn toiletstate_full_wraps_negative_sacrifices() {
+        let mut toilet = None;
+        let data = Vals::from("0/1/-3/extra");
+        Toilet::update_sacrifices(&data, &mut toilet);
+        data.assert_all_read();
+        assert_eq!(toilet.unwrap().sacrifices_left, u32::MAX - 2);
+    }
+
+    #[test]
+    fn toilet_update_ignores_unknown_time_and_uses_field_defaults() {
+        let mut toilet = Toilet::default();
+        let data = Vals::from("5/100/1700000000/2000/extra");
+        toilet.update(&data, ServerTime::default()).unwrap();
+        data.assert_all_read();
+        assert_eq!(toilet.aura, 5);
+        assert_eq!(toilet.mana_currently, 100);
+        assert_eq!(toilet.mana_total, 2000);
+
+        let mut toilet = Toilet::default();
+        let data = Vals::from("1/2/0");
+        toilet.update(&data, ServerTime::default()).unwrap();
+        data.assert_all_read();
+        assert_eq!(toilet.mana_total, 1000);
+    }
+
+    #[test]
+    fn dice_update_reads_next_free_and_remaining() {
+        let mut dice = DiceGame::default();
+        let data = Vals::from("1700000000/3/extra");
+        dice.update(&data, ServerTime::default());
+        data.assert_all_read();
+        assert!(dice.next_free.is_some());
+        assert_eq!(dice.remaining, 3);
+
+        let mut dice = DiceGame::default();
+        let data = Vals::from("0");
+        dice.update(&data, ServerTime::default());
+        data.assert_all_read();
+        assert!(dice.next_free.is_none());
+        assert_eq!(dice.remaining, 0);
+    }
+
+    #[test]
+    fn dice_status_is_all_or_nothing() {
+        let mut dice = DiceGame {
+            current_dice: vec![DiceType::Silver],
+            ..Default::default()
+        };
+        let data = Vals::from("1/2/0/6");
+        dice.update_status(&data);
+        data.assert_all_read();
+        assert_eq!(
+            dice.current_dice,
+            [
+                DiceType::Silver,
+                DiceType::Stone,
+                DiceType::ReRoll,
+                DiceType::Hourglass,
+            ]
+        );
+
+        let data = Vals::from("1/unknown/3");
+        dice.update_status(&data);
+        data.assert_all_read();
+        assert_eq!(dice.current_dice, Vec::new());
+    }
+
+    #[test]
+    fn dice_reward_handles_raw_zero_unknown_and_partial() {
+        let mut dice = DiceGame::default();
+        let data = Vals::from("0/10/extra");
+        dice.update_reward(&data).unwrap();
+        data.assert_all_read();
+        assert_eq!(dice.reward.unwrap().win_typ, DiceType::ReRoll);
+
+        let previous = dice.reward;
+        let data = Vals::from("99/10");
+        assert!(dice.update_reward(&data).is_err());
+        data.assert_all_read();
+        assert_eq!(
+            dice.reward.map(|reward| reward.amount),
+            previous.map(|reward| reward.amount)
+        );
+
+        let data = Vals::from("2");
+        assert!(dice.update_reward(&data).is_err());
+        data.assert_all_read();
+        assert_eq!(
+            dice.reward.map(|reward| reward.amount),
+            previous.map(|reward| reward.amount)
+        );
+
+        let data = Vals::from("3/500");
+        dice.update_reward(&data).unwrap();
+        data.assert_all_read();
+        assert_eq!(dice.reward.unwrap().win_typ, DiceType::Stone);
+    }
+
+    #[test]
+    fn expedition_event_reads_times_and_ignores_tails() {
+        let mut event = ExpeditionsEvent::default();
+        let data = Vals::from("1700000000/1700000100/extra");
+        event.update_event(&data, ServerTime::default());
+        data.assert_all_read();
+        assert!(event.start.is_some());
+        assert!(event.end.is_some());
+
+        let mut event = ExpeditionsEvent::default();
+        let data = Vals::from("0/-1");
+        event.update_event(&data, ServerTime::default());
+        data.assert_all_read();
+        assert!(event.start.is_none());
+        assert!(event.end.is_none());
+    }
+
+    #[test]
+    fn available_expeditions_handle_weird_sizes_and_partial_tails() {
+        let mut event = ExpeditionsEvent::default();
+        let data = Vals::from("11/x/x/x/2/3/600/1/tail1/tail2/tail3");
+        event.update_available(&data);
+        data.assert_all_read();
+        assert_eq!(event.available.len(), 1);
+        let expedition = &event.available[0];
+        assert_eq!(expedition.target, ExpeditionThing::ToiletPaper);
+        assert_eq!(expedition.location_1, Location::SkullIsland);
+        assert_eq!(expedition.location_2, Location::EvernightForest);
+        assert_eq!(expedition.thirst_for_adventure_sec, 600);
+        assert_eq!(expedition.special, Some(ExpeditionSpecial::Egg));
+
+        let mut event = ExpeditionsEvent::default();
+        let data = Vals::from("11/x/x/x/2/3/600/1");
+        event.update_available(&data);
+        data.assert_all_read();
+        assert_eq!(event.available.len(), 1);
+    }
+
+    #[test]
+    fn boss_parse_negates_id_and_defaults_items() {
+        let data = Vals::from("-5/4/extra");
+        let boss = ExpeditionBoss::parse(&data).unwrap();
+        data.assert_all_read();
+        assert_eq!(boss.id, 5);
+        assert_eq!(boss.items, 4);
+
+        let data = Vals::from("-5");
+        let boss = ExpeditionBoss::parse(&data).unwrap();
+        data.assert_all_read();
+        assert_eq!(boss.items, 0);
+
+        let data = Vals::from("bad/2");
+        assert!(ExpeditionBoss::parse(&data).is_err());
+        data.assert_all_read();
+    }
+
+    #[test]
+    fn halftime_negates_boss_id_and_ignores_odd_tail() {
+        let mut event = ExpeditionsEvent::default();
+        let data = Vals::from("-7/1/100/2/200/odd");
+        event.update_halftime(&data).unwrap();
+        data.assert_all_read();
+        let active = event.active.as_ref().unwrap();
+        assert_eq!(active.halftime_for_boss_id, 7);
+        assert_eq!(active.rewards.len(), 2);
+        assert_eq!(active.rewards[0].amount, 100);
+        assert_eq!(active.rewards[1].amount, 200);
+
+        let data = Vals::from("bad/1/100");
+        assert!(event.update_halftime(&data).is_err());
+        data.assert_all_read();
+    }
+
+    #[test]
+    fn expedition_state_reads_offsets_and_remaps_items() {
+        let mut expedition = Expedition::default();
+        expedition.items[3] = Some(ExpeditionThing::SwordInStone);
+        let data = Vals::from(
+            "3/x/2/11/x/x/x/4/10/0/11/999/-1/500/x/1700000015/1700000016/tail",
+        );
+        expedition.update_state(&data, ServerTime::default());
+        data.assert_all_read();
+        assert_eq!(expedition.current_floor, 3);
+        assert_eq!(expedition.floor_stage, 2);
+        assert_eq!(expedition.target_thing, ExpeditionThing::ToiletPaper);
+        assert_eq!(expedition.target_current, 4);
+        assert_eq!(expedition.target_amount, 10);
+        assert_eq!(expedition.heroism, 500);
+        assert!(expedition.busy_since.is_some());
+        assert!(expedition.busy_until.is_some());
+        assert_eq!(expedition.items[0], Some(ExpeditionThing::Unknown));
+        assert_eq!(expedition.items[1], Some(ExpeditionThing::ToiletPaper));
+        assert_eq!(expedition.items[2], Some(ExpeditionThing::Unknown));
+        assert_eq!(expedition.items[3], Some(ExpeditionThing::Unknown));
+
+        // Missing item positions keep their previous value.
+        let mut expedition = Expedition::default();
+        expedition.items[3] = Some(ExpeditionThing::SwordInStone);
+        let data = Vals::from("3/x/2/11/x/x/x/4/10/0/11");
+        expedition.update_state(&data, ServerTime::default());
+        data.assert_all_read();
+        assert_eq!(expedition.items[0], Some(ExpeditionThing::Unknown));
+        assert_eq!(expedition.items[3], Some(ExpeditionThing::SwordInStone));
+    }
+
+    #[test]
+    fn crossroads_ignore_odd_tails() {
+        let mut expedition = Expedition::default();
+        let data = Vals::from("11/10/41/20/999/30/tail");
+        expedition.update_encounters(&data);
+        data.assert_all_read();
+        assert_eq!(expedition.encounters.len(), 3);
+        assert_eq!(expedition.encounters[0].typ, ExpeditionThing::ToiletPaper);
+        assert_eq!(expedition.encounters[0].heroism, 10);
+        assert_eq!(expedition.encounters[1].typ, ExpeditionThing::UnicornHorn);
+        assert_eq!(expedition.encounters[2].typ, ExpeditionThing::Unknown);
+
+        let data = Vals::from("0/5");
+        expedition.update_encounters(&data);
+        data.assert_all_read();
+        assert_eq!(expedition.encounters.len(), 1);
+        assert_eq!(expedition.encounters[0].typ, ExpeditionThing::Unknown);
+    }
+
+    #[test]
+    fn warning_enum_helper_matches_legacy_fallback() {
+        for raw in [0_i64, -1, 1, 999] {
+            let legacy = [raw].cfpget(0, "expedition target", |a| a).unwrap();
+            assert_eq!(
+                new_enum::<ExpeditionThing>(raw, "expedition target"),
+                legacy
+            );
+        }
+    }
 }
