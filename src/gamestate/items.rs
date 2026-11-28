@@ -104,6 +104,7 @@ impl Inventory {
 
     /// Parses the backpack from a response list.
     pub(crate) fn parse(data: &Vals<'_>) -> Result<Self, SFError> {
+        data.ensure_i64()?;
         let backpack = data
             .chunks(ITEM_PARSE_LEN)
             .map(|chunk| Item::parse(&chunk))
@@ -331,6 +332,7 @@ impl Equipment {
 
     /// Parses equipment from a response list.
     pub(crate) fn parse(data: &Vals<'_>) -> Result<Equipment, SFError> {
+        data.ensure_i64()?;
         let mut res = Equipment::default();
         if !data.len().is_multiple_of(ITEM_PARSE_LEN) {
             return Err(SFError::ParsingError(
@@ -356,6 +358,24 @@ impl Equipment {
 pub(crate) const ITEM_PARSE_LEN: usize = 19;
 pub(crate) const EQUIPMENT_PARSE_LEN: usize =
     ITEM_PARSE_LEN * EquipmentSlot::COUNT;
+
+fn required_u32_or(
+    data: &Vals<'_>,
+    pos: usize,
+    default: u32,
+) -> Result<u32, SFError> {
+    data.get(pos)?;
+    Ok(data.u32_or(pos, default))
+}
+
+fn required_u8_or(
+    data: &Vals<'_>,
+    pos: usize,
+    default: u8,
+) -> Result<u8, SFError> {
+    data.get(pos)?;
+    Ok(data.u8_or(pos, default))
+}
 
 /// Information about a single item. This can be anything, that is either in a
 /// inventory, in a reward slot, or similar
@@ -720,6 +740,7 @@ impl Item {
     /// Parses an item from a fixed 19-value response chunk.
     #[allow(clippy::cast_possible_truncation)]
     pub(crate) fn parse(data: &Vals<'_>) -> Result<Option<Self>, SFError> {
+        data.ensure_i64()?;
         let Some(typ) = ItemType::parse(data)? else {
             data.ignore_all("empty item slot");
             return Ok(None);
@@ -733,24 +754,33 @@ impl Item {
             data.ignore(7..13, "attributes on non-equipment item");
         }
 
-        let enchantment = data.enum_opt(2);
+        let enchantment = Enchantment::from_i64(data.i64(2)?);
         let gem_slot_val = data.i64(1)?;
         let gem_pwr = data.i64(16)?;
         let gem_slot = GemSlot::parse(gem_slot_val, gem_pwr);
 
         let class = if typ.is_class_item() {
-            data.enum_map(3, |raw| (raw & 0xFFFF) / 1000)
+            let raw = data.i64(3)?;
+            Class::from_i64((raw & 0xFFFF) / 1000)
         } else {
             None
         };
         let mut rune = None;
         let mut attributes: EnumMap<AttributeType, u32> = EnumMap::default();
-        let price = data.u32_or(13, u32::MAX);
+        let price = required_u32_or(data, 13, u32::MAX)?;
 
         if typ.equipment_slot().is_some() {
             for i in 0..3 {
-                let atr_typ = data.usize_or(i + 7, 0);
-                let atr_val = data.u32_or(i + 10, 0);
+                let raw_typ = data.i64(i + 7)?;
+                let Ok(atr_typ) = usize::try_from(raw_typ) else {
+                    warn!("Invalid attribute typ: {raw_typ}, {typ:?}");
+                    continue;
+                };
+                let raw_val = data.i64(i + 10)?;
+                let Ok(atr_val) = u32::try_from(raw_val) else {
+                    warn!("Invalid attribute value: {raw_val}, {typ:?}");
+                    continue;
+                };
                 match atr_typ {
                     0 => {}
                     1..=5 => {
@@ -810,7 +840,9 @@ impl Item {
                 }
             }
         }
-        let model_id = ((data.u32_or(3, 0) & 0xFFFF) % 1000) as u16;
+        let raw_model_id = data.i64(3)?;
+        let model_id =
+            u16::try_from((raw_model_id & 0xFFFF) % 1000).unwrap_or(0);
 
         let color = match model_id {
             ..=49 if typ != ItemType::Talisman => {
@@ -824,18 +856,18 @@ impl Item {
             typ,
             model_id,
             rune,
-            type_specific_val: data.u32_or(5, 0),
+            type_specific_val: required_u32_or(data, 5, 0)?,
             gem_slot,
             enchantment,
             class,
             attributes,
             color,
             price,
-            mushroom_price: data.u32_or(14, u32::MAX),
-            upgrade_count: data.u8_or(15, u8::MAX),
-            item_quality: data.u32_or(17, 0),
-            is_washed: data.u32_or(18, 0) != 0,
-            full_model_id: data.u32_or(3, 0),
+            mushroom_price: required_u32_or(data, 14, u32::MAX)?,
+            upgrade_count: required_u8_or(data, 15, u8::MAX)?,
+            item_quality: required_u32_or(data, 17, 0)?,
+            is_washed: required_u32_or(data, 18, 0)? != 0,
+            full_model_id: required_u32_or(data, 3, 0)?,
         };
         Ok(Some(item))
     }
@@ -1091,11 +1123,11 @@ impl ItemType {
         Ok(Some(match raw_typ {
             0 => return Ok(None),
             1 => ItemType::Weapon {
-                min_dmg: data.u32_or(5, 0),
-                max_dmg: data.u32_or(6, 0),
+                min_dmg: required_u32_or(data, 5, 0)?,
+                max_dmg: required_u32_or(data, 6, 0)?,
             },
             2 => ItemType::Shield {
-                block_chance: data.u32_or(5, 0),
+                block_chance: required_u32_or(data, 5, 0)?,
             },
             3 => ItemType::BreastPlate,
             4 => ItemType::FootWear,
@@ -1158,7 +1190,7 @@ impl ItemType {
             }
             13 => ItemType::Scrapbook,
             15 => {
-                let gem_value = data.u32_or(16, 0);
+                let gem_value = required_u32_or(data, 16, 0)?;
                 let Some(typ) = GemType::parse(sub_ident, gem_value) else {
                     return unknown_item("gem type");
                 };
@@ -1492,6 +1524,39 @@ mod tests {
         assert_eq!(item.model_id, 10);
         assert_eq!(item.full_model_id, 1010);
         assert_eq!(item.upgrade_count, 0);
+        vals.assert_all_read();
+    }
+
+    #[test]
+    fn malformed_item_numbers_fail_instead_of_defaulting() {
+        let raw = "1/0/0/1010/0/149/265/5/4/0/108/72/0/invalid/10/0/0/45/0";
+        let vals = Vals::from(raw);
+        assert!(Item::parse(&vals).is_err());
+    }
+
+    #[test]
+    fn invalid_rune_strengths_do_not_create_zero_runes() {
+        let raw = "1/0/0/1010/0/149/265/31/0/0/-1/0/0/83940/10/0/0/45/0";
+        let vals = Vals::from(raw);
+        let item = Item::parse(&vals).unwrap().unwrap();
+        assert!(item.rune.is_none());
+        vals.assert_all_read();
+    }
+
+    #[test]
+    fn truncated_items_fail_when_required_fields_are_missing() {
+        let raw = "1/0/0/1010/0/149/265/5/4/0/108/72/0/83940/10/0/0/45";
+        let vals = Vals::from(raw);
+        assert!(Item::parse(&vals).is_err());
+    }
+
+    #[test]
+    fn raw_model_ids_are_masked_before_narrowing() {
+        let raw = "1/0/0/-1/0/149/265/5/4/0/108/72/0/83940/10/0/0/45/0";
+        let vals = Vals::from(raw);
+        let item = Item::parse(&vals).unwrap().unwrap();
+        assert_eq!(item.model_id, 535);
+        assert_eq!(item.full_model_id, 0);
         vals.assert_all_read();
     }
 

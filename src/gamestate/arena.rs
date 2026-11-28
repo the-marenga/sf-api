@@ -91,6 +91,7 @@ impl Fight {
         &mut self,
         data: &Vals<'_>,
     ) -> Result<(), SFError> {
+        data.ensure_i64()?;
         self.has_player_won = data.i64(0)? != 0;
         self.silver_change = data.i64(2)?;
 
@@ -735,6 +736,22 @@ mod tests {
             FightExtra::UnderworldLure { souls: 5 }
         ));
         data.assert_all_read();
+    }
+
+    #[test]
+    fn malformed_fight_result_numbers_fail() {
+        let data = Vals::from("1/0/-10/invalid/2/3/0/4/5");
+        let mut fight = Fight::default();
+        assert!(fight.update_result(&data).is_err());
+    }
+
+    #[test]
+    fn truncated_fight_result_items_fail() {
+        let raw = "1/0/-10/100/2/3/0/4/5/1/0/0/1010/0/149/265/5/4/0/108/72/0/\
+                   83940/10/0/0/45";
+        let data = Vals::from(raw);
+        let mut fight = Fight::default();
+        assert!(fight.update_result(&data).is_err());
     }
 
     #[test]

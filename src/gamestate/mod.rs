@@ -182,6 +182,7 @@ impl Shop {
         data: &Vals<'_>,
         typ: ShopType,
     ) -> Result<Shop, SFError> {
+        data.ensure_i64()?;
         let mut shop = Shop::default();
         shop.typ = typ;
         if data.len() < ITEM_PARSE_LEN * shop.items.len() {
@@ -505,6 +506,7 @@ impl GameState {
             }
             "questofferitems" => {
                 let data = val.list();
+                data.ensure_i64()?;
                 for (chunk, quest) in
                     data.chunks(ITEM_PARSE_LEN).zip(&mut self.tavern.quests)
                 {
@@ -530,6 +532,7 @@ impl GameState {
                 if data.is_empty() {
                     return Ok(());
                 }
+                data.ensure_i64()?;
                 for (idx, cmp) in self
                     .dungeons
                     .companions
@@ -538,8 +541,15 @@ impl GameState {
                     .enumerate()
                 {
                     let start = EQUIPMENT_PARSE_LEN * idx;
-                    let end = start + EQUIPMENT_PARSE_LEN;
-                    cmp.equipment = Equipment::parse(&data.window(start..end))?;
+                    if start > data.len() {
+                        return Err(SFError::TooShortResponse {
+                            name: "companion item",
+                            pos: start,
+                            array: data.to_string(),
+                        });
+                    }
+                    cmp.equipment =
+                        Equipment::parse(&data.window(start..data.len()))?;
                 }
             }
             "storeitemsfidget" => {
@@ -1778,6 +1788,7 @@ impl GameState {
             }
             "pendingreward" => {
                 let data = val.list();
+                data.ensure_i64()?;
                 self.mail
                     .open_claimable
                     .get_or_insert_with(Default::default)
@@ -2111,6 +2122,7 @@ impl GameState {
                     self.legendary_dungeon.active.get_or_insert_default();
                 dungeons.pending_items.clear();
                 let data = val.list();
+                data.ensure_i64()?;
                 let amount = data.i64(0)?;
                 if amount < 1 {
                     data.ignore_all("no pending legendary dungeon items");
@@ -2296,4 +2308,34 @@ pub struct NormalCost {
     pub silver: u64,
     /// The amount of mushrooms something costs
     pub mushrooms: u16,
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+
+    #[test]
+    fn truncated_companion_equipment_still_errors() {
+        let raw = ["0"; EQUIPMENT_PARSE_LEN].join("/");
+        let response = Response::parse(
+            format!("companionequipment:{raw}"),
+            NaiveDateTime::default(),
+        )
+        .unwrap();
+        let err = GameState::default().update(response).unwrap_err();
+        assert!(matches!(err, SFError::TooShortResponse { .. }));
+    }
+
+    #[test]
+    fn two_companion_equipment_blocks_keep_legacy_behavior() {
+        let raw = ["0"; EQUIPMENT_PARSE_LEN * 2].join("/");
+        let response = Response::parse(
+            format!("companionequipment:{raw}"),
+            NaiveDateTime::default(),
+        )
+        .unwrap();
+        assert!(GameState::default().update(response).is_ok());
+    }
 }
