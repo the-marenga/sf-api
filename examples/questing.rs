@@ -8,7 +8,6 @@ use sf_api::{
         items::{Enchantment, EquipmentSlot},
         tavern::{AvailableTasks, CurrentAction},
     },
-    misc::EnumMapGet,
     session::SimpleSession,
 };
 use sha1::digest::Update;

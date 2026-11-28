@@ -5,11 +5,10 @@ use chrono::{DateTime, Local};
 use sf_api::{
     command::{Command, ExpeditionSetting, TimeSkip},
     gamestate::{
+        event::hellevator::HellevatorStatus,
         items::{Enchantment, EquipmentSlot},
         tavern::{AvailableTasks, CurrentAction},
-        unlockables::HellevatorStatus,
     },
-    misc::EnumMapGet,
     session::SimpleSession,
 };
 use sha1::digest::Update;

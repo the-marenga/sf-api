@@ -1,10 +1,12 @@
 use thiserror::Error;
 
+/// A specialized [`Result`] type for operations that can fail with [`SFError`].
+pub type Result<T, E = SFError> = std::result::Result<T, E>;
+
 /// An error, that occurred during the communication (sending/receiving/parsing)
 /// of requests to the S&F server
 #[derive(Debug, Error)]
 #[non_exhaustive]
-#[allow(clippy::module_name_repetitions)]
 pub enum SFError {
     /// Whatever you were trying to send was not possible to send. This is
     /// either our issue when you were doing something normal, or you were
@@ -20,12 +22,10 @@ pub enum SFError {
     #[error("Could not communicate with the server")]
     ConnectionError,
     /// Whatever the server sent back was invalid. Could be because of features
-    /// not yet supported, or a bug in the API
-    #[error(
-        "Error parsing the server response because {0} had an unexpected \
-         value of: {1}"
-    )]
-    ParsingError(&'static str, String),
+    /// not yet supported, or a bug in the API. The contained message usually
+    /// includes the caller location for easier debugging
+    #[error("Error parsing the server response: {0}")]
+    ParsingError(String),
     /// The server responded with an error. If you are already logged in, this
     /// is likely recoverable,  i.e you are able to reuse your session. You
     /// should just not resend the same command, as the server had some error
@@ -37,19 +37,6 @@ pub enum SFError {
     /// communication
     #[error("The server version {0} is not supported")]
     UnsupportedVersion(u32),
-    /// The server responded with a response, that was too short
-    #[error(
-        "Tried to access the response for {name} at [{pos}] , but the \
-         response is too short. The response is: {array}"
-    )]
-    TooShortResponse {
-        /// The name of the item, that was accessed
-        name: &'static str,
-        /// The position at which the array access failed
-        pos: usize,
-        /// The full array in debug print
-        array: String,
-    },
     /// Multiple errors occured when parsing the response
     #[error("Multiple errors occurred:\n{}", .0.iter().map(|e| format!("  - {e}")).collect::<Vec<_>>().join("\n"))]
     NestedError(Vec<SFError>),

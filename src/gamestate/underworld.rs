@@ -1,12 +1,18 @@
-#![allow(clippy::module_name_repetitions)]
 use std::time::Duration;
 
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
 use num_derive::FromPrimitive;
-use strum::{EnumIter, IntoEnumIterator};
+use strum::EnumIter;
 
-use super::{ArrSkip, CCGet, CFPGet, CSTGet, EnumMapGet, SFError, ServerTime};
+use super::ServerTime;
+use crate::{error::Result, response::Vals};
+
+/// The number of values in the `owntower` (`towerSave`) response.
+pub(crate) const TOWER_RESPONSE_LEN: usize = 476;
+/// The size of one `owntower` block: a companion, its underworld unit and the
+/// value after it.
+pub(crate) const TOWER_BLOCK_LEN: usize = 148;
 
 /// The information about a characters underworld
 #[derive(Debug, Default, Clone)]
@@ -70,101 +76,85 @@ pub struct UnderworldCost {
 }
 
 impl UnderworldCost {
-    pub(crate) fn parse(data: &[i64]) -> Result<UnderworldCost, SFError> {
+    /// Parses an underworld cost `[time_seconds, silver, souls]`.
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<UnderworldCost> {
         Ok(UnderworldCost {
-            time: Duration::from_secs(data.csiget(0, "u time cost", 0)?),
-            // Guessing here
-            silver: data.csiget(1, "u silver cost", u64::MAX)?,
-            souls: data.csiget(2, "u sould cost", u64::MAX)?,
+            time: Duration::from_secs(data.u64(0)?),
+            silver: data.u64(1)?,
+            souls: data.u64(2)?,
         })
     }
 }
 
 impl Underworld {
+    /// Updates the building upgrade costs from a 30-value response: 10
+    /// `[time_seconds, silver, souls]` costs, one per building type.
     pub(crate) fn update_building_prices(
         &mut self,
-        data: &[i64],
-    ) -> Result<(), SFError> {
-        for (pos, typ) in UnderworldBuildingType::iter().enumerate() {
-            self.buildings.get_mut(typ).upgrade_cost = UnderworldCost::parse(
-                data.skip(pos * 3, "underworld building prices")?,
-            )?;
+        data: &Vals<'_>,
+    ) -> Result<()> {
+        for (building, cost_vals) in
+            self.buildings.values_mut().zip(data.chunks(3))
+        {
+            building.upgrade_cost = UnderworldCost::parse(&cost_vals)?;
         }
         Ok(())
     }
 
+    /// Updates the unit upgrade costs from a 9-value response: 3
+    /// `[next_level, silver, souls]` costs, one per unit type.
     pub(crate) fn update_underworld_unit_prices(
         &mut self,
-        data: &[i64],
-    ) -> Result<(), SFError> {
-        for (pos, typ) in UnderworldUnitType::iter().enumerate() {
-            self.units.get_mut(typ).upgrade_next_lvl =
-                data.csiget(pos * 3, "uunit next lvl", 0)?;
-            self.units.get_mut(typ).upgrade_cost.silver =
-                data.csiget(1 + pos * 3, "uunit upgrade gold", 0)?;
-            self.units.get_mut(typ).upgrade_cost.souls =
-                data.csiget(2 + pos * 3, "uunit upgrade gold", 0)?;
+        data: &Vals<'_>,
+    ) -> Result<()> {
+        for (unit, chunk) in self.units.values_mut().zip(data.chunks(3)) {
+            unit.upgrade_next_lvl = chunk.u16(0)?;
+            unit.upgrade_cost.silver = chunk.u64(1)?;
+            unit.upgrade_cost.souls = chunk.u64(2)?;
         }
         Ok(())
     }
 
+    /// Updates the underworld state from the tail of the `owntower`
+    /// (`towerSave`) response, everything after the companion blocks.
     pub(crate) fn update(
         &mut self,
-        data: &[i64],
+        data: &Vals<'_>,
         server_time: ServerTime,
-    ) -> Result<(), SFError> {
-        for (pos, typ) in UnderworldBuildingType::iter().enumerate() {
-            self.buildings.get_mut(typ).level =
-                data.csiget(448 + pos, "building level", 0)?;
+    ) -> Result<()> {
+        use UnderworldResourceType as Resource;
+
+        for (pos, building) in self.buildings.values_mut().enumerate() {
+            building.level = data.u8(1 + pos)?;
         }
 
-        for (i, typ) in UnderworldUnitType::iter().enumerate() {
-            let start = 146 + i * 148;
-            self.units.get_mut(typ).upgraded_amount =
-                data.csiget(start, "uunit upgrade level", 0)?;
-            self.units.get_mut(typ).count =
-                data.csiget(start + 1, "uunit count", 0)?;
-            self.units.get_mut(typ).total_attributes =
-                data.csiget(start + 2, "uunit atr bonus", 0)?;
-            self.units.get_mut(typ).level =
-                data.csiget(start + 3, "uunit level", 0)?;
-        }
+        self.production[Resource::Souls].last_collectable = data.u64(12)?;
+        self.production[Resource::Souls].limit = data.u64(13)?;
+        self.souls_limit = data.u64(14)?;
+        self.production[Resource::Souls].per_hour = data.u64(16)?;
 
-        #[allow(clippy::enum_glob_use)]
-        {
-            use UnderworldResourceType::*;
-            self.production.get_mut(Souls).last_collectable =
-                data.csiget(459, "uu souls in building", 0)?;
-            self.production.get_mut(Souls).limit =
-                data.csiget(460, "uu sould max in building", 0)?;
-            self.souls_limit = data.csiget(461, "uu souls max saved", 0)?;
-            self.production.get_mut(Souls).per_hour =
-                data.csiget(463, "uu souls per hour", 0)?;
+        self.production[Resource::Silver].last_collectable = data.u64(17)?;
+        self.production[Resource::Silver].limit = data.u64(18)?;
+        self.production[Resource::Silver].per_hour = data.u64(19)?;
 
-            self.production.get_mut(Silver).last_collectable =
-                data.csiget(464, "uu gold in building", 0)?;
-            self.production.get_mut(Silver).limit =
-                data.csiget(465, "uu max gold in building", 0)?;
-            self.production.get_mut(Silver).per_hour =
-                data.csiget(466, "uu gold ", 0)?;
+        self.production[Resource::ThirstForAdventure].last_collectable =
+            data.u64(26)?;
+        self.production[Resource::ThirstForAdventure].limit = data.u64(27)?;
+        self.production[Resource::ThirstForAdventure].per_hour =
+            data.u64(28)?;
 
-            self.production.get_mut(ThirstForAdventure).last_collectable =
-                data.csiget(473, "uu alu in building", 0)?;
-            self.production.get_mut(ThirstForAdventure).limit =
-                data.csiget(474, "uu max stored alu", 0)?;
-            self.production.get_mut(ThirstForAdventure).per_hour =
-                data.csiget(475, "uu alu per day", 0)?;
-        }
+        self.last_collectable_update = data.server_time(20, server_time)?;
+        self.upgrade_building = data.enum_map(21, |raw| raw.wrapping_sub(1));
+        self.upgrade_finish = data.server_time(22, server_time)?;
+        self.upgrade_begin = data.server_time(23, server_time)?;
+        self.lure_level = data.u16(24)?;
+        self.lured_today = data.u16(25)?;
 
-        self.last_collectable_update =
-            data.cstget(467, "uw resource time", server_time)?;
-        self.upgrade_building =
-            data.cfpget(468, "u building upgrade", |x| x - 1)?;
-        self.upgrade_finish = data.cstget(469, "u expand end", server_time)?;
-        self.upgrade_begin =
-            data.cstget(470, "u upgrade begin", server_time)?;
-        self.lure_level = data.csiget(471, "uu lure lvl", 0)?;
-        self.lured_today = data.csiget(472, "u battles today", 0)?;
+        // 0 in every captured response: before the buildings and around the
+        // soul production
+        data.ignore(0, "always 0");
+        data.ignore(11, "always 0");
+        data.ignore(15, "always 0");
         Ok(())
     }
 }
@@ -263,4 +253,74 @@ pub struct UnderworldUnit {
     pub upgrade_cost: UnderworldCost,
     /// The level this unit will have, when the upgrade has been bought
     pub upgrade_next_lvl: u16,
+}
+
+impl UnderworldUnit {
+    /// Updates this unit from its 4-value slice of an `owntower` block.
+    pub(crate) fn update(&mut self, data: &Vals<'_>) -> Result<()> {
+        self.upgraded_amount = data.u16(0)?;
+        self.count = data.u16(1)?;
+        self.total_attributes = data.u32(2)?;
+        self.level = data.u16(3)?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_underworld_cost_parse() {
+        let vals = Vals::from("7200/4000/1100");
+        let cost = UnderworldCost::parse(&vals).unwrap();
+        vals.assert_all_read();
+        assert_eq!(cost.time, Duration::from_secs(7200));
+        assert_eq!(cost.silver, 4000);
+        assert_eq!(cost.souls, 1100);
+    }
+
+    #[test]
+    fn test_update_building_prices() {
+        // A `underworldprice.underworldPrice(10)` response.
+        // Only the gold pit has a price so far, the rest is still 0.
+        let raw = "0/0/0/0/0/0/1296000/1000000000/162518400/0/0/0/0/0/0/0/0/0/\
+                   0/0/0/0/0/0/0/0/0/0/0/0";
+        let mut uw = Underworld::default();
+        let vals = Vals::from(raw);
+        uw.update_building_prices(&vals).unwrap();
+        vals.assert_all_read();
+
+        let gold_pit =
+            uw.buildings[UnderworldBuildingType::GoldPit].upgrade_cost;
+        assert_eq!(gold_pit.time.as_secs(), 1_296_000);
+        assert_eq!(gold_pit.silver, 1_000_000_000);
+        assert_eq!(gold_pit.souls, 162_518_400);
+
+        let heart =
+            uw.buildings[UnderworldBuildingType::HeartOfDarkness].upgrade_cost;
+        assert_eq!(
+            (heart.time.as_secs(), heart.silver, heart.souls),
+            (0, 0, 0)
+        );
+    }
+
+    #[test]
+    fn test_update_underworld_unit_prices() {
+        // A `underworldupgradeprice` response.
+        let raw = "417/500000/425800/359/500000/340150/369/500000/354450";
+        let mut uw = Underworld::default();
+        let vals = Vals::from(raw);
+        uw.update_underworld_unit_prices(&vals).unwrap();
+        vals.assert_all_read();
+
+        let goblin = &uw.units[UnderworldUnitType::Goblin];
+        assert_eq!(goblin.upgrade_next_lvl, 417);
+        assert_eq!(goblin.upgrade_cost.silver, 500_000);
+        assert_eq!(goblin.upgrade_cost.souls, 425_800);
+
+        let keeper = &uw.units[UnderworldUnitType::Keeper];
+        assert_eq!(keeper.upgrade_next_lvl, 369);
+        assert_eq!(keeper.upgrade_cost.souls, 354_450);
+    }
 }

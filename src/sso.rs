@@ -1,18 +1,18 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
-use chrono::{Local, NaiveDateTime};
-use reqwest::{Client, header::*};
+use chrono::{NaiveDateTime, Utc};
+use reqwest::{
+    Client,
+    header::{ACCEPT, HeaderMap, HeaderValue, REFERER},
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tokio::sync::Mutex;
 use url::Url;
 
 use crate::{
+    command::sha1_hash,
     error::SFError,
-    misc::sha1_hash,
     session::{ConnectionOptions, PWHash, Session, reqwest_client},
 };
 
@@ -24,6 +24,7 @@ enum SSOAuthData {
     Steam,
 }
 
+/// A logged-in Shakes & Fidget SSO (Single Sign-On) account.
 #[derive(Debug)]
 pub struct SFAccount {
     pub(super) username: String,
@@ -33,6 +34,8 @@ pub struct SFAccount {
     pub(super) options: ConnectionOptions,
 }
 
+/// Holds the active session credentials (UUID and bearer token) for an SSO
+/// account.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AccountSession {
     pub(super) uuid: String,
@@ -50,6 +53,7 @@ enum APIRequest {
     },
 }
 
+/// Information about a character associated with an SSO account.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct SSOCharacter {
     pub(super) id: String,
@@ -184,10 +188,9 @@ impl SFAccount {
             val_to_string(&res["token"]["access_token"]),
             val_to_string(&res["account"]["uuid"]),
         ) else {
-            return Err(SFError::ParsingError(
-                "missing auth value in api response",
-                format!("{res:?}"),
-            ));
+            return Err(SFError::ParsingError(format!(
+                "Missing auth value in API response: {res:?}"
+            )));
         };
 
         self.session = AccountSession { uuid, bearer_token };
@@ -221,7 +224,9 @@ impl SFAccount {
         #[allow(clippy::indexing_slicing)]
         let characters: Vec<SSOCharacter> =
             serde_json::from_value(res["characters"].take()).map_err(|_| {
-                SFError::ParsingError("missing json value ", String::new())
+                SFError::ParsingError(
+                    "Missing json value in characters".to_string(),
+                )
             })?;
 
         let account = Arc::new(Mutex::new(self));
@@ -308,7 +313,7 @@ async fn send_api_request(
     }
 
     let resp: APIResponse = serde_json::from_str(&text)
-        .map_err(|_| SFError::ParsingError("API response", text))?;
+        .map_err(|_| SFError::ParsingError(format!("API response: {text}")))?;
 
     if !resp.success {
         return Err(SFError::ConnectionError);
@@ -324,20 +329,67 @@ async fn send_api_request(
     Ok(data)
 }
 
+/// Detailed information about a Shakes & Fidget game server.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ServerInfo {
+    /// The unique numeric ID of the server.
+    pub id: i32,
+    /// The canonical URL of this server.
+    pub url: Url,
+    /// The country or region code for this server (e.g. "de", "en", "int",
+    /// "fu").
+    pub country_code: String,
+    /// The target server URL if this server was merged into another server.
+    pub merged_into: Option<Url>,
+    /// The date and time when the merge takes effect.
+    pub merge_date_time: Option<NaiveDateTime>,
+}
+
+impl ServerInfo {
+    /// Returns whether this server has been merged into another server.
+    ///
+    /// A server is considered merged if a merge target URL is set and the
+    /// merge date and time (if specified) has already passed.
+    #[must_use]
+    pub fn is_merged(&self) -> bool {
+        self.merged_into.is_some()
+            && self
+                .merge_date_time
+                .is_none_or(|mdt| Utc::now().naive_utc() > mdt)
+    }
+}
+
+/// A lookup table mapping numeric server IDs to their respective
+/// [`ServerInfo`].
 #[derive(Debug, Clone)]
-pub struct ServerLookup(HashMap<i32, Url>);
+pub struct ServerLookup(HashMap<i32, ServerInfo>);
 
 impl ServerLookup {
-    /// Fetches the current mapping of numeric server ids to their URLs.
+    /// Fetches the current mapping of numeric server IDs to their server info.
     ///
     /// # Errors
-    /// Returns `ConnectionError`, if the server could not be reached, ro
-    /// `ParsingError`, if the list could not be parsed
+    /// Returns `ConnectionError` if the server could not be reached, or
+    /// `ParsingError` if the server list could not be parsed.
     pub async fn fetch() -> Result<ServerLookup, SFError> {
         Self::fetch_with_client(&reqwest::Client::new()).await
     }
 
-    /// Fetches the current mapping of server ids to server URLs.
+    /// Fetches the current mapping of server IDs using the provided connection
+    /// options.
+    ///
+    /// # Errors
+    /// Returns `ConnectionError` if client initialization fails or the server
+    /// could not be reached, or `ParsingError` if the response could not be
+    /// parsed.
+    pub async fn fetch_with_options(
+        options: &ConnectionOptions,
+    ) -> Result<ServerLookup, SFError> {
+        let client = reqwest_client(options).ok_or(SFError::ConnectionError)?;
+        Self::fetch_with_client(&client).await
+    }
+
+    /// Fetches the current mapping of server IDs to server info using the
+    /// provided client.
     #[allow(clippy::items_after_statements)]
     async fn fetch_with_client(
         client: &Client,
@@ -351,13 +403,13 @@ impl ServerLookup {
             .await
             .map_err(|_| SFError::ConnectionError)?;
 
-        #[derive(Debug, Deserialize, Serialize)]
+        #[derive(Debug, Deserialize)]
         struct ServerResp {
-            servers: Vec<ServerInfo>,
+            servers: Vec<RawServerInfo>,
         }
 
-        #[derive(Debug, Deserialize, Serialize)]
-        struct ServerInfo {
+        #[derive(Debug, Deserialize)]
+        struct RawServerInfo {
             #[serde(rename = "i")]
             id: i32,
             #[serde(rename = "d")]
@@ -371,59 +423,101 @@ impl ServerLookup {
         }
 
         let resp: ServerResp = serde_json::from_str(&res).map_err(|_| {
-            SFError::ParsingError("server response", res.clone())
+            SFError::ParsingError(format!("Server response: {res}"))
         })?;
 
-        let servers: HashMap<i32, Url> = resp
+        let servers: HashMap<i32, ServerInfo> = resp
             .servers
             .into_iter()
             .filter_map(|s| {
-                let mut server_url = s.url;
-                if let Some(merged_url) = s.merged_into {
-                    if let Some(mdt) = s.merge_date_time.and_then(|a| {
-                        NaiveDateTime::parse_from_str(&a, "%Y-%m-%d %H:%M:%S")
+                let url: Url = format!("https://{}", s.url).parse().ok()?;
+                let merged_into = s
+                    .merged_into
+                    .as_deref()
+                    .filter(|u| !u.trim().is_empty())
+                    .and_then(|u| format!("https://{u}").parse().ok());
+                let merge_date_time =
+                    s.merge_date_time.as_deref().and_then(|dt| {
+                        NaiveDateTime::parse_from_str(dt, "%Y-%m-%d %H:%M:%S")
                             .ok()
-                    }) {
-                        if Local::now().naive_utc() > mdt {
-                            server_url = merged_url;
-                        }
-                    } else {
-                        server_url = merged_url;
-                    }
-                }
+                    });
 
-                Some((s.id, format!("https://{server_url}").parse().ok()?))
+                let info = ServerInfo {
+                    id: s.id,
+                    url,
+                    country_code: s.country_code,
+                    merged_into,
+                    merge_date_time,
+                };
+                Some((s.id, info))
             })
             .collect();
         if servers.is_empty() {
-            return Err(SFError::ParsingError("empty server list", res));
+            return Err(SFError::ParsingError(format!(
+                "Empty server list: {res}"
+            )));
         }
 
         Ok(ServerLookup(servers))
     }
 
-    /// Gets the mapping of a server id to a URL
-    ///
-    /// # Errors
-    /// Reutns `InvalidRequest` if there was no server with this id
-    pub fn get(&self, server_id: i32) -> Result<Url, SFError> {
-        self.0
-            .get(&server_id)
-            .cloned()
-            .ok_or(SFError::InvalidRequest("There is no server with this id"))
+    /// Gets the server info for the given server ID.
+    #[must_use]
+    pub fn get(&self, server_id: i32) -> Option<&ServerInfo> {
+        self.0.get(&server_id)
     }
 
-    /// Returns a set of all the servers, that are currently active, so no
-    /// merged, or not yet available servers
+    /// Looks up a server by its URL.
     #[must_use]
-    pub fn all(&self) -> HashSet<Url> {
-        self.0.iter().map(|a| a.1.clone()).collect()
+    pub fn get_by_url(&self, url: &Url) -> Option<&ServerInfo> {
+        self.0.values().find(|s| {
+            s.url == *url
+                || (s.url.host_str().is_some()
+                    && s.url.host_str() == url.host_str())
+        })
+    }
+
+    /// Looks up a server ID by its URL.
+    #[must_use]
+    pub fn get_id(&self, url: &Url) -> Option<i32> {
+        self.get_by_url(url).map(|s| s.id)
+    }
+
+    /// Returns the number of servers in this lookup table.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// Returns whether this lookup table is empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Checks if a server with the specified ID exists in this lookup table.
+    #[must_use]
+    pub fn contains(&self, server_id: i32) -> bool {
+        self.0.contains_key(&server_id)
+    }
+
+    /// Returns an iterator over all `(&server_id, &ServerInfo)` entries.
+    pub fn iter(&self) -> impl Iterator<Item = (&i32, &ServerInfo)> {
+        self.0.iter()
+    }
+
+    /// Returns an iterator over all [`ServerInfo`] values.
+    pub fn servers(&self) -> impl Iterator<Item = &ServerInfo> {
+        self.0.values()
     }
 }
 
+/// The outcome of an SSO login check attempt.
 #[derive(Debug)]
 pub enum AuthResponse {
+    /// Authentication succeeded, returning the authenticated account.
     Success(SFAccount),
+    /// Authentication is still pending or not yet complete.
     NoAuth(SSOAuth),
 }
 
@@ -431,6 +525,7 @@ fn val_to_string(val: &Value) -> Option<String> {
     val.as_str().map(std::string::ToString::to_string)
 }
 
+/// An in-progress SSO authentication session with a third-party provider.
 #[derive(Debug)]
 pub struct SSOAuth {
     client: Client,
@@ -440,9 +535,12 @@ pub struct SSOAuth {
     provider: SSOProvider,
 }
 
+/// Supported third-party SSO authentication providers.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub enum SSOProvider {
+    /// Google account authentication.
     Google,
+    /// Steam account authentication.
     Steam,
 }
 
@@ -581,5 +679,111 @@ impl SSOAuth {
             auth_id,
             provider,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_server_info_active_and_merged() {
+        let active = ServerInfo {
+            id: 1,
+            url: Url::parse("https://s1.sfgame.de").unwrap(),
+            country_code: "de".to_string(),
+            merged_into: None,
+            merge_date_time: None,
+        };
+        assert!(!active.is_merged());
+
+        let merged_past = ServerInfo {
+            id: 2,
+            url: Url::parse("https://s2.sfgame.de").unwrap(),
+            country_code: "de".to_string(),
+            merged_into: Some(Url::parse("https://f1.sfgame.net").unwrap()),
+            merge_date_time: Some(
+                NaiveDateTime::parse_from_str(
+                    "2020-01-01 00:00:00",
+                    "%Y-%m-%d %H:%M:%S",
+                )
+                .unwrap(),
+            ),
+        };
+        assert!(merged_past.is_merged());
+
+        let merge_future = ServerInfo {
+            id: 3,
+            url: Url::parse("https://s3.sfgame.de").unwrap(),
+            country_code: "de".to_string(),
+            merged_into: Some(Url::parse("https://f1.sfgame.net").unwrap()),
+            merge_date_time: Some(
+                NaiveDateTime::parse_from_str(
+                    "2099-01-01 00:00:00",
+                    "%Y-%m-%d %H:%M:%S",
+                )
+                .unwrap(),
+            ),
+        };
+        assert!(!merge_future.is_merged());
+
+        let merged_no_date = ServerInfo {
+            id: 4,
+            url: Url::parse("https://s4.sfgame.de").unwrap(),
+            country_code: "de".to_string(),
+            merged_into: Some(Url::parse("https://f1.sfgame.net").unwrap()),
+            merge_date_time: None,
+        };
+        assert!(merged_no_date.is_merged());
+    }
+
+    #[test]
+    fn test_server_lookup_all_and_queries() {
+        let mut map = HashMap::new();
+        map.insert(
+            1,
+            ServerInfo {
+                id: 1,
+                url: Url::parse("https://s1.sfgame.de").unwrap(),
+                country_code: "de".to_string(),
+                merged_into: None,
+                merge_date_time: None,
+            },
+        );
+        map.insert(
+            2,
+            ServerInfo {
+                id: 2,
+                url: Url::parse("https://s2.sfgame.de").unwrap(),
+                country_code: "de".to_string(),
+                merged_into: Some(Url::parse("https://f1.sfgame.net").unwrap()),
+                merge_date_time: None,
+            },
+        );
+
+        let lookup = ServerLookup(map);
+        assert_eq!(lookup.len(), 2);
+        assert!(!lookup.is_empty());
+        assert!(lookup.contains(1));
+        assert!(lookup.contains(2));
+        assert!(!lookup.contains(999));
+
+        assert_eq!(lookup.get(1).map(|s| s.id), Some(1));
+        assert_eq!(
+            lookup.get(1).map(|s| s.url.as_str()),
+            Some("https://s1.sfgame.de/")
+        );
+        assert!(lookup.get(999).is_none());
+
+        assert_eq!(lookup.iter().count(), 2);
+        assert_eq!(lookup.servers().count(), 2);
+
+        let url1 = Url::parse("https://s1.sfgame.de").unwrap();
+        assert_eq!(lookup.get_by_url(&url1).map(|s| s.id), Some(1));
+        assert_eq!(lookup.get_id(&url1), Some(1));
+
+        let non_existent = Url::parse("https://unknown.sfgame.net").unwrap();
+        assert!(lookup.get_by_url(&non_existent).is_none());
+        assert_eq!(lookup.get_id(&non_existent), None);
     }
 }

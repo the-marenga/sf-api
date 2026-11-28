@@ -1,6 +1,8 @@
 use clap::Parser;
 use regex::Regex;
-use sf_api::{gamestate::GameState, session::*, sso::SFAccount};
+use sf_api::{
+    gamestate::GameState, response::Response, session::*, sso::SFAccount,
+};
 
 #[tokio::main]
 pub async fn main() {

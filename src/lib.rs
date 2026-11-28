@@ -1,3 +1,6 @@
+//! A simple API to send commands to the Shakes & Fidget servers and parse their
+//! responses into characters.
+
 #![warn(
     clippy::indexing_slicing,
     clippy::unwrap_used,
@@ -6,27 +9,31 @@
     clippy::print_stderr,
     missing_debug_implementations,
     clippy::pedantic,
-    // missing_docs
+    missing_docs,
+    unreachable_pub
 )]
-#![allow(
-    clippy::redundant_closure_for_method_calls,
-    clippy::wildcard_imports,
-    clippy::too_many_lines,
-    clippy::field_reassign_with_default,
-    clippy::match_bool,
-    clippy::chunks_exact_to_as_chunks
-)]
+#![allow(clippy::module_name_repetitions, clippy::too_many_lines)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::indexing_slicing))]
 #![deny(unsafe_code)]
 
+/// Commands that can be sent to Shakes & Fidget game servers.
 pub mod command;
+/// Error and Result types used across this crate.
 pub mod error;
+/// Types representing the parsed game state (character, inventory, dungeons,
+/// etc.).
 pub mod gamestate;
-pub mod misc;
+/// Parsing and decoding utilities for raw server response strings.
 pub mod response;
+
+pub use error::{Result, SFError};
+/// Network session handling for communicating with game servers.
 #[cfg(feature = "session")]
 pub mod session;
+/// Battle simulation for characters, dungeons, and pets.
 #[cfg(feature = "simulation")]
 pub mod simulate;
+/// Single Sign-On (SSO) authentication and account management.
 #[cfg(feature = "sso")]
 pub mod sso;
 
