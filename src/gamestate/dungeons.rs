@@ -5,8 +5,8 @@ use num_traits::FromPrimitive;
 use strum::{EnumCount, EnumIter};
 
 use super::{
-    AttributeType, CCGet, Class, EnumMapGet, Item, SFError, ServerTime,
-    items::Equipment,
+    AttributeType, Class, EnumMapGet, Item, SFError, ServerTime,
+    items::{EQUIPMENT_PARSE_LEN, Equipment},
 };
 use crate::{misc::soft_into, response::Vals};
 
@@ -30,19 +30,17 @@ pub struct Portal {
 }
 
 impl Portal {
-    pub(crate) fn update(
-        &mut self,
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<(), SFError> {
-        self.finished = data.csiget(0, "portal fights", 10_000)?;
-        self.enemy_hp_percentage = data.csiget(1, "portal hp", 0)?;
+    pub(crate) fn update(&mut self, data: &Vals<'_>, server_time: ServerTime) {
+        self.finished =
+            soft_into(data.i64_or(0, 10_000), "portal fights", 10_000);
+        self.enemy_hp_percentage = soft_into(data.i64_or(1, 0), "portal hp", 0);
 
         let current_day = chrono::Datelike::ordinal(&server_time.current());
-        let last_portal_day: u32 = data.csiget(2, "portal day", 0)?;
+        let last_portal_day: u32 =
+            soft_into(data.i64_or(2, 0), "portal day", 0);
         self.can_fight = last_portal_day != current_day;
 
-        Ok(())
+        data.ignore(3..data.len(), "extra portal values");
     }
 }
 
@@ -260,15 +258,20 @@ impl From<ShadowDungeon> for Dungeon {
 }
 
 fn update_progress<T: FromPrimitive + enum_map::Enum>(
-    data: &[i64],
+    data: &Vals<'_>,
     dungeons: &mut EnumMap<T, DungeonProgress>,
 ) {
-    for (dungeon_id, progress) in data.iter().copied().enumerate() {
+    for (dungeon_id, raw) in data.iter().enumerate() {
+        // Malformed values are not worth warning about and leave the dungeon
+        // progress untouched; iterating still marks every value as read.
+        let Ok(x) = raw.parse::<i64>() else {
+            continue;
+        };
         let Some(dungeon_typ) = FromPrimitive::from_usize(dungeon_id) else {
             continue;
         };
         let dungeon = dungeons.get_mut(dungeon_typ);
-        *dungeon = match progress {
+        *dungeon = match x {
             -1 => DungeonProgress::Locked,
             x => {
                 let stage = soft_into(x, "dungeon progress", 0);
@@ -299,7 +302,7 @@ impl Dungeons {
 
     pub(crate) fn update_progress(
         &mut self,
-        data: &[i64],
+        data: &Vals<'_>,
         dungeon_type: DungeonType,
     ) {
         match dungeon_type {
@@ -319,6 +322,26 @@ impl Dungeons {
                 }
             }
         }
+    }
+
+    pub(crate) fn update_companion_equipment(
+        &mut self,
+        data: &Vals<'_>,
+    ) -> Result<(), SFError> {
+        // An empty response does not imply that the player has companions.
+        if data.is_empty() {
+            return Ok(());
+        }
+        for (idx, cmp) in self
+            .companions
+            .get_or_insert_with(Default::default)
+            .values_mut()
+            .enumerate()
+        {
+            let window = data.window(idx * EQUIPMENT_PARSE_LEN..data.len());
+            cmp.equipment = Equipment::parse(&window)?;
+        }
+        Ok(())
     }
 }
 
@@ -389,4 +412,229 @@ pub fn get_dungeon_monster(
     };
     crate::simulate::constants::get_dungeon_enemies(dungeon.into())
         .get(stage as usize)
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
+
+    use super::*;
+
+    fn current_day() -> u32 {
+        chrono::Datelike::ordinal(&ServerTime(0).current())
+    }
+
+    #[test]
+    fn portal_full_values_respect_the_day_and_ignore_the_tail() {
+        let raw = format!("5/42/{}/1/2/3", current_day());
+        let data = Vals::from(raw.as_str());
+        let mut portal = Portal::default();
+
+        portal.update(&data, ServerTime(0));
+
+        data.assert_all_read();
+        assert_eq!(portal.finished, 5);
+        assert_eq!(portal.enemy_hp_percentage, 42);
+        assert!(!portal.can_fight);
+    }
+
+    #[test]
+    fn portal_truncated_values_use_defaults() {
+        let data = Vals::from("7");
+        let mut portal = Portal::default();
+
+        portal.update(&data, ServerTime(0));
+
+        data.assert_all_read();
+        assert_eq!(portal.finished, 7);
+        assert_eq!(portal.enemy_hp_percentage, 0);
+        assert_ne!(current_day(), 0);
+        assert!(portal.can_fight);
+    }
+
+    #[test]
+    fn portal_extra_values_do_not_break_can_fight() {
+        let raw = format!("3/99/{}/0/0/0/0", current_day() + 1);
+        let data = Vals::from(raw.as_str());
+        let mut portal = Portal::default();
+
+        portal.update(&data, ServerTime(0));
+
+        data.assert_all_read();
+        assert_eq!(portal.finished, 3);
+        assert_eq!(portal.enemy_hp_percentage, 99);
+        assert!(portal.can_fight);
+    }
+
+    #[test]
+    fn light_progress_skips_unknown_ids_and_applies_thresholds() {
+        let values = [
+            "0", "-1", "5", "10", "100", "0", "0", "0", "0", "0", "0", "0",
+            "0", "0", "100", "0", "0", "123",
+        ];
+        let raw = values.join("/");
+        let data = Vals::from(raw.as_str());
+        let mut dungeons = Dungeons::default();
+
+        dungeons.update_progress(&data, DungeonType::Light);
+
+        data.assert_all_read();
+        assert_eq!(
+            dungeons.light.get(LightDungeon::DesecratedCatacombs),
+            &DungeonProgress::Open { finished: 0 }
+        );
+        assert_eq!(
+            dungeons.light.get(LightDungeon::MinesOfGloria),
+            &DungeonProgress::Locked
+        );
+        assert_eq!(
+            dungeons.light.get(LightDungeon::RuinsOfGnark),
+            &DungeonProgress::Open { finished: 5 }
+        );
+        assert_eq!(
+            dungeons.light.get(LightDungeon::CutthroatGrotto),
+            &DungeonProgress::Finished
+        );
+        assert_eq!(
+            dungeons.light.get(LightDungeon::EmeraldScaleAltar),
+            &DungeonProgress::Open { finished: 100 }
+        );
+        assert_eq!(
+            dungeons.light.get(LightDungeon::Tower),
+            &DungeonProgress::Finished
+        );
+        // Id 17 is not a valid light dungeon and id 18 was not in the data.
+        assert_eq!(
+            dungeons.light.get(LightDungeon::NordicGods),
+            &DungeonProgress::Locked
+        );
+    }
+
+    #[test]
+    fn shadow_progress_finishes_id_14_and_applies_the_post_pass() {
+        let mut values = vec!["0"; 18];
+        values[14] = "100";
+        values[17] = "20";
+        let raw = values.join("/");
+        let data = Vals::from(raw.as_str());
+        let mut dungeons = Dungeons::default();
+
+        dungeons.update_progress(&data, DungeonType::Shadow);
+
+        data.assert_all_read();
+        assert_eq!(
+            dungeons.shadow.get(ShadowDungeon::Twister),
+            &DungeonProgress::Finished
+        );
+        assert_eq!(
+            dungeons.shadow.get(ShadowDungeon::ContinuousLoopofIdols),
+            &DungeonProgress::Open { finished: 20 }
+        );
+
+        let mut values = vec!["0"; 18];
+        values[14] = "1000";
+        values[17] = "21";
+        let raw = values.join("/");
+        let data = Vals::from(raw.as_str());
+        let mut dungeons = Dungeons::default();
+
+        dungeons.update_progress(&data, DungeonType::Shadow);
+
+        data.assert_all_read();
+        assert_eq!(
+            dungeons.shadow.get(ShadowDungeon::Twister),
+            &DungeonProgress::Finished
+        );
+        assert_eq!(
+            dungeons.shadow.get(ShadowDungeon::ContinuousLoopofIdols),
+            &DungeonProgress::Finished
+        );
+    }
+
+    #[test]
+    fn malformed_progress_values_are_skipped_without_unread_values() {
+        let data = Vals::from("abc/5/xyz");
+        let mut dungeons = Dungeons::default();
+
+        dungeons.update_progress(&data, DungeonType::Light);
+
+        data.assert_all_read();
+        assert_eq!(
+            dungeons.light.get(LightDungeon::DesecratedCatacombs),
+            &DungeonProgress::Locked
+        );
+        assert_eq!(
+            dungeons.light.get(LightDungeon::MinesOfGloria),
+            &DungeonProgress::Open { finished: 5 }
+        );
+        assert_eq!(
+            dungeons.light.get(LightDungeon::RuinsOfGnark),
+            &DungeonProgress::Locked
+        );
+    }
+
+    #[test]
+    fn companion_equipment_empty_does_not_create_companions() {
+        let data = Vals::from("");
+        let mut dungeons = Dungeons::default();
+
+        dungeons.update_companion_equipment(&data).unwrap();
+
+        data.assert_all_read();
+        assert!(dungeons.companions.is_none());
+    }
+
+    #[test]
+    fn companion_equipment_one_block_is_read() {
+        let raw = ["0"; EQUIPMENT_PARSE_LEN].join("/");
+        let data = Vals::from(raw.as_str());
+        let mut dungeons = Dungeons::default();
+
+        dungeons.update_companion_equipment(&data).unwrap();
+
+        data.assert_all_read();
+        let companions = dungeons.companions.as_ref().unwrap();
+        assert!(
+            companions.values().all(|cmp| cmp
+                .equipment
+                .0
+                .values()
+                .all(Option::is_none))
+        );
+    }
+
+    #[test]
+    fn companion_equipment_two_blocks_are_split_between_companions() {
+        let mut values = vec!["0"; EQUIPMENT_PARSE_LEN * 2];
+        values[EQUIPMENT_PARSE_LEN] = "1";
+        let raw = values.join("/");
+        let data = Vals::from(raw.as_str());
+        let mut dungeons = Dungeons::default();
+
+        dungeons.update_companion_equipment(&data).unwrap();
+
+        data.assert_all_read();
+        let companions = dungeons.companions.as_ref().unwrap();
+        assert!(
+            companions[CompanionClass::Warrior]
+                .equipment
+                .0
+                .values()
+                .all(Option::is_none)
+        );
+        assert!(
+            companions[CompanionClass::Mage]
+                .equipment
+                .0
+                .values()
+                .any(Option::is_some)
+        );
+        assert!(
+            companions[CompanionClass::Scout]
+                .equipment
+                .0
+                .values()
+                .all(Option::is_none)
+        );
+    }
 }

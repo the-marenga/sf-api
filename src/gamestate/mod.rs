@@ -539,21 +539,7 @@ impl GameState {
                 Toilet::update_sacrifices(&val.list(), &mut self.tavern.toilet);
             }
             "companionequipment" => {
-                let data = val.list();
-                if data.is_empty() {
-                    return Ok(());
-                }
-                for (idx, cmp) in self
-                    .dungeons
-                    .companions
-                    .get_or_insert_with(Default::default)
-                    .values_mut()
-                    .enumerate()
-                {
-                    let start = EQUIPMENT_PARSE_LEN * idx;
-                    cmp.equipment =
-                        Equipment::parse(&data.window(start..data.len()))?;
-                }
+                self.dungeons.update_companion_equipment(&val.list())?;
             }
             "storeitemsfidget" => {
                 *self.shops.get_mut(ShopType::Magic) =
@@ -649,22 +635,20 @@ impl GameState {
                 self.pending_unlocks =
                     Unlockable::parse(&val.into_list("unlock")?)?;
             }
-            "dungeonprogresslight" => self.dungeons.update_progress(
-                &val.into_list("dungeon progress light")?,
-                DungeonType::Light,
-            ),
-            "dungeonprogressshadow" => self.dungeons.update_progress(
-                &val.into_list("dungeon progress shadow")?,
-                DungeonType::Shadow,
-            ),
+            "dungeonprogresslight" => self
+                .dungeons
+                .update_progress(&val.list(), DungeonType::Light),
+            "dungeonprogressshadow" => self
+                .dungeons
+                .update_progress(&val.list(), DungeonType::Shadow),
             "portalprogress" => {
                 self.dungeons
                     .portal
                     .get_or_insert_with(Default::default)
-                    .update(&val.into_list("portal progress")?, server_time)?;
+                    .update(&val.list(), server_time);
             }
             "owntowerlevel" => {
-                // Already in dungeons
+                val.list().ignore_all("already in dungeons");
             }
             "serverversion" => {
                 // Handled in session
@@ -686,7 +670,7 @@ impl GameState {
                     .per_hour_next_lvl = val.into("wood next lvl")?;
             }
             "shadowlevel" | "dungeonlevel" => {
-                // We just look at the db
+                val.list().ignore_all("we just look at the db");
             }
             "gttime" => {
                 self.hellevator.update_time(&val.list(), server_time);
@@ -1019,9 +1003,9 @@ impl GameState {
                 self.character.scrapbook = ScrapBook::parse(val.as_str());
             }
             "dungeonfaces" | "shadowfaces" => {
-                // Gets returned after winning a dungeon fight. This looks a
-                // bit like a reward, but that should be handled in fight
-                // parsing already?
+                val.list().ignore_all(
+                    "dungeon fight reward, already handled in fight parsing",
+                );
             }
             "messagelist" => {
                 self.mail.update_inbox(&val.list_by(';'), server_time);
@@ -1552,7 +1536,7 @@ impl GameState {
             }
             // This is the extra bonus effect all treats get that day
             x if x.contains("dungeonenemies") => {
-                // I `think` we do not need this
+                val.list().ignore_all("extra treat bonus is not needed");
             }
             x if x.starts_with("attbonus") => {
                 // This is always 0s, so I have no idea what this could be
