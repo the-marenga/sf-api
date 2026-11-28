@@ -1,5 +1,6 @@
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
+use log::warn;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use strum::{EnumIter, IntoEnumIterator};
@@ -8,6 +9,7 @@ use crate::{
     error::SFError,
     gamestate::{ServerTime, rewards::RewardType},
     misc::{ArrSkip, CCGet, CFPGet, CGet, CSGet, CSTGet},
+    response::Vals,
 };
 
 /// Information about an upcoming, or currently running special event. This is
@@ -70,35 +72,60 @@ pub enum WorldBossTheme {
 }
 
 impl EventStatus {
-    pub(crate) fn parse(
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<Self, SFError> {
-        let start = data.cstget(2, "event start", server_time)?;
-        let end = data.cstget(3, "event end", server_time)?;
-        let extra_end = data.cstget(4, "event claim end", server_time)?;
+    pub(crate) fn parse(data: &Vals<'_>, server_time: ServerTime) -> Self {
+        let start = data.server_time_opt(2, server_time);
+        let end = data.server_time_opt(3, server_time);
+        let extra_end = data.server_time_opt(4, server_time);
 
-        let typ = match data.cget(0, "event main type")? {
-            1 => SpecialEventType::LegendaryDungeon(
-                data.cfpget(1, "legendary dungeon theme", |a| a)?
-                    .unwrap_or_default(),
-            ),
-            2 => SpecialEventType::Hellevator,
-            3 => SpecialEventType::DrivingDungeon,
-            4 => SpecialEventType::TravelingCircus,
-            6 => SpecialEventType::WorldBoss(
-                data.cfpget(1, "world boss theme", |a| a)?
-                    .unwrap_or_default(),
-            ),
-            _ => SpecialEventType::Unknown,
+        let typ = match data.i64_or(0, 0) {
+            1 => {
+                let raw = data.i64_or(1, 0);
+                let theme = FromPrimitive::from_i64(raw).unwrap_or_else(|| {
+                    if !matches!(raw, 0 | -1) {
+                        warn!(
+                            "There might be a new legendary dungeon theme -> \
+                             {raw}"
+                        );
+                    }
+                    LegendaryDungeonTheme::default()
+                });
+                SpecialEventType::LegendaryDungeon(theme)
+            }
+            2 => {
+                data.ignore(1, "non-legendary event theme");
+                SpecialEventType::Hellevator
+            }
+            3 => {
+                data.ignore(1, "non-legendary event theme");
+                SpecialEventType::DrivingDungeon
+            }
+            4 => {
+                data.ignore(1, "non-legendary event theme");
+                SpecialEventType::TravelingCircus
+            }
+            6 => {
+                let raw = data.i64_or(1, 0);
+                let theme = FromPrimitive::from_i64(raw).unwrap_or_else(|| {
+                    if !matches!(raw, 0 | -1) {
+                        warn!("There might be a new world boss theme -> {raw}");
+                    }
+                    WorldBossTheme::default()
+                });
+                SpecialEventType::WorldBoss(theme)
+            }
+            _ => {
+                data.ignore(1, "unknown event theme");
+                SpecialEventType::Unknown
+            }
         };
 
-        Ok(Self {
+        data.ignore(5..data.len(), "extra event status values");
+        Self {
             typ,
             start,
             end,
             extra_end,
-        })
+        }
     }
 }
 
@@ -520,5 +547,105 @@ impl UpgradeOffer {
             raw_catalyst_price: data.csiget(5, "wb sec ug price", u64::MAX)?,
             raw_mushroom_price: data.csiget(6, "wb mush ug price", u64::MAX)?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+
+    #[test]
+    fn parses_legendary_event_times_and_ignores_extra_values() {
+        let server_time = ServerTime(3_600);
+        let data = Vals::from("1/5/1700000000/1700000100/0/extra/malformed");
+        let status = EventStatus::parse(&data, server_time);
+        data.assert_all_read();
+
+        assert_eq!(
+            status.typ,
+            SpecialEventType::LegendaryDungeon(
+                LegendaryDungeonTheme::WinterSpectacle
+            )
+        );
+        assert_eq!(
+            status.start,
+            server_time.convert_to_local(1_700_000_000, "event start")
+        );
+        assert_eq!(
+            status.end,
+            server_time.convert_to_local(1_700_000_100, "event end")
+        );
+        assert_eq!(status.extra_end, None);
+    }
+
+    #[test]
+    fn parses_world_boss_theme() {
+        let data = Vals::from("6/2/0/0/0");
+        let status = EventStatus::parse(&data, ServerTime::default());
+        data.assert_all_read();
+
+        assert_eq!(
+            status.typ,
+            SpecialEventType::WorldBoss(WorldBossTheme::Winter)
+        );
+    }
+
+    #[test]
+    fn ignores_themes_for_non_theme_events_and_unknown_types() {
+        for (raw, expected) in [
+            ("2/malformed/0/0/0/extra", SpecialEventType::Hellevator),
+            (
+                "3/not-a-theme/0/0/0/extra",
+                SpecialEventType::DrivingDungeon,
+            ),
+            ("4/99/0/0/0/extra", SpecialEventType::TravelingCircus),
+            ("99/not-a-theme/0/0/0/extra", SpecialEventType::Unknown),
+            (
+                "malformed/not-a-theme/malformed/malformed/malformed/extra",
+                SpecialEventType::Unknown,
+            ),
+        ] {
+            let data = Vals::from(raw);
+            let status = EventStatus::parse(&data, ServerTime::default());
+            data.assert_all_read();
+
+            assert_eq!(status.typ, expected, "{raw}");
+            assert_eq!(status.start, None, "{raw}");
+            assert_eq!(status.end, None, "{raw}");
+            assert_eq!(status.extra_end, None, "{raw}");
+        }
+    }
+
+    #[test]
+    fn unknown_or_malformed_event_themes_use_defaults() {
+        for (raw, expected) in [
+            (
+                "1/99/0/0/0",
+                SpecialEventType::LegendaryDungeon(
+                    LegendaryDungeonTheme::Unknown,
+                ),
+            ),
+            (
+                "1/malformed/0/0/0",
+                SpecialEventType::LegendaryDungeon(
+                    LegendaryDungeonTheme::Unknown,
+                ),
+            ),
+            (
+                "6/99/0/0/0",
+                SpecialEventType::WorldBoss(WorldBossTheme::Unknown),
+            ),
+            (
+                "6/malformed/0/0/0",
+                SpecialEventType::WorldBoss(WorldBossTheme::Unknown),
+            ),
+        ] {
+            let data = Vals::from(raw);
+            let status = EventStatus::parse(&data, ServerTime::default());
+            data.assert_all_read();
+            assert_eq!(status.typ, expected, "{raw}");
+        }
     }
 }

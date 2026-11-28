@@ -789,12 +789,8 @@ impl GameState {
                     .update(&val.into_list("gtsave")?, server_time)?;
             }
             "eventstatus" => {
-                let data: Vec<i64> = val.into_list("event status")?;
-                self.special_event = EventStatus::parse(&data, server_time)
-                    .inspect_err(|a| {
-                        log::warn!("Could not parse event status: {a}");
-                    })
-                    .ok();
+                self.special_event =
+                    Some(EventStatus::parse(&val.list(), server_time));
             }
             "wbcharacter" => {
                 let data: Vec<i64> = val.into_list("wb char")?;
@@ -1971,93 +1967,58 @@ impl GameState {
             // Legendary Dungeons
             "iadungeonchances" => {
                 // IDK
+                val.list().ignore_all("drop chances are not modelled");
             }
             "iadungeontime" => {
-                let dungeons = &mut self.legendary_dungeon;
-
-                let vals: Vec<i64> = val.into_list("iadungeontime")?;
-                dungeons.theme = vals.cfpget(0, "ld theme", |x| x)?;
-                dungeons.start = vals.cstget(1, "ld start", server_time)?;
-                dungeons.end = vals.cstget(2, "ld end", server_time)?;
-                dungeons.close = vals.cstget(3, "ld closes", server_time)?;
+                self.legendary_dungeon.update_time(&val.list(), server_time);
             }
             "iadungeonstatstotal" => {
                 let dungeons =
                     self.legendary_dungeon.active.get_or_insert_default();
-
-                let data: Vec<i64> = val.into_list("iadungeonstatstotal")?;
-                dungeons.total_stats = TotalStats::parse(&data)?;
+                dungeons.total_stats = TotalStats::parse(&val.list());
             }
             "iadungeonstats" => {
                 let dungeons =
                     self.legendary_dungeon.active.get_or_insert_default();
-
-                let data = val.into_list("iadungeonstats")?;
-                dungeons.stats = Stats::parse(&data).unwrap_or_default();
+                dungeons.stats = Stats::parse(&val.list());
             }
             "iadungeon" => {
-                let data: Vec<i64> = val.into_list("iadungeon")?;
                 let dungeons =
                     self.legendary_dungeon.active.get_or_insert_default();
-                dungeons.update(&data)?;
+                dungeons.update(&val.list());
                 if !all_values.contains_key("iapendingitems") {
                     dungeons.pending_items.clear();
                 }
             }
             "iapendingitems" => {
-                let dungeons =
-                    self.legendary_dungeon.active.get_or_insert_default();
-                dungeons.pending_items.clear();
-                let data = val.list();
-                let amount = data.i64(0)?;
-                if amount < 1 {
-                    data.ignore_all("no pending legendary dungeon items");
-                    return Ok(());
-                }
-                for chunk in data.window(1..data.len()).chunks(ITEM_PARSE_LEN) {
-                    let Some(item) = Item::parse(&chunk)? else {
-                        warn!("Could not parse pending ld item");
-                        continue;
-                    };
-                    dungeons.pending_items.push(item);
-                }
+                self.legendary_dungeon
+                    .active
+                    .get_or_insert_default()
+                    .update_pending_items(&val.list());
             }
             "ialootitem" => {
                 // The stuff, that was looted after a fight
+                val.list().ignore_all("loot is already handled elsewhere");
             }
             "iamerchant" => {
-                let data: Vec<i64> = val.into_list("iamerchant")?;
-
                 self.legendary_dungeon
                     .active
                     .get_or_insert_default()
-                    .merchant_offers = data
-                    .chunks_exact(3)
-                    .flat_map(MerchantOffer::parse)
-                    .flatten()
-                    .collect();
+                    .update_merchant(&val.list());
             }
             "iadungeon20cost" => {
+                let data = val.list();
                 self.legendary_dungeon
                     .active
                     .get_or_insert_default()
-                    .heal_quarter_cost = val.into("iadungeon20cost")?;
+                    .heal_quarter_cost = data.u32_or(0, 0);
+                data.ignore(1..data.len(), "extra healing cost values");
             }
             "iadungeonsoulstones" => {
-                let dungeons =
-                    self.legendary_dungeon.active.get_or_insert_default();
-
-                let data: Vec<i64> = val.into_list("iamerchant")?;
-                let mut chunks = data.chunks_exact(6);
-                dungeons.active_gems = chunks
-                    .by_ref()
-                    .take(3)
-                    .flat_map(GemOfFate::parse)
-                    .flatten()
-                    .collect();
-
-                dungeons.available_gems =
-                    chunks.flat_map(GemOfFate::parse).flatten().collect();
+                self.legendary_dungeon
+                    .active
+                    .get_or_insert_default()
+                    .update_soul_stones(&val.list());
             }
             "iamap" => {
                 // 25/-5159/1/-315/
@@ -2076,6 +2037,7 @@ impl GameState {
                 // dependant on `LegendaryDungeonsEventTheme`? Whatever is
                 // may be, I don't think we really need this, as long as
                 // it does not contain the gems
+                val.list().ignore_all("map layout is not needed for gems");
             }
             "otherplayerfortressinfo" => {
                 other_player
