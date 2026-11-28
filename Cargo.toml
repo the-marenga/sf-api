@@ -11,7 +11,7 @@ readme = "README.md"
 base64 = "0.23"
 chrono = "0.4"
 enum-map = "3.1"
-fastrand = "2.5"
+fastrand = { version = "2.5", optional = true }
 log = "0.4"
 num-bigint = "0.5"
 num-derive = "0.5"
@@ -28,8 +28,8 @@ url = { version = "2.5", optional = true }
 
 [features]
 default = ["sso", "serde", "simulation"]
-session = ["dep:reqwest", "dep:tokio", "dep:url"]
-simulation = []
+session = ["dep:fastrand", "dep:reqwest", "dep:tokio", "dep:url"]
+simulation = ["dep:fastrand"]
 sso = ["session", "dep:serde", "dep:serde_json"]
 serde = ["dep:serde", "num-bigint/serde", "chrono/serde", "enum-map/serde"]
 

@@ -313,12 +313,8 @@ impl Fortress {
         }
 
         // Check if gem mining is in progress
-        if building_type == FortressBuildingType::GemMine
+        building_type == FortressBuildingType::GemMine
             && self.gem_search.finish.is_some()
-        {
-            return true;
-        }
-        false
     }
 
     /// Checks whether or not it is possible to build/upgrade a building
