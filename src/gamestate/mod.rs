@@ -610,16 +610,16 @@ impl GameState {
             "owngroupsave" => {
                 self.guild
                     .get_or_insert_with(Default::default)
-                    .update_group_save(val.as_str(), server_time)?;
+                    .update_group_save(&val.list(), server_time);
             }
             "owngroupmember" => self
                 .guild
                 .get_or_insert_with(Default::default)
-                .update_member_names(val.as_str()),
+                .update_member_names(&val.list_by(',')),
             "owngrouppotion" => {
                 self.guild
                     .get_or_insert_with(Default::default)
-                    .update_member_potions(val.as_str());
+                    .update_member_potions(&val.list_by(','));
             }
             "unitprice" => {
                 self.fortress
@@ -827,9 +827,7 @@ impl GameState {
             "groupskillprice" => {
                 self.guild
                     .get_or_insert_with(Default::default)
-                    .update_group_prices(
-                        &val.into_list("guild skill prices")?,
-                    )?;
+                    .update_group_prices(&val.list());
             }
             "soldieradvice" => {
                 let advice: u16 = val.into("soldier advice")?;
@@ -1055,7 +1053,7 @@ impl GameState {
             "owngroupknights" => self
                 .guild
                 .get_or_insert_with(Default::default)
-                .update_group_knights(val.as_str()),
+                .update_group_knights(&val.list_by(',')),
             "friendlist" => self.updatete_relation_list(val.as_str()),
             "legendaries" => {
                 if val.as_str().chars().any(|a| a != 'A') {
@@ -1794,7 +1792,7 @@ impl GameState {
             "fightablegroups" => {
                 self.guild
                     .get_or_insert_default()
-                    .update_fightable_targets(val.as_str())?;
+                    .update_fightable_targets(&val.list())?;
             }
             "adventscalendar" => {
                 let vals: Vec<i64> = val.into_list("advent door")?;
@@ -1866,19 +1864,9 @@ impl GameState {
                     data.csiget(1, "rem dice games", 0)?;
             }
             "charactergroup" => {
-                let data: Vec<i64> = val.into_list("c group")?;
-                let guild = self.guild.get_or_insert_with(Default::default);
-                guild.own_treasure_skill =
-                    data.csiget(0, "own treasure skill", 0)?;
-                guild.own_instructor_skill =
-                    data.csiget(1, "own instruction skill", 0)?;
-                guild.hydra.next_battle =
-                    data.cstget(2, "pet battle", server_time)?;
-                guild.hydra.remaining_fights =
-                    data.csiget(3, "remaining pet battles", 0)?;
-                guild.own_pet_lvl = data.csiget(4, "own pet lvl", 0)?;
-                guild.joined = data.cstget(5, "guild joined", server_time)?;
-                // [6] => ????
+                self.guild
+                    .get_or_insert_with(Default::default)
+                    .update_character_group(&val.list(), server_time);
             }
             "arena" => {
                 self.arena.update(&val.list(), server_time);
