@@ -53,7 +53,7 @@ fn key_desc(key: &str) -> impl Display + '_ {
 
 /// Splits `raw`, trimming surrounding whitespace and matching delimiters.
 fn split_values(raw: &str, delim: char) -> Vec<&str> {
-    let trimmed = raw.trim_matches(|c| [delim, ' ', '\n', '\r'].contains(&c));
+    let trimmed = raw.trim_matches(|c: char| c == delim || c.is_whitespace());
     if trimmed.is_empty() {
         Vec::new()
     } else {
@@ -326,9 +326,9 @@ impl<'a> Vals<'a> {
     /// Parses the value at `pos` into `T`.
     #[track_caller]
     fn parse<T: FromStr>(&self, pos: usize, ty: &str) -> Result<T, SFError> {
+        let caller = std::panic::Location::caller();
         let value = self.get(pos)?;
         value.trim().parse().map_err(|_| {
-            let caller = std::panic::Location::caller();
             SFError::ParsingError(
                 "response value",
                 format!(
@@ -355,11 +355,11 @@ impl<'a> Vals<'a> {
     /// The selected values, marking them as read.
     #[must_use]
     pub(crate) fn slice(&self, range: Range<usize>) -> &[&'a str] {
-        for pos in range.clone() {
-            let _ = self.value(pos);
-        }
         let end = range.end.min(self.len());
         let start = range.start.min(end);
+        for pos in start..end {
+            let _ = self.value(pos);
+        }
         self.values().get(start..end).unwrap_or_default()
     }
 
@@ -515,7 +515,7 @@ impl<'a> Vals<'a> {
         pos: usize,
         f: F,
     ) -> Option<T> {
-        let raw = self.u32_or(pos, 0);
+        let raw = self.u32(pos).ok()?;
         T::from_u32(f(raw))
     }
 
@@ -529,14 +529,15 @@ impl<'a> Vals<'a> {
         &self,
         pos: usize,
     ) -> Result<T, SFError> {
+        let caller = std::panic::Location::caller();
         let raw = self.i64(pos)?;
         T::from_i64(raw)
             .or_else(|| T::from_u64(raw.cast_unsigned()))
             .ok_or_else(|| {
-                let caller = std::panic::Location::caller();
                 let message = format!(
-                    "Unknown enum variant {raw} for {} at {}:{}:{}",
+                    "Unknown enum variant {raw} for {}{} at {}:{}:{}",
                     std::any::type_name::<T>(),
+                    key_desc(self.key),
                     caller.file(),
                     caller.line(),
                     caller.column()
@@ -589,16 +590,21 @@ mod tests {
         Second = 2,
     }
 
+    #[track_caller]
+    fn parse_u32(vals: &Vals<'_>, pos: usize) -> Result<u32, SFError> {
+        vals.u32(pos)
+    }
+
     #[test]
     fn splits_and_trims_values() {
-        let vals = Vals::from(" /1/ 2 /3/ ");
-        assert_eq!(vals.values(), ["1", "2", "3"]);
-        assert_eq!(vals.to_string(), "1/2/3");
-        let same = Vals::from("1/2/3");
+        let vals = Vals::from(" \t/1/\t2/\r\n ");
+        assert_eq!(vals.values(), ["1", "2"]);
+        assert_eq!(vals.to_string(), "1/2");
+        let same = Vals::from("1/2");
         assert_eq!(vals, same);
         vals.ignore_all("test values");
         same.ignore_all("test equal values");
-        assert!(Vals::from(" \n ").is_empty());
+        assert!(Vals::from(" \t\r\n ").is_empty());
         let custom = Vals::by("10,20;30", ',');
         assert_eq!(custom.values(), ["10", "20;30"]);
         custom.ignore_all("test custom delimiter");
@@ -631,19 +637,22 @@ mod tests {
     #[test]
     fn errors_include_key_and_caller() {
         let vals = Vals::new("not-a-number", "resources", '/');
-        let err = vals.u32(0).unwrap_err();
+        let expected_line = line!() + 1;
+        let err = parse_u32(&vals, 0).unwrap_err();
         assert!(matches!(err, SFError::ParsingError(_, _)));
         assert!(err.to_string().contains("resources"));
-        assert!(err.to_string().contains(file!()));
+        assert!(err.to_string().contains(&format!(":{expected_line}:")));
 
         let err = vals.u32(1).unwrap_err();
         assert!(err.to_string().contains("Index out of bounds"));
         assert!(err.to_string().contains(file!()));
 
         let enums = Vals::new("99", "enums", '/');
+        let expected_line = line!() + 1;
         let err = enums.parse_enum::<TestEnum>(0).unwrap_err();
         assert!(err.to_string().contains("Unknown enum variant"));
-        assert!(err.to_string().contains(file!()));
+        assert!(err.to_string().contains("enums"));
+        assert!(err.to_string().contains(&format!(":{expected_line}:")));
     }
 
     #[test]
@@ -657,6 +666,8 @@ mod tests {
             vals.enum_map::<TestEnum, _>(0, |raw| raw + 1),
             Some(TestEnum::Second)
         );
+        assert_eq!(vals.enum_map::<TestEnum, _>(3, |raw| raw - 1), None);
+        assert_eq!(vals.enum_map::<TestEnum, _>(99, |raw| raw - 1), None);
         assert_eq!(vals.parse_enum::<TestEnum>(0).unwrap(), TestEnum::First);
         assert!(vals.parse_enum::<TestEnum>(2).is_err());
     }
@@ -689,6 +700,10 @@ mod tests {
         assert_eq!(nested.u32(0).unwrap(), 4);
         assert_eq!(vals.unaccessed_indices(), vec![0, 3, 5]);
         vals.ignore_all("test remaining values");
+
+        let all = Vals::from("0/1");
+        assert_eq!(all.slice(0..usize::MAX), ["0", "1"]);
+        all.assert_all_read();
     }
 
     #[test]
