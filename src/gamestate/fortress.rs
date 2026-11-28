@@ -4,15 +4,11 @@ use std::time::Duration;
 use chrono::{DateTime, Local};
 use enum_map::{Enum, EnumMap};
 use num_derive::FromPrimitive;
-use strum::{EnumCount, EnumIter, IntoEnumIterator};
+use num_traits::FromPrimitive;
+use strum::{EnumCount, EnumIter};
 
-use super::{
-    ArrSkip, CCGet, CFPGet, CSTGet, SFError, ServerTime, items::GemType,
-};
-use crate::{
-    PlayerId,
-    gamestate::{CGet, EnumMapGet},
-};
+use super::{ServerTime, items::GemType};
+use crate::{PlayerId, gamestate::EnumMapGet, response::Vals};
 
 /// The information about a characters fortress
 #[derive(Debug, Default, Clone)]
@@ -89,14 +85,13 @@ pub struct FortressCost {
 }
 
 impl FortressCost {
-    pub(crate) fn parse(data: &[i64]) -> Result<FortressCost, SFError> {
-        Ok(FortressCost {
-            time: Duration::from_secs(data.csiget(0, "fortress time", 0)?),
-            // Guessing here
-            silver: data.csiget(1, "silver cost", u64::MAX)?,
-            wood: data.csiget(2, "wood cost", u64::MAX)?,
-            stone: data.csiget(3, "stone cost", u64::MAX)?,
-        })
+    pub(crate) fn parse(data: &Vals<'_>) -> FortressCost {
+        FortressCost {
+            time: Duration::from_secs(data.u64_or(0, 0)),
+            silver: data.u64_or(1, u64::MAX),
+            wood: data.u64_or(2, u64::MAX),
+            stone: data.u64_or(3, u64::MAX),
+        }
     }
 }
 
@@ -376,151 +371,351 @@ impl Fortress {
 
     pub(crate) fn update_resources(
         &mut self,
-        data: &[i64],
+        data: &Vals<'_>,
         server_time: ServerTime,
-    ) -> Result<(), SFError> {
+    ) {
         for (idx, (typ, resource)) in self.resources.iter_mut().enumerate() {
-            resource.production.last_collectable =
-                data.csiget(idx, "ft resource last collectable", 0)?;
-            resource.production.limit =
-                data.csiget(3 + idx, "ft resource production limit", 0)?;
-            resource.production.per_hour =
-                data.csiget(8 + idx, "ft resource per hour", 0)?;
+            resource.production.last_collectable = data.u64_or(idx, 0);
+            resource.production.limit = data.u64_or(3 + idx, 0);
+            resource.production.per_hour = data.u64_or(8 + idx, 0);
 
             if typ != FortressResourceType::Experience {
-                resource.limit =
-                    data.csiget(6 + idx, "ft resource limit", 0)?;
-                resource.limit_next_level =
-                    data.csiget(12 + idx, "ft resource per hour", 0)?;
-                resource.secret_storage.limit =
-                    data.csiget(14 + idx, "ft secret storage limit", 0)?;
+                resource.limit = data.u64_or(6 + idx, 0);
+                resource.limit_next_level = data.u64_or(12 + idx, 0);
+                resource.secret_storage.limit = data.u64_or(14 + idx, 0);
             }
         }
-        self.last_collectable_updated =
-            data.cstget(11, "ft resource update", server_time)?;
-        Ok(())
+        self.last_collectable_updated = data.server_time_opt(11, server_time);
     }
 
-    pub(crate) fn update_unit_prices(
-        &mut self,
-        data: &[i64],
-    ) -> Result<(), SFError> {
-        for (i, typ) in FortressUnitType::iter().enumerate() {
-            self.units.get_mut(typ).training.cost =
-                FortressCost::parse(data.skip(i * 4, "unit prices")?)?;
+    pub(crate) fn update_unit_prices(&mut self, data: &Vals<'_>) {
+        for (idx, unit) in self.units.values_mut().enumerate() {
+            let start = idx * 4;
+            unit.training.cost =
+                FortressCost::parse(&data.window(start..start + 4));
         }
-        Ok(())
     }
 
-    pub(crate) fn update_unit_upgrade_info(
-        &mut self,
-        data: &[i64],
-    ) -> Result<(), SFError> {
-        for (i, typ) in FortressUnitType::iter().enumerate() {
-            self.units.get_mut(typ).upgrade_next_lvl =
-                data.csiget(i * 3, "unit next lvl", 0)?;
-            self.units.get_mut(typ).upgrade_cost.wood =
-                data.csiget(1 + i * 3, "wood price next unit lvl", 0)?;
-            self.units.get_mut(typ).upgrade_cost.stone =
-                data.csiget(2 + i * 3, "stone price next unit lvl", 0)?;
+    pub(crate) fn update_unit_upgrade_info(&mut self, data: &Vals<'_>) {
+        for (idx, unit) in self.units.values_mut().enumerate() {
+            let start = idx * 3;
+            let chunk = data.window(start..start + 3);
+            unit.upgrade_next_lvl = chunk.u64_or(0, 0);
+            unit.upgrade_cost.wood = chunk.u64_or(1, 0);
+            unit.upgrade_cost.stone = chunk.u64_or(2, 0);
         }
-        Ok(())
     }
 
-    pub(crate) fn update_levels(
-        &mut self,
-        data: &[i64],
-    ) -> Result<(), SFError> {
-        self.units.get_mut(FortressUnitType::Soldier).level =
-            data.csiget(1, "soldier level", 0)?;
-        self.units.get_mut(FortressUnitType::Magician).level =
-            data.csiget(2, "magician level", 0)?;
-        self.units.get_mut(FortressUnitType::Archer).level =
-            data.csiget(3, "archer level", 0)?;
-        Ok(())
-    }
-
-    pub(crate) fn update_prices(
-        &mut self,
-        data: &[i64],
-    ) -> Result<(), SFError> {
-        for (i, typ) in FortressBuildingType::iter().enumerate() {
-            self.buildings.get_mut(typ).upgrade_cost =
-                FortressCost::parse(data.skip(i * 4, "fortress unit prices")?)?;
+    pub(crate) fn update_levels(&mut self, data: &Vals<'_>) {
+        data.ignore(0, "might be max unit level");
+        for (idx, unit) in self.units.values_mut().enumerate() {
+            unit.level = data.u16_or(1 + idx, 0);
         }
-        self.gem_search.cost =
-            FortressCost::parse(data.skip(48, "gem_search_cost")?)?;
-        Ok(())
+    }
+
+    pub(crate) fn update_prices(&mut self, data: &Vals<'_>) {
+        for (idx, building) in self.buildings.values_mut().enumerate() {
+            let start = idx * 4;
+            building.upgrade_cost =
+                FortressCost::parse(&data.window(start..start + 4));
+        }
+        self.gem_search.cost = FortressCost::parse(&data.window(48..52));
     }
 
     pub(crate) fn update_units(
         &mut self,
-        data: &[i64],
+        data: &Vals<'_>,
         server_time: ServerTime,
-    ) -> Result<(), SFError> {
+    ) {
         for (idx, unit) in self.units.values_mut().enumerate() {
-            unit.count = data.csiget(idx, "ft unit count", 0)?;
-            unit.in_training = data.csiget(3 + idx, "ft unit in que", 0)?;
-            unit.training.start =
-                data.cstget(6 + idx, "ft training start", server_time)?;
-            unit.training.finish =
-                data.cstget(9 + idx, "ft training end", server_time)?;
-            // NOTE: 12 + idx has another value, which I can not associate with
-            // anything. It is similar to the base amount of units you can have
-            // max, but it diverges after a few levels
+            unit.count = data.u16_or(idx, 0);
+            unit.in_training = data.u16_or(3 + idx, 0);
+            unit.training.start = data.server_time_opt(6 + idx, server_time);
+            unit.training.finish = data.server_time_opt(9 + idx, server_time);
+            data.ignore(12 + idx, "unknown unit value (diverges from limit)");
         }
-        Ok(())
     }
 
-    pub(crate) fn update(
-        &mut self,
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<(), SFError> {
-        // Buildings
-        for (idx, (_, building)) in self.buildings.iter_mut().enumerate() {
-            building.level = data.csiget(idx, "building lvl", 0)?;
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    pub(crate) fn update(&mut self, data: &Vals<'_>, server_time: ServerTime) {
+        for (idx, building) in self.buildings.values_mut().enumerate() {
+            building.level = data.u16_or(idx, 0);
         }
+
         let upgrade = &mut self.building_upgrade;
-        upgrade.target =
-            data.cfpget(12, "fortress building upgrade", |x| x - 1)?;
-        upgrade.finish =
-            data.cstget(13, "fortress upgrade end", server_time)?;
-        upgrade.start =
-            data.cstget(14, "fortress upgrade begin", server_time)?;
+        upgrade.target = data
+            .i64_or(12, 0)
+            .checked_sub(1)
+            .and_then(FortressBuildingType::from_i64);
+        upgrade.finish = data.server_time_opt(13, server_time);
+        upgrade.start = data.server_time_opt(14, server_time);
 
-        self.upgrades = data.csiget(15, "fortress lvl", 0)?;
-        self.honor = data.csiget(16, "fortress honor", 0)?;
-        let fortress_rank: i64 = data.csiget(17, "fortress rank", 0)?;
-
+        self.upgrades = data.u16_or(15, 0);
+        self.honor = data.u32_or(16, 0);
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        if fortress_rank > 0 {
-            self.rank = Some(fortress_rank as u32);
-        } else {
-            self.rank = None;
-        }
-        self.attack_free_reroll =
-            data.cstget(18, "fortress attack reroll", server_time)?;
-        self.attack_target = data.cwiget(19, "fortress enemy")?;
+        let rank = data.i64_or(17, 0);
+        self.rank = (rank > 0).then_some(rank as u32);
 
-        // 20 = 1541425816 ???
-        // 21 = 1751042620 ???
+        self.attack_free_reroll = data.server_time_opt(18, server_time);
+        self.attack_target =
+            data.i64(19).ok().and_then(|raw| u32::try_from(raw).ok());
+        data.ignore(20, "unknown server timestamp");
+        data.ignore(21, "unknown server timestamp");
 
-        self.gem_search.target =
-            GemType::parse(data.cget(22, "gem target")?, 0);
-        self.gem_search.finish =
-            data.cstget(23, "gem search end", server_time)?;
-        self.gem_search.start =
-            data.cstget(24, "gem search start", server_time)?;
-        self.hall_of_knights_level =
-            data.csiget(25, "hall of knights level", 0)?;
-
-        // 26 = 14309
+        self.gem_search.target = GemType::parse(data.i64_or(22, 0), 0);
+        self.gem_search.finish = data.server_time_opt(23, server_time);
+        self.gem_search.start = data.server_time_opt(24, server_time);
+        self.hall_of_knights_level = data.u16_or(25, 0);
+        data.ignore(26, "unknown server value");
 
         if data.len() > 27 {
             log::warn!("fortress update has new values: {data:?}");
+            data.ignore(27..data.len(), "new fortress values");
         }
+    }
+}
 
-        Ok(())
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
+
+    use super::*;
+
+    #[test]
+    fn parses_fortress_costs_and_tolerates_strings() {
+        let vals = Vals::from("7200/4000/1100/333");
+        let cost = FortressCost::parse(&vals);
+        assert_eq!(cost.time, Duration::from_secs(7200));
+        assert_eq!(cost.silver, 4000);
+        assert_eq!(cost.wood, 1100);
+        assert_eq!(cost.stone, 333);
+        vals.assert_all_read();
+
+        let vals = Vals::from("future/future/future/future");
+        let cost = FortressCost::parse(&vals);
+        assert_eq!(cost.time, Duration::ZERO);
+        assert_eq!(cost.silver, u64::MAX);
+        assert_eq!(cost.wood, u64::MAX);
+        assert_eq!(cost.stone, u64::MAX);
+        vals.assert_all_read();
+    }
+
+    #[test]
+    fn updates_building_and_gem_prices() {
+        let raw = "7200/4000/1100/333/7200/2000/1015/308/7200/800/220/133/\
+                   7200/1200/660/107/7200/6000/1467/444/765/700/7/9/765/500/\
+                   41/7/765/400/20/14/765/600/61/20/7200/10000/1173/356/765/\
+                   400/25/8/765/15000/30/13/9180/45000/29/9";
+        let mut fortress = Fortress::default();
+        let vals = Vals::from(raw);
+        fortress.update_prices(&vals);
+        vals.assert_all_read();
+
+        let fortress_cost =
+            fortress.buildings[FortressBuildingType::Fortress].upgrade_cost;
+        assert_eq!(
+            (
+                fortress_cost.time.as_secs(),
+                fortress_cost.silver,
+                fortress_cost.wood,
+                fortress_cost.stone
+            ),
+            (7200, 4000, 1100, 333)
+        );
+        let gem = fortress.gem_search.cost;
+        assert_eq!(
+            (gem.time.as_secs(), gem.silver, gem.wood, gem.stone),
+            (9180, 45_000, 29, 9)
+        );
+    }
+
+    #[test]
+    fn updates_fortress_state() {
+        let raw = "19/15/18/18/18/18/15/15/15/18/18/18/3/1786227769/\
+                   1785018169/376/7053/1565/1785024031/111111/1459278099/\
+                   1784875170/0/0/0/18/348143";
+        let mut fortress = Fortress::default();
+        let vals = Vals::from(raw);
+        fortress.update(&vals, ServerTime::default());
+        vals.assert_all_read();
+
+        assert_eq!(fortress.upgrades, 376);
+        assert_eq!(fortress.honor, 7053);
+        assert_eq!(fortress.rank, Some(1565));
+        assert_eq!(fortress.attack_target, Some(111_111));
+        assert_eq!(fortress.hall_of_knights_level, 18);
+        assert_eq!(
+            fortress.buildings[FortressBuildingType::Fortress].level,
+            19
+        );
+        assert_eq!(
+            fortress.building_upgrade.target,
+            Some(FortressBuildingType::WoodcuttersHut)
+        );
+        assert!(fortress.building_upgrade.start.is_some());
+        assert!(fortress.building_upgrade.finish.is_some());
+        assert!(fortress.attack_free_reroll.is_some());
+        assert_eq!(fortress.gem_search.target, None);
+    }
+
+    #[test]
+    fn updates_idle_fortress_and_gem_search() {
+        let raw = "19/15/19/18/18/18/15/15/15/18/18/18/0/0/0/377/7069/1583/\
+                   1790325015/222222/1459278099/1791987830/13/1790346770/\
+                   1790323370/18/521703";
+        let mut fortress = Fortress::default();
+        let vals = Vals::from(raw);
+        fortress.update(&vals, ServerTime::default());
+        vals.assert_all_read();
+
+        assert_eq!(fortress.upgrades, 377);
+        assert_eq!(fortress.honor, 7069);
+        assert_eq!(fortress.rank, Some(1583));
+        assert_eq!(fortress.attack_target, Some(222_222));
+        assert_eq!(fortress.building_upgrade.target, None);
+        assert_eq!(fortress.gem_search.target, Some(GemType::Constitution));
+        assert!(fortress.gem_search.start.is_some());
+        assert!(fortress.gem_search.finish.is_some());
+    }
+
+    #[test]
+    fn updates_units() {
+        let raw =
+            "45/0/0/0/0/0/1790341727/1790327907/1790327907/0/0/0/18/18/18";
+        let mut fortress = Fortress::default();
+        let vals = Vals::from(raw);
+        fortress.update_units(&vals, ServerTime::default());
+        vals.assert_all_read();
+
+        let soldier = &fortress.units[FortressUnitType::Soldier];
+        assert_eq!(soldier.count, 45);
+        assert_eq!(soldier.in_training, 0);
+        assert!(soldier.training.start.is_some());
+        assert_eq!(soldier.training.finish, None);
+    }
+
+    #[test]
+    fn truncated_unit_prices_apply_defaults() {
+        let vals = Vals::from("1/2/3");
+        let mut fortress = Fortress::default();
+        fortress.update_unit_prices(&vals);
+        vals.assert_all_read();
+
+        let soldier = fortress.units[FortressUnitType::Soldier].training.cost;
+        assert_eq!(soldier.time.as_secs(), 1);
+        assert_eq!(soldier.silver, 2);
+        assert_eq!(soldier.wood, 3);
+        assert_eq!(soldier.stone, u64::MAX);
+        assert_eq!(
+            fortress.units[FortressUnitType::Magician]
+                .training
+                .cost
+                .silver,
+            u64::MAX
+        );
+    }
+
+    #[test]
+    fn truncated_unit_upgrade_info_applies_defaults() {
+        let vals = Vals::from("5");
+        let mut fortress = Fortress::default();
+        fortress.update_unit_upgrade_info(&vals);
+        vals.assert_all_read();
+
+        let soldier = &fortress.units[FortressUnitType::Soldier];
+        assert_eq!(soldier.upgrade_next_lvl, 5);
+        assert_eq!(soldier.upgrade_cost.wood, 0);
+        assert_eq!(soldier.upgrade_cost.stone, 0);
+        assert_eq!(
+            fortress.units[FortressUnitType::Magician].upgrade_next_lvl,
+            0
+        );
+    }
+
+    #[test]
+    fn truncated_building_prices_apply_defaults() {
+        let vals = Vals::from("1/2/3/4");
+        let mut fortress = Fortress::default();
+        fortress.update_prices(&vals);
+        vals.assert_all_read();
+
+        let fortress_cost =
+            fortress.buildings[FortressBuildingType::Fortress].upgrade_cost;
+        assert_eq!(fortress_cost.time.as_secs(), 1);
+        assert_eq!(fortress_cost.silver, 2);
+        assert_eq!(fortress_cost.wood, 3);
+        assert_eq!(fortress_cost.stone, 4);
+        assert_eq!(fortress.gem_search.cost.silver, u64::MAX);
+    }
+
+    #[test]
+    fn updates_unit_levels() {
+        let vals = Vals::from("190/140/140/140");
+        let mut fortress = Fortress::default();
+        fortress.update_levels(&vals);
+        vals.assert_all_read();
+
+        assert_eq!(fortress.units[FortressUnitType::Soldier].level, 140);
+        assert_eq!(fortress.units[FortressUnitType::Magician].level, 140);
+        assert_eq!(fortress.units[FortressUnitType::Archer].level, 140);
+    }
+
+    #[test]
+    fn updates_unit_upgrade_info() {
+        let raw = "145/49500000/37800000/145/132000000/10800000/145/66000000/\
+                   32400000";
+        let mut fortress = Fortress::default();
+        let vals = Vals::from(raw);
+        fortress.update_unit_upgrade_info(&vals);
+        vals.assert_all_read();
+
+        let soldier = &fortress.units[FortressUnitType::Soldier];
+        assert_eq!(soldier.upgrade_next_lvl, 145);
+        assert_eq!(soldier.upgrade_cost.wood, 49_500_000);
+        assert_eq!(soldier.upgrade_cost.stone, 37_800_000);
+    }
+
+    #[test]
+    fn updates_unit_prices() {
+        let raw = "600/0/20250/6750/600/0/15187/8437/300/0/25312/5062";
+        let mut fortress = Fortress::default();
+        let vals = Vals::from(raw);
+        fortress.update_unit_prices(&vals);
+        vals.assert_all_read();
+
+        let soldier = fortress.units[FortressUnitType::Soldier].training.cost;
+        assert_eq!(soldier.time.as_secs(), 600);
+        assert_eq!(soldier.wood, 20_250);
+        assert_eq!(soldier.stone, 6750);
+    }
+
+    #[test]
+    fn updates_resources() {
+        let raw = "614062/136458/4911687/6300000/1350000/4911687/165000000/\
+                   54000000/225000/50000/454785/1791911255/300000000/\
+                   100000000/49500000/16200000";
+        let mut fortress = Fortress::default();
+        let vals = Vals::from(raw);
+        fortress.update_resources(&vals, ServerTime::default());
+        vals.assert_all_read();
+
+        let wood = &fortress.resources[FortressResourceType::Wood];
+        assert_eq!(wood.production.last_collectable, 614_062);
+        assert_eq!(wood.production.limit, 6_300_000);
+        assert_eq!(wood.production.per_hour, 225_000);
+        assert_eq!(wood.limit, 165_000_000);
+        assert_eq!(wood.limit_next_level, 300_000_000);
+        assert_eq!(wood.secret_storage.limit, 49_500_000);
+        assert!(fortress.last_collectable_updated.is_some());
+    }
+
+    #[test]
+    fn truncated_and_unknown_fortress_values_use_defaults() {
+        let vals = Vals::from("future");
+        let mut fortress = Fortress::default();
+        fortress.update(&vals, ServerTime::default());
+        vals.assert_all_read();
+        assert_eq!(fortress.buildings[FortressBuildingType::Fortress].level, 0);
+        assert_eq!(fortress.attack_target, None);
     }
 }
