@@ -1477,20 +1477,23 @@ impl PetItem {
 }
 
 pub(crate) fn parse_active_potions(
-    data: &[i64],
+    data: &Vals<'_>,
     server_time: ServerTime,
 ) -> [Option<Potion>; 3] {
     if data.len() < 10 {
+        data.ignore_all("short active potion record");
         return Default::default();
     }
-    #[allow(clippy::indexing_slicing)]
-    core::array::from_fn(move |i| {
-        Some(Potion {
-            typ: PotionType::parse(data[i + 1])?,
-            size: PotionSize::parse(data[i + 1])?,
-            expires: server_time.convert_to_local(data[4 + i], "potion exp"),
-            // 6 => effect, but no idea why we would want to use that
-        })
+    data.ignore(0, "unknown active potion value");
+    data.ignore(7..data.len(), "extra active potion values");
+    core::array::from_fn(|idx| {
+        let raw_type = data.i64_or(1 + idx, 0);
+        let raw_expiry = data.i64_or(4 + idx, 0);
+        let typ = PotionType::parse(raw_type)?;
+        let size = PotionSize::parse(raw_type)?;
+        let expires = server_time.convert_to_local(raw_expiry, "potion exp");
+        // The third value in each slot is an unknown potion effect.
+        Some(Potion { typ, size, expires })
     })
 }
 
@@ -1629,5 +1632,68 @@ mod tests {
         assert_eq!(inventory.backpack.len(), 3);
         assert_eq!(inventory.count_free_slots(), 1);
         vals.assert_all_read();
+    }
+
+    #[test]
+    fn short_active_potions_are_ignored_and_default_to_empty_slots() {
+        let data = Vals::from("0/1/6");
+        let potions = parse_active_potions(&data, ServerTime::default());
+        data.assert_all_read();
+        assert_eq!(potions, [None, None, None]);
+    }
+
+    #[test]
+    fn full_active_potions_parse_types_sizes_and_expiry_times() {
+        let data = Vals::from(
+            "ignored/1/7/16/1700000001/1700000002/1700000003/0/0/extra",
+        );
+        let server_time = ServerTime::default();
+        let potions = parse_active_potions(&data, server_time);
+        data.assert_all_read();
+
+        let expected = [
+            Some(Potion {
+                typ: PotionType::Strength,
+                size: PotionSize::Small,
+                expires: server_time.convert_to_local(1_700_000_001, "test"),
+            }),
+            Some(Potion {
+                typ: PotionType::Dexterity,
+                size: PotionSize::Medium,
+                expires: server_time.convert_to_local(1_700_000_002, "test"),
+            }),
+            Some(Potion {
+                typ: PotionType::EternalLife,
+                size: PotionSize::Large,
+                expires: server_time.convert_to_local(1_700_000_003, "test"),
+            }),
+        ];
+        assert_eq!(potions, expected);
+    }
+
+    #[test]
+    fn malformed_active_potions_use_independent_slot_defaults() {
+        let data = Vals::from("0/bad/7/16/bad/0/1700000003/0/0/extra");
+        let server_time = ServerTime::default();
+        let potions = parse_active_potions(&data, server_time);
+        data.assert_all_read();
+
+        assert_eq!(potions[0], None);
+        assert_eq!(
+            potions[1],
+            Some(Potion {
+                typ: PotionType::Dexterity,
+                size: PotionSize::Medium,
+                expires: None,
+            })
+        );
+        assert_eq!(
+            potions[2],
+            Some(Potion {
+                typ: PotionType::EternalLife,
+                size: PotionSize::Large,
+                expires: server_time.convert_to_local(1_700_000_003, "test"),
+            })
+        );
     }
 }
