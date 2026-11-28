@@ -7,11 +7,11 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
 use super::{
-    AttributeType, Class, Emblem, Flag, Item, Potion, Race, Reward, SFError,
-    ServerTime,
+    AttributeType, Class, Emblem, Flag, Item, Potion, Race, Reward, RewardType,
+    SFError, ServerTime,
     character::{Mount, Portrait},
     guild::GuildRank,
-    items::Equipment,
+    items::{Equipment, ITEM_PARSE_LEN},
 };
 use crate::{PlayerId, misc::*, response::Vals};
 
@@ -34,6 +34,26 @@ pub struct Mail {
     /// A preview of a claimable. You can get this via
     /// `Command::ClaimablePreview`
     pub open_claimable: Option<ClaimablePreview>,
+}
+
+impl Mail {
+    pub(crate) fn update_claimables(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        self.claimables.clear();
+        let complete_len = data.len() / 6 * 6;
+        for record in data.window(0..complete_len).chunks(6) {
+            if let Some(claimable) = ClaimableMail::parse(&record, server_time)
+            {
+                self.claimables.push(claimable);
+            } else {
+                warn!("Dropping malformed claimable mail record: {record}");
+            }
+        }
+        data.ignore(complete_len..data.len(), "partial claimable mail record");
+    }
 }
 
 /// Contains information about everything involving other players on the server.
@@ -879,6 +899,53 @@ pub struct ClaimableMail {
     pub claimable_until: Option<DateTime<Local>>,
 }
 
+impl ClaimableMail {
+    pub(crate) fn parse(
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) -> Option<Self> {
+        let (
+            Ok(msg_id),
+            Ok(raw_status),
+            Ok(raw_typ),
+            Ok(name),
+            Ok(start),
+            Ok(end),
+        ) = (
+            data.i64(0),
+            data.str(1),
+            data.i64(2),
+            data.str(3),
+            data.i64(4),
+            data.i64(5),
+        )
+        else {
+            data.ignore_all("malformed claimable mail record");
+            return None;
+        };
+
+        let status = match raw_status {
+            "0" => ClaimableStatus::Unread,
+            "1" => ClaimableStatus::Read,
+            "2" => ClaimableStatus::Claimed,
+            x => {
+                warn!("Unknown claimable status: {x}");
+                ClaimableStatus::Claimed
+            }
+        };
+
+        data.ignore(6..data.len(), "extra claimable mail values");
+        Some(Self {
+            msg_id,
+            typ: FromPrimitive::from_i64(raw_typ).unwrap_or_default(),
+            status,
+            name: name.to_owned(),
+            received: server_time.convert_to_local(start, "p start"),
+            claimable_until: server_time.convert_to_local(end, "p end"),
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ClaimableStatus {
@@ -904,11 +971,47 @@ pub struct ClaimablePreview {
     pub resources: Vec<Reward>,
 }
 
+impl ClaimablePreview {
+    pub(crate) fn update_resources(&mut self, data: &Vals<'_>) {
+        self.resources.clear();
+        let complete_len = data.len() / 2 * 2;
+        self.resources = data
+            .window(0..complete_len)
+            .chunks(2)
+            .map(|chunk| Reward {
+                typ: RewardType::parse(chunk.i64_or(0, 0)),
+                amount: u64::try_from(chunk.i64_or(1, 1)).unwrap_or(1),
+            })
+            .collect();
+        data.ignore(complete_len..data.len(), "partial claimable resource");
+    }
+
+    pub(crate) fn update_items(&mut self, data: &Vals<'_>) {
+        self.items.clear();
+        let complete_len = data.len() / ITEM_PARSE_LEN * ITEM_PARSE_LEN;
+        self.items = data
+            .window(0..complete_len)
+            .chunks(ITEM_PARSE_LEN)
+            .filter_map(|chunk| Item::parse(&chunk).ok().flatten())
+            .collect();
+        data.ignore(complete_len..data.len(), "partial claimable item");
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    #![allow(clippy::unwrap_used)]
+    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 
     use super::*;
+
+    fn local_time(timestamp: i64) -> DateTime<Local> {
+        DateTime::from_timestamp(timestamp, 0)
+            .unwrap()
+            .naive_utc()
+            .and_local_timezone(Local)
+            .latest()
+            .unwrap()
+    }
 
     #[test]
     fn hellevator_hall_of_fame_parses_complete_records_and_ignores_extras() {
@@ -957,5 +1060,89 @@ mod tests {
         hall_of_fames.update_hellevator(&empty);
         empty.assert_all_read();
         assert!(matches!(hall_of_fames.hellevator.as_slice(), []));
+    }
+
+    #[test]
+    fn claimable_mail_parses_required_fields_and_ignores_extras() {
+        let data = Vals::from("42/1/12/CODE/1700000000/1700000100/extra");
+        let mail = ClaimableMail::parse(&data, ServerTime::default()).unwrap();
+        assert_eq!(mail.msg_id, 42);
+        assert_eq!(mail.status, ClaimableStatus::Read);
+        assert_eq!(mail.typ, ClaimableMailType::TwitchDrop);
+        assert_eq!(mail.name, "CODE");
+        assert_eq!(mail.received, Some(local_time(1_700_000_000)));
+        assert_eq!(mail.claimable_until, Some(local_time(1_700_000_100)));
+        data.assert_all_read();
+    }
+
+    #[test]
+    fn claimable_mail_drops_malformed_records_and_defaults_unknown_values() {
+        for raw in [
+            "",
+            "1",
+            "1/0/12",
+            "bad/0/12/name/0/0",
+            "1/0/bad/name/0/0",
+            "1/0/12/name/bad/0",
+            "1/0/12/name/0/bad",
+        ] {
+            let data = Vals::from(raw);
+            assert!(
+                ClaimableMail::parse(&data, ServerTime::default()).is_none()
+            );
+            data.assert_all_read();
+        }
+
+        let data = Vals::from("43/9/999/OTHER/0/0");
+        let mail = ClaimableMail::parse(&data, ServerTime::default()).unwrap();
+        assert_eq!(mail.status, ClaimableStatus::Claimed);
+        assert_eq!(mail.typ, ClaimableMailType::GenericDelivery);
+        assert_eq!(mail.received, None);
+        assert_eq!(mail.claimable_until, None);
+        data.assert_all_read();
+    }
+
+    #[test]
+    fn mail_update_claimables_drops_a_partial_tail() {
+        let mut mail = Mail::default();
+        let data = Vals::from("1/0/10/A/0/0/2/1/11/B/0/0/3/0/12");
+        mail.update_claimables(&data, ServerTime::default());
+        data.assert_all_read();
+        assert_eq!(mail.claimables.len(), 2);
+        assert_eq!(mail.claimables[0].msg_id, 1);
+        assert_eq!(mail.claimables[0].typ, ClaimableMailType::Coupon);
+        assert_eq!(mail.claimables[1].msg_id, 2);
+        assert_eq!(mail.claimables[1].typ, ClaimableMailType::SupermanDelivery);
+    }
+
+    #[test]
+    fn claimable_preview_resources_use_default_one_and_ignore_partial_tail() {
+        let mut preview = ClaimablePreview::default();
+        let data = Vals::from("4/25/5/-1/bad/7/8");
+        preview.update_resources(&data);
+        data.assert_all_read();
+        assert_eq!(preview.resources.len(), 3);
+        assert_eq!(preview.resources[0].typ, RewardType::Silver);
+        assert_eq!(preview.resources[0].amount, 25);
+        assert_eq!(preview.resources[1].typ, RewardType::LuckyCoins);
+        assert_eq!(preview.resources[1].amount, 1);
+        assert_eq!(preview.resources[2].typ, RewardType::Unknown);
+        assert_eq!(preview.resources[2].amount, 7);
+    }
+
+    #[test]
+    fn claimable_preview_items_filter_empty_slots_and_ignore_partial_tail() {
+        use crate::gamestate::items::ItemType;
+
+        let mut preview = ClaimablePreview::default();
+        let mut values = vec!["0".to_owned(); ITEM_PARSE_LEN * 2];
+        values[0] = "6".to_owned();
+        values.extend(["6", "0", "0"].map(str::to_owned));
+        let raw = values.join("/");
+        let data = Vals::from(raw.as_str());
+        preview.update_items(&data);
+        data.assert_all_read();
+        assert_eq!(preview.items.len(), 1);
+        assert_eq!(preview.items[0].typ, ItemType::Hat);
     }
 }
