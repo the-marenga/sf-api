@@ -1,0 +1,1 @@
+{"body":"timestamp:1700000000&ownplayername:FixtureHero&ownplayersavecharacter:0/123/0/42/0/0/0/0/0/0/0/0/0/0/0/0/0/0/1/0/1/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0","received_at":"2023-11-14T22:13:20"}

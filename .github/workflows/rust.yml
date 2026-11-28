@@ -26,6 +26,16 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v2
       - name: Run tests
         run: cargo test --verbose --release
+  test-debug:
+    name: Run Tests (debug)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
+      - name: Run tests
+        run: cargo test --verbose
+      - name: Replay anonymized fixtures
+        run: cargo run --example replay_cache -- --strict tests/fixtures
   format:
     name: Check Code Format
     runs-on: ubuntu-latest
