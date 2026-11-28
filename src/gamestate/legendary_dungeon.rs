@@ -2,7 +2,25 @@ use chrono::{DateTime, Local};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use crate::{error::SFError, gamestate::items::Item, misc::*};
+use crate::{
+    gamestate::{
+        ServerTime,
+        items::{ITEM_PARSE_LEN, Item},
+    },
+    response::Vals,
+};
+
+fn parse_enum_or<T: FromPrimitive + Default>(raw: i64, name: &str) -> T {
+    parse_enum_opt(raw, name).unwrap_or_default()
+}
+
+fn parse_enum_opt<T: FromPrimitive>(raw: i64, name: &str) -> Option<T> {
+    let value = T::from_i64(raw);
+    if value.is_none() && !matches!(raw, 0 | -1) {
+        log::warn!("There might be a new {name} -> {raw}");
+    }
+    value
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -23,6 +41,26 @@ pub struct LegendaryDungeonEvent {
 }
 
 impl LegendaryDungeonEvent {
+    pub(crate) fn update_time(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        let raw_theme = data.i64_or(0, 0);
+        let theme = FromPrimitive::from_i64(raw_theme);
+        if theme.is_none() && !matches!(raw_theme, 0 | -1) {
+            log::warn!(
+                "There might be a new legendary dungeon theme -> {raw_theme}"
+            );
+        }
+        self.theme = if raw_theme == 0 { None } else { theme };
+
+        self.start = data.server_time_opt(1, server_time);
+        self.end = data.server_time_opt(2, server_time);
+        self.close = data.server_time_opt(3, server_time);
+        data.ignore(4..data.len(), "extra legendary dungeon time values");
+    }
+
     #[must_use]
     /// Returns the status of the legendary dungeon event. This is basically the
     /// screen, that you would be looking at in-game
@@ -196,75 +234,127 @@ pub struct LegendaryDungeon {
 }
 
 impl LegendaryDungeon {
-    pub(crate) fn update(&mut self, data: &[i64]) -> Result<(), SFError> {
+    pub(crate) fn update(&mut self, data: &Vals<'_>) {
         // [00] 718719374 <= Some sort of random id?
-        self.health_status = data.cget(1, "ld unknown")?;
+        data.ignore(0, "legendary dungeon run id");
+        self.health_status = data.i64_or(1, 0);
 
-        self.current_hp = data.cget(2, "ld current hp")?;
-        self.pre_battle_hp = data.cget(3, "ld pre hp")?;
-        self.max_hp = data.cget(4, "ld max hp")?;
+        self.current_hp = data.i64_or(2, 0);
+        self.pre_battle_hp = data.i64_or(3, 0);
+        self.max_hp = data.i64_or(4, 0);
 
         for (pos, v) in self.blessings.iter_mut().enumerate() {
-            let s = data.csiget(11 + pos, "ld blessing rem", 0)?;
+            let packed = data.i64_or(11 + pos, 0);
             *v = DungeonEffect::parse(
-                data.csiget(5 + pos, "ld blessing typ", 0)?,
-                s / 10_000,
-                data.csiget(42 + pos, "ld blessing max", 0)?,
-                s % 10_000,
+                data.i64_or(5 + pos, 0),
+                packed / 10_000,
+                data.i64_or(42 + pos, 0),
+                packed % 10_000,
             );
         }
         for (pos, v) in self.curses.iter_mut().enumerate() {
-            let s_pos = match pos {
+            let packed_pos = match pos {
                 0 => 14,
                 1 => 40,
                 _ => 41,
             };
-            let s = data.csiget(s_pos, "ld blessing rem", 0)?;
+            let packed = data.i64_or(packed_pos, 0);
 
             *v = DungeonEffect::parse(
-                data.csiget(8 + pos, "ld blessing typ", 0)?,
-                s / 10_000,
-                data.csiget(45 + pos, "ld blessing max", 0)?,
-                s % 10_000,
+                data.i64_or(8 + pos, 0),
+                packed / 10_000,
+                data.i64_or(45 + pos, 0),
+                packed % 10_000,
             );
         }
 
-        self.stage =
-            data.cfpget(15, "dungeon stage", |a| a)?.unwrap_or_default();
+        self.stage = parse_enum_or(data.i64_or(15, -1), "dungeon stage");
 
         // 16 => gem count
+        data.ignore(16, "gem count");
 
-        self.current_floor = data.csiget(17, "ld floor", 0)?;
-        self.max_floor = data.csiget(18, "ld max floor", 0)?;
+        self.current_floor = data.u32_or(17, 0);
+        self.max_floor = data.u32_or(18, 0);
 
         if self.stage == LegendaryDungeonStage::DoorSelect {
             for (pos, v) in self.doors.iter_mut().enumerate() {
-                v.typ = data
-                    .cfpget(19 + pos, "ld door typ", |a| a)?
-                    .unwrap_or_default();
-
-                let raw_trap = data.cget(25 + pos, "ld door trap")?;
-                v.trap = match raw_trap {
-                    0 => None,
-                    x => FromPrimitive::from_i64(x),
-                }
+                v.typ = parse_enum_or(data.i64_or(19 + pos, 0), "ld door typ");
+                v.trap = data.enum_opt(25 + pos);
             }
         } else {
-            self.room_type =
-                data.cfpget(19, "ld room type", |a| a)?.unwrap_or_default();
+            self.room_type = parse_enum_or(data.i64_or(19, 0), "ld room type");
+            data.ignore(20, "second door type outside door selection");
+            data.ignore(25..27, "door traps outside door selection");
         }
 
-        let raw_enc = data.csiget(22, "ld encounter", 999)?;
-        self.encounter = RoomEncounter::parse(raw_enc);
+        data.ignore(21, "unmodelled legendary dungeon value");
+        self.encounter = RoomEncounter::parse(data.i64_or(22, 999));
 
         // 27..= 38 has moved
-
-        self.keys = data.csiget(39, "ld keys", 0)?;
+        data.ignore(23..25, "unmodelled legendary dungeon values");
+        data.ignore(27..39, "moved legendary dungeon values");
+        self.keys = data.u32_or(39, 0);
 
         // Unknown:
-        // 21, 23, 24, 40, 41, 48;
+        // 48;
+        data.ignore(48..data.len(), "unmodelled legendary dungeon values");
+    }
 
-        Ok(())
+    pub(crate) fn update_pending_items(&mut self, data: &Vals<'_>) {
+        self.pending_items.clear();
+        let amount = data.i64_or(0, 0);
+        if amount < 1 {
+            data.ignore_all("no pending legendary dungeon items");
+            return;
+        }
+
+        let items = data.window(1..data.len());
+        for start in (0..items.len().max(1)).step_by(ITEM_PARSE_LEN) {
+            let end = (start + ITEM_PARSE_LEN).min(items.len());
+            let chunk = items.window(start..end);
+            match Item::parse(&chunk) {
+                Ok(Some(item)) => self.pending_items.push(item),
+                Ok(None) => {
+                    chunk.ignore_all("empty pending legendary dungeon item");
+                    log::warn!("Could not parse pending ld item");
+                }
+                Err(err) => {
+                    chunk.ignore_all("invalid pending legendary dungeon item");
+                    log::warn!("Could not parse pending ld item: {err}");
+                }
+            }
+        }
+    }
+
+    pub(crate) fn update_merchant(&mut self, data: &Vals<'_>) {
+        let complete_len = data.len() / 3 * 3;
+        self.merchant_offers = data
+            .window(0..complete_len)
+            .chunks(3)
+            .filter_map(|chunk| MerchantOffer::parse(&chunk))
+            .collect();
+        data.ignore(
+            complete_len..data.len(),
+            "partial legendary dungeon merchant offer",
+        );
+    }
+
+    pub(crate) fn update_soul_stones(&mut self, data: &Vals<'_>) {
+        let complete_len = data.len() / 6 * 6;
+        let complete = data.window(0..complete_len);
+        let mut chunks = complete.chunks(6);
+        self.active_gems = chunks
+            .by_ref()
+            .take(3)
+            .filter_map(|chunk| GemOfFate::parse(&chunk))
+            .collect();
+        self.available_gems = chunks
+            .filter_map(|chunk| GemOfFate::parse(&chunk))
+            .collect();
+        data.ignore(
+            complete_len..data.len(),
+            "partial legendary dungeon soul stone",
+        );
     }
 }
 
@@ -805,14 +895,16 @@ pub struct Stats {
 }
 
 impl Stats {
-    pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
-        Ok(Stats {
-            items_found: data.csiget(0, "ld item found", 0)?,
-            epics_found: data.csiget(1, "ld epic found", 0)?,
-            keys_found: data.csiget(2, "ld keys found", 0)?,
-            silver_found: data.csiget(3, "ld silver found", 0)?,
-            attempts: data.csiget(4, "ld attempts", 0)?,
-        })
+    pub(crate) fn parse(data: &Vals<'_>) -> Self {
+        let stats = Self {
+            items_found: data.u32_or(0, 0),
+            epics_found: data.u32_or(1, 0),
+            keys_found: data.u32_or(2, 0),
+            silver_found: data.u64_or(3, 0),
+            attempts: data.u32_or(4, 0),
+        };
+        data.ignore(5..data.len(), "extra legendary dungeon stats values");
+        stats
     }
 }
 
@@ -831,22 +923,23 @@ pub struct MerchantOffer {
 }
 
 impl MerchantOffer {
-    pub(crate) fn parse(data: &[i64]) -> Result<Option<Self>, SFError> {
-        if data.iter().all(|a| *a == 0) {
-            return Ok(None);
+    pub(crate) fn parse(data: &Vals<'_>) -> Option<Self> {
+        let raw_type = data.i64_or(0, 0);
+        let raw_packed = data.i64_or(1, 0);
+        let raw_price = data.i64_or(2, 0);
+        if raw_type == 0 && raw_packed == 0 && raw_price == 0 {
+            return None;
         }
-        let typ: DungeonEffectType = data
-            .cfpget(0, "ld merchant offer type", |a| a)?
-            .unwrap_or_default();
 
-        let s: u32 = data.csiget(1, "ld merchant effect", 0)?;
-        let price = data.csiget(2, "ld merchant price", u32::MAX)?;
-        Ok(Some(Self {
+        let typ = parse_enum_or(raw_type, "ld merchant offer type");
+        let packed: u32 = raw_packed.try_into().unwrap_or(0);
+        let price: u32 = raw_price.try_into().unwrap_or(u32::MAX);
+        Some(Self {
             typ,
-            max_uses: s / 10_000,
-            strength: s % 10_000,
+            max_uses: packed / 10_000,
+            strength: packed % 10_000,
             keys: price,
-        }))
+        })
     }
 }
 
@@ -867,15 +960,20 @@ pub struct TotalStats {
 }
 
 impl TotalStats {
-    pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
+    pub(crate) fn parse(data: &Vals<'_>) -> Self {
         // Note: There is another value (5), but I can not figure out what it is
-        Ok(TotalStats {
-            legendaries_found: data.csiget(0, "ld total legendaries", 0)?,
-            attempts_best_run: data.csiget(1, "ld best attempts", 0)?,
-            enemies_defeated: data.csiget(2, "ld enemies defeated", 0)?,
-            epics_found: data.csiget(3, "ld total epics", 0)?,
-            gold_found: data.csiget(4, "ld total gold", 0)?,
-        })
+        let stats = Self {
+            legendaries_found: data.u32_or(0, 0),
+            attempts_best_run: data.u32_or(1, 0),
+            enemies_defeated: data.u32_or(2, 0),
+            epics_found: data.u32_or(3, 0),
+            gold_found: data.u64_or(4, 0),
+        };
+        data.ignore(
+            5..data.len(),
+            "extra legendary dungeon total stats values",
+        );
+        stats
     }
 }
 
@@ -899,18 +997,34 @@ pub struct GemOfFate {
 }
 
 impl GemOfFate {
-    pub(crate) fn parse(data: &[i64]) -> Result<Option<GemOfFate>, SFError> {
-        if data.iter().all(|a| *a == 0) {
-            return Ok(None);
+    pub(crate) fn parse(data: &Vals<'_>) -> Option<Self> {
+        let raw_type = data.i64_or(0, 0);
+        let raw_advantage = data.i64_or(1, 0);
+        let advantage_pwr = data.i64_or(2, 0);
+        let raw_disadvantage = data.i64_or(3, 0);
+        let disadvantage_pwr = data.i64_or(4, 0);
+        let raw_disadvantage_effect = data.i64_or(5, 0);
+        if raw_type == 0
+            && raw_advantage == 0
+            && advantage_pwr == 0
+            && raw_disadvantage == 0
+            && disadvantage_pwr == 0
+            && raw_disadvantage_effect == 0
+        {
+            return None;
         }
-        Ok(Some(Self {
-            typ: data.cfpget(0, "ld gof typ", |a| a)?.unwrap_or_default(),
-            advantage: data.cfpget(1, "ld gof adv", |a| a)?,
-            advantage_pwr: data.cget(2, "ld gof dis val")?,
-            disadvantage: data.cfpget(3, "ld gof dis", |a| a)?,
-            disadvantage_pwr: data.cget(4, "ld gof dis val")?,
-            disadvantage_effect: data.cfpget(5, "ld gof dis effect", |a| a)?,
-        }))
+
+        Some(Self {
+            typ: parse_enum_or(raw_type, "ld gof typ"),
+            advantage: parse_enum_opt(raw_advantage, "ld gof adv"),
+            advantage_pwr,
+            disadvantage: parse_enum_opt(raw_disadvantage, "ld gof dis"),
+            disadvantage_pwr,
+            disadvantage_effect: parse_enum_opt(
+                raw_disadvantage_effect,
+                "ld gof dis effect",
+            ),
+        })
     }
 }
 
@@ -1095,4 +1209,464 @@ pub enum RPSChoice {
     Paper = 91,
     /// Scissors choice
     Scissors = 92,
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
+
+    use super::*;
+
+    const ITEM: &str = "1/0/0/1010/0/149/265/5/4/0/108/72/0/83940/10/0/0/45/0";
+
+    fn sample_item() -> Item {
+        let data = Vals::from(ITEM);
+        Item::parse(&data).unwrap().unwrap()
+    }
+
+    #[test]
+    fn updates_full_event_time_and_ignores_extra_values() {
+        let server_time = ServerTime(3_600);
+        let data = Vals::from("5/1700000000/1700000100/1700000200/extra");
+        let mut event = LegendaryDungeonEvent::default();
+        event.update_time(&data, server_time);
+        data.assert_all_read();
+
+        assert_eq!(
+            event.theme,
+            Some(LegendaryDungeonEventTheme::MassiveWinterSpectacle)
+        );
+        assert_eq!(
+            event.start,
+            server_time.convert_to_local(1_700_000_000, "event start")
+        );
+        assert_eq!(
+            event.end,
+            server_time.convert_to_local(1_700_000_100, "event end")
+        );
+        assert_eq!(
+            event.close,
+            server_time.convert_to_local(1_700_000_200, "event close")
+        );
+    }
+
+    #[test]
+    fn truncated_event_time_clears_missing_fields() {
+        let server_time = ServerTime(3_600);
+        let old_time = server_time
+            .convert_to_local(1_700_000_300, "old event time")
+            .unwrap();
+        let data = Vals::from("2/1700000000");
+        let mut event = LegendaryDungeonEvent {
+            theme: Some(LegendaryDungeonEventTheme::Unknown),
+            start: Some(old_time),
+            end: Some(old_time),
+            close: Some(old_time),
+            ..Default::default()
+        };
+        event.update_time(&data, server_time);
+        data.assert_all_read();
+
+        assert_eq!(
+            event.theme,
+            Some(LegendaryDungeonEventTheme::LordOfTheThings)
+        );
+        assert_eq!(
+            event.start,
+            server_time.convert_to_local(1_700_000_000, "event start")
+        );
+        assert_eq!(event.end, None);
+        assert_eq!(event.close, None);
+    }
+
+    #[test]
+    fn event_time_preserves_theme_option_semantics() {
+        for (raw, expected) in [
+            ("0/0/0/0", None),
+            ("-1/0/0/0", Some(LegendaryDungeonEventTheme::Unknown)),
+            ("99/0/0/0", None),
+            ("malformed/0/0/0", None),
+        ] {
+            let data = Vals::from(raw);
+            let mut event = LegendaryDungeonEvent::default();
+            event.update_time(&data, ServerTime::default());
+            data.assert_all_read();
+            assert_eq!(event.theme, expected, "{raw}");
+        }
+    }
+
+    #[test]
+    fn stats_parse_all_fields_and_ignore_the_tail() {
+        let data = Vals::from("1/2/3/9000000000/4/extra/malformed");
+        let stats = Stats::parse(&data);
+        data.assert_all_read();
+
+        assert_eq!(
+            stats,
+            Stats {
+                items_found: 1,
+                epics_found: 2,
+                keys_found: 3,
+                silver_found: 9_000_000_000,
+                attempts: 4,
+            }
+        );
+    }
+
+    #[test]
+    fn malformed_stats_use_per_field_defaults() {
+        let data = Vals::from("bad/bad/bad/bad/bad/extra");
+        let stats = Stats::parse(&data);
+        data.assert_all_read();
+        assert_eq!(stats, Stats::default());
+    }
+
+    #[test]
+    fn total_stats_parse_all_fields_and_ignore_the_tail() {
+        let data = Vals::from("1/2/3/4/9000000000/extra/malformed");
+        let stats = TotalStats::parse(&data);
+        data.assert_all_read();
+
+        assert_eq!(
+            stats,
+            TotalStats {
+                legendaries_found: 1,
+                attempts_best_run: 2,
+                enemies_defeated: 3,
+                epics_found: 4,
+                gold_found: 9_000_000_000,
+            }
+        );
+    }
+
+    #[test]
+    fn malformed_total_stats_use_per_field_defaults() {
+        let data = Vals::from("bad/bad/bad/bad/bad/extra");
+        let stats = TotalStats::parse(&data);
+        data.assert_all_read();
+        assert_eq!(stats, TotalStats::default());
+    }
+
+    #[test]
+    fn updates_all_49_dungeon_values_in_door_select() {
+        let mut values = vec!["ignored".to_owned(); 49];
+        for (pos, value) in [
+            (0, "718719374"),
+            (1, "2"),
+            (2, "80"),
+            (3, "90"),
+            (4, "100"),
+            (5, "1"),
+            (6, "2"),
+            (7, "3"),
+            (8, "101"),
+            (9, "102"),
+            (10, "103"),
+            (11, "20050"),
+            (12, "10025"),
+            (13, "30075"),
+            (14, "40020"),
+            (15, "1"),
+            (17, "7"),
+            (18, "9"),
+            (19, "1"),
+            (20, "1001"),
+            (22, "-123"),
+            (25, "1"),
+            (26, "0"),
+            (39, "4"),
+            (40, "50030"),
+            (41, "60040"),
+            (42, "2"),
+            (43, "1"),
+            (44, "3"),
+            (45, "9"),
+            (46, "5"),
+            (47, "6"),
+        ] {
+            values[pos] = value.to_owned();
+        }
+        let raw = values.join("/");
+        let data = Vals::from(raw.as_str());
+        let mut dungeon = LegendaryDungeon {
+            room_type: RoomType::FinalBossRoom,
+            ..Default::default()
+        };
+        dungeon.update(&data);
+        data.assert_all_read();
+
+        assert_eq!(dungeon.health_status, 2);
+        assert_eq!(dungeon.current_hp, 80);
+        assert_eq!(dungeon.pre_battle_hp, 90);
+        assert_eq!(dungeon.max_hp, 100);
+        assert_eq!(
+            dungeon.blessings,
+            [
+                Some(DungeonEffect {
+                    typ: DungeonEffectType::Raider,
+                    remaining_uses: 2,
+                    max_uses: 2,
+                    strength: 50,
+                }),
+                Some(DungeonEffect {
+                    typ: DungeonEffectType::OneHitWonder,
+                    remaining_uses: 1,
+                    max_uses: 1,
+                    strength: 25,
+                }),
+                Some(DungeonEffect {
+                    typ: DungeonEffectType::EscapeAssistant,
+                    remaining_uses: 3,
+                    max_uses: 3,
+                    strength: 75,
+                }),
+            ]
+        );
+        assert_eq!(
+            dungeon.curses,
+            [
+                Some(DungeonEffect {
+                    typ: DungeonEffectType::BrokenArmor,
+                    remaining_uses: 4,
+                    max_uses: 9,
+                    strength: 20,
+                }),
+                Some(DungeonEffect {
+                    typ: DungeonEffectType::Poisoned,
+                    remaining_uses: 5,
+                    max_uses: 5,
+                    strength: 30,
+                }),
+                Some(DungeonEffect {
+                    typ: DungeonEffectType::Panderous,
+                    remaining_uses: 6,
+                    max_uses: 6,
+                    strength: 40,
+                }),
+            ]
+        );
+        assert_eq!(dungeon.stage, LegendaryDungeonStage::DoorSelect);
+        assert_eq!(dungeon.current_floor, 7);
+        assert_eq!(dungeon.max_floor, 9);
+        assert_eq!(
+            dungeon.doors,
+            [
+                Door {
+                    typ: DoorType::Monster1,
+                    trap: Some(DoorTrap::PoisonedDaggers),
+                },
+                Door {
+                    typ: DoorType::MysteryDoor,
+                    trap: None,
+                },
+            ]
+        );
+        assert_eq!(dungeon.room_type, RoomType::FinalBossRoom);
+        assert_eq!(dungeon.encounter, RoomEncounter::Monster(123));
+        assert_eq!(dungeon.keys, 4);
+    }
+
+    #[test]
+    fn truncated_malformed_dungeon_uses_defaults_and_keeps_doors() {
+        let mut values = vec!["malformed".to_owned(); 23];
+        values[0] = "ignored".to_owned();
+        values[2] = "2".to_owned();
+        values[4] = "4".to_owned();
+        let raw = values.join("/");
+        let data = Vals::from(raw.as_str());
+        let stale_effect = DungeonEffect {
+            typ: DungeonEffectType::Raider,
+            remaining_uses: 9,
+            max_uses: 9,
+            strength: 9,
+        };
+        let doors = [
+            Door {
+                typ: DoorType::Monster2,
+                trap: Some(DoorTrap::BearTrap),
+            },
+            Door {
+                typ: DoorType::OpenDoor,
+                trap: Some(DoorTrap::Shark),
+            },
+        ];
+        let mut dungeon = LegendaryDungeon {
+            current_hp: 99,
+            pre_battle_hp: 88,
+            max_hp: 77,
+            blessings: core::array::from_fn(|_| Some(stale_effect.clone())),
+            curses: core::array::from_fn(|_| Some(stale_effect.clone())),
+            stage: LegendaryDungeonStage::DoorSelect,
+            current_floor: 9,
+            max_floor: 9,
+            keys: 9,
+            room_type: RoomType::FinalBossRoom,
+            doors: doors.clone(),
+            ..Default::default()
+        };
+        dungeon.update(&data);
+        data.assert_all_read();
+
+        assert_eq!(dungeon.health_status, 0);
+        assert_eq!(dungeon.current_hp, 2);
+        assert_eq!(dungeon.pre_battle_hp, 0);
+        assert_eq!(dungeon.max_hp, 4);
+        assert_eq!(dungeon.blessings, [None, None, None]);
+        assert_eq!(dungeon.curses, [None, None, None]);
+        assert_eq!(dungeon.stage, LegendaryDungeonStage::Unknown);
+        assert_eq!(dungeon.current_floor, 0);
+        assert_eq!(dungeon.max_floor, 0);
+        assert_eq!(dungeon.room_type, RoomType::Unknown);
+        assert_eq!(dungeon.doors, doors);
+        assert_eq!(dungeon.encounter, RoomEncounter::Unknown);
+        assert_eq!(dungeon.keys, 0);
+    }
+
+    #[test]
+    fn zero_pending_item_count_clears_and_ignores_all_values() {
+        let raw = format!("0/{ITEM}/1/2/3");
+        let data = Vals::from(raw.as_str());
+        let mut dungeon = LegendaryDungeon {
+            pending_items: vec![sample_item()],
+            ..Default::default()
+        };
+        dungeon.update_pending_items(&data);
+        data.assert_all_read();
+        assert_eq!(dungeon.pending_items, Vec::<Item>::new());
+    }
+
+    #[test]
+    fn pending_items_parse_complete_and_partial_chunks() {
+        let raw = format!("1/{ITEM}/1/2/3");
+        let data = Vals::from(raw.as_str());
+        let mut dungeon = LegendaryDungeon {
+            pending_items: vec![sample_item(), sample_item()],
+            ..Default::default()
+        };
+        dungeon.update_pending_items(&data);
+        data.assert_all_read();
+
+        assert_eq!(dungeon.pending_items.len(), 2);
+        assert_eq!(dungeon.pending_items[0].price, 83_940);
+        assert_eq!(dungeon.pending_items[1].price, u32::MAX);
+    }
+
+    #[test]
+    fn positive_pending_count_with_only_a_partial_item_is_preserved() {
+        let data = Vals::from("1/1/0/0/1010");
+        let mut dungeon = LegendaryDungeon::default();
+        dungeon.update_pending_items(&data);
+        data.assert_all_read();
+
+        assert_eq!(dungeon.pending_items.len(), 1);
+        assert_eq!(dungeon.pending_items[0].full_model_id, 1010);
+        assert_eq!(dungeon.pending_items[0].price, u32::MAX);
+    }
+
+    #[test]
+    fn positive_pending_count_without_item_values_keeps_the_gate() {
+        let data = Vals::from("1");
+        let mut dungeon = LegendaryDungeon::default();
+        dungeon.update_pending_items(&data);
+        data.assert_all_read();
+
+        assert_eq!(dungeon.pending_items.len(), 1);
+        assert_eq!(dungeon.pending_items[0].price, u32::MAX);
+    }
+
+    #[test]
+    fn pending_item_count_is_not_a_chunk_limit() {
+        let raw = format!("1/{ITEM}/{ITEM}");
+        let data = Vals::from(raw.as_str());
+        let mut dungeon = LegendaryDungeon::default();
+        dungeon.update_pending_items(&data);
+        data.assert_all_read();
+        assert_eq!(dungeon.pending_items.len(), 2);
+    }
+
+    #[test]
+    fn merchant_all_numeric_zero_chunk_is_an_empty_sentinel() {
+        let data = Vals::from("0/00/0");
+        assert_eq!(MerchantOffer::parse(&data), None);
+        data.assert_all_read();
+    }
+
+    #[test]
+    fn merchant_preserves_unknown_type_and_ignores_partial_tail() {
+        let data = Vals::from("0/10050/3/0/00/0/7/8");
+        let mut dungeon = LegendaryDungeon {
+            merchant_offers: vec![MerchantOffer::default()],
+            ..Default::default()
+        };
+        dungeon.update_merchant(&data);
+        data.assert_all_read();
+
+        assert_eq!(
+            dungeon.merchant_offers,
+            vec![MerchantOffer {
+                typ: DungeonEffectType::Unknown,
+                max_uses: 1,
+                strength: 50,
+                keys: 3,
+            }]
+        );
+    }
+
+    #[test]
+    fn merchant_keeps_legacy_numeric_fallbacks() {
+        let data = Vals::from("1/-1/-1");
+        let offer = MerchantOffer::parse(&data).unwrap();
+        data.assert_all_read();
+
+        assert_eq!(offer.typ, DungeonEffectType::Raider);
+        assert_eq!(offer.max_uses, 0);
+        assert_eq!(offer.strength, 0);
+        assert_eq!(offer.keys, u32::MAX);
+    }
+
+    #[test]
+    fn soul_stones_group_before_filtering_and_ignore_partial_tail() {
+        let raw =
+            "0/00/0/0/0/0/1/1/25/10/-5/2/0/00/0/0/0/0/2/10/15/0/0/0/1/2/3";
+        let data = Vals::from(raw);
+        let mut dungeon = LegendaryDungeon {
+            active_gems: vec![GemOfFate::default()],
+            available_gems: vec![GemOfFate::default()],
+            ..Default::default()
+        };
+        dungeon.update_soul_stones(&data);
+        data.assert_all_read();
+
+        assert_eq!(
+            dungeon.active_gems,
+            vec![GemOfFate {
+                typ: GemOfFateType::EyeOfTheBull,
+                advantage: Some(GemOfFateEffect::ChanceOfKeys),
+                advantage_pwr: 25,
+                disadvantage: Some(GemOfFateEffect::EscapeChance),
+                disadvantage_pwr: -5,
+                disadvantage_effect: Some(
+                    GemOfFateSpecialDisadvantage::StrongerMonstersSpawn
+                ),
+            }]
+        );
+        assert_eq!(
+            dungeon.available_gems,
+            vec![GemOfFate {
+                typ: GemOfFateType::SoulOfTheRabbit,
+                advantage: Some(GemOfFateEffect::EscapeChance),
+                advantage_pwr: 15,
+                disadvantage: None,
+                disadvantage_pwr: 0,
+                disadvantage_effect: None,
+            }]
+        );
+    }
+
+    #[test]
+    fn all_numeric_zero_soul_stone_is_an_empty_sentinel() {
+        let data = Vals::from("0/00/0/0/0/0");
+        assert_eq!(GemOfFate::parse(&data), None);
+        data.assert_all_read();
+    }
 }
