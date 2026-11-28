@@ -2,12 +2,25 @@ use std::num::NonZeroU8;
 
 use chrono::{DateTime, Local};
 use enum_map::Enum;
-use log::error;
+use log::{error, warn};
 use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 use strum::EnumIter;
 
 use super::*;
 use crate::{PlayerId, gamestate::items::*, misc::*};
+
+fn parse_enum_opt<T: FromPrimitive>(raw: i64, name: &str) -> Option<T> {
+    let value = T::from_i64(raw);
+    if value.is_none() && !matches!(raw, 0 | -1) {
+        warn!("There might be a new {name} -> {raw}");
+    }
+    value
+}
+
+fn parse_enum_or<T: FromPrimitive + Default>(raw: i64, name: &str) -> T {
+    parse_enum_opt(raw, name).unwrap_or_default()
+}
 
 /// Information about the Hellevator event on the server. If it is active, you
 /// can get more detailed info via `active()`
@@ -40,6 +53,18 @@ pub enum HellevatorStatus<'a> {
 }
 
 impl HellevatorEvent {
+    pub(crate) fn update_time(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        self.start = data.server_time_opt(0, server_time);
+        self.end = data.server_time_opt(1, server_time);
+        data.ignore(2, "unknown event time value");
+        self.collect_time_end = data.server_time_opt(3, server_time);
+        data.ignore(4..data.len(), "extra event time values");
+    }
+
     /// Checks if the event has started and not yet ended compared to the
     /// current time
     #[must_use]
@@ -135,23 +160,30 @@ pub enum HellevatorMonsterElement {
 }
 
 impl HellevatorMonster {
-    pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
-        Ok(HellevatorMonster {
-            id: data.cget(0, "h monster id")?,
-            level: data.csiget(1, "h monster level", 0)?,
-            typ: data.cfpget(2, "h monster typ", |a| a)?.unwrap_or_default(),
-        })
+    pub(crate) fn parse(data: &Vals<'_>) -> Option<Self> {
+        let Ok(id) = data.i64(0) else {
+            data.ignore_all("empty or malformed monster id");
+            return None;
+        };
+
+        let level = data.u32_or(1, 0);
+        let typ = parse_enum_or(data.i64_or(2, 0), "h monster typ");
+        data.ignore(3..data.len(), "extra monster values");
+        Some(Self { id, level, typ })
     }
 }
 
 impl HellevatorTreatBonus {
-    pub(crate) fn parse(data: &[i64]) -> Result<Self, SFError> {
-        Ok(HellevatorTreatBonus {
-            typ: data
-                .cfpget(0, "hellevator treat bonus", |a| a)?
-                .unwrap_or_default(),
-            amount: data.csiget(1, "hellevator treat bonus a", 0)?,
-        })
+    pub(crate) fn parse(data: &Vals<'_>) -> Option<Self> {
+        if data.len() < 2 {
+            data.ignore_all("incomplete hellevator treat bonus");
+            return None;
+        }
+
+        let typ = parse_enum_or(data.i64_or(0, 0), "hellevator treat bonus");
+        let amount = data.u32_or(1, 0);
+        data.ignore(2..data.len(), "extra treat bonus values");
+        Some(Self { typ, amount })
     }
 }
 
@@ -285,23 +317,26 @@ impl HellevatorDailyReward {
             || self.blacksmith_chests > 0
     }
 
-    pub(crate) fn parse(data: &[i64]) -> Option<HellevatorDailyReward> {
+    pub(crate) fn parse(data: &Vals<'_>) -> Option<HellevatorDailyReward> {
         if data.len() < 10 {
+            data.ignore_all("incomplete hellevator daily reward");
             return None;
         }
 
-        Some(HellevatorDailyReward {
-            start_level: data.csiget(0, "start level", 0).unwrap_or(0),
-            end_level: data.csiget(1, "end level", 0).unwrap_or(0),
-            gold_chests: data.csiget(2, "gold chests", 0).unwrap_or(0),
-            silver: data.csiget(5, "silver reward", 0).unwrap_or(0),
-            fortress_chests: data.csiget(3, "ft chests", 0).unwrap_or(0),
-            wood: data.csiget(6, "wood reward", 0).unwrap_or(0),
-            stone: data.csiget(7, "stone reward", 0).unwrap_or(0),
-            blacksmith_chests: data.csiget(4, "bs chests", 0).unwrap_or(0),
-            arcane: data.csiget(8, "arcane reward", 0).unwrap_or(0),
-            metal: data.csiget(9, "metal reward", 0).unwrap_or(0),
-        })
+        let reward = HellevatorDailyReward {
+            start_level: data.u16_or(0, 0),
+            end_level: data.u16_or(1, 0),
+            gold_chests: data.u16_or(2, 0),
+            silver: data.u64_or(5, 0),
+            fortress_chests: data.u16_or(3, 0),
+            wood: data.u64_or(6, 0),
+            stone: data.u64_or(7, 0),
+            blacksmith_chests: data.u16_or(4, 0),
+            arcane: data.u64_or(8, 0),
+            metal: data.u64_or(9, 0),
+        };
+        data.ignore(10..data.len(), "extra daily reward values");
+        Some(reward)
     }
 }
 
@@ -323,56 +358,147 @@ impl Hellevator {
         None
     }
 
-    pub(crate) fn update(
-        &mut self,
-        data: &[i64],
-        server_time: ServerTime,
-    ) -> Result<(), SFError> {
-        self.key_cards = data.csiget(0, "h key cards", 0)?;
-        self.next_card_generated = data.cstget(1, "next card", server_time)?;
-        self.next_reset = data.cstget(2, "h next reset", server_time)?;
-        self.current_floor = data.csiget(3, "h current floor", 0)?;
-        self.points = data.csiget(4, "h points", 0)?;
-        self.start_contrib_date =
-            data.cstget(5, "start contrib", server_time)?;
-        self.has_final_reward = data.cget(6, "hellevator final")? == 1;
-        self.own_best_floor = data.csiget(7, "hellevator best rank", 0)?;
+    pub(crate) fn update(&mut self, data: &Vals<'_>, server_time: ServerTime) {
+        self.key_cards = data.u32_or(0, 0);
+        self.next_card_generated = data.server_time_opt(1, server_time);
+        self.next_reset = data.server_time_opt(2, server_time);
+        self.current_floor = data.u32_or(3, 0);
+        self.points = data.u32_or(4, 0);
+        self.start_contrib_date = data.server_time_opt(5, server_time);
+        self.has_final_reward = data.i64_or(6, 0) == 1;
+        self.own_best_floor = data.u32_or(7, 0);
 
         for (pos, shop_item) in self.shop_items.iter_mut().enumerate() {
-            let start = data.skip(8 + pos, "shop item start")?;
-            shop_item.typ = start
-                .cfpget(0, "hellevator shop treat", |a| a)?
-                .unwrap_or_default();
-            // FIXME: This is wrong
-            shop_item.is_special =
-                start.cget(3, "hellevator shop special")? > 0;
-            shop_item.price =
-                start.csiget(6, "hellevator shop price", u32::MAX)?;
-            shop_item.duration =
-                start.csiget(9, "hellevator shop duration", 0)?;
-            shop_item.effect_strength =
-                start.csiget(12, "hellevator effect str", 0)?;
+            shop_item.typ =
+                parse_enum_or(data.i64_or(8 + pos, 0), "hellevator shop treat");
+            shop_item.is_special = data.i64_or(11 + pos, 0) > 0;
+            shop_item.price = data.u32_or(14 + pos, u32::MAX);
+            shop_item.duration = data.u32_or(17 + pos, 0);
+            shop_item.effect_strength = data.u32_or(20 + pos, 0);
         }
 
-        let c_typ = data.cget(23, "current ctyp")?;
-        self.current_treat = if c_typ > 0 {
+        let current_typ = data.i64_or(23, 0);
+        self.current_treat = if current_typ > 0 {
             Some(HellevatorShopTreat {
-                typ: FromPrimitive::from_i64(c_typ).unwrap_or_default(),
-                is_special: data.cget(24, "current item special")? > 0,
+                typ: FromPrimitive::from_i64(current_typ).unwrap_or_default(),
+                is_special: data.i64_or(24, 0) > 0,
                 price: 0,
-                duration: data.csiget(25, "current item remaining", 0)?,
-                effect_strength: data.csiget(26, "current item effect", 0)?,
+                duration: data.u32_or(25, 0),
+                effect_strength: data.u32_or(26, 0),
             })
         } else {
+            data.ignore(24..27, "unused current treat values");
             None
         };
 
-        self.earned_today = data.csiget(27, "points earned today", 0)?;
-        // 28 => probably a "has acknowledged rank fall" msg
-        self.earned_yesterday = data.csiget(29, "points earned yd", 0)?;
-        // 30 => fallen to rank
-        // 31 => ???
-        Ok(())
+        self.earned_today = data.u32_or(27, 0);
+        data.ignore(28, "rank fall acknowledgement");
+        self.earned_yesterday = data.u32_or(29, 0);
+        data.ignore(30..32, "unmodelled earned reward fields");
+        data.ignore(32..data.len(), "extra hellevator save values");
+    }
+
+    pub(crate) fn update_raid_participants(
+        &mut self,
+        data: &Vals<'_>,
+        target: fn(&mut HellevatorRaidFloor) -> &mut Vec<String>,
+    ) {
+        for floor in &mut self.guild_raid_floors {
+            target(floor).clear();
+        }
+
+        let pair_count = data.len() / 2;
+        for pair in data.window(0..pair_count * 2).chunks(2) {
+            let name = pair.get_str(0).unwrap_or_default();
+            let floor = pair.usize(1).ok().unwrap_or_default();
+            if floor == 0 {
+                continue;
+            }
+            if self.guild_raid_floors.len() < floor {
+                self.guild_raid_floors.resize_with(floor, Default::default);
+            }
+            if let Some(raid_floor) = self.guild_raid_floors.get_mut(floor - 1)
+            {
+                target(raid_floor).push(name.to_owned());
+            }
+        }
+        data.ignore(
+            pair_count * 2..data.len(),
+            "odd trailing participant value",
+        );
+    }
+
+    pub(crate) fn update_raid_fights(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        self.guild_raid_signup_start =
+            data.server_time_opt(0, server_time).unwrap_or_default();
+        self.guild_raid_start =
+            data.server_time_opt(1, server_time).unwrap_or_default();
+
+        let tail = data.window(2..data.len());
+        let floor_count = tail.len() / 5;
+        if self.guild_raid_floors.len() < floor_count {
+            self.guild_raid_floors
+                .resize_with(floor_count, Default::default);
+        }
+        for (chunk, floor) in tail
+            .window(0..floor_count * 5)
+            .chunks(5)
+            .zip(&mut self.guild_raid_floors)
+        {
+            chunk.ignore(0, "unknown raid floor value");
+            floor.today = chunk.i64_or(1, 0);
+            floor.yesterday = chunk.i64_or(2, 0);
+            floor.point_reward = chunk.u32_or(3, 0);
+            floor.silver_reward = chunk.u64_or(4, 0);
+        }
+        for floor in self.guild_raid_floors.iter_mut().skip(floor_count) {
+            floor.today = 0;
+            floor.yesterday = 0;
+            floor.point_reward = 0;
+            floor.silver_reward = 0;
+        }
+        tail.ignore(floor_count * 5..tail.len(), "partial raid fight values");
+    }
+
+    pub(crate) fn update_monster_rewards(&mut self, data: &Vals<'_>) {
+        self.monster_rewards.clear();
+
+        let reward_count = data.len() / 3;
+        for chunk in data.window(0..reward_count * 3).chunks(3) {
+            let raw_typ = chunk.i64_or(0, 0);
+            if raw_typ <= 0 {
+                chunk.ignore(1..3, "empty monster reward values");
+                continue;
+            }
+            let flag = chunk.i64_or(1, 0);
+            if flag != 0 {
+                warn!("hellevator monster t: {flag}");
+            }
+            let typ = HellevatorMonsterRewardTyp::parse(raw_typ);
+            let amount = chunk.u64_or(2, 0);
+            self.monster_rewards
+                .push(HellevatorMonsterReward { typ, amount });
+        }
+        data.ignore(
+            reward_count * 3..data.len(),
+            "partial monster reward values",
+        );
+    }
+
+    pub(crate) fn update_brackets(&mut self, data: &Vals<'_>) {
+        let mut parsed = Vec::with_capacity(data.len());
+        let mut valid = true;
+        for raw in data.iter() {
+            match raw.parse::<u32>() {
+                Ok(value) => parsed.push(value),
+                Err(_) => valid = false,
+            }
+        }
+        self.brackets = if valid { parsed } else { Vec::new() };
     }
 }
 
@@ -1105,4 +1231,466 @@ fn parse_scrapbook_item(item_idx: i64) -> Option<EquipmentIdent> {
         });
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
+
+    use super::*;
+
+    const GTSAVE_FULL: &str = concat!(
+        "5/1700000001/1700000002/7/1234/1700000005/1/9/",
+        "1/2/3/1/0/1/100/200/300/",
+        "60/120/180/10/20/30/",
+        "4/1/45/50/11/ignored/22/ignored/ignored",
+    );
+
+    fn full_hellevator() -> Hellevator {
+        let data = Vals::from(GTSAVE_FULL);
+        let mut hellevator = Hellevator::default();
+        hellevator.update(&data, ServerTime::default());
+        data.assert_all_read();
+        hellevator
+    }
+
+    #[test]
+    fn event_time_handles_full_truncated_and_extra_values() {
+        let server_time = ServerTime::default();
+        let expected_start = server_time
+            .convert_to_local(1_700_000_000, "test event start")
+            .unwrap();
+        let expected_end = server_time
+            .convert_to_local(1_700_000_100, "test event end")
+            .unwrap();
+        let expected_collect_end = server_time
+            .convert_to_local(1_700_000_200, "test collect end")
+            .unwrap();
+        let mut event = HellevatorEvent::default();
+
+        let full = Vals::from("1700000000/1700000100/ignored/1700000200");
+        event.update_time(&full, server_time);
+        full.assert_all_read();
+        assert_eq!(event.start.as_ref(), Some(&expected_start));
+        assert_eq!(event.end.as_ref(), Some(&expected_end));
+        assert_eq!(
+            event.collect_time_end.as_ref(),
+            Some(&expected_collect_end)
+        );
+
+        let truncated = Vals::from("1700000000");
+        event.update_time(&truncated, server_time);
+        truncated.assert_all_read();
+        assert_eq!(event.start.as_ref(), Some(&expected_start));
+        assert_eq!(event.end, None);
+        assert_eq!(event.collect_time_end, None);
+
+        let extra = Vals::from(
+            "1700000000/1700000100/ignored/1700000200/extra/malformed",
+        );
+        event.update_time(&extra, server_time);
+        extra.assert_all_read();
+        assert_eq!(event.start.as_ref(), Some(&expected_start));
+        assert_eq!(event.end.as_ref(), Some(&expected_end));
+        assert_eq!(
+            event.collect_time_end.as_ref(),
+            Some(&expected_collect_end)
+        );
+    }
+
+    #[test]
+    fn monster_parsing_handles_valid_malformed_and_missing_fields() {
+        let valid = Vals::from("42/12/2/extra");
+        let monster = HellevatorMonster::parse(&valid).unwrap();
+        valid.assert_all_read();
+        assert_eq!(monster.id, 42);
+        assert_eq!(monster.level, 12);
+        assert_eq!(monster.typ, HellevatorMonsterElement::Cold);
+
+        for raw in ["", "malformed/12/2/extra"] {
+            let malformed = Vals::from(raw);
+            assert!(HellevatorMonster::parse(&malformed).is_none());
+            malformed.assert_all_read();
+        }
+
+        let missing = Vals::from("42");
+        let monster = HellevatorMonster::parse(&missing).unwrap();
+        missing.assert_all_read();
+        assert_eq!(monster.id, 42);
+        assert_eq!(monster.level, 0);
+        assert_eq!(monster.typ, HellevatorMonsterElement::Unknown);
+
+        let unknown_type = Vals::from("42/12/999/extra");
+        let monster = HellevatorMonster::parse(&unknown_type).unwrap();
+        unknown_type.assert_all_read();
+        assert_eq!(monster.typ, HellevatorMonsterElement::Unknown);
+    }
+
+    #[test]
+    fn treat_bonus_parsing_handles_valid_short_and_malformed_values() {
+        let valid = Vals::from("14/25/extra");
+        let bonus = HellevatorTreatBonus::parse(&valid).unwrap();
+        valid.assert_all_read();
+        assert_eq!(bonus.typ, HellevatorTreatBonusType::ExtraDamage);
+        assert_eq!(bonus.amount, 25);
+
+        let short = Vals::from("14");
+        assert!(HellevatorTreatBonus::parse(&short).is_none());
+        short.assert_all_read();
+
+        let malformed = Vals::from("999/not-a-number/extra");
+        let bonus = HellevatorTreatBonus::parse(&malformed).unwrap();
+        malformed.assert_all_read();
+        assert_eq!(bonus.typ, HellevatorTreatBonusType::Unknown);
+        assert_eq!(bonus.amount, 0);
+    }
+
+    #[test]
+    fn daily_reward_parsing_handles_full_short_and_malformed_values() {
+        let full = Vals::from("10/20/2/3/4/500/600/700/800/900/extra");
+        let reward = HellevatorDailyReward::parse(&full).unwrap();
+        full.assert_all_read();
+        assert_eq!(reward.start_level, 10);
+        assert_eq!(reward.end_level, 20);
+        assert_eq!(reward.gold_chests, 2);
+        assert_eq!(reward.fortress_chests, 3);
+        assert_eq!(reward.blacksmith_chests, 4);
+        assert_eq!(reward.silver, 500);
+        assert_eq!(reward.wood, 600);
+        assert_eq!(reward.stone, 700);
+        assert_eq!(reward.arcane, 800);
+        assert_eq!(reward.metal, 900);
+        assert!(reward.claimable());
+
+        let short = Vals::from("10/20/2");
+        assert!(HellevatorDailyReward::parse(&short).is_none());
+        short.assert_all_read();
+
+        let malformed = Vals::from("bad/20/-1/3/-2/-3/bad/700/800/900/extra");
+        let reward = HellevatorDailyReward::parse(&malformed).unwrap();
+        malformed.assert_all_read();
+        assert_eq!(reward.start_level, 0);
+        assert_eq!(reward.end_level, 20);
+        assert_eq!(reward.gold_chests, 0);
+        assert_eq!(reward.fortress_chests, 3);
+        assert_eq!(reward.blacksmith_chests, 0);
+        assert_eq!(reward.silver, 0);
+        assert_eq!(reward.wood, 0);
+        assert_eq!(reward.stone, 700);
+        assert_eq!(reward.arcane, 800);
+        assert_eq!(reward.metal, 900);
+    }
+
+    #[test]
+    fn full_hellevator_save_parses_all_modeled_fields() {
+        let server_time = ServerTime::default();
+        let data = Vals::from(GTSAVE_FULL);
+        assert_eq!(data.len(), 32);
+        let mut hellevator = Hellevator::default();
+        hellevator.update(&data, server_time);
+        data.assert_all_read();
+
+        assert_eq!(hellevator.key_cards, 5);
+        assert_eq!(hellevator.current_floor, 7);
+        assert_eq!(hellevator.points, 1234);
+        assert!(hellevator.has_final_reward);
+        assert_eq!(hellevator.own_best_floor, 9);
+        let expected_next_card = server_time
+            .convert_to_local(1_700_000_001, "test next card")
+            .unwrap();
+        let expected_reset = server_time
+            .convert_to_local(1_700_000_002, "test reset")
+            .unwrap();
+        let expected_contrib = server_time
+            .convert_to_local(1_700_000_005, "test contribution start")
+            .unwrap();
+        assert_eq!(
+            hellevator.next_card_generated.as_ref(),
+            Some(&expected_next_card)
+        );
+        assert_eq!(hellevator.next_reset.as_ref(), Some(&expected_reset));
+        assert_eq!(
+            hellevator.start_contrib_date.as_ref(),
+            Some(&expected_contrib)
+        );
+
+        assert_eq!(
+            hellevator.shop_items[0].typ,
+            HellevatorTreatType::ChocolateChilliPepper
+        );
+        assert_eq!(
+            hellevator.shop_items[1].typ,
+            HellevatorTreatType::PeppermintChocolate
+        );
+        assert_eq!(
+            hellevator.shop_items[2].typ,
+            HellevatorTreatType::Electroshock
+        );
+        assert!(hellevator.shop_items[0].is_special);
+        assert!(!hellevator.shop_items[1].is_special);
+        assert!(hellevator.shop_items[2].is_special);
+        assert_eq!(hellevator.shop_items[0].price, 100);
+        assert_eq!(hellevator.shop_items[1].price, 200);
+        assert_eq!(hellevator.shop_items[2].price, 300);
+        assert_eq!(hellevator.shop_items[0].duration, 60);
+        assert_eq!(hellevator.shop_items[1].duration, 120);
+        assert_eq!(hellevator.shop_items[2].duration, 180);
+        assert_eq!(hellevator.shop_items[0].effect_strength, 10);
+        assert_eq!(hellevator.shop_items[1].effect_strength, 20);
+        assert_eq!(hellevator.shop_items[2].effect_strength, 30);
+
+        let current = hellevator.current_treat.as_ref().unwrap();
+        assert_eq!(current.typ, HellevatorTreatType::ChillIceCream);
+        assert!(current.is_special);
+        assert_eq!(current.price, 0);
+        assert_eq!(current.duration, 45);
+        assert_eq!(current.effect_strength, 50);
+        assert_eq!(hellevator.earned_today, 11);
+        assert_eq!(hellevator.earned_yesterday, 22);
+    }
+
+    #[test]
+    fn malformed_hellevator_save_defaults_and_clears_stale_state() {
+        let mut hellevator = full_hellevator();
+        let raw = vec!["malformed"; 32].join("/");
+        let data = Vals::from(raw.as_str());
+        hellevator.update(&data, ServerTime::default());
+        data.assert_all_read();
+
+        assert_eq!(hellevator.key_cards, 0);
+        assert_eq!(hellevator.current_floor, 0);
+        assert_eq!(hellevator.points, 0);
+        assert!(!hellevator.has_final_reward);
+        assert_eq!(hellevator.own_best_floor, 0);
+        assert_eq!(hellevator.next_card_generated, None);
+        assert_eq!(hellevator.next_reset, None);
+        assert_eq!(hellevator.start_contrib_date, None);
+        assert_eq!(hellevator.earned_today, 0);
+        assert_eq!(hellevator.earned_yesterday, 0);
+        assert!(hellevator.current_treat.is_none());
+        for shop_item in &hellevator.shop_items {
+            assert_eq!(shop_item.typ, HellevatorTreatType::Unknown);
+            assert!(!shop_item.is_special);
+            assert_eq!(shop_item.price, u32::MAX);
+            assert_eq!(shop_item.duration, 0);
+            assert_eq!(shop_item.effect_strength, 0);
+        }
+    }
+
+    #[test]
+    fn truncated_hellevator_save_defaults_and_clears_stale_state() {
+        let server_time = ServerTime::default();
+        let mut hellevator = full_hellevator();
+        let data = Vals::from("8/1700000101");
+        hellevator.update(&data, server_time);
+        data.assert_all_read();
+
+        assert_eq!(hellevator.key_cards, 8);
+        let expected_next_card = server_time
+            .convert_to_local(1_700_000_101, "test truncated next card")
+            .unwrap();
+        assert_eq!(
+            hellevator.next_card_generated.as_ref(),
+            Some(&expected_next_card)
+        );
+        assert_eq!(hellevator.next_reset, None);
+        assert_eq!(hellevator.start_contrib_date, None);
+        assert_eq!(hellevator.current_floor, 0);
+        assert_eq!(hellevator.points, 0);
+        assert!(!hellevator.has_final_reward);
+        assert_eq!(hellevator.own_best_floor, 0);
+        assert_eq!(hellevator.earned_today, 0);
+        assert_eq!(hellevator.earned_yesterday, 0);
+        assert!(hellevator.current_treat.is_none());
+        for shop_item in &hellevator.shop_items {
+            assert_eq!(shop_item.typ, HellevatorTreatType::Unknown);
+            assert_eq!(shop_item.price, u32::MAX);
+        }
+    }
+
+    #[test]
+    fn raid_participants_update_today_yesterday_and_ignore_odd_tail() {
+        let mut hellevator = Hellevator {
+            guild_raid_floors: vec![
+                HellevatorRaidFloor {
+                    today_assigned: vec!["old-today-0".to_owned()],
+                    yesterday_assigned: vec!["old-yesterday-0".to_owned()],
+                    ..Default::default()
+                },
+                HellevatorRaidFloor {
+                    today_assigned: vec!["old-today-1".to_owned()],
+                    yesterday_assigned: vec!["old-yesterday-1".to_owned()],
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+
+        let today = Vals::from("Alice/2/Bob/1/Carol/4/unpaired");
+        hellevator.update_raid_participants(&today, |floor| {
+            &mut floor.today_assigned
+        });
+        today.assert_all_read();
+        assert_eq!(hellevator.guild_raid_floors.len(), 4);
+        assert_eq!(
+            hellevator.guild_raid_floors[0].today_assigned,
+            vec!["Bob".to_owned()]
+        );
+        assert_eq!(
+            hellevator.guild_raid_floors[1].today_assigned,
+            vec!["Alice".to_owned()]
+        );
+        assert_eq!(
+            hellevator.guild_raid_floors[2].today_assigned,
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            hellevator.guild_raid_floors[3].today_assigned,
+            vec!["Carol".to_owned()]
+        );
+        assert_eq!(
+            hellevator.guild_raid_floors[0].yesterday_assigned,
+            vec!["old-yesterday-0".to_owned()]
+        );
+        assert_eq!(
+            hellevator.guild_raid_floors[1].yesterday_assigned,
+            vec!["old-yesterday-1".to_owned()]
+        );
+
+        let yesterday = Vals::from("Dave/3/Eve/2/unpaired");
+        hellevator.update_raid_participants(&yesterday, |floor| {
+            &mut floor.yesterday_assigned
+        });
+        yesterday.assert_all_read();
+        assert_eq!(hellevator.guild_raid_floors.len(), 4);
+        assert_eq!(
+            hellevator.guild_raid_floors[0].yesterday_assigned,
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            hellevator.guild_raid_floors[1].yesterday_assigned,
+            vec!["Eve".to_owned()]
+        );
+        assert_eq!(
+            hellevator.guild_raid_floors[2].yesterday_assigned,
+            vec!["Dave".to_owned()]
+        );
+        assert_eq!(
+            hellevator.guild_raid_floors[3].yesterday_assigned,
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            hellevator.guild_raid_floors[0].today_assigned,
+            vec!["Bob".to_owned()]
+        );
+        assert_eq!(
+            hellevator.guild_raid_floors[1].today_assigned,
+            vec!["Alice".to_owned()]
+        );
+    }
+
+    #[test]
+    fn raid_fights_parse_full_data_grow_and_ignore_partial_tail() {
+        let server_time = ServerTime::default();
+        let mut hellevator = Hellevator {
+            guild_raid_floors: vec![HellevatorRaidFloor {
+                today_assigned: vec!["keep".to_owned()],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let full =
+            Vals::from("1700000200/1700000201/99/1/2/10/20/88/3/4/30/40");
+        hellevator.update_raid_fights(&full, server_time);
+        full.assert_all_read();
+
+        let expected_signup = server_time
+            .convert_to_local(1_700_000_200, "test raid signup")
+            .unwrap();
+        let expected_start = server_time
+            .convert_to_local(1_700_000_201, "test raid start")
+            .unwrap();
+        assert_eq!(hellevator.guild_raid_signup_start, expected_signup);
+        assert_eq!(hellevator.guild_raid_start, expected_start);
+        assert_eq!(hellevator.guild_raid_floors.len(), 2);
+        assert_eq!(hellevator.guild_raid_floors[0].today, 1);
+        assert_eq!(hellevator.guild_raid_floors[0].yesterday, 2);
+        assert_eq!(hellevator.guild_raid_floors[0].point_reward, 10);
+        assert_eq!(hellevator.guild_raid_floors[0].silver_reward, 20);
+        assert_eq!(hellevator.guild_raid_floors[1].today, 3);
+        assert_eq!(hellevator.guild_raid_floors[1].yesterday, 4);
+        assert_eq!(hellevator.guild_raid_floors[1].point_reward, 30);
+        assert_eq!(hellevator.guild_raid_floors[1].silver_reward, 40);
+        assert_eq!(
+            hellevator.guild_raid_floors[0].today_assigned,
+            vec!["keep".to_owned()]
+        );
+
+        hellevator.guild_raid_floors[1].today_assigned =
+            vec!["keep-second".to_owned()];
+        let partial = Vals::from("0/0/99/5/6/7/8/9/tail");
+        hellevator.update_raid_fights(&partial, server_time);
+        partial.assert_all_read();
+        assert_eq!(
+            hellevator.guild_raid_signup_start,
+            DateTime::<Local>::default()
+        );
+        assert_eq!(hellevator.guild_raid_start, DateTime::<Local>::default());
+        assert_eq!(hellevator.guild_raid_floors.len(), 2);
+        assert_eq!(hellevator.guild_raid_floors[0].today, 5);
+        assert_eq!(hellevator.guild_raid_floors[0].yesterday, 6);
+        assert_eq!(hellevator.guild_raid_floors[0].point_reward, 7);
+        assert_eq!(hellevator.guild_raid_floors[0].silver_reward, 8);
+        assert_eq!(hellevator.guild_raid_floors[1].today, 0);
+        assert_eq!(hellevator.guild_raid_floors[1].yesterday, 0);
+        assert_eq!(hellevator.guild_raid_floors[1].point_reward, 0);
+        assert_eq!(hellevator.guild_raid_floors[1].silver_reward, 0);
+        assert_eq!(
+            hellevator.guild_raid_floors[1].today_assigned,
+            vec!["keep-second".to_owned()]
+        );
+    }
+
+    #[test]
+    fn monster_rewards_skip_empty_types_warn_flags_and_ignore_partial_tail() {
+        let mut hellevator = Hellevator {
+            monster_rewards: vec![HellevatorMonsterReward {
+                typ: HellevatorMonsterRewardTyp::Unknown,
+                amount: 1,
+            }],
+            ..Default::default()
+        };
+        let data = Vals::from("0/7/100/4/7/250/11/1/300/tail");
+        hellevator.update_monster_rewards(&data);
+        data.assert_all_read();
+
+        assert_eq!(hellevator.monster_rewards.len(), 2);
+        assert!(matches!(
+            hellevator.monster_rewards[0].typ,
+            HellevatorMonsterRewardTyp::Silver
+        ));
+        assert_eq!(hellevator.monster_rewards[0].amount, 250);
+        assert!(matches!(
+            hellevator.monster_rewards[1].typ,
+            HellevatorMonsterRewardTyp::Fruit(HabitatType::Shadow)
+        ));
+        assert_eq!(hellevator.monster_rewards[1].amount, 300);
+    }
+
+    #[test]
+    fn brackets_fail_closed_on_any_malformed_entry() {
+        let mut hellevator = Hellevator {
+            brackets: vec![999],
+            ..Default::default()
+        };
+        let valid = Vals::from("10/20/30");
+        hellevator.update_brackets(&valid);
+        valid.assert_all_read();
+        assert_eq!(hellevator.brackets, vec![10, 20, 30]);
+
+        let data = Vals::from("10/bad/20/-1/30/4294967296");
+        hellevator.update_brackets(&data);
+        data.assert_all_read();
+        assert_eq!(hellevator.brackets, Vec::<u32>::new());
+    }
 }

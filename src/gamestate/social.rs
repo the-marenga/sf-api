@@ -13,7 +13,7 @@ use super::{
     guild::GuildRank,
     items::Equipment,
 };
-use crate::{PlayerId, misc::*};
+use crate::{PlayerId, misc::*, response::Vals};
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -80,6 +80,51 @@ pub struct HallOfFameHellevator {
     pub rank: usize,
     pub name: String,
     pub tokens: u64,
+}
+
+impl HallOfFameHellevator {
+    pub(crate) fn parse(data: &Vals<'_>) -> Option<Self> {
+        let (Ok(rank), Ok(name), Ok(tokens)) =
+            (data.usize(0), data.str(1), data.u64(2))
+        else {
+            data.ignore_all("malformed hellevator hall of fame record");
+            return None;
+        };
+
+        data.ignore(3..data.len(), "extra hall of fame record values");
+        Some(Self {
+            rank,
+            name: name.to_owned(),
+            tokens,
+        })
+    }
+}
+
+impl HallOfFames {
+    pub(crate) fn update_hellevator(&mut self, data: &Vals<'_>) {
+        self.hellevator.clear();
+        for record in data.iter() {
+            if record.is_empty() {
+                continue;
+            }
+            if record.starts_with(',') {
+                warn!(
+                    "Dropping malformed hellevator hall of fame record: \
+                     {record}"
+                );
+                continue;
+            }
+            let values = Vals::by(record, ',');
+            if let Some(entry) = HallOfFameHellevator::parse(&values) {
+                self.hellevator.push(entry);
+            } else {
+                warn!(
+                    "Dropping malformed hellevator hall of fame record: \
+                     {record}"
+                );
+            }
+        }
+    }
 }
 
 /// Contains the results of `ViewGuild` & `ViewPlayer` commands. You can access
@@ -857,4 +902,60 @@ pub enum ClaimableMailType {
 pub struct ClaimablePreview {
     pub items: Vec<Item>,
     pub resources: Vec<Reward>,
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used)]
+
+    use super::*;
+
+    #[test]
+    fn hellevator_hall_of_fame_parses_complete_records_and_ignores_extras() {
+        let data = Vals::by("2,Alice,1234,extra", ',');
+        let entry = HallOfFameHellevator::parse(&data).unwrap();
+        data.assert_all_read();
+        assert_eq!(entry.rank, 2);
+        assert_eq!(entry.name, "Alice");
+        assert_eq!(entry.tokens, 1234);
+    }
+
+    #[test]
+    fn malformed_hellevator_hall_of_fame_records_are_dropped_whole() {
+        for raw in ["", "1,Alice", "bad,Alice,100", "1,Alice,bad"] {
+            let data = Vals::by(raw, ',');
+            assert!(HallOfFameHellevator::parse(&data).is_none());
+            data.assert_all_read();
+        }
+    }
+
+    #[test]
+    fn hellevator_hall_of_fame_update_replaces_skips_empty_and_drops_malformed()
+    {
+        let mut hall_of_fames = HallOfFames {
+            hellevator: vec![HallOfFameHellevator::default()],
+            ..Default::default()
+        };
+        let data = Vals::by(
+            "1,Alice,100;;bad,Bob,200;,1,Leading,400;2,Carol,300;",
+            ';',
+        );
+        hall_of_fames.update_hellevator(&data);
+        data.assert_all_read();
+
+        assert_eq!(hall_of_fames.hellevator.len(), 2);
+        let alice = hall_of_fames.hellevator.first().unwrap();
+        assert_eq!(alice.rank, 1);
+        assert_eq!(alice.name, "Alice");
+        assert_eq!(alice.tokens, 100);
+        let carol = hall_of_fames.hellevator.get(1).unwrap();
+        assert_eq!(carol.rank, 2);
+        assert_eq!(carol.name, "Carol");
+        assert_eq!(carol.tokens, 300);
+
+        let empty = Vals::by("", ';');
+        hall_of_fames.update_hellevator(&empty);
+        empty.assert_all_read();
+        assert!(matches!(hall_of_fames.hellevator.as_slice(), []));
+    }
 }
