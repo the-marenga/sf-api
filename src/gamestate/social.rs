@@ -9,7 +9,7 @@ use num_traits::FromPrimitive;
 use super::{
     AttributeType, Class, Emblem, Flag, Item, Potion, Race, Reward, RewardType,
     SFError, ServerTime,
-    character::{Mount, Portrait},
+    character::{Character, Mount, Portrait},
     guild::GuildRank,
     items::{Equipment, ITEM_PARSE_LEN},
 };
@@ -37,6 +37,64 @@ pub struct Mail {
 }
 
 impl Mail {
+    pub(crate) fn update_news_inbox(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        self.news_inbox.clear();
+        for record in data.iter() {
+            if record.is_empty() {
+                continue;
+            }
+            let values = Vals::by(record, ',');
+            match NewsEntry::parse(&values, server_time) {
+                Ok(entry) => self.news_inbox.push(entry),
+                Err(err) => warn!("Invalid msg: {record} {err}"),
+            }
+        }
+    }
+
+    pub(crate) fn update_inbox(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        self.inbox.clear();
+        for record in data.iter() {
+            if record.is_empty() {
+                continue;
+            }
+            match InboxEntry::parse(record, server_time) {
+                Ok(entry) => self.inbox.push(entry),
+                Err(err) => warn!("Invalid msg: {record} {err}"),
+            }
+        }
+    }
+
+    pub(crate) fn update_combat_log(
+        &mut self,
+        data: &Vals<'_>,
+        server_time: ServerTime,
+    ) {
+        self.combat_log.clear();
+        for record in data.iter() {
+            let values = Vals::by(record, ',');
+            if values.values().iter().all(|value| value.is_empty()) {
+                values.ignore_all("empty combat log record");
+                continue;
+            }
+            match CombatLogEntry::parse(&values, server_time) {
+                Ok(entry) => self.combat_log.push(entry),
+                Err(err) => {
+                    warn!(
+                        "Unable to parse combat log entry: {values:?} - {err}"
+                    );
+                }
+            }
+        }
+    }
+
     pub(crate) fn update_claimables(
         &mut self,
         data: &Vals<'_>,
@@ -120,7 +178,81 @@ impl HallOfFameHellevator {
     }
 }
 
+fn update_hall_of_fame_list<T>(
+    data: &Vals<'_>,
+    entries: &mut Vec<T>,
+    parse: impl Fn(&Vals<'_>) -> Result<T, SFError>,
+) {
+    entries.clear();
+    for record in data.iter() {
+        if record.is_empty() {
+            continue;
+        }
+        let values = Vals::by(record, ',');
+        match parse(&values) {
+            Ok(entry) => entries.push(entry),
+            Err(err) => warn!("{err}"),
+        }
+    }
+}
+
+fn hall_of_fame_parse_result<T>(
+    data: &Vals<'_>,
+    result: Result<T, SFError>,
+) -> Result<T, SFError> {
+    if result.is_err() {
+        data.ignore_all("malformed hall of fame record");
+    }
+    result
+}
+
 impl HallOfFames {
+    pub(crate) fn update_players(&mut self, data: &Vals<'_>) {
+        self.players.clear();
+        for record in data.iter() {
+            if record.is_empty() {
+                continue;
+            }
+            if record.ends_with(",,,0,0,0,") {
+                data.ignore_all("unused hall of fame player records");
+                break;
+            }
+            let values = Vals::by(record, ',');
+            match HallOfFamePlayer::parse(&values) {
+                Ok(entry) => self.players.push(entry),
+                Err(err) => warn!("{err}"),
+            }
+        }
+    }
+
+    pub(crate) fn update_guilds(&mut self, data: &Vals<'_>) {
+        update_hall_of_fame_list(
+            data,
+            &mut self.guilds,
+            HallOfFameGuild::parse,
+        );
+    }
+
+    pub(crate) fn update_pets(&mut self, data: &Vals<'_>) {
+        update_hall_of_fame_list(data, &mut self.pets, HallOfFamePets::parse);
+    }
+
+    pub(crate) fn update_fortresses(&mut self, data: &Vals<'_>) {
+        update_hall_of_fame_list(
+            data,
+            &mut self.fortresses,
+            HallOfFameFortress::parse,
+        );
+    }
+
+    pub(crate) fn update_underworlds(&mut self, data: &Vals<'_>) {
+        update_hall_of_fame_list(
+            data,
+            &mut self.underworlds,
+            HallOfFameUnderworld::parse,
+        );
+    }
+
     pub(crate) fn update_hellevator(&mut self, data: &Vals<'_>) {
         self.hellevator.clear();
         for record in data.iter() {
@@ -227,35 +359,41 @@ pub struct HallOfFamePlayer {
 }
 
 impl HallOfFamePlayer {
-    pub(crate) fn parse(val: &str) -> Result<Self, SFError> {
-        let data: Vec<_> = val.split(',').collect();
-        let rank = data.cfsuget(0, "hof player rank")?;
-        let name = data.cget(1, "hof player name")?.to_string();
-        let guild = Some(data.cget(2, "hof player guild")?.to_string())
-            .filter(|a| !a.is_empty());
-        let level = data.cfsuget(3, "hof player level")?;
-        let honor = data.cfsuget(4, "hof player fame")?;
-        let class: i64 = data.cfsuget(5, "hof player class")?;
-        let Some(class) = FromPrimitive::from_i64(class - 1) else {
-            warn!("Invalid hof class: {class} - {data:?}");
-            return Err(SFError::ParsingError(
-                "hof player class",
-                class.to_string(),
-            ));
-        };
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Self, SFError> {
+        hall_of_fame_parse_result(
+            data,
+            (|| {
+                let rank = data.u32(0)?;
+                let name = data.str(1)?.to_owned();
+                let guild =
+                    Some(data.str(2)?.to_owned()).filter(|g| !g.is_empty());
+                let level = data.u32(3)?;
+                let honor = data.u32(4)?;
+                let raw_class = data.i64(5)?;
+                let mapped_class = raw_class.wrapping_sub(1);
+                let Some(class) = FromPrimitive::from_i64(mapped_class) else {
+                    warn!("Invalid hof class: {raw_class} - {data:?}");
+                    return Err(SFError::ParsingError(
+                        "hof player class",
+                        mapped_class.to_string(),
+                    ));
+                };
 
-        let raw_flag = data.get(6).copied().unwrap_or_default();
-        let flag = Flag::parse(raw_flag);
+                let raw_flag = data.get_str(6).unwrap_or_default();
+                let flag = Flag::parse(raw_flag);
+                data.ignore(7..data.len(), "extra hall of fame player values");
 
-        Ok(HallOfFamePlayer {
-            rank,
-            name,
-            guild,
-            level,
-            honor,
-            class,
-            flag,
-        })
+                Ok(Self {
+                    rank,
+                    name,
+                    guild,
+                    level,
+                    honor,
+                    class,
+                    flag,
+                })
+            })(),
+        )
     }
 }
 
@@ -279,87 +417,113 @@ pub struct HallOfFameGuild {
 }
 
 impl HallOfFameGuild {
-    pub(crate) fn parse(val: &str) -> Result<Self, SFError> {
-        let data: Vec<_> = val.split(',').collect();
-        let rank = data.cfsuget(0, "hof guild rank")?;
-        let name = data.cget(1, "hof guild name")?.to_string();
-        let leader = data.cget(2, "hof guild leader")?.to_string();
-        let member = data.cfsuget(3, "hof guild member")?;
-        let honor = data.cfsuget(4, "hof guild fame")?;
-        let attack_status: u8 = data.cfsuget(5, "hof guild atk")?;
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Self, SFError> {
+        hall_of_fame_parse_result(
+            data,
+            (|| {
+                let rank = data.u32(0)?;
+                let name = data.str(1)?.to_owned();
+                let leader = data.str(2)?.to_owned();
+                let member_count = data.u32(3)?;
+                let honor = data.u32(4)?;
+                let attack_status = data.u8(5)?;
+                data.ignore(6..data.len(), "extra hall of fame guild values");
 
-        Ok(HallOfFameGuild {
-            rank,
-            name,
-            leader,
-            member_count: member,
-            honor,
-            is_attacked: attack_status == 1u8,
-        })
+                Ok(Self {
+                    rank,
+                    name,
+                    leader,
+                    member_count,
+                    honor,
+                    is_attacked: attack_status == 1,
+                })
+            })(),
+        )
     }
 }
 
 impl HallOfFamePets {
-    pub(crate) fn parse(val: &str) -> Result<Self, SFError> {
-        let data: Vec<_> = val.split(',').collect();
-        let rank = data.cfsuget(0, "hof pet rank")?;
-        let name = data.cget(1, "hof pet player")?.to_string();
-        let guild = Some(data.cget(2, "hof pet guild")?.to_string())
-            .filter(|a| !a.is_empty());
-        let collected = data.cfsuget(3, "hof pets collected")?;
-        let honor = data.cfsuget(4, "hof pets fame")?;
-        let unknown = data.cfsuget(5, "hof pets uk")?;
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Self, SFError> {
+        hall_of_fame_parse_result(
+            data,
+            (|| {
+                let rank = data.u32(0)?;
+                let name = data.str(1)?.to_owned();
+                let guild =
+                    Some(data.str(2)?.to_owned()).filter(|g| !g.is_empty());
+                let collected = data.u32(3)?;
+                let honor = data.u32(4)?;
+                let unknown = data.i64(5)?;
+                data.ignore(6..data.len(), "extra hall of fame pet values");
 
-        Ok(HallOfFamePets {
-            name,
-            rank,
-            guild,
-            collected,
-            honor,
-            unknown,
-        })
+                Ok(Self {
+                    name,
+                    rank,
+                    guild,
+                    collected,
+                    honor,
+                    unknown,
+                })
+            })(),
+        )
     }
 }
 
 impl HallOfFameFortress {
-    pub(crate) fn parse(val: &str) -> Result<Self, SFError> {
-        let data: Vec<_> = val.split(',').collect();
-        let rank = data.cfsuget(0, "hof ft rank")?;
-        let name = data.cget(1, "hof ft player")?.to_string();
-        let guild = Some(data.cget(2, "hof ft guild")?.to_string())
-            .filter(|a| !a.is_empty());
-        let upgrade = data.cfsuget(3, "hof ft collected")?;
-        let honor = data.cfsuget(4, "hof ft fame")?;
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Self, SFError> {
+        hall_of_fame_parse_result(
+            data,
+            (|| {
+                let rank = data.u32(0)?;
+                let name = data.str(1)?.to_owned();
+                let guild =
+                    Some(data.str(2)?.to_owned()).filter(|g| !g.is_empty());
+                let upgrade = data.u32(3)?;
+                let honor = data.u32(4)?;
+                data.ignore(
+                    5..data.len(),
+                    "extra hall of fame fortress values",
+                );
 
-        Ok(HallOfFameFortress {
-            name,
-            rank,
-            guild,
-            upgrade,
-            honor,
-        })
+                Ok(Self {
+                    name,
+                    rank,
+                    guild,
+                    upgrade,
+                    honor,
+                })
+            })(),
+        )
     }
 }
 
 impl HallOfFameUnderworld {
-    pub(crate) fn parse(val: &str) -> Result<Self, SFError> {
-        let data: Vec<_> = val.split(',').collect();
-        let rank = data.cfsuget(0, "hof ft rank")?;
-        let name = data.cget(1, "hof ft player")?.to_string();
-        let guild = Some(data.cget(2, "hof ft guild")?.to_string())
-            .filter(|a| !a.is_empty());
-        let upgrade = data.cfsuget(3, "hof ft collected")?;
-        let honor = data.cfsuget(4, "hof ft fame")?;
-        let unknown = data.cfsuget(5, "hof pets uk")?;
+    pub(crate) fn parse(data: &Vals<'_>) -> Result<Self, SFError> {
+        hall_of_fame_parse_result(
+            data,
+            (|| {
+                let rank = data.u32(0)?;
+                let name = data.str(1)?.to_owned();
+                let guild =
+                    Some(data.str(2)?.to_owned()).filter(|g| !g.is_empty());
+                let upgrade = data.u32(3)?;
+                let honor = data.u32(4)?;
+                let unknown = data.i64(5)?;
+                data.ignore(
+                    6..data.len(),
+                    "extra hall of fame underworld values",
+                );
 
-        Ok(HallOfFameUnderworld {
-            rank,
-            name,
-            guild,
-            upgrade,
-            honor,
-            unknown,
-        })
+                Ok(Self {
+                    rank,
+                    name,
+                    guild,
+                    upgrade,
+                    honor,
+                    unknown,
+                })
+            })(),
+        )
     }
 }
 
@@ -526,121 +690,212 @@ pub enum Relationship {
     Friend = 1,
 }
 
+fn update_attribute_block<A: enum_map::Enum>(
+    map: &mut EnumMap<A, u32>,
+    data: &Vals<'_>,
+    start: usize,
+) -> Result<(), SFError> {
+    data.get(start)?;
+    for (idx, value) in map.values_mut().enumerate() {
+        let pos = start + idx;
+        if pos < data.len() {
+            *value = soft_into(data.i64(pos)?, "attribute val", 0);
+        }
+    }
+    Ok(())
+}
+
 impl OtherPlayer {
     pub(crate) fn update_pet_bonus(
         &mut self,
-        data: &[u32],
+        data: &Vals<'_>,
     ) -> Result<(), SFError> {
-        let atr = &mut self.attribute_pet_bonus;
-        // The order of these makes no sense. It is neither pet,
-        // nor attribute order
-        *atr.get_mut(AttributeType::Constitution) = data.cget(1, "pet con")?;
-        *atr.get_mut(AttributeType::Dexterity) = data.cget(2, "pet dex")?;
-        *atr.get_mut(AttributeType::Intelligence) = data.cget(3, "pet int")?;
-        *atr.get_mut(AttributeType::Luck) = data.cget(4, "pet luck")?;
-        *atr.get_mut(AttributeType::Strength) = data.cget(5, "pet str")?;
+        let parsed = (|| {
+            data.ignore(0, "unknown pet bonus value");
+            // The order of these makes no sense. It is neither pet,
+            // nor attribute order.
+            let constitution = data.u32(1)?;
+            let dexterity = data.u32(2)?;
+            let intelligence = data.u32(3)?;
+            let luck = data.u32(4)?;
+            let strength = data.u32(5)?;
+            data.ignore(6..data.len(), "extra pet bonus values");
+            Ok::<_, SFError>((
+                constitution,
+                dexterity,
+                intelligence,
+                luck,
+                strength,
+            ))
+        })();
+        let (constitution, dexterity, intelligence, luck, strength) =
+            match parsed {
+                Ok(values) => values,
+                Err(err) => {
+                    data.ignore_all("malformed pet bonus record");
+                    return Err(err);
+                }
+            };
+
+        let attributes = &mut self.attribute_pet_bonus;
+        *attributes.get_mut(AttributeType::Constitution) = constitution;
+        *attributes.get_mut(AttributeType::Dexterity) = dexterity;
+        *attributes.get_mut(AttributeType::Intelligence) = intelligence;
+        *attributes.get_mut(AttributeType::Luck) = luck;
+        *attributes.get_mut(AttributeType::Strength) = strength;
         Ok(())
     }
 
     pub(crate) fn update_fortress(
         &mut self,
-        data: &[i64],
+        data: &Vals<'_>,
     ) -> Result<(), SFError> {
-        let ft = self.fortress.get_or_insert_default();
-        ft.upgrade_count = data.csiget(0, "other ft upgrades", 0)?;
-        ft.fortifications_level =
-            data.csiget(1, "other soldier fortifications", 0)?;
-        ft.archer_count = data.csiget(2, "other mage count", 0)?;
-        ft.mage_count = data.csiget(3, "other soldier advice", 0)?;
-        ft.lootable_wood = data.csiget(4, "other lootable wood", 0)?;
-        ft.lootable_stone = data.csiget(5, "other lootable stone", 0)?;
+        let parsed = (|| {
+            let upgrades = data.i64(0)?;
+            let fortifications = data.i64(1)?;
+            let archers = data.i64(2)?;
+            let mages = data.i64(3)?;
+            let wood = data.i64(4)?;
+            let stone = data.i64(5)?;
+            data.ignore(6..data.len(), "extra other-player fortress values");
+            Ok::<_, SFError>((
+                upgrades,
+                fortifications,
+                archers,
+                mages,
+                wood,
+                stone,
+            ))
+        })();
+        let (upgrades, fortifications, archers, mages, wood, stone) =
+            match parsed {
+                Ok(values) => values,
+                Err(err) => {
+                    data.ignore_all("malformed other-player fortress record");
+                    return Err(err);
+                }
+            };
+
+        let mut fortress = self.fortress.clone().unwrap_or_default();
+        fortress.upgrade_count = soft_into(upgrades, "other ft upgrades", 0);
+        fortress.fortifications_level =
+            soft_into(fortifications, "other soldier fortifications", 0);
+        fortress.archer_count = soft_into(archers, "other mage count", 0);
+        fortress.mage_count = soft_into(mages, "other soldier advice", 0);
+        fortress.lootable_wood = soft_into(wood, "other lootable wood", 0);
+        fortress.lootable_stone = soft_into(stone, "other lootable stone", 0);
+        self.fortress = Some(fortress);
         Ok(())
     }
 
     pub(crate) fn update(
         &mut self,
-        data: &[i64],
+        data: &Vals<'_>,
         server_time: ServerTime,
     ) -> Result<(), SFError> {
-        // 0
-        self.player_id = data.csiget(1, "player id", 0)?;
-        // 0
-        self.level = data.csimget(3, "level", 0, |a| a & 0xFFFF)?;
-        self.experience = data.csiget(4, "experience", 0)?;
-        self.next_level_xp = data.csiget(5, "xp to next lvl", 0)?;
-        self.honor = data.csiget(6, "honor", 0)?;
-        self.rank = data.csiget(7, "rank", 0)?;
-        self.portrait =
-            Portrait::parse(data.skip(8, "portrait")?).unwrap_or_default();
-        //////// portrait
-        // 4
-        // 206
-        // 203
-        // 2
-        // 0
-        // 2
-        // 7
-        // 2
-        // 0
-        // 0
-        self.race = data.cfpuget(18, "char race", |a| a)?;
-        // 2
-        //////
-        self.class = data.cfpuget(20, "character class", |a| a - 1)?;
-        self.mount = data.cfpget(21, "character mount", |a| a & 0xFF)?;
-        // 3
-        // 0
-        self.armor = data.csiget(23, "total armor", 0)?;
-        self.min_damage = data.csiget(24, "min damage", 0)?;
-        self.max_damage = data.csiget(25, "max damage", 0)?;
-        self.portal_dmg_bonus = data.cimget(26, "portal dmg bonus", |a| a)?;
-        // 4280492      // ???
-        self.portal_hp_bonus = data.csimget(28, "portal hp bonus", 0, |a| a)?;
-        self.mount_end = data.cstget(29, "mount end", server_time)?;
-        update_enum_map(
-            &mut self.attribute_basis,
-            data.skip(30, "char attr basis")?,
-        );
-        update_enum_map(
-            &mut self.attribute_additions,
-            data.skip(35, "char attr adds")?,
-        );
-        update_enum_map(
-            &mut self.attribute_times_bought,
-            data.skip(40, "char attr tb")?,
-        );
-        // 0
-        // 0
-        // 0
-        // 0
-        // 0
-        // 17
-        // 0
-        // 0
-        // 0
-        // 66
-        // 0
-        // 7
-        // 18
-        // 0
-        // 0
-        // 0
-        // 0
-        // 0
-        // 0
-        // 0
+        let mut updated = self.clone();
+        let parsed = (|| -> Result<(), SFError> {
+            data.ignore(0, "unknown other-player save value");
+            updated.player_id = soft_into(data.i64(1)?, "player id", 0);
+            data.ignore(2, "unknown other-player save value");
+            updated.level = soft_into(data.i64(3)? & 0xffff, "level", 0);
+            updated.experience = soft_into(data.i64(4)?, "experience", 0);
+            updated.next_level_xp =
+                soft_into(data.i64(5)?, "xp to next lvl", 0);
+            updated.honor = soft_into(data.i64(6)?, "honor", 0);
+            updated.rank = soft_into(data.i64(7)?, "rank", 0);
+            updated.portrait = Portrait::parse_vals(&data.window(8..20));
 
-        // 80315 // guild id
-        let sb_count = data.cget(66, "scrapbook count")?;
-        if sb_count >= 10000 {
-            self.scrapbook_count =
-                Some(soft_into(sb_count - 10000, "scrapbook count", 0));
+            let raw_race = data.i64(18)?;
+            updated.race =
+                FromPrimitive::from_i64(raw_race).ok_or_else(|| {
+                    SFError::ParsingError("char race", raw_race.to_string())
+                })?;
+            let raw_class = data.i64(20)?;
+            let mapped_class = raw_class.wrapping_sub(1);
+            updated.class =
+                FromPrimitive::from_i64(mapped_class).ok_or_else(|| {
+                    SFError::ParsingError(
+                        "character class",
+                        mapped_class.to_string(),
+                    )
+                })?;
+
+            let raw_mount = data.i64(21)?;
+            let masked_mount = raw_mount & 0xff;
+            updated.mount = FromPrimitive::from_i64(masked_mount);
+            if updated.mount.is_none() && !matches!(masked_mount, 0 | -1) {
+                warn!("There might be a new character mount -> {masked_mount}");
+            }
+
+            data.ignore(22, "unknown other-player save value");
+            updated.armor = soft_into(data.i64(23)?, "total armor", 0);
+            updated.min_damage = soft_into(data.i64(24)?, "min damage", 0);
+            updated.max_damage = soft_into(data.i64(25)?, "max damage", 0);
+            let raw_portal_damage = data.i64(26)?;
+            updated.portal_dmg_bonus = u32::try_from(raw_portal_damage)
+                .map_err(|_| {
+                    SFError::ParsingError(
+                        "portal dmg bonus",
+                        raw_portal_damage.to_string(),
+                    )
+                })?;
+            data.ignore(27, "unknown other-player save value");
+            updated.portal_hp_bonus =
+                soft_into(data.i64(28)?, "portal hp bonus", 0);
+            updated.mount_end = data.server_time(29, server_time)?;
+
+            update_attribute_block(&mut updated.attribute_basis, data, 30)?;
+            update_attribute_block(&mut updated.attribute_additions, data, 35)?;
+            update_attribute_block(
+                &mut updated.attribute_times_bought,
+                data,
+                40,
+            )?;
+
+            let scrapbook_count = data.i64(66)?;
+            if scrapbook_count >= 10000 {
+                updated.scrapbook_count = Some(soft_into(
+                    scrapbook_count - 10000,
+                    "scrapbook count",
+                    0,
+                ));
+            }
+            updated.gladiator_lvl =
+                soft_into(data.i64(69)?, "gladiator lvl", 0);
+
+            data.ignore(45..66, "unmodelled other-player save values");
+            data.ignore(67..69, "unmodelled other-player save values");
+            data.ignore(70..data.len(), "extra other-player save values");
+            Ok(())
+        })();
+        if let Err(err) = parsed {
+            data.ignore_all("malformed other-player save record");
+            return Err(err);
         }
-        // 0
-        // 31
-        self.gladiator_lvl = data.csiget(69, "gladiator lvl", 0)?;
-
+        *self = updated;
         Ok(())
+    }
+
+    pub(crate) fn update_unit_levels(
+        &mut self,
+        data: &Vals<'_>,
+    ) -> Result<(), SFError> {
+        let parsed = (|| {
+            let level = soft_into(data.i64(0)?, "wall_lvl", 0);
+            data.ignore(1..data.len(), "extra other-player unit levels");
+            Ok::<_, SFError>(level)
+        })();
+        match parsed {
+            Ok(level) => {
+                self.wall_combat_lvl = level;
+                Ok(())
+            }
+            Err(err) => {
+                data.ignore_all("malformed other-player unit levels");
+                Err(err)
+            }
+        }
     }
 }
 
@@ -687,29 +942,40 @@ pub struct CombatLogEntry {
 
 impl CombatLogEntry {
     pub(crate) fn parse(
-        data: &[&str],
+        data: &Vals<'_>,
         server_time: ServerTime,
     ) -> Result<CombatLogEntry, SFError> {
-        let msg_id = data.cfsuget(0, "combat msg_id")?;
-        let battle_t: i64 = data.cfsuget(3, "battle t")?;
-        let time_stamp: i64 = data.cfsuget(4, "combat log time")?;
-        let time = server_time
-            .convert_to_local(time_stamp, "combat time")
-            .ok_or_else(|| {
-                SFError::ParsingError("combat time", time_stamp.to_string())
+        let result = (|| {
+            let msg_id = data.i64(0)?;
+            let player_name = data.str(1)?.to_owned();
+            let won = data.str(2)? == "1";
+            let battle_type = data.i64(3)?;
+            let timestamp = data.i64(4)?;
+            let time = server_time
+                .convert_to_local(timestamp, "combat time")
+                .ok_or_else(|| {
+                SFError::ParsingError("combat time", timestamp.to_string())
             })?;
-
-        let mt = FromPrimitive::from_i64(battle_t).ok_or_else(|| {
-            SFError::ParsingError("combat mt", format!("{battle_t} @ {time:?}"))
-        })?;
-
-        Ok(CombatLogEntry {
-            msg_id,
-            player_name: data.cget(1, "clog player")?.to_string(),
-            won: data.cget(2, "clog won")? == "1",
-            battle_type: mt,
-            time,
-        })
+            let battle_type =
+                FromPrimitive::from_i64(battle_type).ok_or_else(|| {
+                    SFError::ParsingError(
+                        "combat mt",
+                        format!("{battle_type} @ {time:?}"),
+                    )
+                })?;
+            data.ignore(5..data.len(), "extra combat log values");
+            Ok(Self {
+                msg_id,
+                player_name,
+                won,
+                battle_type,
+                time,
+            })
+        })();
+        if result.is_err() {
+            data.ignore_all("malformed combat log record");
+        }
+        result
     }
 }
 
@@ -786,25 +1052,36 @@ pub struct NewsEntry {
 
 impl NewsEntry {
     pub(crate) fn parse(
-        msg: &str,
+        data: &Vals<'_>,
         server_time: ServerTime,
     ) -> Result<NewsEntry, SFError> {
-        let parts = msg.splitn(4, ',').collect::<Vec<_>>();
-        let title = parts.cget(1, "news title")?;
-        let Ok(ts) = parts.cget(2, "news timestamp")?.parse::<i64>() else {
-            return Err(SFError::ParsingError("invalid news ts", msg.into()));
-        };
-
-        let Some(date) = server_time.convert_to_local(ts, "msg_date") else {
-            return Err(SFError::ParsingError("msg date", ts.to_string()));
-        };
-
-        Ok(NewsEntry {
-            news_id: ts,
-            date,
-            title: from_sf_string(title),
-            read: parts.cget(0, "inbox read")? == "1",
-        })
+        let result = (|| {
+            let read = data.str(0)? == "1";
+            let title = from_sf_string(data.str(1)?);
+            let raw_timestamp = data.get(2)?;
+            let Ok(timestamp) = raw_timestamp.parse::<i64>() else {
+                return Err(SFError::ParsingError(
+                    "invalid news ts",
+                    raw_timestamp.to_owned(),
+                ));
+            };
+            let published_at = server_time
+                .convert_to_local(timestamp, "msg_date")
+                .ok_or_else(|| {
+                    SFError::ParsingError("msg date", timestamp.to_string())
+                })?;
+            data.ignore(3..data.len(), "extra news values");
+            Ok(Self {
+                news_id: timestamp,
+                date: published_at,
+                title,
+                read,
+            })
+        })();
+        if result.is_err() {
+            data.ignore_all("malformed news record");
+        }
+        result
     }
 }
 
@@ -838,43 +1115,139 @@ pub struct OtherGuildMember {
     pub pet_lvl: u16,
     pub last_active: Option<DateTime<Local>>,
 }
+fn required_guild_i64(data: &Vals<'_>, pos: usize) -> Result<i64, SFError> {
+    Ok(data.str(pos)?.parse().unwrap_or_default())
+}
+
 impl OtherGuild {
     pub(crate) fn update(
         &mut self,
-        val: &str,
+        data: &Vals<'_>,
         server_time: ServerTime,
     ) -> Result<(), SFError> {
-        let data: Vec<_> = val
-            .split('/')
-            .map(|c| c.trim().parse::<i64>().unwrap_or_default())
-            .collect();
-
-        self.member_count = data.csiget(3, "member count", 0)?;
-        let member_count = self.member_count as usize;
-        self.finished_raids = data.csiget(8, "raid count", 0)?;
-        self.honor = data.csiget(13, "other guild honor", 0)?;
-
-        self.members.resize_with(member_count, Default::default);
-
-        for (i, member) in &mut self.members.iter_mut().enumerate() {
-            member.level =
-                data.csiget(64 + i, "other guild member level", 0)?;
-            member.last_active =
-                data.cstget(114 + i, "other guild member active", server_time)?;
-            member.treasure_lvl =
-                data.csiget(214 + i, "other guild member treasure levels", 0)?;
-            member.instructor_lvl = data.csiget(
-                264 + i,
-                "other guild member instructor levels",
+        let mut updated = self.clone();
+        let parsed = (|| -> Result<(), SFError> {
+            updated.member_count =
+                soft_into(required_guild_i64(data, 3)?, "member count", 0);
+            let member_count = usize::from(updated.member_count);
+            updated.finished_raids =
+                soft_into(required_guild_i64(data, 8)?, "raid count", 0);
+            updated.honor = soft_into(
+                required_guild_i64(data, 13)?,
+                "other guild honor",
                 0,
-            )?;
-            member.rank = data
-                .cfpget(314 + i, "other guild member ranks", |q| q)?
-                .unwrap_or_default();
-            member.pet_lvl =
-                data.csiget(390 + i, "other guild pet levels", 0)?;
+            );
+
+            updated.members.resize_with(member_count, Default::default);
+            for (idx, member) in updated.members.iter_mut().enumerate() {
+                member.level = soft_into(
+                    required_guild_i64(data, 64 + idx)?,
+                    "other guild member level",
+                    0,
+                );
+                member.last_active = server_time.convert_to_local(
+                    required_guild_i64(data, 114 + idx)?,
+                    "other guild member active",
+                );
+                member.treasure_lvl = soft_into(
+                    required_guild_i64(data, 214 + idx)?,
+                    "other guild member treasure levels",
+                    0,
+                );
+                member.instructor_lvl = soft_into(
+                    required_guild_i64(data, 264 + idx)?,
+                    "other guild member instructor levels",
+                    0,
+                );
+                let raw_rank = required_guild_i64(data, 314 + idx)?;
+                member.rank =
+                    FromPrimitive::from_i64(raw_rank).unwrap_or_else(|| {
+                        if !matches!(raw_rank, 0 | -1) {
+                            warn!(
+                                "There might be a new other guild member \
+                                 ranks -> {raw_rank}"
+                            );
+                        }
+                        GuildRank::Member
+                    });
+                member.pet_lvl = soft_into(
+                    required_guild_i64(data, 390 + idx)?,
+                    "other guild pet levels",
+                    0,
+                );
+            }
+
+            data.ignore_unmodelled(
+                &[
+                    0..3,
+                    4..8,
+                    9..13,
+                    14..64,
+                    164..214,
+                    364..390,
+                    64 + member_count..114,
+                    114 + member_count..164,
+                    214 + member_count..264,
+                    264 + member_count..314,
+                    314 + member_count..364,
+                    390 + member_count..data.len(),
+                ],
+                "unmodelled other guild values",
+            );
+            Ok(())
+        })();
+        if let Err(err) = parsed {
+            data.ignore_all("malformed other guild record");
+            return Err(err);
         }
+        *self = updated;
         Ok(())
+    }
+
+    pub(crate) fn update_member_names(&mut self, data: &Vals<'_>) {
+        self.members.resize_with(data.len(), Default::default);
+        for (member, name) in self.members.iter_mut().zip(data.iter()) {
+            name.clone_into(&mut member.name);
+        }
+    }
+}
+
+impl Character {
+    pub(crate) fn update_relations(&mut self, data: &Vals<'_>) {
+        self.relations.clear();
+        for record in data.iter() {
+            if record.is_empty() {
+                continue;
+            }
+            let values = Vals::by(record, ',');
+            let parsed = (|| {
+                let id = values.u32(0)?;
+                let name = values.str(1)?.to_owned();
+                let guild = values.str(2)?.to_owned();
+                let level = values.u16(3)?;
+                let relation = match values.str(4)? {
+                    "-1" => Some(Relationship::Ignored),
+                    "1" => Some(Relationship::Friend),
+                    _ => None,
+                };
+                values.ignore(5..values.len(), "extra friendslist values");
+                Ok::<_, SFError>(relation.map(|relation| RelationEntry {
+                    id,
+                    name,
+                    guild,
+                    level,
+                    relation,
+                }))
+            })();
+            match parsed {
+                Ok(Some(entry)) => self.relations.push(entry),
+                Ok(None) => {}
+                Err(_) => {
+                    values.ignore_all("malformed friendslist record");
+                    warn!("bad friendslist entry: {record}");
+                }
+            }
+        }
     }
 }
 
@@ -1003,6 +1376,7 @@ mod tests {
     #![allow(clippy::unwrap_used, clippy::indexing_slicing)]
 
     use super::*;
+    use crate::gamestate::character::Gender;
 
     fn local_time(timestamp: i64) -> DateTime<Local> {
         DateTime::from_timestamp(timestamp, 0)
@@ -1011,6 +1385,68 @@ mod tests {
             .and_local_timezone(Local)
             .latest()
             .unwrap()
+    }
+
+    fn other_player_values() -> Vec<String> {
+        let mut values = vec!["0".to_owned(); 70];
+        values[0] = "ignored".to_owned();
+        values[1] = "123456".to_owned();
+        values[2] = "ignored".to_owned();
+        values[3] = "1048618".to_owned();
+        values[4] = "9000000000".to_owned();
+        values[5] = "12345678".to_owned();
+        values[6] = "4321".to_owned();
+        values[7] = "17".to_owned();
+        values[8] = "4".to_owned();
+        values[9] = "206".to_owned();
+        values[10] = "103".to_owned();
+        values[11] = "2".to_owned();
+        values[12] = "104".to_owned();
+        values[13] = "5".to_owned();
+        values[14] = "6".to_owned();
+        values[15] = "7".to_owned();
+        values[16] = "108".to_owned();
+        values[17] = "9".to_owned();
+        values[18] = "3".to_owned();
+        values[19] = "1".to_owned();
+        values[20] = "4".to_owned();
+        values[21] = "260".to_owned();
+        values[22] = "ignored".to_owned();
+        values[23] = "98765".to_owned();
+        values[24] = "123".to_owned();
+        values[25] = "456".to_owned();
+        values[26] = "12".to_owned();
+        values[27] = "ignored".to_owned();
+        values[28] = "345".to_owned();
+        values[29] = "1700000029".to_owned();
+        for (idx, value) in values.iter_mut().enumerate().take(45).skip(30) {
+            *value = (idx - 29).to_string();
+        }
+        values[45..66].fill("ignored".to_owned());
+        values[66] = "10042".to_owned();
+        values[67..69].fill("ignored".to_owned());
+        values[69] = "31".to_owned();
+        values
+    }
+
+    fn other_guild_values() -> Vec<String> {
+        let mut values = vec!["0".to_owned(); 392];
+        values[3] = "2".to_owned();
+        values[8] = "53".to_owned();
+        values[13] = "1288".to_owned();
+        values[64] = "248".to_owned();
+        values[65] = "365".to_owned();
+        values[114] = "1700000001".to_owned();
+        values[115] = "1700000002".to_owned();
+        values[214] = "28".to_owned();
+        values[215] = "31".to_owned();
+        values[264] = "31".to_owned();
+        values[265] = "55".to_owned();
+        values[314] = "1".to_owned();
+        values[315] = "2".to_owned();
+        values[390] = "190".to_owned();
+        values[391] = "180".to_owned();
+        values
     }
 
     #[test]
@@ -1144,5 +1580,690 @@ mod tests {
         data.assert_all_read();
         assert_eq!(preview.items.len(), 1);
         assert_eq!(preview.items[0].typ, ItemType::Hat);
+    }
+
+    #[test]
+    fn hall_of_fame_parsers_read_required_fields_and_ignore_tails() {
+        let players = Vals::by("1,Alice,,42,99,1,de,extra", ',');
+        let player = HallOfFamePlayer::parse(&players).unwrap();
+        players.assert_all_read();
+        assert_eq!(player.rank, 1);
+        assert_eq!(player.name, "Alice");
+        assert_eq!(player.guild, None);
+        assert_eq!(player.level, 42);
+        assert_eq!(player.honor, 99);
+        assert_eq!(player.class, Class::Warrior);
+        assert_eq!(player.flag, Some(Flag::Germany));
+
+        let players = Vals::by("2,Bob,Guild,12,34,2", ',');
+        let player = HallOfFamePlayer::parse(&players).unwrap();
+        players.assert_all_read();
+        assert_eq!(player.guild.as_deref(), Some("Guild"));
+        assert_eq!(player.class, Class::Mage);
+        assert_eq!(player.flag, None);
+
+        let guilds = Vals::by("3,Guild,Leader,4,500,1,extra", ',');
+        let guild = HallOfFameGuild::parse(&guilds).unwrap();
+        guilds.assert_all_read();
+        assert_eq!(guild.rank, 3);
+        assert_eq!(guild.name, "Guild");
+        assert_eq!(guild.leader, "Leader");
+        assert_eq!(guild.member_count, 4);
+        assert_eq!(guild.honor, 500);
+        assert!(guild.is_attacked);
+
+        let pets = Vals::by("4,PetOwner,Guild,20,600,-7,extra", ',');
+        let pets_entry = HallOfFamePets::parse(&pets).unwrap();
+        pets.assert_all_read();
+        assert_eq!(pets_entry.rank, 4);
+        assert_eq!(pets_entry.name, "PetOwner");
+        assert_eq!(pets_entry.guild.as_deref(), Some("Guild"));
+        assert_eq!(pets_entry.collected, 20);
+        assert_eq!(pets_entry.honor, 600);
+        assert_eq!(pets_entry.unknown, -7);
+
+        let fortresses = Vals::by("5,FortOwner,,30,700,extra", ',');
+        let fortress = HallOfFameFortress::parse(&fortresses).unwrap();
+        fortresses.assert_all_read();
+        assert_eq!(fortress.rank, 5);
+        assert_eq!(fortress.name, "FortOwner");
+        assert_eq!(fortress.guild, None);
+        assert_eq!(fortress.upgrade, 30);
+        assert_eq!(fortress.honor, 700);
+
+        let underworlds = Vals::by("6,UWOwner,Guild,40,800,9,extra", ',');
+        let underworld = HallOfFameUnderworld::parse(&underworlds).unwrap();
+        underworlds.assert_all_read();
+        assert_eq!(underworld.rank, 6);
+        assert_eq!(underworld.name, "UWOwner");
+        assert_eq!(underworld.guild.as_deref(), Some("Guild"));
+        assert_eq!(underworld.upgrade, 40);
+        assert_eq!(underworld.honor, 800);
+        assert_eq!(underworld.unknown, 9);
+    }
+
+    #[test]
+    fn malformed_hall_of_fame_records_are_consumed_and_rejected_whole() {
+        for raw in [
+            "",
+            "1,Alice",
+            "bad,Alice,Guild,42,99,1,de",
+            "1,Alice,Guild,bad,99,1,de",
+            "1,Alice,Guild,42,bad,1,de",
+            "1,Alice,Guild,42,99,bad,de",
+            "1,Alice,Guild,42,99,0,de",
+        ] {
+            let data = Vals::by(raw, ',');
+            assert!(HallOfFamePlayer::parse(&data).is_err());
+            data.assert_all_read();
+        }
+        for raw in [
+            "",
+            "1,Guild,Leader,2,30",
+            "1,Guild,Leader,bad,30,1",
+            "1,Guild,Leader,2,bad,1",
+            "1,Guild,Leader,2,30,256",
+        ] {
+            let data = Vals::by(raw, ',');
+            assert!(HallOfFameGuild::parse(&data).is_err());
+            data.assert_all_read();
+        }
+        for raw in [
+            "",
+            "1,Alice,Guild,20",
+            "1,Alice,Guild,bad,600,1",
+            "1,Alice,Guild,20,600,bad",
+        ] {
+            let data = Vals::by(raw, ',');
+            assert!(HallOfFamePets::parse(&data).is_err());
+            data.assert_all_read();
+        }
+        for raw in [
+            "",
+            "1,Alice,Guild,30",
+            "bad,Alice,Guild,30,700",
+            "1,Alice,Guild,bad,700",
+            "1,Alice,Guild,30,bad",
+        ] {
+            let data = Vals::by(raw, ',');
+            assert!(HallOfFameFortress::parse(&data).is_err());
+            data.assert_all_read();
+        }
+        for raw in [
+            "",
+            "1,Alice,Guild,40",
+            "1,Alice,Guild,bad,800,9",
+            "1,Alice,Guild,40,bad,9",
+            "1,Alice,Guild,40,800,bad",
+        ] {
+            let data = Vals::by(raw, ',');
+            assert!(HallOfFameUnderworld::parse(&data).is_err());
+            data.assert_all_read();
+        }
+
+        let data = Vals::by("1,Alice,Guild,42,99,0,de", ',');
+        let err = HallOfFamePlayer::parse(&data).unwrap_err();
+        data.assert_all_read();
+        assert!(matches!(err, SFError::ParsingError(name, value)
+            if name == "hof player class" && value == "-1"));
+    }
+
+    #[test]
+    fn hall_of_fame_player_update_stops_at_terminator_and_drops_bad_records() {
+        let mut hof = HallOfFames {
+            players: vec![HallOfFamePlayer::default()],
+            ..Default::default()
+        };
+        let data = Vals::by(
+            "1,Alice,Guild,42,99,1,de;;bad;2,Bob,,12,34,2;9,Stop,,,,0,0,0,;10,\
+             After,,,,0,0,0,",
+            ';',
+        );
+        hof.update_players(&data);
+        data.assert_all_read();
+        assert_eq!(hof.players.len(), 2);
+        assert_eq!(hof.players[0].name, "Alice");
+        assert_eq!(hof.players[1].name, "Bob");
+    }
+
+    #[test]
+    fn all_other_hall_of_fame_updates_replace_and_drop_malformed_records() {
+        let mut hof = HallOfFames {
+            guilds: vec![HallOfFameGuild::default()],
+            pets: vec![HallOfFamePets::default()],
+            fortresses: vec![HallOfFameFortress::default()],
+            underworlds: vec![HallOfFameUnderworld::default()],
+            ..Default::default()
+        };
+
+        let guilds = Vals::by(
+            "1,Guild,Leader,2,30,1;;bad,Missing,Fields;2,Other,Lead,1,20",
+            ';',
+        );
+        hof.update_guilds(&guilds);
+        guilds.assert_all_read();
+        assert_eq!(hof.guilds.len(), 1);
+        assert_eq!(hof.guilds[0].name, "Guild");
+
+        let pets = Vals::by("1,Alice,Guild,20,600,1;;bad;2,Bob,,10,300", ';');
+        hof.update_pets(&pets);
+        pets.assert_all_read();
+        assert_eq!(hof.pets.len(), 1);
+        assert_eq!(hof.pets[0].name, "Alice");
+
+        let fortresses =
+            Vals::by("1,Alice,Guild,30,700;;bad,Missing;2,Bob,,20", ';');
+        hof.update_fortresses(&fortresses);
+        fortresses.assert_all_read();
+        assert_eq!(hof.fortresses.len(), 1);
+        assert_eq!(hof.fortresses[0].name, "Alice");
+
+        let underworlds =
+            Vals::by("1,Alice,Guild,40,800,9;;bad,Missing;2,Bob,,20,500", ';');
+        hof.update_underworlds(&underworlds);
+        underworlds.assert_all_read();
+        assert_eq!(hof.underworlds.len(), 1);
+        assert_eq!(hof.underworlds[0].name, "Alice");
+
+        let empty = Vals::by("", ';');
+        hof.update_guilds(&empty);
+        hof.update_pets(&empty);
+        hof.update_fortresses(&empty);
+        hof.update_underworlds(&empty);
+        empty.assert_all_read();
+        assert!(hof.guilds.is_empty());
+        assert!(hof.pets.is_empty());
+        assert!(hof.fortresses.is_empty());
+        assert!(hof.underworlds.is_empty());
+    }
+
+    #[test]
+    fn friendslist_keeps_only_ignored_and_friend_relations() {
+        let mut character = Character {
+            relations: vec![RelationEntry::default()],
+            ..Default::default()
+        };
+        let data = Vals::by(
+            "1,Alice,Guild,10,-1,extra;;2,Bob,H,11,0;3,Carol,I,12,1;4,Dave,J,\
+             13,2;bad,entry",
+            ';',
+        );
+        character.update_relations(&data);
+        data.assert_all_read();
+
+        assert_eq!(character.relations.len(), 2);
+        assert_eq!(character.relations[0].id, 1);
+        assert_eq!(character.relations[0].name, "Alice");
+        assert_eq!(character.relations[0].guild, "Guild");
+        assert_eq!(character.relations[0].level, 10);
+        assert_eq!(character.relations[0].relation, Relationship::Ignored);
+        assert_eq!(character.relations[1].id, 3);
+        assert_eq!(character.relations[1].relation, Relationship::Friend);
+    }
+
+    #[test]
+    fn news_entries_parse_timestamps_and_drop_malformed_records() {
+        let data = Vals::by("1,Title$CWithComma,1700000000,extra", ',');
+        let entry = NewsEntry::parse(&data, ServerTime::default()).unwrap();
+        data.assert_all_read();
+        assert_eq!(entry.news_id, 1_700_000_000);
+        assert_eq!(entry.title, "Title,WithComma");
+        assert_eq!(entry.date, local_time(1_700_000_000));
+        assert!(entry.read);
+
+        for raw in ["1,Title", "1,Title,bad", "1,Title,0", "Title,1700000000"] {
+            let data = Vals::by(raw, ',');
+            assert!(NewsEntry::parse(&data, ServerTime::default()).is_err());
+            data.assert_all_read();
+        }
+
+        let mut mail = Mail {
+            news_inbox: vec![NewsEntry {
+                news_id: 0,
+                title: "old".to_owned(),
+                date: local_time(1_700_000_000),
+                read: false,
+            }],
+            ..Default::default()
+        };
+        let records = Vals::by(
+            "0,Good,1700000001;;1,Bad,bad;1,Invalid,0;1,AlsoGood,1700000002",
+            ';',
+        );
+        mail.update_news_inbox(&records, ServerTime::default());
+        records.assert_all_read();
+        assert_eq!(mail.news_inbox.len(), 2);
+        assert_eq!(mail.news_inbox[0].title, "Good");
+        assert!(!mail.news_inbox[0].read);
+        assert_eq!(mail.news_inbox[1].title, "AlsoGood");
+    }
+
+    #[test]
+    fn inbox_entries_preserve_comma_titles_spaces_types_and_read_state() {
+        let server_time = ServerTime::default();
+        let comma = InboxEntry::parse(
+            "42,Alice,1,Hello, world,1700000000",
+            server_time,
+        )
+        .unwrap();
+        assert_eq!(comma.msg_id, 42);
+        assert_eq!(comma.from, "Alice");
+        assert_eq!(comma.title, "Hello, world");
+        assert!(comma.read);
+        assert!(matches!(comma.msg_typ, MessageType::Normal));
+
+        let spaces =
+            InboxEntry::parse("43,Bob,0,   ,1700000000", server_time).unwrap();
+        assert_eq!(spaces.title, "   ");
+        assert!(!spaces.read);
+        assert!(matches!(spaces.msg_typ, MessageType::Normal));
+
+        let kicked =
+            InboxEntry::parse("44,Carol,2,3,1700000000", server_time).unwrap();
+        assert!(matches!(kicked.msg_typ, MessageType::GuildKicked));
+        assert!(kicked.read);
+
+        let invited =
+            InboxEntry::parse("45,Dave,0,5,1700000000", server_time).unwrap();
+        assert!(matches!(invited.msg_typ, MessageType::GuildInvite));
+        assert!(!invited.read);
+
+        assert!(
+            InboxEntry::parse("46,Erin,1,,1700000000", server_time).is_err()
+        );
+
+        let mut mail = Mail {
+            inbox: vec![InboxEntry {
+                msg_typ: MessageType::Normal,
+                from: "old".to_owned(),
+                msg_id: 0,
+                title: "old".to_owned(),
+                date: local_time(1_700_000_000),
+                read: false,
+            }],
+            ..Default::default()
+        };
+        let records = Vals::by(
+            "42,Alice,1,Hello, \
+             world,1700000000;;43,Bob,0,,1700000000;44,Carol,0,Valid,\
+             1700000001",
+            ';',
+        );
+        mail.update_inbox(&records, server_time);
+        records.assert_all_read();
+        assert_eq!(mail.inbox.len(), 2);
+        assert_eq!(mail.inbox[0].title, "Hello, world");
+        assert_eq!(mail.inbox[1].title, "Valid");
+    }
+
+    #[test]
+    fn combat_log_parses_known_types_and_consumes_all_tail_values() {
+        let data = Vals::by("7,Alice,1,2,1700000000,extra,more", ',');
+        let entry =
+            CombatLogEntry::parse(&data, ServerTime::default()).unwrap();
+        data.assert_all_read();
+        assert_eq!(entry.msg_id, 7);
+        assert_eq!(entry.player_name, "Alice");
+        assert!(entry.won);
+        assert!(matches!(entry.battle_type, CombatMessageType::GuildFight));
+        assert_eq!(entry.time, local_time(1_700_000_000));
+
+        let unknown = Vals::by("8,Bob,0,999,1700000000,tail", ',');
+        let err =
+            CombatLogEntry::parse(&unknown, ServerTime::default()).unwrap_err();
+        unknown.assert_all_read();
+        assert!(matches!(err, SFError::ParsingError(name, value)
+            if name == "combat mt" && value.contains("999 @")));
+
+        let bad_time = Vals::by("9,Bob,0,2,0,tail", ',');
+        let err = CombatLogEntry::parse(&bad_time, ServerTime::default())
+            .unwrap_err();
+        bad_time.assert_all_read();
+        assert!(matches!(err, SFError::ParsingError(name, _)
+            if name == "combat time"));
+    }
+
+    #[test]
+    fn combat_log_update_skips_all_empty_records_and_drops_malformed_ones() {
+        let mut mail = Mail {
+            combat_log: vec![CombatLogEntry {
+                msg_id: 0,
+                player_name: "old".to_owned(),
+                won: false,
+                battle_type: CombatMessageType::Arena,
+                time: local_time(1_700_000_000),
+            }],
+            ..Default::default()
+        };
+        let empty = Vals::by(",,,,;,,;;;,", ';');
+        mail.update_combat_log(&empty, ServerTime::default());
+        empty.assert_all_read();
+        assert!(mail.combat_log.is_empty());
+
+        let records = Vals::by(
+            "7,Alice,1,2,1700000000,extra;;bad;8,Bob,0,999,1700000000;9,Carol,\
+             0,3,1700000001,tail",
+            ';',
+        );
+        mail.update_combat_log(&records, ServerTime::default());
+        records.assert_all_read();
+        assert_eq!(mail.combat_log.len(), 2);
+        assert_eq!(mail.combat_log[0].player_name, "Alice");
+        assert_eq!(mail.combat_log[1].player_name, "Carol");
+    }
+
+    #[test]
+    fn other_player_update_parses_a_full_seventy_value_save() {
+        let server_time = ServerTime(3600);
+        let raw = other_player_values().join("/");
+        let data = Vals::from(raw.as_str());
+        assert_eq!(data.len(), 70);
+        let mut player = OtherPlayer::default();
+        player.update(&data, server_time).unwrap();
+        data.assert_all_read();
+
+        assert_eq!(player.player_id, 123_456);
+        assert_eq!(player.level, 42);
+        assert_eq!(player.experience, 9_000_000_000);
+        assert_eq!(player.next_level_xp, 12_345_678);
+        assert_eq!(player.honor, 4_321);
+        assert_eq!(player.rank, 17);
+        assert_eq!(player.race, Race::Dwarf);
+        assert_eq!(player.class, Class::Assassin);
+        assert_eq!(player.mount, Some(Mount::Dragon));
+        assert_eq!(player.armor, 98_765);
+        assert_eq!(player.min_damage, 123);
+        assert_eq!(player.max_damage, 456);
+        assert_eq!(player.portal_dmg_bonus, 12);
+        assert_eq!(player.portal_hp_bonus, 345);
+        assert_eq!(player.scrapbook_count, Some(42));
+        assert_eq!(player.gladiator_lvl, 31);
+        assert_eq!(
+            player.mount_end,
+            server_time.convert_to_local(1_700_000_029, "test")
+        );
+        assert_eq!(
+            player.portrait,
+            Portrait {
+                gender: Gender::Male,
+                hair_color: 2,
+                hair: 6,
+                mouth: 4,
+                brows: 3,
+                eyes: 2,
+                beards: 4,
+                nose: 5,
+                ears: 6,
+                extra: 7,
+                horns: 8,
+                special_portrait: 9,
+            }
+        );
+        assert_eq!(
+            player.attribute_basis,
+            EnumMap::from_array([1, 2, 3, 4, 5])
+        );
+        assert_eq!(
+            player.attribute_additions,
+            EnumMap::from_array([6, 7, 8, 9, 10])
+        );
+        assert_eq!(
+            player.attribute_times_bought,
+            EnumMap::from_array([11, 12, 13, 14, 15])
+        );
+    }
+
+    #[test]
+    fn other_player_race_class_and_portal_errors_do_not_partially_mutate() {
+        let server_time = ServerTime::default();
+        let mut player = OtherPlayer {
+            player_id: 7,
+            name: "unchanged".to_owned(),
+            level: 9,
+            scrapbook_count: Some(3),
+            ..Default::default()
+        };
+        let before = format!("{player:?}");
+
+        for (pos, replacement, expected_name) in [
+            (18, "99", "char race"),
+            (20, "0", "character class"),
+            (26, "-1", "portal dmg bonus"),
+        ] {
+            let mut values = other_player_values();
+            values[pos] = replacement.to_owned();
+            let raw = values.join("/");
+            let data = Vals::from(raw.as_str());
+            let err = player.update(&data, server_time).unwrap_err();
+            data.assert_all_read();
+            assert!(matches!(err, SFError::ParsingError(name, _)
+                if name == expected_name));
+            assert_eq!(format!("{player:?}"), before);
+        }
+
+        let mut values = other_player_values();
+        values[30] = "bad".to_owned();
+        let raw = values.join("/");
+        let data = Vals::from(raw.as_str());
+        assert!(player.update(&data, server_time).is_err());
+        data.assert_all_read();
+        assert_eq!(format!("{player:?}"), before);
+    }
+
+    #[test]
+    fn other_player_attribute_blocks_preserve_missing_trailing_values() {
+        let mut attributes: EnumMap<AttributeType, u32> =
+            EnumMap::from_array([10, 20, 30, 40, 50]);
+        let data = Vals::from("1/-1");
+        update_attribute_block(&mut attributes, &data, 0).unwrap();
+        data.assert_all_read();
+        assert_eq!(attributes, EnumMap::from_array([1, 0, 30, 40, 50]));
+    }
+
+    #[test]
+    fn other_player_scrapbook_below_ten_thousand_preserves_existing_count() {
+        let mut values = other_player_values();
+        values[66] = "42".to_owned();
+        let raw = values.join("/");
+        let data = Vals::from(raw.as_str());
+        let mut player = OtherPlayer {
+            scrapbook_count: Some(7),
+            ..Default::default()
+        };
+        player.update(&data, ServerTime::default()).unwrap();
+        data.assert_all_read();
+        assert_eq!(player.scrapbook_count, Some(7));
+    }
+
+    #[test]
+    fn other_player_pet_bonus_is_strict_and_all_or_nothing() {
+        let data = Vals::from("ignored/1/2/3/4/5/extra");
+        let mut player = OtherPlayer::default();
+        player.update_pet_bonus(&data).unwrap();
+        data.assert_all_read();
+        assert_eq!(
+            player.attribute_pet_bonus,
+            EnumMap::from_array([5, 2, 3, 1, 4])
+        );
+
+        let before = format!("{player:?}");
+        for raw in ["0/1/2/bad/4/5/tail", "0/1/2/3/4", "0/-1/2/3/4/5"] {
+            let data = Vals::from(raw);
+            assert!(player.update_pet_bonus(&data).is_err());
+            data.assert_all_read();
+            assert_eq!(format!("{player:?}"), before);
+        }
+    }
+
+    #[test]
+    fn other_player_fortress_requires_all_fields_and_soft_defaults_ranges() {
+        let mut player = OtherPlayer {
+            fortress: Some(OtherFortress {
+                soldier_advice: 99,
+                rank: 7,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let data = Vals::from("10/11/12/13/14/15/extra");
+        player.update_fortress(&data).unwrap();
+        data.assert_all_read();
+        let fortress = player.fortress.as_ref().unwrap();
+        assert_eq!(fortress.upgrade_count, 10);
+        assert_eq!(fortress.fortifications_level, 11);
+        assert_eq!(fortress.archer_count, 12);
+        assert_eq!(fortress.mage_count, 13);
+        assert_eq!(fortress.lootable_wood, 14);
+        assert_eq!(fortress.lootable_stone, 15);
+        assert_eq!(fortress.soldier_advice, 99);
+        assert_eq!(fortress.rank, 7);
+
+        let before = format!("{player:?}");
+        for raw in ["1/2/3/bad/5/6/tail", "1/2/3/4/5"] {
+            let data = Vals::from(raw);
+            assert!(player.update_fortress(&data).is_err());
+            data.assert_all_read();
+            assert_eq!(format!("{player:?}"), before);
+        }
+
+        let data = Vals::from("-1/-1/-1/-1/-1/-1");
+        player.update_fortress(&data).unwrap();
+        data.assert_all_read();
+        let fortress = player.fortress.as_ref().unwrap();
+        assert_eq!(fortress.upgrade_count, 0);
+        assert_eq!(fortress.fortifications_level, 0);
+        assert_eq!(fortress.archer_count, 0);
+        assert_eq!(fortress.mage_count, 0);
+        assert_eq!(fortress.lootable_wood, 0);
+        assert_eq!(fortress.lootable_stone, 0);
+    }
+
+    #[test]
+    fn other_player_unit_levels_require_field_zero_and_soft_convert_it() {
+        let mut player = OtherPlayer {
+            wall_combat_lvl: 9,
+            ..Default::default()
+        };
+        let data = Vals::from("42/ignored/also ignored");
+        player.update_unit_levels(&data).unwrap();
+        data.assert_all_read();
+        assert_eq!(player.wall_combat_lvl, 42);
+
+        let data = Vals::from("70000/tail");
+        player.update_unit_levels(&data).unwrap();
+        data.assert_all_read();
+        assert_eq!(player.wall_combat_lvl, 0);
+
+        let data = Vals::from("-1/tail");
+        player.update_unit_levels(&data).unwrap();
+        data.assert_all_read();
+        assert_eq!(player.wall_combat_lvl, 0);
+
+        let before = format!("{player:?}");
+        for raw in ["", "bad/tail"] {
+            let data = Vals::from(raw);
+            assert!(player.update_unit_levels(&data).is_err());
+            data.assert_all_read();
+            assert_eq!(format!("{player:?}"), before);
+        }
+    }
+
+    #[test]
+    fn other_guild_update_parses_two_members_from_the_full_layout() {
+        let raw = other_guild_values().join("/");
+        let data = Vals::from(raw.as_str());
+        let mut guild = OtherGuild {
+            members: vec![OtherGuildMember::default(); 5],
+            ..Default::default()
+        };
+        guild.update(&data, ServerTime::default()).unwrap();
+        data.assert_all_read();
+
+        assert_eq!(guild.member_count, 2);
+        assert_eq!(guild.members.len(), 2);
+        assert_eq!(guild.finished_raids, 53);
+        assert_eq!(guild.honor, 1288);
+        assert_eq!(guild.members[0].level, 248);
+        assert_eq!(guild.members[1].level, 365);
+        assert_eq!(
+            guild.members[0].last_active,
+            Some(local_time(1_700_000_001))
+        );
+        assert_eq!(
+            guild.members[1].last_active,
+            Some(local_time(1_700_000_002))
+        );
+        assert_eq!(guild.members[0].treasure_lvl, 28);
+        assert_eq!(guild.members[1].treasure_lvl, 31);
+        assert_eq!(guild.members[0].instructor_lvl, 31);
+        assert_eq!(guild.members[1].instructor_lvl, 55);
+        assert!(matches!(guild.members[0].rank, GuildRank::Leader));
+        assert!(matches!(guild.members[1].rank, GuildRank::Officer));
+        assert_eq!(guild.members[0].pet_lvl, 190);
+        assert_eq!(guild.members[1].pet_lvl, 180);
+    }
+
+    #[test]
+    fn other_guild_update_tolerates_nonnumeric_tokens_and_defaults_rank() {
+        let mut values = other_guild_values();
+        values[8] = "future".to_owned();
+        values[13] = "future".to_owned();
+        values[64] = "future".to_owned();
+        values[114] = "future".to_owned();
+        values[214] = "future".to_owned();
+        values[264] = "-1".to_owned();
+        values[314] = "99".to_owned();
+        values[390] = "future".to_owned();
+        let raw = values.join("/");
+        let data = Vals::from(raw.as_str());
+        let mut guild = OtherGuild::default();
+        guild.update(&data, ServerTime::default()).unwrap();
+        data.assert_all_read();
+
+        assert_eq!(guild.finished_raids, 0);
+        assert_eq!(guild.honor, 0);
+        assert_eq!(guild.members[0].level, 0);
+        assert_eq!(guild.members[0].last_active, None);
+        assert_eq!(guild.members[0].treasure_lvl, 0);
+        assert_eq!(guild.members[0].instructor_lvl, 0);
+        assert!(matches!(guild.members[0].rank, GuildRank::Member));
+        assert_eq!(guild.members[0].pet_lvl, 0);
+    }
+
+    #[test]
+    fn other_guild_missing_member_fields_do_not_partially_mutate() {
+        let values = other_guild_values();
+        let raw = values[..115].join("/");
+        let data = Vals::from(raw.as_str());
+        let mut guild = OtherGuild {
+            name: "unchanged".to_owned(),
+            honor: 9,
+            members: vec![OtherGuildMember::default(); 3],
+            ..Default::default()
+        };
+        let before = format!("{guild:?}");
+        assert!(guild.update(&data, ServerTime::default()).is_err());
+        data.assert_all_read();
+        assert_eq!(format!("{guild:?}"), before);
+    }
+
+    #[test]
+    fn other_guild_member_names_resize_exactly_when_shrinking() {
+        let mut guild = OtherGuild {
+            members: vec![OtherGuildMember::default(); 3],
+            ..Default::default()
+        };
+        let names = Vals::by("One,Two", ',');
+        guild.update_member_names(&names);
+        names.assert_all_read();
+        assert_eq!(guild.members.len(), 2);
+        assert_eq!(guild.members[0].name, "One");
+        assert_eq!(guild.members[1].name, "Two");
+
+        let names = Vals::by("Only", ',');
+        guild.update_member_names(&names);
+        names.assert_all_read();
+        assert_eq!(guild.members.len(), 1);
+        assert_eq!(guild.members[0].name, "Only");
     }
 }

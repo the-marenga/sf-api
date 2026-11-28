@@ -5,10 +5,8 @@ use enum_map::EnumMap;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
-use super::{NormalCost, RelationEntry, SFError, ScrapBook, ServerTime};
-use crate::{
-    PlayerId, command::*, gamestate::items::*, misc::*, response::Vals,
-};
+use super::{NormalCost, RelationEntry, ScrapBook, ServerTime};
+use crate::{PlayerId, command::*, gamestate::items::*, response::Vals};
 
 /// Everything, that can be considered part of the character and not the rest
 /// of the world
@@ -177,26 +175,6 @@ impl Portrait {
         data.ignore(10, "race parsed by the character save caller");
         data.ignore(12..data.len(), "extra portrait values");
         portrait
-    }
-
-    // Keep the other-player parser's existing eager behavior until it is
-    // migrated.
-    pub(crate) fn parse(data: &[i64]) -> Result<Portrait, SFError> {
-        Ok(Portrait {
-            mouth: data.csiget(0, "mouth", 1)?,
-            hair_color: data.csimget(1, "hair color", 100, |a| a / 100)?,
-            hair: data.csimget(1, "hair", 1, |a| a % 100)?,
-            brows: data.csimget(2, "brows", 1, |a| a % 100)?,
-            eyes: data.csiget(3, "eyes", 1)?,
-            beards: data.csimget(4, "beards", 1, |a| a % 100)?,
-            nose: data.csiget(5, "nose", 1)?,
-            ears: data.csiget(6, "ears", 1)?,
-            extra: data.csiget(7, "extra", 1)?,
-            horns: data.csimget(8, "horns", 1, |a| a % 100)?,
-            special_portrait: data.cget(9, "special portrait")?,
-            gender: Gender::from_i64(data.csimget(11, "gender", 1, |a| a % 2)?)
-                .unwrap_or_default(),
-        })
     }
 }
 

@@ -321,45 +321,6 @@ impl GameState {
         }
     }
 
-    pub(crate) fn updatete_relation_list(&mut self, val: &str) {
-        self.character.relations.clear();
-        for entry in val
-            .trim_end_matches(';')
-            .split(';')
-            .filter(|a| !a.is_empty())
-        {
-            let mut parts = entry.split(',');
-            let (
-                Some(id),
-                Some(name),
-                Some(guild),
-                Some(level),
-                Some(relation),
-            ) = (
-                parts.next().and_then(|a| a.parse().ok()),
-                parts.next().map(std::string::ToString::to_string),
-                parts.next().map(std::string::ToString::to_string),
-                parts.next().and_then(|a| a.parse().ok()),
-                parts.next().and_then(|a| match a {
-                    "-1" => Some(Relationship::Ignored),
-                    "1" => Some(Relationship::Friend),
-                    _ => None,
-                }),
-            )
-            else {
-                warn!("bad friendslist entry: {entry}");
-                continue;
-            };
-            self.character.relations.push(RelationEntry {
-                id,
-                name,
-                guild,
-                level,
-                relation,
-            });
-        }
-    }
-
     pub(crate) fn update_tower(
         &mut self,
         data: &Vals<'_>,
@@ -621,14 +582,7 @@ impl GameState {
             }
             "systemmessagelist" => {}
             "newslist" => {
-                self.mail.news_inbox.clear();
-                let data = val.as_str();
-                for msg in data.split(';').filter(|a| !a.trim().is_empty()) {
-                    match NewsEntry::parse(msg, server_time) {
-                        Ok(msg) => self.mail.news_inbox.push(msg),
-                        Err(e) => warn!("Invalid msg: {msg} {e}"),
-                    }
-                }
+                self.mail.update_news_inbox(&val.list_by(';'), server_time);
             }
             "dummieequipment" => {
                 self.character.mannequin = Some(Equipment::parse(&val.list())?);
@@ -968,31 +922,10 @@ impl GameState {
                 // mail. Just a name and clicked play
             }
             "Ranklistplayer" => {
-                self.hall_of_fames.players.clear();
-                for player in val.as_str().trim_matches(';').split(';') {
-                    // Stop parsing once we receive an empty player
-                    if player.ends_with(",,,0,0,0,") {
-                        break;
-                    }
-
-                    match HallOfFamePlayer::parse(player) {
-                        Ok(x) => {
-                            self.hall_of_fames.players.push(x);
-                        }
-                        Err(err) => warn!("{err}"),
-                    }
-                }
+                self.hall_of_fames.update_players(&val.list_by(';'));
             }
             "ranklistgroup" => {
-                self.hall_of_fames.guilds.clear();
-                for guild in val.as_str().trim_matches(';').split(';') {
-                    match HallOfFameGuild::parse(guild) {
-                        Ok(x) => {
-                            self.hall_of_fames.guilds.push(x);
-                        }
-                        Err(err) => warn!("{err}"),
-                    }
-                }
+                self.hall_of_fames.update_guilds(&val.list_by(';'));
             }
             "maxrankgroup" => {
                 self.hall_of_fames.guilds_total = Some(val.into("guild max")?);
@@ -1001,37 +934,13 @@ impl GameState {
                 self.hall_of_fames.pets_total = Some(val.into("pet rank max")?);
             }
             "RanklistPets" => {
-                self.hall_of_fames.pets.clear();
-                for entry in val.as_str().trim_matches(';').split(';') {
-                    match HallOfFamePets::parse(entry) {
-                        Ok(x) => {
-                            self.hall_of_fames.pets.push(x);
-                        }
-                        Err(err) => warn!("{err}"),
-                    }
-                }
+                self.hall_of_fames.update_pets(&val.list_by(';'));
             }
             "ranklistfortress" | "Ranklistfortress" => {
-                self.hall_of_fames.fortresses.clear();
-                for guild in val.as_str().trim_matches(';').split(';') {
-                    match HallOfFameFortress::parse(guild) {
-                        Ok(x) => {
-                            self.hall_of_fames.fortresses.push(x);
-                        }
-                        Err(err) => warn!("{err}"),
-                    }
-                }
+                self.hall_of_fames.update_fortresses(&val.list_by(';'));
             }
             "ranklistunderworld" => {
-                self.hall_of_fames.underworlds.clear();
-                for entry in val.as_str().trim_matches(';').split(';') {
-                    match HallOfFameUnderworld::parse(entry) {
-                        Ok(x) => {
-                            self.hall_of_fames.underworlds.push(x);
-                        }
-                        Err(err) => warn!("{err}"),
-                    }
-                }
+                self.hall_of_fames.update_underworlds(&val.list_by(';'));
             }
             "gamblegoldvalue" => {
                 self.tavern.gamble_result =
@@ -1054,7 +963,10 @@ impl GameState {
                 .guild
                 .get_or_insert_with(Default::default)
                 .update_group_knights(&val.list_by(',')),
-            "friendlist" => self.updatete_relation_list(val.as_str()),
+            "friendlist" => {
+                self.character
+                    .update_relations(&Vals::by(val.as_str(), ';'));
+            }
             "legendaries" => {
                 if val.as_str().chars().any(|a| a != 'A') {
                     warn!("Found a legendaries value, that is not just AAA..");
@@ -1236,37 +1148,13 @@ impl GameState {
                 // parsing already?
             }
             "messagelist" => {
-                let data = val.as_str();
-                self.mail.inbox.clear();
-                for msg in data.split(';').filter(|a| !a.trim().is_empty()) {
-                    match InboxEntry::parse(msg, server_time) {
-                        Ok(msg) => self.mail.inbox.push(msg),
-                        Err(e) => warn!("Invalid msg: {msg} {e}"),
-                    }
-                }
+                self.mail.update_inbox(&val.list_by(';'), server_time);
             }
             "messagetext" => {
                 self.mail.open_msg = Some(from_sf_string(val.as_str()));
             }
             "combatloglist" => {
-                self.mail.combat_log.clear();
-                for entry in val.as_str().split(';') {
-                    let parts = entry.split(',').collect::<Vec<_>>();
-                    if parts.iter().all(|a| a.is_empty()) {
-                        continue;
-                    }
-                    match CombatLogEntry::parse(&parts, server_time) {
-                        Ok(cle) => {
-                            self.mail.combat_log.push(cle);
-                        }
-                        Err(e) => {
-                            warn!(
-                                "Unable to parse combat log entry: {parts:?} \
-                                 - {e}"
-                            );
-                        }
-                    }
-                }
+                self.mail.update_combat_log(&val.list_by(';'), server_time);
             }
             "maxupgradelevel" => {
                 self.fortress
@@ -1302,21 +1190,28 @@ impl GameState {
             "otherplayersavecharacter" => {
                 other_player
                     .get_or_insert_default()
-                    .update(&val.into_list("other player")?, server_time)?;
+                    .update(&val.list(), server_time)?;
             }
             "otherplayersavepotions" => {
                 other_player.get_or_insert_default().active_potions =
-                    items::parse_active_potions(
-                        &val.into_list("other potions")?,
-                        server_time,
-                    );
+                    items::parse_active_potions(&val.list(), server_time);
             }
             "otherplayer" => {
-                let data: Vec<i64> = val.into_list("other player")?;
+                let data = val.list();
+                data.ignore(0..166, "deprecated other-player values");
+                let joined =
+                    data.server_time(166, server_time).inspect_err(|_| {
+                        data.ignore_all(
+                            "malformed deprecated other-player record",
+                        );
+                    })?;
+                data.ignore(
+                    167..data.len(),
+                    "extra deprecated other-player values",
+                );
                 #[allow(deprecated)]
                 {
-                    other_player.get_or_insert_default().guild_joined =
-                        data.cstget(166, "other joined guild", server_time)?;
+                    other_player.get_or_insert_default().guild_joined = joined;
                 }
             }
             "otherplayerfriendstatus" => {
@@ -1332,16 +1227,12 @@ impl GameState {
             "otherplayerpetbonus" => {
                 other_player
                     .get_or_insert_with(Default::default)
-                    .update_pet_bonus(&val.into_list("o pet bonus")?)?;
+                    .update_pet_bonus(&val.list())?;
             }
             "otherplayerunitlevel" => {
-                let data: Vec<i64> =
-                    val.into_list("other player unit level")?;
-                // This includes other levels, but they are handled
-                // elsewhere I think
                 other_player
                     .get_or_insert_with(Default::default)
-                    .wall_combat_lvl = data.csiget(0, "wall_lvl", 0)?;
+                    .update_unit_levels(&val.list())?;
             }
             "petsrank" => {
                 self.pets.get_or_insert_with(Default::default).rank =
@@ -1427,12 +1318,9 @@ impl GameState {
                     val.into("other group fighting cost")?;
             }
             "othergroupmember" => {
-                let names: Vec<_> = val.as_str().split(',').collect();
-                let og = other_guild.get_or_insert_with(Default::default);
-                og.members.resize_with(names.len(), Default::default);
-                for (m, n) in og.members.iter_mut().zip(names) {
-                    m.name.set(n);
-                }
+                other_guild
+                    .get_or_insert_with(Default::default)
+                    .update_member_names(&val.list_by(','));
             }
             "othergroupdescription" => {
                 let guild = other_guild.get_or_insert_with(Default::default);
@@ -1445,7 +1333,7 @@ impl GameState {
             "othergroup" => {
                 other_guild
                     .get_or_insert_with(Default::default)
-                    .update(val.as_str(), server_time)?;
+                    .update(&val.list(), server_time)?;
             }
             "reward" => {
                 // This is the task reward, which you should already know
@@ -1675,9 +1563,8 @@ impl GameState {
                 self.arena.update(&val.list(), server_time);
             }
             "ownplayersavepotions" => {
-                let data: Vec<i64> = val.into_list("potions")?;
                 self.character.active_potions =
-                    items::parse_active_potions(&data, server_time);
+                    items::parse_active_potions(&val.list(), server_time);
             }
             "arcanetoilet" => {
                 let data: Vec<i64> = val.into_list("toilet")?;
@@ -1798,7 +1685,7 @@ impl GameState {
             "otherplayerfortressinfo" => {
                 other_player
                     .get_or_insert_default()
-                    .update_fortress(&val.into_list("other ft")?)?;
+                    .update_fortress(&val.list())?;
             }
             x if x.contains("average") && x.ends_with("level") => {
                 // We do not care about avg. item lvl
