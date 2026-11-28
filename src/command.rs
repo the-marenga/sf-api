@@ -1476,10 +1476,9 @@ impl Command {
             }
             Command::IdleSacrifice => format!("IdlePrestige:0"),
             Command::SwapMannequin => format!("PlayerDummySwap:301/1"),
-            Command::UpdateFlag { flag } => format!(
-                "PlayerSetFlag:{}",
-                flag.map(Flag::code).unwrap_or_default()
-            ),
+            Command::UpdateFlag { flag } => {
+                format!("PlayerSetFlag:{}", flag.map_or_default(Flag::code))
+            }
             Command::BlockGuildInvites { block_invites } => {
                 format!("PlayerSetNoGroupInvite:{}", u8::from(*block_invites))
             }

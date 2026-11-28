@@ -295,14 +295,12 @@ impl PlayerFighterSquad {
             .dungeons
             .portal
             .as_ref()
-            .map(|a| a.player_hp_bonus)
-            .unwrap_or_default()
+            .map_or_default(|a| a.player_hp_bonus)
             .into();
         let portal_dmg_bonus = gs
             .guild
             .as_ref()
-            .map(|a| a.portal.damage_bonus)
-            .unwrap_or_default()
+            .map_or_default(|a| a.portal.damage_bonus)
             .into();
 
         let gladiator = match &gs.underworld {
